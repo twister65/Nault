@@ -41,6 +41,7 @@
     "@ledgerhq/hw-transport": "^6.27.1",
     "@ledgerhq/hw-transport-node-ble": "^6.27.1",
     "@ledgerhq/hw-transport-node-hid": "^6.27.1",
+    "@ledgerhq/hw-transport-node-hid-noevents": "6.27.5",
     "@ledgerhq/hw-transport-u2f": "^5.34.0",
     "@ledgerhq/hw-transport-web-ble": "^6.27.1",
     "@ledgerhq/hw-transport-webhid": "^6.27.1",
