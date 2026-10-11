@@ -21,8 +21,8 @@
     "desktop:compile": "cd desktop-app && tsc && cd ..",
     "desktop:build": "npm run wallet:build-desktop && npm run desktop:compile",
     "desktop:build-local": "npm run desktop:build && npm run desktop:local",
-    "desktop:dev": "npm run desktop:compile && electron desktop-app/dist/desktop-app.js",
-    "desktop:local": "electron-builder -p never"
+    "desktop:dev": "npm run desktop:compile && node scripts/prepare-desktop-ledger.js && electron desktop-app/dist/desktop-app.js",
+    "desktop:local": "node scripts/prepare-desktop-ledger.js && electron-builder -p never -c.npmRebuild=false"
   },
   "private": true,
   "dependencies": {
@@ -37,6 +37,7 @@
     "@angular/platform-browser-dynamic": "^13.1.1",
     "@angular/router": "^13.1.1",
     "@angular/service-worker": "^13.1.1",
+    "@ledgerhq/devices": "7.0.2",
     "@ledgerhq/hw-transport": "^6.27.1",
     "@ledgerhq/hw-transport-node-ble": "^6.27.1",
     "@ledgerhq/hw-transport-node-hid": "^6.27.1",
