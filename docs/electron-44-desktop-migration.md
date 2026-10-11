@@ -1,11 +1,11 @@
 # Electron 44 desktop migration — Ubuntu validation
 
-This branch updates the Electron **runtime** from 9.4.4 to **44.7.0**
+PR #3 (merged October 11, 2026) upgraded the Electron **runtime** from 9.4.4 to **44.7.0**
 (Chromium 152 / Node.js 24.21.0). The existing Angular 13, TypeScript 4.5,
 Ledger packages, and electron-builder 25 are intentionally left unchanged,
 so we can isolate compatibility issues before further upgrades.
 
-## Changes in this PR
+## Changes delivered in PR #3
 
 - Pin `electron` to `44.7.0` rather than the unsupported Electron 9.
 - Replace the removed `webContents.on('new-window')` event with
@@ -13,28 +13,25 @@ so we can isolate compatibility issues before further upgrades.
   browser; Electron does not create another renderer window.
 - Stop generating `@ledgerhq/devices` compatibility entry points: Node.js 24
   supports the package's pattern-based exports.
-- Retain `-c.npmRebuild=false` **temporarily**. Prebuilt USB/HID native modules
-  still need hardware testing with the new Electron runtime.
+- Retain `-c.npmRebuild=false` for the initial packaging strategy.
+  The native USB/HID worker was tested on Ubuntu with the Nano S Plus;
+  other platforms and native-module upgrades need separate validation.
 
 ## Updating a local checkout
 
 ```sh
 cd /home/olivier/Source/Nault
-git fetch origin
-git switch --track origin/upgrade/electron-44-desktop
-
-# Required: the checked-in v2 package-lock.json still describes Electron 9.
-# npm install will update this lockfile locally to match package.json.
+git switch master
+git pull --ff-only origin master
 npm install
 node -p "require('electron/package.json').version"  # expect 44.7.0
 npm run desktop:build
 npm run desktop:local
 ```
 
-**Lockfile follow-up:** The `package-lock.json` has not yet been regenerated
-and committed in this draft PR. Do not use `npm ci` or merge until it has been
-updated using npm against the registry and checked into the PR. No lockfile
-integrity hashes should be fabricated manually.
+**Lockfile status:** PR #3 includes the npm-generated `package-lock.json`.
+Both `package.json` and the committed lockfile pin Electron `44.7.0` and
+`@ledgerhq/hw-transport-node-hid-noevents` `6.27.5`.
 
 ## Running the unpacked application
 
@@ -63,7 +60,7 @@ The user validated a bounded `device.readTimeout(100)` replacement: the
 Ledger connected and Nault successfully read account 0. That initial
 diagnostic solution executed synchronous reads on Electron's main thread.
 
-The **next unvalidated iteration** moves all USB HID access into a dedicated
+The merged implementation moves all USB HID access into a dedicated
 Node.js `worker_threads` worker:
 
 - `lib/ledger-hid-worker.ts` owns the no-events Ledger HID transport,
@@ -80,15 +77,16 @@ Node.js `worker_threads` worker:
 - USB hotplug events are not monitored: manual **Reconnect** is required
   after unplugging or replugging a Ledger.
 
-The user has now reviewed, compiled, and tested the PR (including its
-Ledger integration) on Ubuntu. Security hardening introduced afterward
-requires a new regression test before merge.
+The user reviewed, compiled, and tested the worker implementation on Ubuntu.
+The subsequent `webSecurity` hardening was also tested before PR #3 was
+merged. This confirms the reported Ubuntu setup, not every OS or wallet flow.
 
-## Test the worker version
+## Reproduce the Ubuntu worker test
 
 ```sh
 cd /home/olivier/Source/Nault
-git pull --ff-only origin upgrade/electron-44-desktop
+git switch master
+git pull --ff-only origin master
 npm run desktop:build
 npm run desktop:local
 ./desktop-app/build/linux-unpacked/nault --disable-setuid-sandbox \
@@ -128,18 +126,19 @@ operations), not granted to remote documents. A subsequent standalone WebHID
 PR should introduce a secure custom app origin, explicit user-driven HID
 selection, and Ledger vendor-ID restrictions before enabling WebHID at all.
 
-### Required Ubuntu regression test after this security change
+### Security regression test for future changes
 
 ```sh
 cd /home/olivier/Source/Nault
-git pull --ff-only origin upgrade/electron-44-desktop
+git switch master
+git pull --ff-only origin master
 npm run desktop:build
 npm run desktop:local
 ./desktop-app/build/linux-unpacked/nault --disable-setuid-sandbox \
   2>&1 | tee /tmp/nault-security.log
 ```
 
-Verify the following before considering the PR ready:
+For future releases or other machines, verify the following:
 
 1. The application renders normally, including translations and local
    asset loading; inspect DevTools for blocked `file://` requests.
@@ -156,9 +155,10 @@ Verify the following before considering the PR ready:
    CORS errors verbatim. Do not fall back to `--no-sandbox` or
    `--disable-gpu-sandbox`.
 
-We still need to generate and commit an npm-registry-based
-`package-lock.json` before merging. This security iteration has **not**
-been validated on Ubuntu yet.
+The lockfile was committed before PR #3 merged. The user reported a working
+Ubuntu build and Ledger connection after these security changes. Other operating
+systems and full transaction-signing workflows are not yet covered by that
+validation.
 
 ## Checklist
 
@@ -173,12 +173,30 @@ been validated on Ubuntu yet.
 
 ## Known limitations
 
-- The earlier main-thread readTimeout build and subsequent PR revision were
-  reviewed and tested by the user on Ubuntu. The later security changes
-  still require a separate regression test before merge.
-- `electron-builder@25.1.8`, `electron-updater@4.3.5`, native USB modules,
-  and Angular 13 could require follow-up compatibility fixes.
-- `webSecurity: false` still exists in the original desktop window
-  configuration and needs its own security-focused PR.
-- Do not consider this build ready for protecting real funds based only on
-  compilation or device-detection success.
+- **WebHID is not enabled in the Electron desktop app.** USB Ledger access
+  currently uses a native HID worker with bounded `readTimeout(100)` calls.
+  Chromium HID device permission requests remain denied. A separate PR will
+  evaluate WebHID and narrowly scoped device permissions.
+- **USB reconnection is manual.** The native worker does not monitor HID
+  hotplug events; unplugging or replugging the Ledger requires **Reconnect**.
+  Bluetooth behavior has not received equivalent regression coverage.
+- **Ubuntu testing is not cross-platform certification.** The maintainer
+  compiled and tested the application and Nano S Plus connection on Ubuntu
+  after the Electron 44 and `webSecurity: true` changes. Windows/macOS,
+  installer/updater behavior, and complete on-device transaction-signing
+  workflows still need dedicated tests. No CI check runs were recorded for
+  the merged PR.
+- **Some configured Nano RPC services may require CORS support.** The desktop
+  renderer still loads from `file://`; with `webSecurity: true`, custom
+  HTTP(S) backends might reject requests with an opaque origin. Keep web
+  security enabled rather than relaxing it to accommodate such servers.
+- **The desktop technology stack still contains older components.**
+  `electron-builder@25.1.8`, `electron-updater@4.3.5`, Angular 13, and
+  native USB/HID dependencies need maintenance and broader compatibility
+  testing.
+- **Further security hardening remains.** A strict Content Security Policy,
+  fuller IPC payload validation, and a trusted app origin deserve separate
+  review. The maintainer's packet-capture inspection did not identify Nano
+  RPC calls among plaintext HTTP requests, but it is not a comprehensive
+  security audit. Continue verifying every transaction on the Ledger display
+  and do not treat basic device connectivity as proof of fund safety.
