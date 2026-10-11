@@ -1,20 +1,17 @@
 import { Injectable } from '@angular/core';
 import {NotificationService} from './notification.service';
-import { IpcRenderer } from 'electron';
 
 @Injectable()
 export class DesktopService {
 
-  private _ipc: IpcRenderer | undefined;
+  private _ipc: NaultDesktopBridge | undefined;
 
   constructor(private notifications: NotificationService) {
-    if (window.require) {
-      try {
-        this._ipc = window.require('electron').ipcRenderer;
-        console.log('IPC loaded');
-      } catch (e) {
-        throw e;
-      }
+    // The main process provides this allowlisted bridge from the preload.
+    // Browsers do not expose it; they continue to run without desktop IPC.
+    if (window.naultDesktop) {
+      this._ipc = window.naultDesktop;
+      console.log('Desktop IPC bridge loaded');
     }
   }
 
