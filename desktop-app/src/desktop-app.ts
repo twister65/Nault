@@ -7,6 +7,14 @@ import * as path from 'path';
 import { initialize } from './lib/ledger';
 import * as settings from 'electron-settings';
 const log = require('electron-log');
+
+// Diagnostic-only listener: record native main-process exceptions without
+// swallowing them or changing Electron's normal uncaught-error behavior.
+// This must not log wallet secrets, APDUs, or account addresses.
+process.on('uncaughtExceptionMonitor', (error, origin) => {
+  console.error('[Nault main uncaught exception]', origin,
+    error instanceof Error ? error.stack : error);
+});
 // Don't want errors to display when checking for update
 // Too annoying if there would be long-term problems with the source
 // Error would pop up on every launch
