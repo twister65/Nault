@@ -1,5 +1,4 @@
 import TransportNodeHid from '@ledgerhq/hw-transport-node-hid';
-import TransportNodeBle from '@ledgerhq/hw-transport-node-ble';
 import Transport from '@ledgerhq/hw-transport';
 import Nano from 'hw-app-nano';
 
@@ -61,7 +60,11 @@ export class LedgerService {
   // Open a connection to the usb device and initialize up the Nano Ledger library
   async loadTransport(bluetooth: boolean) {
     return new Promise((resolve, reject) => {
-      const transport = bluetooth ? TransportNodeBle : TransportNodeHid;
+      // Load the optional Bluetooth native binding only when requested.
+      // Nano S Plus uses USB HID and must not require a Bluetooth driver to start.
+      const transport = bluetooth
+        ? require('@ledgerhq/hw-transport-node-ble').default
+        : TransportNodeHid;
       let found = false;
       const sub = transport.listen({
         next: async(e) => {
