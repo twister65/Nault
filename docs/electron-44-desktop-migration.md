@@ -1,9 +1,9 @@
 # Electron 44 desktop migration — Ubuntu validation
 
 PR #3 (merged October 11, 2026) upgraded the Electron **runtime** from 9.4.4 to **44.7.0**
-(Chromium 152 / Node.js 24.21.0). The existing Angular 13, TypeScript 4.5,
-Ledger packages, and electron-builder 25 are intentionally left unchanged,
-so we can isolate compatibility issues before further upgrades.
+(Chromium 152 / Node.js 24.21.0). Angular 13, TypeScript 4.5 and
+electron-builder 25 were kept for compatibility; USB Ledger support now uses
+the no-events HID transport, isolated in a worker thread.
 
 ## Changes delivered in PR #3
 
