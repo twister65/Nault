@@ -240,3 +240,30 @@ restarted Electron window should not inherit the prior in-memory grant.
   invoked, the same window is running, and the button is clicked.
 
 Diagnostics only; no changes to the HID allowlist or permission decisions.
+
+
+## Diagnosing post-consent `eligibleLedger: false` safely
+
+Some permission checks occur for unrelated USB HID devices (keyboards/FIDO).
+A post-consent `eligibleLedger: false` alone does **not** prove that the
+just-selected Nano S Plus was rejected; compare the new sanitized fields
+`vendorMatchesLedger`, `productMatchesNanoSPlus`,
+`deviceIdPresent`, `interfaceGuidPresent` in both
+`consent recorded` and `device-permission-check` entries. The
+checks will not expose raw IDs, names or serial numbers.
+
+- `vendorMatchesLedger: false` means that permission check concerned
+  a different vendor, so do not interpret it as a Ledger failure.
+- Vendor and product both true but `deviceIdPresent: false` means
+  Chromium/Electron did not provide the ID that the current exact grant
+  policy requires at that stage. Keep denying until identity can
+  safely be correlated.
+- Both true with an ID present, but `selectedIdMatched: false`:
+  investigate deviceId stability across the chooser and permission check.
+- `granted: true` and `getDevices() > 0`, but opening fails:
+  investigate interface contention/hidraw, not permissions.
+
+All allow/deny predicates are unchanged. The updater and native Ledger IPC
+now explicitly handle rejected promises; neither change alters APDUs,
+device permissions, or hardware ownership. If Node still emits an
+unhandled rejection, capture the first stack trace to locate its source.

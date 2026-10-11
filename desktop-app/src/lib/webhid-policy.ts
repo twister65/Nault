@@ -42,3 +42,32 @@ export function describeWebHidOrigin(candidate: string | undefined, trusted: str
   if (candidate === undefined) return 'missing';
   return 'different';
 }
+
+
+// Sanitized diagnostics for Electron's two different HID entry points.
+// A rejection may be for an unrelated connected HID device, not the Ledger.
+// Never log raw USB identifiers, interface GUIDs, serials or deviceId strings.
+export function describeNanoSPlusHidDevice(device: unknown): {
+  vendorMatchesLedger: boolean;
+  productMatchesNanoSPlus: boolean;
+  deviceIdPresent: boolean;
+  interfaceGuidPresent: boolean;
+} {
+  const candidate = device && typeof device === 'object' ? device as {
+    vendorId?: unknown;
+    productId?: unknown;
+    deviceId?: unknown;
+    guid?: unknown;
+  } : {};
+  const pid = candidate.productId;
+  return {
+    vendorMatchesLedger: candidate.vendorId === LEDGER_USB_VENDOR_ID,
+    productMatchesNanoSPlus: pid === 0x50 ||
+      (typeof pid === 'number' && Number.isInteger(pid) &&
+        pid >= 0x5000 && pid <= 0x501f),
+    deviceIdPresent: typeof candidate.deviceId === 'string' &&
+      candidate.deviceId.length > 0,
+    interfaceGuidPresent: typeof candidate.guid === 'string' &&
+      candidate.guid.length > 0
+  };
+}

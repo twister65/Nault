@@ -2,7 +2,7 @@ import 'babel-polyfill';
 
 import { app, BrowserWindow, shell, Menu, screen, dialog, ipcMain, IpcMainEvent } from 'electron';
 import { APP_WALLET_ORIGIN, APP_WALLET_URL, registerWalletScheme, registerWalletFileProtocol, isTrustedWalletDocument } from './lib/wallet-protocol';
-import { isNanoSPlusHidDevice, isTrustedWebHidOrigin, describeWebHidOrigin } from './lib/webhid-policy';
+import { isNanoSPlusHidDevice, isTrustedWebHidOrigin, describeWebHidOrigin, describeNanoSPlusHidDevice } from './lib/webhid-policy';
 import { autoUpdater } from 'electron-updater';
 import * as url from 'url';
 import * as path from 'path';
@@ -337,6 +337,7 @@ function createWindow () {
         originForm: describeWebHidOrigin(details.origin, trustedHidOrigin),
         eligibleLedger,
         selectedIdMatched,
+        ...describeNanoSPlusHidDevice(details.device),
         selectedDeviceCount: permittedHidDeviceIds.size
       });
     }
@@ -392,7 +393,8 @@ function createWindow () {
       }
       permittedHidDeviceIds.add(candidate.deviceId);
       log.info('[Nault WebHID] consent recorded for selected Ledger:', {
-        selectedDeviceCount: permittedHidDeviceIds.size
+        selectedDeviceCount: permittedHidDeviceIds.size,
+        ...describeNanoSPlusHidDevice(candidate)
       });
       callback(candidate.deviceId);
     }).catch(() => callback());
@@ -528,7 +530,15 @@ if (!appLock) {
 }
 
 function checkForUpdates() {
-  autoUpdater.checkForUpdates();
+  // Network/update failures must not become unhandled promise rejections.
+  // Keep the updater optional; it cannot affect offline wallet operation.
+  try {
+    void autoUpdater.checkForUpdates().catch(error => {
+      log.warn('Update check failed:', error instanceof Error ? error.message : String(error));
+    });
+  } catch (error) {
+    log.warn('Could not start update check:', error instanceof Error ? error.message : String(error));
+  }
 }
 
 // Build up the menu bar options based on platform

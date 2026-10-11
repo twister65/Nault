@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { isNanoSPlusHidDevice, isTrustedWebHidOrigin, describeWebHidOrigin } =
+const { isNanoSPlusHidDevice, isTrustedWebHidOrigin, describeWebHidOrigin, describeNanoSPlusHidDevice } =
   require('../dist/lib/webhid-policy');
 const { APP_WALLET_ORIGIN, APP_WALLET_URL } =
   require('../dist/lib/wallet-origin');
@@ -40,4 +40,27 @@ test('HID permissions check the complete and exact secure origin', () => {
   ]) {
     assert.equal(isTrustedWebHidOrigin(other, trusted), false);
   }
+});
+
+
+test('sanitized HID device diagnostics expose only shape, never identifiers', () => {
+  const ledger = {
+    vendorId: 0x2c97, productId: 0x5000, deviceId: 'private-device-id',
+    guid: 'private-interface-guid', serialNumber: 'private-serial'
+  };
+  assert.deepEqual(describeNanoSPlusHidDevice(ledger), {
+    vendorMatchesLedger: true,
+    productMatchesNanoSPlus: true,
+    deviceIdPresent: true,
+    interfaceGuidPresent: true
+  });
+  assert.deepEqual(describeNanoSPlusHidDevice({
+    vendorId: 1234, productId: 0x5000
+  }), {
+    vendorMatchesLedger: false,
+    productMatchesNanoSPlus: true,
+    deviceIdPresent: false,
+    interfaceGuidPresent: false
+  });
+  assert.equal(JSON.stringify(describeNanoSPlusHidDevice(ledger)).includes('private-'), false);
 });

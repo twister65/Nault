@@ -267,6 +267,13 @@ export class LedgerService {
 
 let sendingWindow = null;
 
+// Keep rejections in the native IPC command path observable and handled.
+// The renderer already receives status/error messages through the Ledger service.
+function reportLedgerIpcFailure(operation: string, error: unknown): void {
+  console.error('[Ledger IPC] rejected:', operation,
+    error instanceof Error ? error.name + ': ' + error.message : String(error));
+}
+
 // Create a copy of the ledger service and register listeners with the browser window
 export function initialize(isTrustedSender: (event: IpcMainEvent) => boolean) {
   console.log('Ledger service initializing');
@@ -298,16 +305,16 @@ export function initialize(isTrustedSender: (event: IpcMainEvent) => boolean) {
     if (!data || !data.event) return;
     switch (data.event) {
       case 'get-ledger-status':
-        Ledger.loadLedger(data.data.bluetooth);
+        void Ledger.loadLedger(data.data.bluetooth).catch(error => reportLedgerIpcFailure('get-ledger-status', error));
         break;
       case 'account-details':
-        Ledger.getLedgerAccount(data.data.accountIndex || 0, data.data.showOnScreen || false);
+        void Ledger.getLedgerAccount(data.data.accountIndex || 0, data.data.showOnScreen || false).catch(error => reportLedgerIpcFailure('account-details', error));
         break;
       case 'cache-block':
-        Ledger.cacheBlock(data.data.accountIndex, data.data.cacheData, data.data.signature);
+        void Ledger.cacheBlock(data.data.accountIndex, data.data.cacheData, data.data.signature).catch(error => reportLedgerIpcFailure('cache-block', error));
         break;
       case 'sign-block':
-        Ledger.signBlock(data.data.accountIndex, data.data.blockData);
+        void Ledger.signBlock(data.data.accountIndex, data.data.blockData).catch(error => reportLedgerIpcFailure('sign-block', error));
         break;
     }
   });
