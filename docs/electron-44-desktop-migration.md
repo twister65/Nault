@@ -80,9 +80,9 @@ Node.js `worker_threads` worker:
 - USB hotplug events are not monitored: manual **Reconnect** is required
   after unplugging or replugging a Ledger.
 
-This is still **draft code requiring hardware testing**. Native add-on
-compatibility with the Electron worker-thread runtime and worker cleanup
-must both be confirmed before merge.
+The user has now reviewed, compiled, and tested the PR (including its
+Ledger integration) on Ubuntu. Security hardening introduced afterward
+requires a new regression test before merge.
 
 ## Test the worker version
 
@@ -106,6 +106,60 @@ the worker crashes or packaging fails, preserve the terminal errors for
 review; the previously successful main-thread readTimeout experiment remains
 available in Git history at commit `f42c810`.
 
+## Security hardening: webSecurity and Chromium device permissions
+
+The Electron 44 migration now enables `webSecurity: true` and explicitly
+keeps the renderer sandbox enabled. The local document is restricted to
+the bundled `dist/index.html`: attempts to navigate any frame to another
+file or a remote website are rejected. The existing external HTTPS-link
+handler still opens links in the operating-system browser.
+
+The main process also validates that any `ledger` IPC request comes from
+the exact top-level local wallet document belonging to Nault's main window
+before running address, cache, or signing commands. This complements the
+context-isolated preload IPC bridge, but never replaces transaction
+confirmation on the Ledger screen.
+
+The current Electron Ledger transport uses a **native HID worker**, not
+Chromium WebHID. Accordingly, this PR denies Chromium HID device selection
+and device permissions by default. General browser permissions are limited
+to a small set used by the local wallet (media access and sanitized clipboard
+operations), not granted to remote documents. A subsequent standalone WebHID
+PR should introduce a secure custom app origin, explicit user-driven HID
+selection, and Ledger vendor-ID restrictions before enabling WebHID at all.
+
+### Required Ubuntu regression test after this security change
+
+```sh
+cd /home/olivier/Source/Nault
+git pull --ff-only origin upgrade/electron-44-desktop
+npm run desktop:build
+npm run desktop:local
+./desktop-app/build/linux-unpacked/nault --disable-setuid-sandbox \
+  2>&1 | tee /tmp/nault-security.log
+```
+
+Verify the following before considering the PR ready:
+
+1. The application renders normally, including translations and local
+   asset loading; inspect DevTools for blocked `file://` requests.
+2. A configured Nano RPC node can still return balances and history.
+   `webSecurity: true` enforces CORS for `file://` to HTTP(S) requests,
+   so some remote and custom nodes may reject the opaque `Origin: null`.
+   This is **not** a reason to re-disable `webSecurity`.
+3. WebSocket connections, refreshes, clipboard usage, QR scanning (if used),
+   deep links, and external HTTPS links remain functional.
+4. Unlock the Nano S Plus, open the Nano app, and use **Reconnect**.
+   Confirm the native worker connects and the address matches the hardware
+   display. Test disconnecting/reconnecting. Do not send funds for this test.
+5. Confirm no GPU sandbox override is required and report any renderer or
+   CORS errors verbatim. Do not fall back to `--no-sandbox` or
+   `--disable-gpu-sandbox`.
+
+We still need to generate and commit an npm-registry-based
+`package-lock.json` before merging. This security iteration has **not**
+been validated on Ubuntu yet.
+
 ## Checklist
 
 1. Confirm Electron version `44.7.0` in the packaging output.
@@ -119,9 +173,9 @@ available in Git history at commit `f42c810`.
 
 ## Known limitations
 
-- The earlier main-thread readTimeout build was tested successfully on the
-  user's Ubuntu machine. The new worker-thread version remains untested and
-  this PR must stay in draft until validated.
+- The earlier main-thread readTimeout build and subsequent PR revision were
+  reviewed and tested by the user on Ubuntu. The later security changes
+  still require a separate regression test before merge.
 - `electron-builder@25.1.8`, `electron-updater@4.3.5`, native USB modules,
   and Angular 13 could require follow-up compatibility fixes.
 - `webSecurity: false` still exists in the original desktop window
