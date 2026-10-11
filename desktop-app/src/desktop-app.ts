@@ -2,6 +2,7 @@ import 'babel-polyfill';
 
 import { app, BrowserWindow, shell, Menu, screen, dialog, ipcMain, IpcMainEvent } from 'electron';
 import { APP_WALLET_URL, registerWalletScheme, registerWalletFileProtocol, isTrustedWalletDocument } from './lib/wallet-protocol';
+import { isNanoSPlusHidDevice, isTrustedWebHidOrigin } from './lib/webhid-policy';
 import { autoUpdater } from 'electron-updater';
 import * as url from 'url';
 import * as path from 'path';
@@ -182,6 +183,9 @@ let mainWindow: BrowserWindow;
 // a reviewed wallet data migration exists.
 const trustedIndexPath = path.resolve(__dirname, '../../dist/index.html');
 const useExperimentalAppOrigin = process.env.NAULT_TEST_APP_ORIGIN === '1';
+// HID permissions are opt-in, and only available on the secure test origin.
+const useExperimentalWebHID = useExperimentalAppOrigin &&
+  process.env.NAULT_TEST_WEBHID === '1';
 const trustedWalletURL = useExperimentalAppOrigin
   ? APP_WALLET_URL
   : url.pathToFileURL(trustedIndexPath).toString();
@@ -248,27 +252,107 @@ function createWindow () {
     }
   });
 
-  // WebHID is deliberately NOT enabled in this PR. The existing Ledger
-  // connection uses a native HID worker; Chromium has no reason to receive
-  // permission to open a hardware device. Future WebHID support must
-  // explicitly authorize trusted main-frame requests and Ledger vendor IDs.
+  // Native HID remains Nault's active desktop transport. This opt-in WebHID
+  // permission experiment does not modify LedgerService or issue any APDUs.
+  // No HID permission is granted automatically, not even to Ledger devices.
   const walletSession = mainWindow.webContents.session;
   const permittedWebFeatures = new Set(['media', 'clipboard-read', 'clipboard-sanitized-write']);
   const isTrustedWebContents = (contents: Electron.WebContents | null): boolean =>
     !!contents && contents === mainWindow.webContents &&
     isTrustedWalletURL(contents.getURL());
+  const trustedHidOrigin = new URL(APP_WALLET_URL).origin;
 
-  walletSession.setPermissionRequestHandler((contents, permission, callback) => {
+  // Permission request/check callback details identify the initiating frame.
+  // A trusted top-level webContents alone is insufficient: subframes must
+  // never be able to inherit its HID permissions.
+  const isTrustedHidFrame = (
+    contents: Electron.WebContents | null,
+    frameDetails: { isMainFrame?: boolean; requestingUrl?: string } | undefined
+  ): boolean =>
+    useExperimentalWebHID &&
+    isTrustedWebContents(contents) &&
+    frameDetails?.isMainFrame === true &&
+    isTrustedWalletURL(frameDetails.requestingUrl || '');
+
+  // Device grants exist only in memory until this window closes. Using the
+  // Chromium device ID prevents silently granting all Ledger USB devices.
+  const permittedHidDeviceIds = new Set<string>();
+
+  walletSession.setPermissionRequestHandler((contents, permission, callback, details) => {
+    if (permission === 'hid') {
+      callback(isTrustedHidFrame(contents, details));
+      return;
+    }
     callback(isTrustedWebContents(contents) && permittedWebFeatures.has(permission));
   });
-  walletSession.setPermissionCheckHandler((contents, permission) =>
-    isTrustedWebContents(contents) && permittedWebFeatures.has(permission)
-  );
-  walletSession.setDevicePermissionHandler(() => false);
-  walletSession.on('select-hid-device', (event, _details, callback) => {
-    event.preventDefault();
-    callback();
+  walletSession.setPermissionCheckHandler((contents, permission, requestingOrigin, details) => {
+    if (permission === 'hid') {
+      return isTrustedHidFrame(contents, details) &&
+        isTrustedWebHidOrigin(requestingOrigin, trustedHidOrigin) &&
+        isTrustedWebHidOrigin(details.securityOrigin, trustedHidOrigin);
+    }
+    return isTrustedWebContents(contents) && permittedWebFeatures.has(permission);
   });
+
+  walletSession.setDevicePermissionHandler(details =>
+    useExperimentalWebHID &&
+    details.deviceType === 'hid' &&
+    isTrustedWebHidOrigin(details.origin, trustedHidOrigin) &&
+    isNanoSPlusHidDevice(details.device) &&
+    permittedHidDeviceIds.has(details.device.deviceId)
+  );
+
+  walletSession.on('select-hid-device', (event, details, callback) => {
+    event.preventDefault();
+    // Reject untrusted frames, missing frames and ambiguous device lists.
+    if (!useExperimentalWebHID ||
+        !mainWindow || mainWindow.isDestroyed() ||
+        !details.frame ||
+        details.frame !== mainWindow.webContents.mainFrame ||
+        !isTrustedWalletURL(details.frame.url)) {
+      callback();
+      return;
+    }
+
+    const candidates = details.deviceList.filter(isNanoSPlusHidDevice);
+    if (candidates.length !== 1) {
+      // Explicitly decline multiple matches instead of guessing which Ledger
+      // the user intended to authorize.
+      log.warn('WebHID selection cancelled: expected exactly one Nano S Plus');
+      callback();
+      return;
+    }
+
+    const candidate = candidates[0];
+    dialog.showMessageBox(mainWindow, {
+      type: 'question',
+      title: 'Nault experimental WebHID',
+      message: 'Allow this Ledger Nano S Plus?',
+      detail: 'This grants this wallet window access to the selected device for this session only. Do not test with real funds.',
+      buttons: ['Allow Ledger', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true
+    }).then(answer => {
+      if (answer.response !== 0 ||
+          !mainWindow || mainWindow.isDestroyed() ||
+          !details.frame ||
+          details.frame !== mainWindow.webContents.mainFrame ||
+          !isTrustedWalletURL(details.frame.url)) {
+        callback();
+        return;
+      }
+      permittedHidDeviceIds.add(candidate.deviceId);
+      callback(candidate.deviceId);
+    }).catch(() => callback());
+  });
+
+  walletSession.on('hid-device-revoked', (_event, details) => {
+    if (details.origin && isTrustedWebHidOrigin(details.origin, trustedHidOrigin)) {
+      permittedHidDeviceIds.delete(details.device.deviceId);
+    }
+  });
+  mainWindow.on('closed', () => permittedHidDeviceIds.clear());
 
   // Track window state
   mainWindowStateKeeper.track(mainWindow);

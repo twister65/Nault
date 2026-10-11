@@ -68,3 +68,63 @@ index URL (hash routes permitted).
 The changes are not yet runtime-validated on Ubuntu or Chromebook. The
 next stages are WebHID permissioning, explicit transport choice, disconnect
 handling, and hardware signing tests after the local origin is confirmed.
+
+## Stage 2 — opt-in HID permission discovery (not the transport yet)
+
+Stage 2 adds experimental HID permission handlers **only** when both
+`NAULT_TEST_APP_ORIGIN=1` and `NAULT_TEST_WEBHID=1` are set.
+The default Electron installation continues to deny all WebHID requests.
+LedgerService still uses the pre-existing native HID worker: do not click
+Nault's Reconnect button while testing Chromium HID permissions, as the
+two implementations must not hold the same hardware concurrently.
+
+- Accept permission requests exclusively from the application's exact
+  top-level `nault-app://wallet/index.html` document.
+- Permit only VID `0x2c97` and Nano S Plus normal IDs
+  `0x0050` or `0x5000..0x501f`; never bootloader `0x0005`.
+- Refuse zero or multiple matching Ledger devices rather than guessing.
+- Require a native Electron confirmation dialog for the one matched Ledger.
+- Track only the selected Chromium `deviceId` in RAM; don't persist it.
+- Block and revoke all other HID device access.
+
+### Check permission selection without exchanging APDUs
+
+Launch with a fresh test profile and both environment variables:
+
+```sh
+TEST_PROFILE="$(mktemp -d)"
+NAULT_TEST_APP_ORIGIN=1 NAULT_TEST_WEBHID=1 \
+ ./desktop-app/build/linux-unpacked/nault \
+ --user-data-dir="$TEST_PROFILE" --disable-setuid-sandbox
+```
+
+Open DevTools and paste the following snippet. It adds a temporary test button
+to the rendered page; the HID request is triggered from a real button click,
+not directly from the console. Do not invoke Nault's native Ledger Reconnect
+at the same time.
+
+```js
+const btn = document.createElement('button');
+btn.textContent = 'WebHID permission test (Nano S Plus)';
+btn.style.cssText = 'position:fixed;top:10px;right:10px;z-index:99999';
+btn.onclick = async () => {
+  try {
+    const devices = await navigator.hid.requestDevice({
+      filters: [{ vendorId: 0x2c97 }]
+    });
+    console.log('Selected device count:', devices.length);
+    console.log('Product IDs:', devices.map(d => d.productId.toString(16)));
+  } catch (e) {
+    console.error('WebHID selection failed:', e.name, e.message);
+  }
+};
+document.body.appendChild(btn);
+```
+
+Click the button. Expect an Electron confirmation for one Nano S Plus,
+then one device to be returned on acceptance and none on cancellation. No
+`device.open()` or APDU operation is performed in this stage. Please report
+any permission errors and the product ID shown, but not wallet addresses,
+seeds or Ledger serial numbers.
+
+**Requires compilation and real Electron 44 regression testing.**
