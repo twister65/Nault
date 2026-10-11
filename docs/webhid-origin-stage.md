@@ -128,3 +128,25 @@ any permission errors and the product ID shown, but not wallet addresses,
 seeds or Ledger serial numbers.
 
 **Requires compilation and real Electron 44 regression testing.**
+
+## Stage 2 bugfix — permission checks silently cancelled
+
+The initial Stage 2 used `new URL(APP_WALLET_URL).origin` inside the Node.js
+Electron main process. Node returns `"null"` for `nault-app://wallet` because
+it does not know Electron's custom Chromium origin registration. Consequently
+the exact-origin permission check denied WebHID before device selection.
+The fix uses the explicit `APP_WALLET_ORIGIN` constant from `wallet-origin.ts`.
+
+**Rerun `npm run desktop:test-origin`, `npm run desktop:build` and
+`npm run desktop:local`**, then repeat the permission-only test with
+both opt-in flags enabled. The main-process terminal / Electron log includes
+non-sensitive diagnostic entries:
+
+- `[Nault WebHID] permission-check:` shows three decision booleans.
+- `[Nault WebHID] permission-request:` shows whether the frame was accepted.
+- `[Nault WebHID] select-hid-device:` shows whether the frame is trusted
+  and how many device entries Chromium offered.
+- `[Nault WebHID] Nano S Plus candidate count:` reports the matches.
+
+No serial numbers, APDUs, account addresses, seeds or Chromium device IDs are logged.
+If no dialog appears, report these entries instead of guessing why.

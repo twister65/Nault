@@ -2,8 +2,8 @@ import { net, protocol } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { pathToFileURL, URL } from 'url';
-import { APP_WALLET_URL, isTrustedWalletDocument, isPathInsideRoot } from './wallet-origin';
-export { APP_WALLET_URL, isTrustedWalletDocument } from './wallet-origin';
+import { isPathInsideRoot } from './wallet-origin';
+export { APP_WALLET_ORIGIN, APP_WALLET_URL, isTrustedWalletDocument } from './wallet-origin';
 
 // Separate from the OS-level "nano:" deep link schemes.
 const WALLET_SCHEME = 'nault-app';

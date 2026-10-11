@@ -1,7 +1,7 @@
 import 'babel-polyfill';
 
 import { app, BrowserWindow, shell, Menu, screen, dialog, ipcMain, IpcMainEvent } from 'electron';
-import { APP_WALLET_URL, registerWalletScheme, registerWalletFileProtocol, isTrustedWalletDocument } from './lib/wallet-protocol';
+import { APP_WALLET_ORIGIN, APP_WALLET_URL, registerWalletScheme, registerWalletFileProtocol, isTrustedWalletDocument } from './lib/wallet-protocol';
 import { isNanoSPlusHidDevice, isTrustedWebHidOrigin } from './lib/webhid-policy';
 import { autoUpdater } from 'electron-updater';
 import * as url from 'url';
@@ -260,7 +260,9 @@ function createWindow () {
   const isTrustedWebContents = (contents: Electron.WebContents | null): boolean =>
     !!contents && contents === mainWindow.webContents &&
     isTrustedWalletURL(contents.getURL());
-  const trustedHidOrigin = new URL(APP_WALLET_URL).origin;
+  // Never derive a custom scheme's origin with Node's URL.origin:
+  // that yields "null" and silently denies all HID permission checks.
+  const trustedHidOrigin = APP_WALLET_ORIGIN;
 
   // Permission request/check callback details identify the initiating frame.
   // A trusted top-level webContents alone is insufficient: subframes must
@@ -280,16 +282,27 @@ function createWindow () {
 
   walletSession.setPermissionRequestHandler((contents, permission, callback, details) => {
     if (permission === 'hid') {
-      callback(isTrustedHidFrame(contents, details));
+      const allowed = isTrustedHidFrame(contents, details);
+      if (useExperimentalWebHID) {
+        log.info('[Nault WebHID] permission-request:', { allowed });
+      }
+      callback(allowed);
       return;
     }
     callback(isTrustedWebContents(contents) && permittedWebFeatures.has(permission));
   });
   walletSession.setPermissionCheckHandler((contents, permission, requestingOrigin, details) => {
     if (permission === 'hid') {
-      return isTrustedHidFrame(contents, details) &&
-        isTrustedWebHidOrigin(requestingOrigin, trustedHidOrigin) &&
-        isTrustedWebHidOrigin(details.securityOrigin, trustedHidOrigin);
+      const frameAllowed = isTrustedHidFrame(contents, details);
+      const originAllowed = isTrustedWebHidOrigin(requestingOrigin, trustedHidOrigin);
+      const securityOriginAllowed = isTrustedWebHidOrigin(details.securityOrigin, trustedHidOrigin);
+      if (useExperimentalWebHID) {
+        // Only boolean decisions: never log device IDs, serials, addresses or APDUs.
+        log.info('[Nault WebHID] permission-check:', {
+          frameAllowed, originAllowed, securityOriginAllowed
+        });
+      }
+      return frameAllowed && originAllowed && securityOriginAllowed;
     }
     return isTrustedWebContents(contents) && permittedWebFeatures.has(permission);
   });
@@ -305,16 +318,23 @@ function createWindow () {
   walletSession.on('select-hid-device', (event, details, callback) => {
     event.preventDefault();
     // Reject untrusted frames, missing frames and ambiguous device lists.
-    if (!useExperimentalWebHID ||
-        !mainWindow || mainWindow.isDestroyed() ||
-        !details.frame ||
-        details.frame !== mainWindow.webContents.mainFrame ||
-        !isTrustedWalletURL(details.frame.url)) {
+    const frameAllowed = useExperimentalWebHID &&
+      !!mainWindow && !mainWindow.isDestroyed() &&
+      !!details.frame &&
+      details.frame === mainWindow.webContents.mainFrame &&
+      isTrustedWalletURL(details.frame.url);
+    if (useExperimentalWebHID) {
+      log.info('[Nault WebHID] select-hid-device:', {
+        frameAllowed, offeredDeviceCount: details.deviceList.length
+      });
+    }
+    if (!frameAllowed) {
       callback();
       return;
     }
 
     const candidates = details.deviceList.filter(isNanoSPlusHidDevice);
+    log.info('[Nault WebHID] Nano S Plus candidate count:', candidates.length);
     if (candidates.length !== 1) {
       // Explicitly decline multiple matches instead of guessing which Ledger
       // the user intended to authorize.

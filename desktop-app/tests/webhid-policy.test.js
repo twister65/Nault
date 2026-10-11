@@ -3,6 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { isNanoSPlusHidDevice, isTrustedWebHidOrigin } =
   require('../dist/lib/webhid-policy');
+const { APP_WALLET_ORIGIN, APP_WALLET_URL } =
+  require('../dist/lib/wallet-origin');
 
 test('HID policy permits Nano S Plus normal device variants only', () => {
   const base = { vendorId: 0x2c97, deviceId: 'session-device-1' };
@@ -18,7 +20,11 @@ test('HID policy permits Nano S Plus normal device variants only', () => {
 });
 
 test('HID permissions check the complete and exact secure origin', () => {
-  const trusted = 'nault-app://wallet';
+  const trusted = APP_WALLET_ORIGIN;
+  assert.equal(APP_WALLET_ORIGIN, 'nault-app://wallet');
+  assert.equal(APP_WALLET_URL, APP_WALLET_ORIGIN + '/index.html');
+  // This was the bug: Node returns "null" for custom URL schemes.
+  assert.equal(new URL(APP_WALLET_URL).origin, 'null');
   assert.equal(isTrustedWebHidOrigin(trusted, trusted), true);
   for (const other of [
     'file://', 'https://wallet', 'nault-app://wallet.evil',

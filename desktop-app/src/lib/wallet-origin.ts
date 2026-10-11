@@ -1,7 +1,11 @@
 import * as path from 'path';
 import { URL } from 'url';
 
-export const APP_WALLET_URL = 'nault-app://wallet/index.html';
+// Do not use new URL(APP_WALLET_URL).origin: Node's WHATWG URL parser
+// returns "null" for custom schemes, even when Electron registers them
+// as secure/standard Chromium origins.
+export const APP_WALLET_ORIGIN = 'nault-app://wallet';
+export const APP_WALLET_URL = APP_WALLET_ORIGIN + '/index.html';
 
 export function isTrustedWalletDocument(candidate: string, expected: string): boolean {
   try {
