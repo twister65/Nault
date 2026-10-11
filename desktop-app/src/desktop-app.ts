@@ -226,10 +226,21 @@ function createWindow () {
     }
   });
 
-  // Block navigation from the local wallet to remote pages or other files.
-  // Router fragment navigation within index.html remains available.
-  mainWindow.webContents.on('will-frame-navigate', (event, details) => {
-    if (!details.isMainFrame || !isTrustedWalletURL(details.url)) {
+  // Block navigation in every frame, not just the top-level document.
+  // Electron 44 documents will-frame-navigate, but some generated Electron
+  // typings omit its WebContents.on() overload. Define only this event's
+  // documented shape instead of widening the entire WebContents to any.
+  // Unlike will-navigate, the navigation details are ON the event object.
+  type FrameNavigationEvent = {
+    url: string;
+    isMainFrame: boolean;
+    preventDefault(): void;
+  };
+  const frameNavigationEvents = mainWindow.webContents as unknown as {
+    on(event: 'will-frame-navigate', listener: (event: FrameNavigationEvent) => void): void;
+  };
+  frameNavigationEvents.on('will-frame-navigate', event => {
+    if (!event.isMainFrame || !isTrustedWalletURL(event.url)) {
       event.preventDefault();
       log.warn('Blocked navigation outside the trusted wallet document');
     }
