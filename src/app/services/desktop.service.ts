@@ -9,9 +9,15 @@ export class DesktopService {
   constructor(private notifications: NotificationService) {
     // The main process provides this allowlisted bridge from the preload.
     // Browsers do not expose it; they continue to run without desktop IPC.
-    if (window.naultDesktop) {
-      this._ipc = window.naultDesktop;
-      console.log('Desktop IPC bridge loaded');
+    try {
+      if (window.naultDesktop) {
+        this._ipc = window.naultDesktop;
+        console.log('Desktop IPC bridge loaded');
+      }
+    } catch (error) {
+      // Fail closed if the preload bridge is unavailable or throws.
+      this._ipc = undefined;
+      console.error('Unable to initialize desktop IPC bridge:', error);
     }
   }
 
