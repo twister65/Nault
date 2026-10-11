@@ -132,13 +132,15 @@ export class LedgerService {
 
     let resolved = false;
 
-    setTimeout(() => {
+    // Allow the worker and Ledger up to the configured transport timeout.
+    // The former 3-second deadline could close a healthy device mid-request.
+    const connectionTimeout = setTimeout(() => {
       if (resolved || this.ledger.status === LedgerStatus.READY) return;
       this.setLedgerStatus(LedgerStatus.NOT_CONNECTED, `Ledger device not detected`);
       this.resetLedger();
       resolved = true;
       return false;
-    }, 3000);
+    }, this.waitTimeout);
 
 
     // Attempt to load account 0 - which confirms the app is unlocked and ready
@@ -148,6 +150,7 @@ export class LedgerService {
       console.info('[Ledger diagnosis] Account 0 read completed');
       this.setLedgerStatus(LedgerStatus.READY, `Ledger device ready`);
       resolved = true;
+      clearTimeout(connectionTimeout);
 
       if (!this.pollingLedger) {
         this.pollingLedger = true;
@@ -156,6 +159,7 @@ export class LedgerService {
 
       return true;
     } catch (err) {
+      clearTimeout(connectionTimeout);
       console.log(err);
       if (err.statusCode === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
         this.setLedgerStatus(LedgerStatus.LOCKED, `Ledger device locked`);
