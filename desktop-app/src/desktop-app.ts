@@ -205,10 +205,23 @@ function createWindow () {
     mainWindow = null;
   });
 
-  // Detect link clicks to new windows and open them in the default browser
-  mainWindow.webContents.on('new-window', function(e, externalurl) {
-    e.preventDefault();
-    shell.openExternal(externalurl);
+  // The legacy 'new-window' event was removed in Electron 22.
+  // Never create a second Electron window for external web links; use the OS browser.
+  mainWindow.webContents.setWindowOpenHandler(({ url: externalUrl }) => {
+    try {
+      // Do not pass arbitrary protocols (e.g. file:, javascript:) to the OS.
+      const parsed = new URL(externalUrl);
+      if (parsed.protocol === 'https:') {
+        shell.openExternal(externalUrl).catch(error => {
+          log.warn('Could not open external URL:', error);
+        });
+      } else {
+        log.warn('Blocked non-HTTPS external URL');
+      }
+    } catch (error) {
+      log.warn('Blocked invalid external URL:', error);
+    }
+    return { action: 'deny' };
   });
 
   mainWindow.webContents.on('did-finish-load', function () {
