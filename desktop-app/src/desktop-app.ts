@@ -1,12 +1,16 @@
 import 'babel-polyfill';
 
 import { app, BrowserWindow, shell, Menu, screen, dialog, ipcMain, IpcMainEvent } from 'electron';
+import { APP_WALLET_URL, registerWalletScheme, registerWalletFileProtocol, isTrustedWalletDocument } from './lib/wallet-protocol';
 import { autoUpdater } from 'electron-updater';
 import * as url from 'url';
 import * as path from 'path';
 import { initialize } from './lib/ledger';
 import * as settings from 'electron-settings';
 const log = require('electron-log');
+
+// Declare the secure local scheme before Electron's ready event.
+registerWalletScheme();
 
 // Diagnostic-only listener: record native main-process exceptions without
 // swallowing them or changing Electron's normal uncaught-error behavior.
@@ -173,20 +177,18 @@ if (process.platform === 'darwin') {
 
 let mainWindow: BrowserWindow;
 
-// The desktop UI is bundled locally. Reject navigation and privileged IPC
-// from any page other than this exact file (fragment routes are allowed).
+// Keep existing file:// wallet storage intact while trying a new origin.
+// A new origin has separate localStorage, so this must remain opt-in until
+// a reviewed wallet data migration exists.
 const trustedIndexPath = path.resolve(__dirname, '../../dist/index.html');
+const useExperimentalAppOrigin = process.env.NAULT_TEST_APP_ORIGIN === '1';
+const trustedWalletURL = useExperimentalAppOrigin
+  ? APP_WALLET_URL
+  : url.pathToFileURL(trustedIndexPath).toString();
 
+// Accept hash-based Angular routes, but never trust another document.
 function isTrustedWalletURL(candidate: string): boolean {
-  try {
-    const parsed = new url.URL(candidate);
-    return parsed.protocol === 'file:' &&
-      !parsed.hostname &&
-      !parsed.search &&
-      url.fileURLToPath(parsed) === trustedIndexPath;
-  } catch (_error) {
-    return false;
-  }
+  return isTrustedWalletDocument(candidate, trustedWalletURL);
 }
 
 function isTrustedLedgerSender(event: IpcMainEvent): boolean {
@@ -271,8 +273,8 @@ function createWindow () {
   // Track window state
   mainWindowStateKeeper.track(mainWindow);
 
-  // Use only the local bundled index.html, never a remote wallet site.
-  mainWindow.loadURL(url.pathToFileURL(trustedIndexPath).toString());
+  // Load only the chosen bundled wallet document, never a remote site.
+  mainWindow.loadURL(trustedWalletURL);
 
   // Emitted when the window is closed.
   mainWindow.on('closed', function () {
@@ -327,6 +329,10 @@ if (!appLock) {
   app.quit();
 } else {
   app.on('ready', () => {
+    // Register the confined file handler before loading the test origin.
+    if (useExperimentalAppOrigin) {
+      registerWalletFileProtocol(path.dirname(trustedIndexPath));
+    }
     // Once the app is ready, launch the wallet window
     createWindow();
 
