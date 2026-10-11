@@ -323,7 +323,9 @@ function createWindow () {
     const correctType = details.deviceType === 'hid';
     const originAllowed = isTrustedWebHidOrigin(details.origin, trustedHidOrigin);
     const eligibleLedger = isNanoSPlusHidDevice(details.device);
-    const selectedIdMatched = eligibleLedger &&
+    // Narrow the HID | Serial | USB union at the property access itself.
+    // TypeScript 4.5 does not preserve the narrowing through eligibleLedger.
+    const selectedIdMatched = isNanoSPlusHidDevice(details.device) &&
       permittedHidDeviceIds.has(details.device.deviceId);
     const granted = useExperimentalWebHID && correctType &&
       originAllowed && eligibleLedger && selectedIdMatched;
