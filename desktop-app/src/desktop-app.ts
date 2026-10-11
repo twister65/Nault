@@ -283,9 +283,12 @@ function createWindow () {
     frameDetails?.isMainFrame === true &&
     isTrustedWalletURL(frameDetails.requestingUrl || '');
 
-  // Device grants exist only in memory until this window closes. Using the
-  // Chromium device ID prevents silently granting all Ledger USB devices.
-  const permittedHidDeviceIds = new Set<string>();
+  // Let Electron/Chromium hold only the grants produced by requestDevice
+  // in its default in-memory permission store. Do not install a custom
+  // setDevicePermissionHandler: in Electron 44 its device object can lack
+  // deviceId even when the chooser device includes it. A custom handler
+  // overrides Chromium's selection-based grant checks and made getDevices()
+  // return zero despite explicit consent. Never grant by VID/PID alone.
 
   walletSession.setPermissionRequestHandler((contents, permission, callback, details) => {
     if (permission === 'hid') {
@@ -315,33 +318,6 @@ function createWindow () {
       return frameAllowed && originAllowed && securityOriginAllowed;
     }
     return isTrustedWebContents(contents) && permittedWebFeatures.has(permission);
-  });
-
-  walletSession.setDevicePermissionHandler(details => {
-    // Electron calls this again for navigator.hid.getDevices() and open().
-    // A selection succeeding does not prove that this grant check succeeds.
-    const correctType = details.deviceType === 'hid';
-    const originAllowed = isTrustedWebHidOrigin(details.origin, trustedHidOrigin);
-    const eligibleLedger = isNanoSPlusHidDevice(details.device);
-    // Narrow the HID | Serial | USB union at the property access itself.
-    // TypeScript 4.5 does not preserve the narrowing through eligibleLedger.
-    const selectedIdMatched = isNanoSPlusHidDevice(details.device) &&
-      permittedHidDeviceIds.has(details.device.deviceId);
-    const granted = useExperimentalWebHID && correctType &&
-      originAllowed && eligibleLedger && selectedIdMatched;
-    if (useExperimentalWebHID && correctType) {
-      // Never log Chromium IDs, serials, addresses, APDUs or raw URLs.
-      log.info('[Nault WebHID] device-permission-check:', {
-        granted,
-        originAllowed,
-        originForm: describeWebHidOrigin(details.origin, trustedHidOrigin),
-        eligibleLedger,
-        selectedIdMatched,
-        ...describeNanoSPlusHidDevice(details.device),
-        selectedDeviceCount: permittedHidDeviceIds.size
-      });
-    }
-    return granted;
   });
 
   walletSession.on('select-hid-device', (event, details, callback) => {
@@ -391,21 +367,17 @@ function createWindow () {
         callback();
         return;
       }
-      permittedHidDeviceIds.add(candidate.deviceId);
+      // callback(deviceId) registers only this user's chosen HID device
+      // in Chromium's session-local grant store.
       log.info('[Nault WebHID] consent recorded for selected Ledger:', {
-        selectedDeviceCount: permittedHidDeviceIds.size,
         ...describeNanoSPlusHidDevice(candidate)
       });
       callback(candidate.deviceId);
     }).catch(() => callback());
   });
 
-  walletSession.on('hid-device-revoked', (_event, details) => {
-    if (details.origin && isTrustedWebHidOrigin(details.origin, trustedHidOrigin)) {
-      permittedHidDeviceIds.delete(details.device.deviceId);
-    }
-  });
-  mainWindow.on('closed', () => permittedHidDeviceIds.clear());
+  // HID revocation and cleanup are handled by Chromium's permission store.
+  // Use an isolated test profile and close Electron to discard in-memory grants.
 
   // Track window state
   mainWindowStateKeeper.track(mainWindow);

@@ -64,3 +64,19 @@ test('sanitized HID device diagnostics expose only shape, never identifiers', ()
   });
   assert.equal(JSON.stringify(describeNanoSPlusHidDevice(ledger)).includes('private-'), false);
 });
+
+
+// The default Electron permission store is critical: a previous custom
+// device handler expected details.device.deviceId, but Electron 44 provides
+// deviceId only during chooser selection, not during later grant checks.
+// Keep this a source-level regression test; unit tests have no Electron session.
+test('experimental WebHID uses Chromium chooser grants rather than a custom device handler', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const mainSource = fs.readFileSync(path.join(__dirname, '../src/desktop-app.ts'), 'utf8');
+  assert.equal(mainSource.includes('walletSession.setDevicePermissionHandler('), false);
+  assert.equal(mainSource.includes('walletSession.on(\'select-hid-device\''), true);
+  assert.equal(mainSource.includes('details.deviceList.filter(isNanoSPlusHidDevice)'), true);
+  assert.equal(mainSource.includes('callback(candidate.deviceId)'), true);
+  assert.equal(mainSource.includes('isTrustedWalletURL(details.frame.url)'), true);
+});

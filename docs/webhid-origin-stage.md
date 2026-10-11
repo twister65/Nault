@@ -1,3 +1,42 @@
+
+## Resolution: Electron 44 default HID grants (2026-10-11)
+
+**This section supersedes all earlier device-permission-handler debugging
+suggestions in this document.** The earlier experiment installed
+`setDevicePermissionHandler` and tried to correlate the selected
+`deviceId` with `details.device.deviceId`. Hardware diagnostics proved:
+
+- Chooser: Nano S Plus selected, `deviceIdPresent: true`.
+- Later permission check for **the same VID/PID**: `deviceIdPresent: false`.
+- The custom handler consequently returned `false`, so
+  `navigator.hid.getDevices()` returned zero devices.
+
+Electron 44 documents that **if `setDevicePermissionHandler` is
+not installed**, permissions granted through `requestDevice()`
+are used by default and held in memory by Electron/Chromium.
+See https://www.electronjs.org/docs/latest/api/session#sessetdevicepermissionhandlerhandler
+
+The custom device handler, custom device-ID set and revoke listener have
+therefore been removed. They are **not** replaced by a VID/PID blanket
+allowlist. The existing `setPermissionRequestHandler`,
+`setPermissionCheckHandler`, trusted main-frame/origin checks,
+`select-hid-device` strict Nano S Plus selection, single candidate
+requirement and explicit Electron consent dialog are all retained.
+The approved chooser callback registers only the selected device.
+
+Retest with a fresh isolated `TEST_PROFILE`. Use the in-app numbered
+buttons in order:
+1. Select: `Selected: 1 / Nano S Plus: 1`.
+2. Enumerate: `Authorized Nano S Plus: 1`.
+3. Open and close without APDU: `OPEN / CLOSE: OK`.
+4. Only then read Nano account-0 address on-device.
+
+If step 2 remains zero, capture the visible result plus only the
+permission-check/selection/consent lines in `main.log`.
+`device-permission-check` lines are no longer emitted; that is expected.
+Do not attempt to fix by broadening origin checks or enabling all Ledger
+devices. Do not perform signing or transfers.
+
 # Experimental secure desktop origin — WebHID stage 1
 
 The `feature/webhid` branch introduces an opt-in local origin at
@@ -214,30 +253,23 @@ private key, seed or serial number.
 
 ## Stage 3 HID grant diagnostics — `getDevices()` unexpectedly empty
 
-A successful `requestDevice()` only verifies the chooser selection.
-Electron's custom `setDevicePermissionHandler` overrides the normal
-in-memory grant check; a rejection there can result in zero devices from
-`navigator.hid.getDevices()` or `Failed to open the device`.
+Historical failure analysis (now fixed): the former custom
+`setDevicePermissionHandler` overrode default grants and rejected
+a consented device because the later callback lacked a `deviceId`.
+The custom handler has been removed; Electron now tracks the selected
+device automatically.
 
-Logs now contain:
-- `[Nault WebHID] consent recorded for selected Ledger:` (count only).
-- `[Nault WebHID] device-permission-check:` with decision booleans,
-  an anonymized origin category, and the count of selected Chromium IDs.
-No raw device identifiers, serial numbers, addresses or APDUs are logged.
+Logs contain `[Nault WebHID] consent recorded for selected Ledger:`
+with safe device-shape booleans (no IDs or serials). The removed
+`device-permission-check` callback no longer produces diagnostics.
 
 Use the same *running* Electron instance to run `requestDevice()`,
 accept consent, and then `getDevices()`. A new `mktemp -d` profile or
 restarted Electron window should not inherit the prior in-memory grant.
 
-- `originAllowed: false` — inspect anonymized `originForm` (still deny
-  unknown and opaque origins).
-- `eligibleLedger: false` — a different HID collection/model reached
-  the grant check, or the metadata differs.
-- `selectedIdMatched: false` with a recorded selection — the Chromium
-  device ID seen in the permission check does not match the chooser ID.
-  Never grant by vendor ID alone as a workaround.
-- No `device-permission-check` messages — confirm the grant check is
-  invoked, the same window is running, and the button is clicked.
+These were diagnostic categories for the **removed** handler and are
+not expected in new logs. If step 2 still fails, share the chooser
+and main-frame permission-check logs, not hardware identifiers.
 
 Diagnostics only; no changes to the HID allowlist or permission decisions.
 
@@ -263,10 +295,10 @@ checks will not expose raw IDs, names or serial numbers.
 - `granted: true` and `getDevices() > 0`, but opening fails:
   investigate interface contention/hidraw, not permissions.
 
-All allow/deny predicates are unchanged. The updater and native Ledger IPC
-now explicitly handle rejected promises; neither change alters APDUs,
-device permissions, or hardware ownership. If Node still emits an
-unhandled rejection, capture the first stack trace to locate its source.
+Electron now supplies the chooser-based in-memory device grants.
+The updater and native Ledger IPC retain explicit rejection handlers.
+If Node still emits an unhandled rejection, capture its first stack
+trace without exposing wallet or device secrets.
 
 
 ## Built-in WebHID diagnostic panel — ordered manual test plan
@@ -301,7 +333,8 @@ flag merely shows the panel; Electron main still enforces all permissions.
 - [ ] **2. Check authorized devices**: click the next button in the **same
       running Electron session**. It calls `navigator.hid.getDevices()`.
       Expected: `Permission: Authorized Nano S Plus: 1`.
-      If 0, **stop** and inspect the main-process HID permission/grant logs.
+      If 0, **stop** and inspect the main-process HID selection and
+      main-frame permission-check logs.
 - [ ] **3. Open / close (no APDU)**: click the third button, which
       rechecks the granted Nano S Plus and calls only `device.open()`
       followed by `device.close()` in a `finally`.
