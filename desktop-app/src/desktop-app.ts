@@ -1,12 +1,20 @@
 import 'babel-polyfill';
 
-import { app, BrowserWindow, shell, Menu, screen, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, shell, Menu, screen, dialog, ipcMain, IpcMainEvent } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as url from 'url';
 import * as path from 'path';
 import { initialize } from './lib/ledger';
 import * as settings from 'electron-settings';
 const log = require('electron-log');
+
+// Diagnostic-only listener: record native main-process exceptions without
+// swallowing them or changing Electron's normal uncaught-error behavior.
+// This must not log wallet secrets, APDUs, or account addresses.
+process.on('uncaughtExceptionMonitor', (error, origin) => {
+  console.error('[Nault main uncaught exception]', origin,
+    error instanceof Error ? error.stack : error);
+});
 // Don't want errors to display when checking for update
 // Too annoying if there would be long-term problems with the source
 // Error would pop up on every launch
@@ -105,7 +113,7 @@ class AppUpdater {
     autoUpdater.on('update-available', (event, releaseNotes, releaseName) => {
       if (isDownloading) return;
       const dialogOpts = {
-        type: 'info',
+        type: 'info' as const,
         buttons: ['Update', 'Ask Later'],
         title: 'New Version',
         message: 'An update for Nault is available!',
@@ -142,7 +150,7 @@ class AppUpdater {
       mainWindow.setTitle(`Nault - ${autoUpdater.currentVersion}`); // reset title
       showUpdateErrors = false; // disable errors
       const dialogOpts = {
-        type: 'error',
+        type: 'error' as const,
         buttons: ['OK'],
         title: 'Update Error',
         message: 'Something went wrong while downloading Nault.',
@@ -163,10 +171,37 @@ if (process.platform === 'darwin') {
   nano_schemes.forEach((scheme) => app.setAsDefaultProtocolClient(scheme, process.execPath, args));
 }
 
-// Initialize Ledger device detection
-initialize();
-
 let mainWindow: BrowserWindow;
+
+// The desktop UI is bundled locally. Reject navigation and privileged IPC
+// from any page other than this exact file (fragment routes are allowed).
+const trustedIndexPath = path.resolve(__dirname, '../../dist/index.html');
+
+function isTrustedWalletURL(candidate: string): boolean {
+  try {
+    const parsed = new url.URL(candidate);
+    return parsed.protocol === 'file:' &&
+      !parsed.hostname &&
+      !parsed.search &&
+      url.fileURLToPath(parsed) === trustedIndexPath;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isTrustedLedgerSender(event: IpcMainEvent): boolean {
+  return !!mainWindow &&
+    !mainWindow.isDestroyed() &&
+    event.sender === mainWindow.webContents &&
+    !!event.senderFrame &&
+    event.senderFrame === event.sender.mainFrame &&
+    isTrustedWalletURL(event.senderFrame.url);
+}
+
+// Validate the sender before handling any Ledger IPC, including account reads
+// and signing requests. This does not replace transaction confirmation on
+// the physical Ledger display.
+initialize(isTrustedLedgerSender);
 
 function createWindow () {
   // Get window state
@@ -182,7 +217,8 @@ function createWindow () {
     {
       // Renderer code must not have direct access to Node.js or Electron.
       // Only the narrow IPC bridge from preload.ts is exposed to Angular.
-      webSecurity: false, // Existing setting; harden in a separate PR.
+      webSecurity: true,
+      sandbox: true,
       devTools: true,
       nodeIntegration: false,
       contextIsolation: true,
@@ -190,25 +226,76 @@ function createWindow () {
     }
   });
 
+  // Block navigation in every frame, not just the top-level document.
+  // Electron 44 documents will-frame-navigate, but some generated Electron
+  // typings omit its WebContents.on() overload. Define only this event's
+  // documented shape instead of widening the entire WebContents to any.
+  // Unlike will-navigate, the navigation details are ON the event object.
+  type FrameNavigationEvent = {
+    url: string;
+    isMainFrame: boolean;
+    preventDefault(): void;
+  };
+  const frameNavigationEvents = mainWindow.webContents as unknown as {
+    on(event: 'will-frame-navigate', listener: (event: FrameNavigationEvent) => void): void;
+  };
+  frameNavigationEvents.on('will-frame-navigate', event => {
+    if (!event.isMainFrame || !isTrustedWalletURL(event.url)) {
+      event.preventDefault();
+      log.warn('Blocked navigation outside the trusted wallet document');
+    }
+  });
+
+  // WebHID is deliberately NOT enabled in this PR. The existing Ledger
+  // connection uses a native HID worker; Chromium has no reason to receive
+  // permission to open a hardware device. Future WebHID support must
+  // explicitly authorize trusted main-frame requests and Ledger vendor IDs.
+  const walletSession = mainWindow.webContents.session;
+  const permittedWebFeatures = new Set(['media', 'clipboard-read', 'clipboard-sanitized-write']);
+  const isTrustedWebContents = (contents: Electron.WebContents | null): boolean =>
+    !!contents && contents === mainWindow.webContents &&
+    isTrustedWalletURL(contents.getURL());
+
+  walletSession.setPermissionRequestHandler((contents, permission, callback) => {
+    callback(isTrustedWebContents(contents) && permittedWebFeatures.has(permission));
+  });
+  walletSession.setPermissionCheckHandler((contents, permission) =>
+    isTrustedWebContents(contents) && permittedWebFeatures.has(permission)
+  );
+  walletSession.setDevicePermissionHandler(() => false);
+  walletSession.on('select-hid-device', (event, _details, callback) => {
+    event.preventDefault();
+    callback();
+  });
+
   // Track window state
   mainWindowStateKeeper.track(mainWindow);
 
-  // mainWindow.loadURL('http://localhost:4200/'); // Only use this for development
-  mainWindow.loadURL(url.format({
-    pathname: path.join(__dirname, '../../dist/index.html'),
-    protocol: 'file:',
-    slashes: true
-  }));
+  // Use only the local bundled index.html, never a remote wallet site.
+  mainWindow.loadURL(url.pathToFileURL(trustedIndexPath).toString());
 
   // Emitted when the window is closed.
   mainWindow.on('closed', function () {
     mainWindow = null;
   });
 
-  // Detect link clicks to new windows and open them in the default browser
-  mainWindow.webContents.on('new-window', function(e, externalurl) {
-    e.preventDefault();
-    shell.openExternal(externalurl);
+  // The legacy 'new-window' event was removed in Electron 22.
+  // Never create a second Electron window for external web links; use the OS browser.
+  mainWindow.webContents.setWindowOpenHandler(({ url: externalUrl }) => {
+    try {
+      // Do not pass arbitrary protocols (e.g. file:, javascript:) to the OS.
+      const parsed = new URL(externalUrl);
+      if (parsed.protocol === 'https:') {
+        shell.openExternal(externalUrl).catch(error => {
+          log.warn('Could not open external URL:', error);
+        });
+      } else {
+        log.warn('Blocked non-HTTPS external URL');
+      }
+    } catch (error) {
+      log.warn('Blocked invalid external URL:', error);
+    }
+    return { action: 'deny' };
   });
 
   mainWindow.webContents.on('did-finish-load', function () {

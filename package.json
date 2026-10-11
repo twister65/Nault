@@ -21,8 +21,8 @@
     "desktop:compile": "cd desktop-app && tsc && cd ..",
     "desktop:build": "npm run wallet:build-desktop && npm run desktop:compile",
     "desktop:build-local": "npm run desktop:build && npm run desktop:local",
-    "desktop:dev": "npm run desktop:compile && node scripts/prepare-desktop-ledger.js && electron desktop-app/dist/desktop-app.js",
-    "desktop:local": "node scripts/prepare-desktop-ledger.js && electron-builder -p never -c.npmRebuild=false"
+    "desktop:dev": "npm run desktop:compile && electron desktop-app/dist/desktop-app.js",
+    "desktop:local": "electron-builder -p never -c.npmRebuild=false"
   },
   "private": true,
   "dependencies": {
@@ -41,6 +41,7 @@
     "@ledgerhq/hw-transport": "^6.27.1",
     "@ledgerhq/hw-transport-node-ble": "^6.27.1",
     "@ledgerhq/hw-transport-node-hid": "^6.27.1",
+    "@ledgerhq/hw-transport-node-hid-noevents": "6.27.5",
     "@ledgerhq/hw-transport-u2f": "^5.34.0",
     "@ledgerhq/hw-transport-web-ble": "^6.27.1",
     "@ledgerhq/hw-transport-webhid": "^6.27.1",
@@ -99,7 +100,7 @@
     "@types/qrcode": "^0.8.1",
     "@typescript-eslint/eslint-plugin": "5.17.0",
     "@typescript-eslint/parser": "5.17.0",
-    "electron": "^9.4.0",
+    "electron": "44.7.0",
     "electron-builder": "^25.1.8",
     "eslint": "^8.12.0",
     "jasmine-core": "~3.6.0",

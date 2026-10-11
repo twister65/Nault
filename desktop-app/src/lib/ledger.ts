@@ -1,10 +1,10 @@
-import TransportNodeHid from '@ledgerhq/hw-transport-node-hid';
+import LedgerHidWorkerTransport from './ledger-hid-worker-transport';
 import Transport from '@ledgerhq/hw-transport';
 import Nano from 'hw-app-nano';
 
 import * as rx from 'rxjs';
 
-import { ipcMain } from 'electron';
+import { ipcMain, IpcMainEvent } from 'electron';
 
 const STATUS_CODES = {
   SECURITY_STATUS_NOT_SATISFIED: 0x6982,
@@ -52,19 +52,36 @@ export class LedgerService {
 
   // Reset connection to the ledger device, update the status
   resetLedger(errorMessage = '') {
+    const transport = this.ledger.transport;
     this.ledger.transport = null;
     this.ledger.nano = null;
+    // Release the worker and HID handle when a device disconnects or fails.
+    if (transport) {
+      Promise.resolve(transport.close()).catch(error => {
+        console.warn('Could not close Ledger transport:', error);
+      });
+    }
     this.setLedgerStatus(LedgerStatus.NOT_CONNECTED, errorMessage);
   }
 
   // Open a connection to the usb device and initialize up the Nano Ledger library
   async loadTransport(bluetooth: boolean) {
+    if (!bluetooth) {
+      // Keep all native USB/HID work inside a dedicated Node.js worker.
+      // Electron 44 cannot safely use the legacy node-hid async read
+      // callback, while the bounded synchronous read works in the worker.
+      console.info('[Ledger diagnosis] Opening USB HID worker transport');
+      const hidTransport = await LedgerHidWorkerTransport.open();
+      console.info('[Ledger diagnosis] USB HID worker ready');
+      this.ledger.transport = hidTransport;
+      this.ledger.nano = new Nano(hidTransport);
+      console.info('[Ledger diagnosis] Nano application transport initialized');
+      return hidTransport;
+    }
+
     return new Promise((resolve, reject) => {
-      // Load the optional Bluetooth native binding only when requested.
-      // Nano S Plus uses USB HID and must not require a Bluetooth driver to start.
-      const transport = bluetooth
-        ? require('@ledgerhq/hw-transport-node-ble').default
-        : TransportNodeHid;
+      // Keep the optional Bluetooth transport lazy-loaded and unchanged.
+      const transport = require('@ledgerhq/hw-transport-node-ble').default;
       let found = false;
       const sub = transport.listen({
         next: async(e) => {
@@ -115,20 +132,25 @@ export class LedgerService {
 
     let resolved = false;
 
-    setTimeout(() => {
+    // Allow the worker and Ledger up to the configured transport timeout.
+    // The former 3-second deadline could close a healthy device mid-request.
+    const connectionTimeout = setTimeout(() => {
       if (resolved || this.ledger.status === LedgerStatus.READY) return;
       this.setLedgerStatus(LedgerStatus.NOT_CONNECTED, `Ledger device not detected`);
       this.resetLedger();
       resolved = true;
       return false;
-    }, 3000);
+    }, this.waitTimeout);
 
 
     // Attempt to load account 0 - which confirms the app is unlocked and ready
     try {
+      console.info('[Ledger diagnosis] Reading account 0 from Nano application');
       const accountDetails = await this.getLedgerAccount(0);
+      console.info('[Ledger diagnosis] Account 0 read completed');
       this.setLedgerStatus(LedgerStatus.READY, `Ledger device ready`);
       resolved = true;
+      clearTimeout(connectionTimeout);
 
       if (!this.pollingLedger) {
         this.pollingLedger = true;
@@ -137,6 +159,7 @@ export class LedgerService {
 
       return true;
     } catch (err) {
+      clearTimeout(connectionTimeout);
       console.log(err);
       if (err.statusCode === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
         this.setLedgerStatus(LedgerStatus.LOCKED, `Ledger device locked`);
@@ -149,12 +172,15 @@ export class LedgerService {
   async getLedgerAccount(accountIndex, showOnScreen = false) {
     try {
       this.queryingLedger = true;
+      console.info('[Ledger diagnosis] Requesting Nano address (index only):', accountIndex);
       const account = await this.ledger.nano.getAddress(this.ledgerPath(accountIndex), showOnScreen);
+      console.info('[Ledger diagnosis] Nano address request resolved');
       this.queryingLedger = false;
 
       this.ledgerMessage$.next({ event: 'account-details', data: Object.assign({ accountIndex }, account) });
     } catch (err) {
       this.queryingLedger = false;
+      console.error('[Ledger diagnosis] Nano address request failed:', err);
 
       const data = { error: true, errorMessage: typeof err === 'string' ? err : err.message };
       this.ledgerMessage$.next({ event: 'account-details', data: Object.assign({ accountIndex }, data) });
@@ -242,7 +268,7 @@ export class LedgerService {
 let sendingWindow = null;
 
 // Create a copy of the ledger service and register listeners with the browser window
-export function initialize() {
+export function initialize(isTrustedSender: (event: IpcMainEvent) => boolean) {
   console.log('Ledger service initializing');
   const Ledger = new LedgerService();
 
@@ -262,7 +288,12 @@ export function initialize() {
 
   // Listen for new messages from the browser window and dispatch accordingly
   ipcMain.on('ledger', (event, data) => {
-    console.log(`Got ledger message?!`, data);
+    // The renderer is not allowed to invoke hardware-wallet commands from
+    // another window, a subframe, or a document outside the bundled wallet.
+    if (!isTrustedSender(event)) {
+      console.warn('Rejected Ledger IPC from an untrusted sender');
+      return;
+    }
     sendingWindow = event.sender;
     if (!data || !data.event) return;
     switch (data.event) {
