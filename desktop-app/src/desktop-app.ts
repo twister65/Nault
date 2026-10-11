@@ -179,7 +179,7 @@ const trustedIndexPath = path.resolve(__dirname, '../../dist/index.html');
 
 function isTrustedWalletURL(candidate: string): boolean {
   try {
-    const parsed = new URL(candidate);
+    const parsed = new url.URL(candidate);
     return parsed.protocol === 'file:' &&
       !parsed.hostname &&
       !parsed.search &&
