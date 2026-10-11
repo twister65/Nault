@@ -1,4 +1,4 @@
-import TransportNodeHid from '@ledgerhq/hw-transport-node-hid';
+import TransportNodeHidNoEvents from '@ledgerhq/hw-transport-node-hid-noevents';
 import Transport from '@ledgerhq/hw-transport';
 import Nano from 'hw-app-nano';
 
@@ -59,12 +59,23 @@ export class LedgerService {
 
   // Open a connection to the usb device and initialize up the Nano Ledger library
   async loadTransport(bluetooth: boolean) {
+    if (!bluetooth) {
+      // The event-driven HID transport registers native USB hotplug callbacks.
+      // Under Electron 44 these can fail with "Error in native callback" even
+      // though the native usb and node-hid modules load successfully.
+      //
+      // For USB devices, enumerate and open the first Ledger HID device
+      // directly. The no-events transport uses node-hid alone and does not
+      // register USB hotplug listeners. Reconnect remains user-initiated.
+      const hidTransport = await TransportNodeHidNoEvents.open(null);
+      this.ledger.transport = hidTransport;
+      this.ledger.nano = new Nano(hidTransport);
+      return hidTransport;
+    }
+
     return new Promise((resolve, reject) => {
-      // Load the optional Bluetooth native binding only when requested.
-      // Nano S Plus uses USB HID and must not require a Bluetooth driver to start.
-      const transport = bluetooth
-        ? require('@ledgerhq/hw-transport-node-ble').default
-        : TransportNodeHid;
+      // Keep the optional Bluetooth transport lazy-loaded and unchanged.
+      const transport = require('@ledgerhq/hw-transport-node-ble').default;
       let found = false;
       const sub = transport.listen({
         next: async(e) => {
