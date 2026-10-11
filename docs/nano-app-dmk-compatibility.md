@@ -130,11 +130,11 @@ device. No signing tests using real funds at this stage.
 
 ## Test plan and release gates
 
-**Gate 1: existing experiment (LedgerJS WebHID)**
-- Confirm Chromium's secure origin, user selection and Nano S Plus
-  product filter. (Device selection already passed on Linux.)
-- Verify `getAddress("44'/165'/0'", true)` with the on-device display
-  and a read-only test account. Do not run native worker in parallel.
+**Gate 1: existing experiment (LedgerJS WebHID) — PASSED manually 2026-10-11**
+- Confirmed Chromium secure origin, consent and Nano S Plus chooser selection on Linux.
+- Confirmed in-app `getDevices()`, open/close, and `getAddress("44'/165'/0'", true)`.
+- The user reports the returned `nano_` address matches the Ledger's physical screen.
+- This is a maintainer-run hardware test, not CI or a DMK test; keep the native worker isolated.
 
 **Gate 2: DMK transport and app identity**
 - Pin a DMK version supporting Electron 44 and available build tooling.

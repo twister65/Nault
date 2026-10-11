@@ -1,3 +1,34 @@
+## Hardware validation recorded — 2026-10-11
+
+**Reported successful by the maintainer on an actual Ledger Nano S Plus**
+with the Nano application open, using Nault Desktop/Electron 44 on Linux
+and the experimental secure `nault-app://wallet` origin. This is a
+manual hardware result, not an automated CI test or DMK test.
+
+The four built-in test-panel stages completed successfully:
+
+1. Device chooser/consent: exactly one permitted Nano S Plus selected.
+2. `navigator.hid.getDevices()`: selected Ledger visible after consent.
+3. `HIDDevice.open()` / `close()`: succeeded without an APDU.
+4. `hw-app-nano.getAddress("44'/165'/0'", true)`: returned a `nano_`
+   address identical to the one displayed and verified on the physical
+   Ledger. The read-only WebHID transport was subsequently closed by code.
+
+The user-supplied main-process logs corroborate origin/frame checks,
+chooser count and explicit selection of a Nano S Plus. They do not
+themselves print an address or APDU; the successful address comparison
+is confirmed by the user's direct report. The logs show
+`frameAllowed`, `originAllowed`, and `securityOriginAllowed` as
+`true`; the selected device matched Ledger VID and allowed S Plus PID.
+
+**Validated scope:** chooser, access grant, HID connection lifecycle,
+read-only Nano APDU address derivation, physical display confirmation.
+
+**Still unvalidated:** DMK session/transport integration, robust native
+transport exclusion, signing and cache-block authorization, transaction
+construction, Nano RPC sync, Ledger Wallet coin-module integration.
+Do not present this manual test as production security certification.
+
 
 ## Resolution: Electron 44 default HID grants (2026-10-11)
 
@@ -248,7 +279,7 @@ Electron preload and that `location.protocol === 'nault-app:'`.
 If an error occurs, report the *error message only*, without sharing any
 private key, seed or serial number.
 
-**Not yet compiled or hardware-tested in this branch.**
+**Updated 2026-10-11:** Compiled and tested on Linux by the maintainer with a real Nano S Plus; read-only account-0 address confirmed against the hardware display. See the hardware-validation section above. This does not validate DMK or signing.
 
 
 ## Stage 3 HID grant diagnostics — `getDevices()` unexpectedly empty
