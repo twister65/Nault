@@ -180,9 +180,13 @@ function createWindow () {
     height: mainWindowStateKeeper.height,
     webPreferences:
     {
-      webSecurity: false,
+      // Renderer code must not have direct access to Node.js or Electron.
+      // Only the narrow IPC bridge from preload.ts is exposed to Angular.
+      webSecurity: false, // Existing setting; harden in a separate PR.
       devTools: true,
-      nodeIntegration: true
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
     }
   });
 
