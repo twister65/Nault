@@ -69,6 +69,16 @@ export class ConfigureWalletComponent implements OnInit {
     window.location.protocol === 'nault-app:' &&
     window.location.hostname === 'wallet' &&
     window.naultDesktop?.experimentalWebHidReadOnly === true;
+  // UI-only diagnostics. No device IDs or serials are retained, and every
+  // HID operation is initiated by a dedicated physical button click.
+  readonly isSecureWebHidContext = window.isSecureContext === true;
+  readonly isWebHidApiAvailable = !!navigator.hid;
+  webHidDiagnosticBusy = false;
+  webHidSelectionStatus = 'Not tested';
+  webHidPermissionsStatus = 'Not tested';
+  webHidOpeningStatus = 'Not tested';
+  webHidDiagnosticError = '';
+  webHidOpenOk = false;
   webHidProbeBusy = false;
   webHidProbeAddress = '';
   webHidProbeError = '';
@@ -142,8 +152,118 @@ export class ConfigureWalletComponent implements OnInit {
     this.walletService.informNewWallet();
   }
 
+  // Match the same VID/PID policy as Electron, never grant by vendor alone.
+  private isTestNanoSPlus(device: { vendorId: number, productId: number }): boolean {
+    const pid = device.productId;
+    return device.vendorId === 0x2c97 &&
+      (pid === 0x50 || (pid >= 0x5000 && pid <= 0x501f));
+  }
+
+  private checkWebHidTestPrerequisites(): void {
+    if (!this.experimentalWebHidReadOnly || !window.isSecureContext || !navigator.hid) {
+      throw new Error('Experimental WebHID is not available on this secure Electron origin.');
+    }
+    if (this.ledger.status !== LedgerStatus.NOT_CONNECTED) {
+      throw new Error('Disconnect the native Ledger session before WebHID testing.');
+    }
+  }
+
+  private describeWebHidTestError(error: unknown): string {
+    return error instanceof Error ? error.name + ': ' + error.message : String(error);
+  }
+
+  // Step 1 must be called directly from (click); WebHID requestDevice
+  // requires transient user activation, not an automatic startup hook.
+  async requestWebHidTestDevice(): Promise<void> {
+    if (!this.experimentalWebHidReadOnly || this.webHidDiagnosticBusy || this.webHidProbeBusy) return;
+    this.webHidDiagnosticBusy = true;
+    this.webHidDiagnosticError = '';
+    this.webHidSelectionStatus = 'In progress';
+    this.webHidPermissionsStatus = 'Not tested';
+    this.webHidOpeningStatus = 'Not tested';
+    this.webHidOpenOk = false;
+    this.webHidProbeAddress = '';
+    this.webHidProbeError = '';
+    try {
+      this.checkWebHidTestPrerequisites();
+      const devices = await navigator.hid.requestDevice({
+        filters: [{ vendorId: 0x2c97 }]
+      });
+      const compatible = devices.filter(device => this.isTestNanoSPlus(device));
+      this.webHidSelectionStatus =
+        'Selected: ' + devices.length + ' / Nano S Plus: ' + compatible.length;
+      if (devices.length !== 1 || compatible.length !== 1) {
+        this.webHidDiagnosticError =
+          'Expected exactly one Nano S Plus. If cancelled, retry step 1.';
+      }
+    } catch (error) {
+      this.webHidSelectionStatus = 'Failed';
+      this.webHidDiagnosticError = this.describeWebHidTestError(error);
+    } finally {
+      this.webHidDiagnosticBusy = false;
+    }
+  }
+
+  // Step 2 checks the result of Electron's device permission handler.
+  // An accepted chooser alone does not guarantee getDevices() will see it.
+  async checkWebHidTestPermissions(): Promise<void> {
+    if (!this.experimentalWebHidReadOnly || this.webHidDiagnosticBusy || this.webHidProbeBusy) return;
+    this.webHidDiagnosticBusy = true;
+    this.webHidDiagnosticError = '';
+    this.webHidOpenOk = false;
+    this.webHidOpeningStatus = 'Not tested';
+    try {
+      this.checkWebHidTestPrerequisites();
+      const devices = await navigator.hid.getDevices();
+      const compatible = devices.filter(device => this.isTestNanoSPlus(device));
+      this.webHidPermissionsStatus =
+        'Authorized Nano S Plus: ' + compatible.length;
+      if (compatible.length !== 1) {
+        this.webHidDiagnosticError =
+          'Expected one authorized Nano S Plus. Inspect main.log device-permission-check.';
+      }
+    } catch (error) {
+      this.webHidPermissionsStatus = 'Failed';
+      this.webHidDiagnosticError = this.describeWebHidTestError(error);
+    } finally {
+      this.webHidDiagnosticBusy = false;
+    }
+  }
+
+  // Step 3 opens and immediately closes the WebHID handle. No APDU is sent.
+  async testWebHidDeviceOpen(): Promise<void> {
+    if (!this.experimentalWebHidReadOnly || this.webHidDiagnosticBusy || this.webHidProbeBusy) return;
+    this.webHidDiagnosticBusy = true;
+    this.webHidDiagnosticError = '';
+    this.webHidOpeningStatus = 'In progress';
+    this.webHidOpenOk = false;
+    try {
+      this.checkWebHidTestPrerequisites();
+      const devices = (await navigator.hid.getDevices())
+        .filter(device => this.isTestNanoSPlus(device));
+      if (devices.length !== 1) {
+        throw new Error('One authorized Nano S Plus is required. Complete steps 1 and 2 first.');
+      }
+      const device = devices[0];
+      try {
+        await device.open();
+      } finally {
+        // Avoid contention with Nault's native HID worker and next APDU probe.
+        if (device.opened) await device.close();
+      }
+      this.webHidOpeningStatus = 'OPEN / CLOSE: OK (no APDU sent)';
+      this.webHidOpenOk = true;
+    } catch (error) {
+      this.webHidOpeningStatus = 'Failed';
+      this.webHidDiagnosticError = this.describeWebHidTestError(error);
+    } finally {
+      this.webHidDiagnosticBusy = false;
+    }
+  }
+
   async probeWebHidAccountZero(): Promise<void> {
-    if (!this.experimentalWebHidReadOnly || this.webHidProbeBusy) return;
+    if (!this.experimentalWebHidReadOnly || this.webHidProbeBusy ||
+        this.webHidDiagnosticBusy || !this.webHidOpenOk) return;
 
     // Only one software transport may own the physical USB interface.
     if (this.ledger.status !== LedgerStatus.NOT_CONNECTED) {

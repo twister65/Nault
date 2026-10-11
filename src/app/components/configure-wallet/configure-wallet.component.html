@@ -1,17 +1,45 @@
 <h2 class="uk-heading-divider">Configure Wallet</h2>
 
-<!-- Read-only experimental Ledger probe. Hidden on normal desktop and web. -->
-<div *ngIf="experimentalWebHidReadOnly" class="uk-alert uk-alert-primary nlt-inline-alert">
-  <div>
-    <h3>Experimental WebHID — Nano account 0</h3>
-    <p>Open the Nano app on your Ledger Nano S Plus. This test reads and
-      displays only account 0 (44'/165'/0'). It does not import a wallet,
-      sign a transaction, or access recovery phrases.</p>
-    <p>Do not use Nault's normal Connect/Reconnect while this test runs.</p>
+<!-- Test panel only on the secure Electron origin with BOTH opt-in flags. -->
+<div *ngIf="experimentalWebHidReadOnly" class="uk-card uk-card-default uk-margin-bottom">
+  <div class="uk-card-body">
+    <h3>Experimental Ledger WebHID — diagnostics</h3>
+    <p>Use a dedicated test profile. Close Ledger Wallet and other Ledger
+      applications. Do not click normal Connect / Reconnect during this test.
+      No seed or private key is accessed.</p>
+    <p>Secure origin: <b>{{ isSecureWebHidContext ? 'YES' : 'NO' }}</b>
+      &nbsp; WebHID API: <b>{{ isWebHidApiAvailable ? 'YES' : 'NO' }}</b>
+      &nbsp; Native Ledger: <b>{{ ledger.status }}</b></p>
+
+    <div class="uk-margin-small-bottom">
+      <button type="button" class="uk-button uk-button-default"
+        [disabled]="webHidDiagnosticBusy || webHidProbeBusy || ledger.status !== ledgerStatus.NOT_CONNECTED"
+        (click)="requestWebHidTestDevice()">1. Select / authorize Nano S Plus</button>
+      <div><small>Selection: {{ webHidSelectionStatus }}</small></div>
+    </div>
+    <div class="uk-margin-small-bottom">
+      <button type="button" class="uk-button uk-button-default"
+        [disabled]="webHidDiagnosticBusy || webHidProbeBusy || ledger.status !== ledgerStatus.NOT_CONNECTED"
+        (click)="checkWebHidTestPermissions()">2. Check authorized devices</button>
+      <div><small>Permission: {{ webHidPermissionsStatus }}</small></div>
+    </div>
+    <div class="uk-margin-small-bottom">
+      <button type="button" class="uk-button uk-button-default"
+        [disabled]="webHidDiagnosticBusy || webHidProbeBusy || ledger.status !== ledgerStatus.NOT_CONNECTED"
+        (click)="testWebHidDeviceOpen()">3. Open / close (no APDU)</button>
+      <div><small>Device: {{ webHidOpeningStatus }}</small></div>
+    </div>
+    <p *ngIf="webHidDiagnosticError" class="uk-text-danger">
+      {{ webHidDiagnosticError }}
+    </p>
+    <hr>
+    <p>Only after steps 1–3 succeed, open the Nano app on your Ledger
+      and read account 0 (44'/165'/0'). The device may ask you to confirm
+      the address. Nothing is signed or broadcast.</p>
     <button type="button" class="uk-button uk-button-primary"
-      [disabled]="webHidProbeBusy || ledger.status !== ledgerStatus.NOT_CONNECTED"
+      [disabled]="!webHidOpenOk || webHidDiagnosticBusy || webHidProbeBusy || ledger.status !== ledgerStatus.NOT_CONNECTED"
       (click)="probeWebHidAccountZero()">
-      {{ webHidProbeBusy ? 'Waiting for Ledger...' : 'Read account 0 via WebHID' }}
+      {{ webHidProbeBusy ? 'Waiting for Ledger...' : '4. Read account 0 via WebHID' }}
     </button>
     <p *ngIf="webHidProbeAddress" class="uk-margin-top">
       <b>Account 0 (read only):</b>

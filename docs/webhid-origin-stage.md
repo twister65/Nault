@@ -267,3 +267,94 @@ All allow/deny predicates are unchanged. The updater and native Ledger IPC
 now explicitly handle rejected promises; neither change alters APDUs,
 device permissions, or hardware ownership. If Node still emits an
 unhandled rejection, capture the first stack trace to locate its source.
+
+
+## Built-in WebHID diagnostic panel — ordered manual test plan
+
+An opt-in WebHID test panel now appears at the top of **Configure Wallet**,
+not in DevTools. Both `NAULT_TEST_APP_ORIGIN=1` and
+`NAULT_TEST_WEBHID=1` are required, and only the app-local
+`nault-app://wallet/index.html` origin is accepted. A frozen preload
+flag merely shows the panel; Electron main still enforces all permissions.
+
+### Prerequisites / checklist
+
+- [ ] On `feature/webhid`, run `npm run desktop:test-origin`,
+      `npm run desktop:build` and `npm run desktop:local`.
+- [ ] Close Ledger Wallet / Ledger Live, other Nault windows, and other apps
+      connected to the physical Ledger; unplug/replug if necessary.
+- [ ] Unlock the Ledger Nano S Plus, open the **Nano** app, and keep it
+      connected over USB.
+- [ ] Start Nault with a *new, isolated test profile* and the two opt-in
+      flags. Avoid real funds and do not use normal native Connect/Reconnect.
+- [ ] Navigate to **Configure Wallet**; check the panel reports
+      `Secure origin: YES`, `WebHID API: YES`,
+      `Native Ledger: not-connected`.
+
+### Four separate user-click tests
+
+- [ ] **1. Select / authorize Nano S Plus**: click the actual button;
+      it calls `navigator.hid.requestDevice({ filters: [{ vendorId: 0x2c97 }] })`
+      directly within the user gesture. Approve the Electron confirmation.
+      Expected: `Selection: Selected: 1 / Nano S Plus: 1`.
+      This step does **not** call `getDevices`, `open`, or any APDU.
+- [ ] **2. Check authorized devices**: click the next button in the **same
+      running Electron session**. It calls `navigator.hid.getDevices()`.
+      Expected: `Permission: Authorized Nano S Plus: 1`.
+      If 0, **stop** and inspect the main-process HID permission/grant logs.
+- [ ] **3. Open / close (no APDU)**: click the third button, which
+      rechecks the granted Nano S Plus and calls only `device.open()`
+      followed by `device.close()` in a `finally`.
+      Expected: `Device: OPEN / CLOSE: OK (no APDU sent)`.
+      If it fails, **stop** and report the on-screen error; do not
+      attempt the address test.
+- [ ] **4. Read account 0 via WebHID**: enabled only after step 3
+      succeeds in this component instance. It uses the existing
+      LedgerJS `hw-app-nano.getAddress("44'/165'/0'", true)`.
+      Approve the address display on the Ledger and verify that the
+      `nano_` address matches on-screen, without posting the full
+      address publicly. It closes the HID transport afterwards.
+- [ ] Close the test Electron app. The in-memory HID grants must not
+      be assumed to persist between windows/runs.
+
+### Reproducible command sequence
+
+```sh
+git checkout feature/webhid
+git pull --ff-only origin feature/webhid
+npm run desktop:test-origin
+npm run desktop:build
+npm run desktop:local
+
+TEST_PROFILE="$(mktemp -d)"
+echo "Diagnostic logs: $TEST_PROFILE/logs/main.log"
+NAULT_TEST_APP_ORIGIN=1 NAULT_TEST_WEBHID=1 \
+  ./desktop-app/build/linux-unpacked/nault \
+    --user-data-dir="$TEST_PROFILE" --disable-setuid-sandbox
+```
+
+In another terminal while Nault is still running:
+
+```sh
+grep -A 12 -E 'consent recorded|permission-check|device-permission-check|select-hid-device' \
+  "$TEST_PROFILE/logs/main.log" | tail -150
+```
+
+### How to report results / stop conditions
+
+Provide: `Secure origin`, `WebHID API`, `Native Ledger`, and
+the displayed `Selection`, `Permission`, `Device` results, plus
+the error message if any. Also include post-consent sanitized
+`consent recorded` and `device-permission-check` fields, especially
+`vendorMatchesLedger`, `productMatchesNanoSPlus`,
+`deviceIdPresent`, `interfaceGuidPresent`,
+`selectedIdMatched`, `selectedDeviceCount`, `granted`.
+
+Do not share seed phrases, private keys, raw HID IDs, serial numbers, APDUs,
+or the full Nano address. `Chooser dialog is not displaying a FIDO HID
+device` may occur for the separate protected interface; it is not
+proof that the Ledger APDU interface cannot operate.
+
+All steps are manual and read-only. The built-in panel does not add
+automatic connection, background HID polling, wallet import,
+transaction signing, or permission-policy changes.
