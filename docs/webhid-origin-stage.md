@@ -210,3 +210,33 @@ If an error occurs, report the *error message only*, without sharing any
 private key, seed or serial number.
 
 **Not yet compiled or hardware-tested in this branch.**
+
+
+## Stage 3 HID grant diagnostics — `getDevices()` unexpectedly empty
+
+A successful `requestDevice()` only verifies the chooser selection.
+Electron's custom `setDevicePermissionHandler` overrides the normal
+in-memory grant check; a rejection there can result in zero devices from
+`navigator.hid.getDevices()` or `Failed to open the device`.
+
+Logs now contain:
+- `[Nault WebHID] consent recorded for selected Ledger:` (count only).
+- `[Nault WebHID] device-permission-check:` with decision booleans,
+  an anonymized origin category, and the count of selected Chromium IDs.
+No raw device identifiers, serial numbers, addresses or APDUs are logged.
+
+Use the same *running* Electron instance to run `requestDevice()`,
+accept consent, and then `getDevices()`. A new `mktemp -d` profile or
+restarted Electron window should not inherit the prior in-memory grant.
+
+- `originAllowed: false` — inspect anonymized `originForm` (still deny
+  unknown and opaque origins).
+- `eligibleLedger: false` — a different HID collection/model reached
+  the grant check, or the metadata differs.
+- `selectedIdMatched: false` with a recorded selection — the Chromium
+  device ID seen in the permission check does not match the chooser ID.
+  Never grant by vendor ID alone as a workaround.
+- No `device-permission-check` messages — confirm the grant check is
+  invoked, the same window is running, and the button is clicked.
+
+Diagnostics only; no changes to the HID allowlist or permission decisions.
