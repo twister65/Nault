@@ -2,7 +2,7 @@ import 'babel-polyfill';
 
 import { app, BrowserWindow, shell, Menu, screen, dialog, ipcMain, IpcMainEvent } from 'electron';
 import { APP_WALLET_ORIGIN, APP_WALLET_URL, registerWalletScheme, registerWalletFileProtocol, isTrustedWalletDocument } from './lib/wallet-protocol';
-import { isNanoSPlusHidDevice, isTrustedWebHidOrigin } from './lib/webhid-policy';
+import { isNanoSPlusHidDevice, isTrustedWebHidOrigin, describeWebHidOrigin } from './lib/webhid-policy';
 import { autoUpdater } from 'electron-updater';
 import * as url from 'url';
 import * as path from 'path';
@@ -297,9 +297,12 @@ function createWindow () {
       const originAllowed = isTrustedWebHidOrigin(requestingOrigin, trustedHidOrigin);
       const securityOriginAllowed = isTrustedWebHidOrigin(details.securityOrigin, trustedHidOrigin);
       if (useExperimentalWebHID) {
-        // Only boolean decisions: never log device IDs, serials, addresses or APDUs.
+        // Only safe origin categories and decisions, never raw URLs,
+        // hardware IDs, account addresses, serial numbers or APDUs.
         log.info('[Nault WebHID] permission-check:', {
-          frameAllowed, originAllowed, securityOriginAllowed
+          frameAllowed, originAllowed, securityOriginAllowed,
+          requestingOriginForm: describeWebHidOrigin(requestingOrigin, trustedHidOrigin),
+          securityOriginForm: describeWebHidOrigin(details.securityOrigin, trustedHidOrigin)
         });
       }
       return frameAllowed && originAllowed && securityOriginAllowed;

@@ -26,7 +26,19 @@ export function isNanoSPlusHidDevice(device: unknown): device is {
      productId >= 0x5000 && productId <= 0x501f);
 }
 
-// Compare exact canonical origins; never accept arbitrary URLs or subdomains.
+// Chromium may serialize the root of an app:// origin with a final '/'.
+// Only these two literal forms are accepted: no arbitrary paths, queries,
+// credentials, ports, subdomains, or opaque ("null") origins.
 export function isTrustedWebHidOrigin(candidate: string | undefined, trusted: string): boolean {
-  return typeof candidate === 'string' && candidate === trusted;
+  return candidate === trusted || candidate === trusted + '/';
+}
+
+// Diagnostics never expose URLs, hardware serial numbers or device IDs.
+// An unexpected value remains denied and can be investigated by its category.
+export function describeWebHidOrigin(candidate: string | undefined, trusted: string): string {
+  if (candidate === trusted) return 'exact';
+  if (candidate === trusted + '/') return 'trailing-slash';
+  if (candidate === 'null') return 'opaque-null';
+  if (candidate === undefined) return 'missing';
+  return 'different';
 }

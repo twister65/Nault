@@ -150,3 +150,17 @@ non-sensitive diagnostic entries:
 
 No serial numbers, APDUs, account addresses, seeds or Chromium device IDs are logged.
 If no dialog appears, report these entries instead of guessing why.
+
+## Permission-check diagnostics — strict origin serialization
+
+If the console shows `frameAllowed: true` but both origin comparisons are
+false, a Chromium/Electron origin serialization mismatch is possible.
+The origin policy now accepts only the two exact literals
+`nault-app://wallet` and `nault-app://wallet/` (a trailing slash).
+It **continues to reject** `null`, missing, unrelated, and path-bearing
+origins; it never skips the trusted main-frame check.
+
+The `permission-check` log adds `requestingOriginForm` and
+`securityOriginForm`, reporting only `exact`, `trailing-slash`,
+`opaque-null`, `missing`, or `different`. No raw URLs are logged.
+If either remains denied, send these two forms plus the boolean checks.
