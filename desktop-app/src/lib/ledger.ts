@@ -1,4 +1,4 @@
-import TransportNodeHidNoEvents from '@ledgerhq/hw-transport-node-hid-noevents';
+import LedgerHidWorkerTransport from './ledger-hid-worker-transport';
 import Transport from '@ledgerhq/hw-transport';
 import Nano from 'hw-app-nano';
 
@@ -52,61 +52,27 @@ export class LedgerService {
 
   // Reset connection to the ledger device, update the status
   resetLedger(errorMessage = '') {
+    const transport = this.ledger.transport;
     this.ledger.transport = null;
     this.ledger.nano = null;
+    // Release the worker and HID handle when a device disconnects or fails.
+    if (transport) {
+      Promise.resolve(transport.close()).catch(error => {
+        console.warn('Could not close Ledger transport:', error);
+      });
+    }
     this.setLedgerStatus(LedgerStatus.NOT_CONNECTED, errorMessage);
   }
 
   // Open a connection to the usb device and initialize up the Nano Ledger library
   async loadTransport(bluetooth: boolean) {
     if (!bluetooth) {
-      // The event-driven HID transport registers native USB hotplug callbacks.
-      // Under Electron 44 these can fail with "Error in native callback" even
-      // though the native usb and node-hid modules load successfully.
-      //
-      // For USB devices, enumerate and open the first Ledger HID device
-      // directly. The no-events transport uses node-hid alone and does not
-      // register USB hotplug listeners. Reconnect remains user-initiated.
-      console.info('[Ledger diagnosis] Opening USB HID device (no-events transport)');
-      let hidTransport;
-      try {
-        hidTransport = await TransportNodeHidNoEvents.open(null);
-        console.info('[Ledger diagnosis] USB HID device opened');
-      } catch (error) {
-        console.error('[Ledger diagnosis] USB HID open failed:', error);
-        throw error;
-      }
-      // Electron 44 / node-hid@2.1.1 diagnostic workaround.
-      // The native async read callback triggers "Error in native callback"
-      // after a successful HID write. Try bounded synchronous reads to
-      // determine whether the callback bridge is the failing component.
-      //
-      // IMPORTANT: Each readTimeout call blocks the Electron main thread
-      // for up to 100 ms. This is a temporary test only, not the final
-      // production transport. A dedicated worker is preferable long-term.
-      const device: any = hidTransport.device;
-      (hidTransport as any).readHID = (): Promise<Buffer> =>
-        new Promise<Buffer>((resolve, reject) => {
-          const started = Date.now();
-          const attempt = () => {
-            try {
-              if (Date.now() - started >= this.waitTimeout) {
-                return reject(new Error('Ledger HID read timed out'));
-              }
-              const bytes: number[] = device.readTimeout(100);
-              if (bytes && bytes.length > 0) {
-                console.info('[Ledger diagnosis] HID synchronous read succeeded');
-                return resolve(Buffer.from(bytes));
-              }
-              setImmediate(attempt);
-            } catch (error) {
-              console.error('[Ledger diagnosis] HID synchronous read failed:', error);
-              reject(error);
-            }
-          };
-          setImmediate(attempt);
-        });
-      console.info('[Ledger diagnosis] HID readTimeout workaround enabled');
+      // Keep all native USB/HID work inside a dedicated Node.js worker.
+      // Electron 44 cannot safely use the legacy node-hid async read
+      // callback, while the bounded synchronous read works in the worker.
+      console.info('[Ledger diagnosis] Opening USB HID worker transport');
+      const hidTransport = await LedgerHidWorkerTransport.open();
+      console.info('[Ledger diagnosis] USB HID worker ready');
       this.ledger.transport = hidTransport;
       this.ledger.nano = new Nano(hidTransport);
       console.info('[Ledger diagnosis] Nano application transport initialized');
