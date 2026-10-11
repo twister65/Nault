@@ -82,6 +82,40 @@ test. Because the no-events transport does not watch plug/unplug events,
 manual **Reconnect** is expected after attaching or reattaching the device.
 Please report the terminal output and UI status if connection still fails.
 
+## Diagnostic test: synchronous HID reads (October 11, 2026)
+
+The previous diagnostic run confirmed that the HID device opens and the
+first APDU write completes, but the native asynchronous `device.read(callback)`
+never invokes its JS callback and raises `Error in native callback`.
+
+A **temporary experiment** in commit `f42c810` overrides the USB
+transport's `readHID()` with bounded `device.readTimeout(100)` calls,
+yielding to the event loop between attempts. It preserves Ledger framing
+and signing code and never logs APDU contents. A read is rejected after the
+existing 30-second transport wait timeout.
+
+**This is NOT a final production design.** Each synchronous call may block
+the Electron main thread for up to 100 ms, and the underlying hardware
+communication is still handled by a legacy `node-hid` package. We need
+to confirm both functionality and UI responsiveness before deciding on
+a dedicated I/O worker implementation.
+
+To retest this commit:
+
+```sh
+git pull --ff-only origin upgrade/electron-44-desktop
+npm run desktop:build
+npm run desktop:local
+./desktop-app/build/linux-unpacked/nault --disable-setuid-sandbox \
+  2>&1 | tee /tmp/nault-ledger-debug.log
+```
+
+Unlock the Ledger Nano S Plus, open Nano, and use **Reconnect**.
+Look for `HID readTimeout workaround enabled` and
+`HID synchronous read succeeded`. If the account address loads,
+check that it matches the address displayed on the Ledger screen.
+Do **not** send funds for the test.
+
 ## Checklist
 
 1. Confirm Electron version `44.7.0` in the packaging output.
