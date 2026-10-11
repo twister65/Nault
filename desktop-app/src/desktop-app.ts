@@ -317,13 +317,29 @@ function createWindow () {
     return isTrustedWebContents(contents) && permittedWebFeatures.has(permission);
   });
 
-  walletSession.setDevicePermissionHandler(details =>
-    useExperimentalWebHID &&
-    details.deviceType === 'hid' &&
-    isTrustedWebHidOrigin(details.origin, trustedHidOrigin) &&
-    isNanoSPlusHidDevice(details.device) &&
-    permittedHidDeviceIds.has(details.device.deviceId)
-  );
+  walletSession.setDevicePermissionHandler(details => {
+    // Electron calls this again for navigator.hid.getDevices() and open().
+    // A selection succeeding does not prove that this grant check succeeds.
+    const correctType = details.deviceType === 'hid';
+    const originAllowed = isTrustedWebHidOrigin(details.origin, trustedHidOrigin);
+    const eligibleLedger = isNanoSPlusHidDevice(details.device);
+    const selectedIdMatched = eligibleLedger &&
+      permittedHidDeviceIds.has(details.device.deviceId);
+    const granted = useExperimentalWebHID && correctType &&
+      originAllowed && eligibleLedger && selectedIdMatched;
+    if (useExperimentalWebHID && correctType) {
+      // Never log Chromium IDs, serials, addresses, APDUs or raw URLs.
+      log.info('[Nault WebHID] device-permission-check:', {
+        granted,
+        originAllowed,
+        originForm: describeWebHidOrigin(details.origin, trustedHidOrigin),
+        eligibleLedger,
+        selectedIdMatched,
+        selectedDeviceCount: permittedHidDeviceIds.size
+      });
+    }
+    return granted;
+  });
 
   walletSession.on('select-hid-device', (event, details, callback) => {
     event.preventDefault();
@@ -373,6 +389,9 @@ function createWindow () {
         return;
       }
       permittedHidDeviceIds.add(candidate.deviceId);
+      log.info('[Nault WebHID] consent recorded for selected Ledger:', {
+        selectedDeviceCount: permittedHidDeviceIds.size
+      });
       callback(candidate.deviceId);
     }).catch(() => callback());
   });
