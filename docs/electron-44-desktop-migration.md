@@ -52,69 +52,59 @@ available, also try launching **without any Chromium flags**.
 **Do not silently fall back to `--disable-gpu-sandbox` or `--no-sandbox`.**
 Report startup errors instead; we want to restore process isolation.
 
-## USB Ledger reconnect regression test (October 11, 2026)
+## USB Ledger regression and worker-thread design (October 11, 2026)
 
-The first Electron 44 build rendered the UI successfully but failed to connect
-the Ledger Nano S Plus, displaying `Error in native callback`. The subsequent
-`ELECTRON_RUN_AS_NODE=1` test confirmed that both `usb.getDeviceList()` and
-`node-hid.devices()` load and enumerate devices under Electron 44 / Node 24.
-This test does not prove that native hotplug callbacks work in Electron's
-normal main-process runtime.
+The Electron 44 application started and rendered correctly, but its old USB
+Ledger transport raised `Error in native callback`. Instrumentation
+confirmed that HID opening and the first APDU write succeeded; the failure
+occurred after registering the native asynchronous `device.read(callback)`.
 
-The updated code selects `@ledgerhq/hw-transport-node-hid-noevents@6.27.5`
-for USB Ledger devices, opening the first matching Ledger HID device directly
-instead of registering native USB attach/detach listeners. Bluetooth continues
-to use the existing optional transport.
+The user validated a bounded `device.readTimeout(100)` replacement: the
+Ledger connected and Nault successfully read account 0. That initial
+diagnostic solution executed synchronous reads on Electron's main thread.
 
-Update to the latest PR commit and rebuild:
+The **next unvalidated iteration** moves all USB HID access into a dedicated
+Node.js `worker_threads` worker:
 
-```sh
-git pull --ff-only origin upgrade/electron-44-desktop
-npm install
-npm run desktop:build
-npm run desktop:local
-./desktop-app/build/linux-unpacked/nault --disable-setuid-sandbox
-```
+- `lib/ledger-hid-worker.ts` owns the no-events Ledger HID transport,
+  including device enumeration, APDU exchange, and bounded synchronous reads.
+  No HID handle is shared between threads.
+- `lib/ledger-hid-worker-transport.ts` provides a Transport-compatible
+  asynchronous proxy for Nault. APDUs and results cross the local worker
+  message channel without logging their contents.
+- The worker serializes exchanges, times out individual HID reads after 30
+  seconds, and releases its device handle on normal shutdown. The proxy
+  rejects pending calls if the worker exits unexpectedly.
+- The existing Nano app and cryptographic signing routines remain unchanged.
+  Bluetooth continues to use its existing optional transport.
+- USB hotplug events are not monitored: manual **Reconnect** is required
+  after unplugging or replugging a Ledger.
 
-Verify the Ledger device is unlocked, its Nano app is open, and an address can
-be queried without native callback errors. Do not send funds as part of this
-test. Because the no-events transport does not watch plug/unplug events,
-manual **Reconnect** is expected after attaching or reattaching the device.
-Please report the terminal output and UI status if connection still fails.
+This is still **draft code requiring hardware testing**. Native add-on
+compatibility with the Electron worker-thread runtime and worker cleanup
+must both be confirmed before merge.
 
-## Diagnostic test: synchronous HID reads (October 11, 2026)
-
-The previous diagnostic run confirmed that the HID device opens and the
-first APDU write completes, but the native asynchronous `device.read(callback)`
-never invokes its JS callback and raises `Error in native callback`.
-
-A **temporary experiment** in commit `f42c810` overrides the USB
-transport's `readHID()` with bounded `device.readTimeout(100)` calls,
-yielding to the event loop between attempts. It preserves Ledger framing
-and signing code and never logs APDU contents. A read is rejected after the
-existing 30-second transport wait timeout.
-
-**This is NOT a final production design.** Each synchronous call may block
-the Electron main thread for up to 100 ms, and the underlying hardware
-communication is still handled by a legacy `node-hid` package. We need
-to confirm both functionality and UI responsiveness before deciding on
-a dedicated I/O worker implementation.
-
-To retest this commit:
+## Test the worker version
 
 ```sh
+cd /home/olivier/Source/Nault
 git pull --ff-only origin upgrade/electron-44-desktop
 npm run desktop:build
 npm run desktop:local
 ./desktop-app/build/linux-unpacked/nault --disable-setuid-sandbox \
-  2>&1 | tee /tmp/nault-ledger-debug.log
+  2>&1 | tee /tmp/nault-ledger-worker.log
 ```
 
-Unlock the Ledger Nano S Plus, open Nano, and use **Reconnect**.
-Look for `HID readTimeout workaround enabled` and
-`HID synchronous read succeeded`. If the account address loads,
-check that it matches the address displayed on the Ledger screen.
-Do **not** send funds for the test.
+With the Nano app open on the unlocked Ledger Nano S Plus, select **Reconnect**.
+Look for `Opening USB HID worker transport`,
+`USB HID worker ready`, and `Nano address request resolved`.
+
+Check that the account address matches the hardware display. Then test
+unplugging/replugging and **Reconnect**, and check that the Nault UI stays
+responsive during a request. Do not send funds as part of this test. If
+the worker crashes or packaging fails, preserve the terminal errors for
+review; the previously successful main-thread readTimeout experiment remains
+available in Git history at commit `f42c810`.
 
 ## Checklist
 
@@ -129,8 +119,9 @@ Do **not** send funds for the test.
 
 ## Known limitations
 
-- This change is **not yet tested** with the new Electron version on the
-  user's Ubuntu machine. The PR should remain a draft until tested.
+- The earlier main-thread readTimeout build was tested successfully on the
+  user's Ubuntu machine. The new worker-thread version remains untested and
+  this PR must stay in draft until validated.
 - `electron-builder@25.1.8`, `electron-updater@4.3.5`, native USB modules,
   and Angular 13 could require follow-up compatibility fixes.
 - `webSecurity: false` still exists in the original desktop window
