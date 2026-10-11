@@ -4,7 +4,7 @@ import Nano from 'hw-app-nano';
 
 import * as rx from 'rxjs';
 
-import { ipcMain } from 'electron';
+import { ipcMain, IpcMainEvent } from 'electron';
 
 const STATUS_CODES = {
   SECURITY_STATUS_NOT_SATISFIED: 0x6982,
@@ -268,7 +268,7 @@ export class LedgerService {
 let sendingWindow = null;
 
 // Create a copy of the ledger service and register listeners with the browser window
-export function initialize() {
+export function initialize(isTrustedSender: (event: IpcMainEvent) => boolean) {
   console.log('Ledger service initializing');
   const Ledger = new LedgerService();
 
@@ -288,7 +288,12 @@ export function initialize() {
 
   // Listen for new messages from the browser window and dispatch accordingly
   ipcMain.on('ledger', (event, data) => {
-    console.log(`Got ledger message?!`, data);
+    // The renderer is not allowed to invoke hardware-wallet commands from
+    // another window, a subframe, or a document outside the bundled wallet.
+    if (!isTrustedSender(event)) {
+      console.warn('Rejected Ledger IPC from an untrusted sender');
+      return;
+    }
     sendingWindow = event.sender;
     if (!data || !data.event) return;
     switch (data.event) {
