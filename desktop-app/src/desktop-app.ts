@@ -1,6 +1,6 @@
 import 'babel-polyfill';
 
-import { app, BrowserWindow, shell, Menu, screen, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, shell, Menu, screen, dialog, ipcMain, IpcMainEvent } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as url from 'url';
 import * as path from 'path';
@@ -171,10 +171,36 @@ if (process.platform === 'darwin') {
   nano_schemes.forEach((scheme) => app.setAsDefaultProtocolClient(scheme, process.execPath, args));
 }
 
-// Initialize Ledger device detection
-initialize();
-
 let mainWindow: BrowserWindow;
+
+// The desktop UI is bundled locally. Reject navigation and privileged IPC
+// from any page other than this exact file (fragment routes are allowed).
+const trustedIndexPath = path.resolve(__dirname, '../../dist/index.html');
+
+function isTrustedWalletURL(candidate: string): boolean {
+  try {
+    const parsed = new URL(candidate);
+    return parsed.protocol === 'file:' &&
+      !parsed.hostname &&
+      !parsed.search &&
+      url.fileURLToPath(parsed) === trustedIndexPath;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isTrustedLedgerSender(event: IpcMainEvent): boolean {
+  return !!mainWindow &&
+    !mainWindow.isDestroyed() &&
+    event.sender === mainWindow.webContents &&
+    event.senderFrame === event.sender.mainFrame &&
+    isTrustedWalletURL(event.senderFrame.url);
+}
+
+// Validate the sender before handling any Ledger IPC, including account reads
+// and signing requests. This does not replace transaction confirmation on
+// the physical Ledger display.
+initialize(isTrustedLedgerSender);
 
 function createWindow () {
   // Get window state
@@ -190,7 +216,8 @@ function createWindow () {
     {
       // Renderer code must not have direct access to Node.js or Electron.
       // Only the narrow IPC bridge from preload.ts is exposed to Angular.
-      webSecurity: false, // Existing setting; harden in a separate PR.
+      webSecurity: true,
+      sandbox: true,
       devTools: true,
       nodeIntegration: false,
       contextIsolation: true,
@@ -198,15 +225,42 @@ function createWindow () {
     }
   });
 
+  // Block navigation from the local wallet to remote pages or other files.
+  // Router fragment navigation within index.html remains available.
+  mainWindow.webContents.on('will-frame-navigate', (event, details) => {
+    if (!details.isMainFrame || !isTrustedWalletURL(details.url)) {
+      event.preventDefault();
+      log.warn('Blocked navigation outside the trusted wallet document');
+    }
+  });
+
+  // WebHID is deliberately NOT enabled in this PR. The existing Ledger
+  // connection uses a native HID worker; Chromium has no reason to receive
+  // permission to open a hardware device. Future WebHID support must
+  // explicitly authorize trusted main-frame requests and Ledger vendor IDs.
+  const walletSession = mainWindow.webContents.session;
+  const permittedWebFeatures = new Set(['media', 'clipboard-read', 'clipboard-sanitized-write']);
+  const isTrustedWebContents = (contents: Electron.WebContents | null): boolean =>
+    !!contents && contents === mainWindow.webContents &&
+    isTrustedWalletURL(contents.getURL());
+
+  walletSession.setPermissionRequestHandler((contents, permission, callback) => {
+    callback(isTrustedWebContents(contents) && permittedWebFeatures.has(permission));
+  });
+  walletSession.setPermissionCheckHandler((contents, permission) =>
+    isTrustedWebContents(contents) && permittedWebFeatures.has(permission)
+  );
+  walletSession.setDevicePermissionHandler(() => false);
+  walletSession.on('select-hid-device', (event, _details, callback) => {
+    event.preventDefault();
+    callback();
+  });
+
   // Track window state
   mainWindowStateKeeper.track(mainWindow);
 
-  // mainWindow.loadURL('http://localhost:4200/'); // Only use this for development
-  mainWindow.loadURL(url.format({
-    pathname: path.join(__dirname, '../../dist/index.html'),
-    protocol: 'file:',
-    slashes: true
-  }));
+  // Use only the local bundled index.html, never a remote wallet site.
+  mainWindow.loadURL(url.pathToFileURL(trustedIndexPath).toString());
 
   // Emitted when the window is closed.
   mainWindow.on('closed', function () {
