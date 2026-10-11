@@ -193,6 +193,7 @@ function isTrustedLedgerSender(event: IpcMainEvent): boolean {
   return !!mainWindow &&
     !mainWindow.isDestroyed() &&
     event.sender === mainWindow.webContents &&
+    !!event.senderFrame &&
     event.senderFrame === event.sender.mainFrame &&
     isTrustedWalletURL(event.senderFrame.url);
 }
