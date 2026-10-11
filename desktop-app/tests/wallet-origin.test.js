@@ -5,7 +5,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const { APP_WALLET_URL, isTrustedWalletDocument, isPathInsideRoot } =
-  require('../dist/lib/wallet-protocol');
+  require('../dist/lib/wallet-origin');
 
 test('only the selected wallet document and hash routes are trusted', () => {
   assert.equal(isTrustedWalletDocument(APP_WALLET_URL, APP_WALLET_URL), true);

@@ -2,12 +2,12 @@ import { net, protocol } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { pathToFileURL, URL } from 'url';
+import { APP_WALLET_URL, isTrustedWalletDocument, isPathInsideRoot } from './wallet-origin';
+export { APP_WALLET_URL, isTrustedWalletDocument } from './wallet-origin';
 
 // Separate from the OS-level "nano:" deep link schemes.
 const WALLET_SCHEME = 'nault-app';
 const WALLET_HOST = 'wallet';
-export const APP_WALLET_URL = `${WALLET_SCHEME}://${WALLET_HOST}/index.html`;
-
 // Must run before app.ready. Never bypass CSP or enable Service Workers.
 export function registerWalletScheme(): void {
   protocol.registerSchemesAsPrivileged([{
@@ -19,26 +19,6 @@ export function registerWalletScheme(): void {
       corsEnabled: true
     }
   }]);
-}
-
-// Only the exact index page may use Ledger IPC; #hash routes are fine.
-export function isTrustedWalletDocument(candidate: string, expected: string): boolean {
-  try {
-    const parsed = new URL(candidate);
-    parsed.hash = '';
-    return parsed.href === expected;
-  } catch (_error) {
-    return false;
-  }
-}
-
-// Perform this check on canonical (realpath) paths to deny symlink escape.
-export function isPathInsideRoot(root: string, file: string): boolean {
-  const relative = path.relative(root, file);
-  return relative !== '' &&
-    relative !== '..' &&
-    !relative.startsWith('..' + path.sep) &&
-    !path.isAbsolute(relative);
 }
 
 // Only serve regular bundled dist/ files under nault-app://wallet.
