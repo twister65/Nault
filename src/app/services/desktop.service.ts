@@ -20,14 +20,12 @@ export class DesktopService {
 
   on(channel: string, listener) {
     if (!this._ipc) return false;
-    this._ipc.on(channel, listener);
-    return true;
+    return this._ipc.on(channel, listener);
   }
 
   send(channel: string, ...args) {
     if (!this._ipc) return false;
-    this._ipc.send(channel, ...args);
-    return true;
+    return this._ipc.send(channel, ...args);
   }
 
 }
