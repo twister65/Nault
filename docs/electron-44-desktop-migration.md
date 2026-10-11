@@ -52,6 +52,36 @@ available, also try launching **without any Chromium flags**.
 **Do not silently fall back to `--disable-gpu-sandbox` or `--no-sandbox`.**
 Report startup errors instead; we want to restore process isolation.
 
+## USB Ledger reconnect regression test (October 11, 2026)
+
+The first Electron 44 build rendered the UI successfully but failed to connect
+the Ledger Nano S Plus, displaying `Error in native callback`. The subsequent
+`ELECTRON_RUN_AS_NODE=1` test confirmed that both `usb.getDeviceList()` and
+`node-hid.devices()` load and enumerate devices under Electron 44 / Node 24.
+This test does not prove that native hotplug callbacks work in Electron's
+normal main-process runtime.
+
+The updated code selects `@ledgerhq/hw-transport-node-hid-noevents@6.27.5`
+for USB Ledger devices, opening the first matching Ledger HID device directly
+instead of registering native USB attach/detach listeners. Bluetooth continues
+to use the existing optional transport.
+
+Update to the latest PR commit and rebuild:
+
+```sh
+git pull --ff-only origin upgrade/electron-44-desktop
+npm install
+npm run desktop:build
+npm run desktop:local
+./desktop-app/build/linux-unpacked/nault --disable-setuid-sandbox
+```
+
+Verify the Ledger device is unlocked, its Nano app is open, and an address can
+be queried without native callback errors. Do not send funds as part of this
+test. Because the no-events transport does not watch plug/unplug events,
+manual **Reconnect** is expected after attaching or reattaching the device.
+Please report the terminal output and UI status if connection still fails.
+
 ## Checklist
 
 1. Confirm Electron version `44.7.0` in the packaging output.
