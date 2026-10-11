@@ -67,9 +67,18 @@ export class LedgerService {
       // For USB devices, enumerate and open the first Ledger HID device
       // directly. The no-events transport uses node-hid alone and does not
       // register USB hotplug listeners. Reconnect remains user-initiated.
-      const hidTransport = await TransportNodeHidNoEvents.open(null);
+      console.info('[Ledger diagnosis] Opening USB HID device (no-events transport)');
+      let hidTransport;
+      try {
+        hidTransport = await TransportNodeHidNoEvents.open(null);
+        console.info('[Ledger diagnosis] USB HID device opened');
+      } catch (error) {
+        console.error('[Ledger diagnosis] USB HID open failed:', error);
+        throw error;
+      }
       this.ledger.transport = hidTransport;
       this.ledger.nano = new Nano(hidTransport);
+      console.info('[Ledger diagnosis] Nano application transport initialized');
       return hidTransport;
     }
 
@@ -137,7 +146,9 @@ export class LedgerService {
 
     // Attempt to load account 0 - which confirms the app is unlocked and ready
     try {
+      console.info('[Ledger diagnosis] Reading account 0 from Nano application');
       const accountDetails = await this.getLedgerAccount(0);
+      console.info('[Ledger diagnosis] Account 0 read completed');
       this.setLedgerStatus(LedgerStatus.READY, `Ledger device ready`);
       resolved = true;
 
@@ -160,12 +171,15 @@ export class LedgerService {
   async getLedgerAccount(accountIndex, showOnScreen = false) {
     try {
       this.queryingLedger = true;
+      console.info('[Ledger diagnosis] Requesting Nano address (index only):', accountIndex);
       const account = await this.ledger.nano.getAddress(this.ledgerPath(accountIndex), showOnScreen);
+      console.info('[Ledger diagnosis] Nano address request resolved');
       this.queryingLedger = false;
 
       this.ledgerMessage$.next({ event: 'account-details', data: Object.assign({ accountIndex }, account) });
     } catch (err) {
       this.queryingLedger = false;
+      console.error('[Ledger diagnosis] Nano address request failed:', err);
 
       const data = { error: true, errorMessage: typeof err === 'string' ? err : err.message };
       this.ledgerMessage$.next({ event: 'account-details', data: Object.assign({ accountIndex }, data) });
