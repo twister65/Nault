@@ -76,27 +76,37 @@ export class LedgerService {
         console.error('[Ledger diagnosis] USB HID open failed:', error);
         throw error;
       }
-      // Temporary instrumentation for Electron 44 / N-API compatibility:
-      // record I/O stages without logging any HID packets, APDUs, or addresses.
-      // Remove these wrappers once the failing native operation is identified.
+      // Electron 44 / node-hid@2.1.1 diagnostic workaround.
+      // The native async read callback triggers "Error in native callback"
+      // after a successful HID write. Try bounded synchronous reads to
+      // determine whether the callback bridge is the failing component.
+      //
+      // IMPORTANT: Each readTimeout call blocks the Electron main thread
+      // for up to 100 ms. This is a temporary test only, not the final
+      // production transport. A dedicated worker is preferable long-term.
       const device: any = hidTransport.device;
-      const nativeWrite = device.write.bind(device);
-      const nativeRead = device.read.bind(device);
-      device.write = (data: number[]) => {
-        console.info('[Ledger diagnosis] HID write starting');
-        const result = nativeWrite(data);
-        console.info('[Ledger diagnosis] HID write completed');
-        return result;
-      };
-      device.read = (callback: (error: Error | null, data: number[]) => void) => {
-        console.info('[Ledger diagnosis] HID async read starting');
-        const result = nativeRead((error: Error | null, data: number[]) => {
-          console.info('[Ledger diagnosis] HID async read callback invoked:', error ? 'error' : 'success');
-          callback(error, data);
+      (hidTransport as any).readHID = (): Promise<Buffer> =>
+        new Promise<Buffer>((resolve, reject) => {
+          const started = Date.now();
+          const attempt = () => {
+            try {
+              if (Date.now() - started >= this.waitTimeout) {
+                return reject(new Error('Ledger HID read timed out'));
+              }
+              const bytes: number[] = device.readTimeout(100);
+              if (bytes && bytes.length > 0) {
+                console.info('[Ledger diagnosis] HID synchronous read succeeded');
+                return resolve(Buffer.from(bytes));
+              }
+              setImmediate(attempt);
+            } catch (error) {
+              console.error('[Ledger diagnosis] HID synchronous read failed:', error);
+              reject(error);
+            }
+          };
+          setImmediate(attempt);
         });
-        console.info('[Ledger diagnosis] HID async read registered');
-        return result;
-      };
+      console.info('[Ledger diagnosis] HID readTimeout workaround enabled');
       this.ledger.transport = hidTransport;
       this.ledger.nano = new Nano(hidTransport);
       console.info('[Ledger diagnosis] Nano application transport initialized');
