@@ -76,6 +76,27 @@ export class LedgerService {
         console.error('[Ledger diagnosis] USB HID open failed:', error);
         throw error;
       }
+      // Temporary instrumentation for Electron 44 / N-API compatibility:
+      // record I/O stages without logging any HID packets, APDUs, or addresses.
+      // Remove these wrappers once the failing native operation is identified.
+      const device: any = hidTransport.device;
+      const nativeWrite = device.write.bind(device);
+      const nativeRead = device.read.bind(device);
+      device.write = (data: number[]) => {
+        console.info('[Ledger diagnosis] HID write starting');
+        const result = nativeWrite(data);
+        console.info('[Ledger diagnosis] HID write completed');
+        return result;
+      };
+      device.read = (callback: (error: Error | null, data: number[]) => void) => {
+        console.info('[Ledger diagnosis] HID async read starting');
+        const result = nativeRead((error: Error | null, data: number[]) => {
+          console.info('[Ledger diagnosis] HID async read callback invoked:', error ? 'error' : 'success');
+          callback(error, data);
+        });
+        console.info('[Ledger diagnosis] HID async read registered');
+        return result;
+      };
       this.ledger.transport = hidTransport;
       this.ledger.nano = new Nano(hidTransport);
       console.info('[Ledger diagnosis] Nano application transport initialized');
