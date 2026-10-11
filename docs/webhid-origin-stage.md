@@ -164,3 +164,49 @@ The `permission-check` log adds `requestingOriginForm` and
 `securityOriginForm`, reporting only `exact`, `trailing-slash`,
 `opaque-null`, `missing`, or `different`. No raw URLs are logged.
 If either remains denied, send these two forms plus the boolean checks.
+
+## Stage 3 — read-only Nano account-0 WebHID probe
+
+With WebHID device selection and Electron consent working, the
+**Configure Wallet** screen now contains a separate experimental button
+when the secure custom origin and WebHID opt-in are both active.
+The flag is a frozen, read-only preload value; HID permission decisions
+are still enforced independently by Electron main.
+
+This diagnostic uses the existing `@ledgerhq/hw-transport-webhid` with
+`hw-app-nano.getAddress("44'/165'/0'", true)` to read the account-0 address
+and ask for on-device display. It does not import wallet state, sign or
+broadcast, cache blocks, call Nano RPC, or touch the existing native worker.
+It closes the HID connection in `finally` after the one read.
+
+This is a **LedgerJS compatibility probe, not a Ledger Live DMK integration**.
+Ledger Live's DMK WebHID transport and the future native Nano (XNO) coin module
+remain separate milestones. Do not attempt native `Connect`/`Reconnect`
+while a WebHID probe runs. Use a distinct temporary Electron profile and
+avoid real funds.
+
+Build and launch:
+
+```sh
+git pull --ff-only origin feature/webhid
+npm run desktop:test-origin
+npm run desktop:build
+npm run desktop:local
+TEST_PROFILE="$(mktemp -d)"
+NAULT_TEST_APP_ORIGIN=1 NAULT_TEST_WEBHID=1 \
+  ./desktop-app/build/linux-unpacked/nault \
+  --user-data-dir="$TEST_PROFILE" --disable-setuid-sandbox
+```
+
+Open **Configure Wallet**. With the Nano app unlocked, click
+**Read account 0 via WebHID** and approve only the device access / account
+display requests you recognize. The Nano account is presented transiently in
+the page, not logged, stored or imported. Compare it against the address
+shown on the device. Close the experiment before testing native HID.
+
+If the button is not visible, check that both opt-in variables reached the
+Electron preload and that `location.protocol === 'nault-app:'`.
+If an error occurs, report the *error message only*, without sharing any
+private key, seed or serial number.
+
+**Not yet compiled or hardware-tested in this branch.**

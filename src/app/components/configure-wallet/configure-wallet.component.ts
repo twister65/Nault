@@ -3,6 +3,7 @@ import {WalletService, NotificationService, RepresentativeService} from '../../s
 import {ActivatedRoute, Router} from '@angular/router';
 import * as bip39 from 'bip39';
 import {LedgerService, LedgerStatus} from '../../services/ledger.service';
+import { readNanoAccountZeroWebHid } from '../../services/ledger-webhid-probe';
 import { QrModalService } from '../../services/qr-modal.service';
 import {UtilService} from '../../services/util.service';
 import { wallet } from 'nanocurrency-web';
@@ -61,6 +62,16 @@ export class ConfigureWalletComponent implements OnInit {
 
   ledgerStatus = LedgerStatus;
   ledger = this.ledgerService.ledger;
+
+  // Available only in the isolated Electron WebHID experiment. Never
+  // imports/replaces a wallet and never uses the native HID worker.
+  readonly experimentalWebHidReadOnly =
+    window.location.protocol === 'nault-app:' &&
+    window.location.hostname === 'wallet' &&
+    window.naultDesktop?.experimentalWebHidReadOnly === true;
+  webHidProbeBusy = false;
+  webHidProbeAddress = '';
+  webHidProbeError = '';
 
   constructor(
     private router: ActivatedRoute,
@@ -129,6 +140,29 @@ export class ConfigureWalletComponent implements OnInit {
 
     this.notifications.sendSuccess(`Successfully imported wallet from a private key!`);
     this.walletService.informNewWallet();
+  }
+
+  async probeWebHidAccountZero(): Promise<void> {
+    if (!this.experimentalWebHidReadOnly || this.webHidProbeBusy) return;
+
+    // Only one software transport may own the physical USB interface.
+    if (this.ledger.status !== LedgerStatus.NOT_CONNECTED) {
+      this.webHidProbeError = 'Disconnect the native Ledger session before running this test.';
+      return;
+    }
+
+    this.webHidProbeBusy = true;
+    this.webHidProbeAddress = '';
+    this.webHidProbeError = '';
+    try {
+      // A direct, single read-only APDU flow. Do not call loadLedger():
+      // desktop loadLedger() opens the separate native HID worker.
+      this.webHidProbeAddress = await readNanoAccountZeroWebHid();
+    } catch (error) {
+      this.webHidProbeError = error instanceof Error ? error.message : String(error);
+    } finally {
+      this.webHidProbeBusy = false;
+    }
   }
 
   async connectLedgerByBluetooth() {

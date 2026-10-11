@@ -6,6 +6,7 @@ interface NodeModule {
 
 // The preload exposes only the desktop messages needed by the web renderer.
 interface NaultDesktopBridge {
+  readonly experimentalWebHidReadOnly?: boolean;
   on(channel: string, listener: (...args: any[]) => void): boolean;
   send(channel: string, ...args: any[]): boolean;
 }

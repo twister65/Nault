@@ -1,5 +1,28 @@
 <h2 class="uk-heading-divider">Configure Wallet</h2>
 
+<!-- Read-only experimental Ledger probe. Hidden on normal desktop and web. -->
+<div *ngIf="experimentalWebHidReadOnly" class="uk-alert uk-alert-primary nlt-inline-alert">
+  <div>
+    <h3>Experimental WebHID — Nano account 0</h3>
+    <p>Open the Nano app on your Ledger Nano S Plus. This test reads and
+      displays only account 0 (44'/165'/0'). It does not import a wallet,
+      sign a transaction, or access recovery phrases.</p>
+    <p>Do not use Nault's normal Connect/Reconnect while this test runs.</p>
+    <button type="button" class="uk-button uk-button-primary"
+      [disabled]="webHidProbeBusy || ledger.status !== ledgerStatus.NOT_CONNECTED"
+      (click)="probeWebHidAccountZero()">
+      {{ webHidProbeBusy ? 'Waiting for Ledger...' : 'Read account 0 via WebHID' }}
+    </button>
+    <p *ngIf="webHidProbeAddress" class="uk-margin-top">
+      <b>Account 0 (read only):</b>
+      <code style="overflow-wrap:anywhere">{{ webHidProbeAddress }}</code>
+    </p>
+    <p *ngIf="webHidProbeError" class="uk-text-danger uk-margin-top">
+      {{ webHidProbeError }}
+    </p>
+  </div>
+</div>
+
 <div *ngIf="isConfigured() && !walletService.isLedgerWallet() && (activePanel === panels.landing || activePanel === panels.import || activePanel === panels.mnemonicTypeSelection)" class="uk-margin-small-bottom">
   <div class="uk-alert uk-alert-danger nlt-inline-alert">
     <div class="icon-column">
