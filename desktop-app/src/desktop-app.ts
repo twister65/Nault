@@ -210,6 +210,13 @@ function isTrustedLedgerSender(event: IpcMainEvent): boolean {
 initialize(isTrustedLedgerSender);
 
 function createWindow () {
+  // Visible before any navigator.hid request; no device IDs or wallet data.
+  // Helps distinguish disabled opt-in, stale bundles and Chromium callbacks.
+  log.info('[Nault WebHID] startup:', {
+    appOriginEnabled: useExperimentalAppOrigin,
+    webHidEnabled: useExperimentalWebHID
+  });
+
   // Get window state
   const mainWindowStateKeeper = windowStateKeeper();
 
