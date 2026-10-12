@@ -10,6 +10,19 @@ export class ApiService {
   storeKey = `nanovault-active-difficulty`;
   constructor(private http: HttpClient, private node: NodeService, private appSettings: AppSettingsService) { }
 
+  // Some public RPC proxies still whitelist the legacy pending action names.
+  // Only retry when the proxy explicitly denies the modern action; never retry
+  // unrelated errors or mutate transaction-processing requests.
+  private legacyReceivableAction(action: string, error: any): string | null {
+    const legacyAction = action === 'accounts_receivable' ? 'accounts_pending' :
+      action === 'receivable' ? 'pending' : null;
+    if (!legacyAction) return null;
+
+    const reason = error && error.error && error.error.error;
+    return typeof reason === 'string' && reason.trim() === `Action ${action} not allowed`
+      ? legacyAction : null;
+  }
+
   private async request(action, data, skipError, url = '', validateResponse?): Promise<any> {
     data.action = action;
     const apiUrl = url === '' ? this.appSettings.settings.serverAPI : url;
@@ -57,6 +70,14 @@ export class ApiService {
       })
       .catch(async err => {
         if (skipError) return;
+
+        const legacyAction = this.legacyReceivableAction(action, err);
+        if (legacyAction) {
+          // Retry the same request against the same endpoint with the legacy
+          // action name, even when a random server was selected.
+          console.info(`RPC proxy rejected ${action}; retrying with ${legacyAction}`);
+          return this.request(legacyAction, data, skipError, apiUrl, validateResponse);
+        }
 
         if ( err.isValidationFailure === true ) {
           console.log(
