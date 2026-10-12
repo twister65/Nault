@@ -7,7 +7,7 @@ describe('WebSocket bounded connections', () => {
   let service: WebsocketService;
   beforeEach(() => {
     sockets = [];
-    spyOn(window, 'WebSocket').and.callFake(() => {
+    spyOn(window, 'WebSocket').and.callFake(function () {
       const socket: any = { send: jasmine.createSpy(), close: () => { if (socket.onclose) socket.onclose({}); } };
       sockets.push(socket);
       return socket;
