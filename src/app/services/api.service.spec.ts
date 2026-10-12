@@ -77,3 +77,46 @@ describe('ApiService block contents compatibility', () => {
     expect(response.subtype).toBe('send');
   });
 });
+
+
+describe('ApiService receivable RPC compatibility', () => {
+  it('uses accounts_receivable for all multi-account pending queries', async () => {
+    const service = new ApiService(null as any, null as any, null as any);
+    const request = spyOn<any>(service, 'request').and.returnValue(Promise.resolve({ blocks: {} }));
+    const accounts = ['nano_test'];
+    const base = { accounts, count: 50, source: true, include_only_confirmed: true };
+
+    await service.accountsPending(accounts);
+    expect(request).toHaveBeenCalledWith('accounts_receivable', base, false);
+
+    await service.accountsPendingLimit(accounts, '100');
+    expect(request).toHaveBeenCalledWith('accounts_receivable', { ...base, threshold: '100' }, false);
+
+    await service.accountsPendingSorted(accounts);
+    expect(request).toHaveBeenCalledWith('accounts_receivable', { ...base, sorting: true }, false);
+
+    await service.accountsPendingLimitSorted(accounts, '100');
+    expect(request).toHaveBeenCalledWith('accounts_receivable', { ...base, threshold: '100', sorting: true }, false);
+    expect(request).toHaveBeenCalledTimes(4);
+  });
+
+  it('uses receivable for all single-account pending queries', async () => {
+    const service = new ApiService(null as any, null as any, null as any);
+    const request = spyOn<any>(service, 'request').and.returnValue(Promise.resolve({ blocks: {} }));
+    const account = 'nano_test';
+    const base = { account, count: 50, source: true, include_only_confirmed: true };
+
+    await service.pending(account, 50);
+    expect(request).toHaveBeenCalledWith('receivable', base, false);
+
+    await service.pendingLimit(account, 50, '100');
+    expect(request).toHaveBeenCalledWith('receivable', { ...base, threshold: '100' }, false);
+
+    await service.pendingSorted(account, 50);
+    expect(request).toHaveBeenCalledWith('receivable', { ...base, sorting: true }, false);
+
+    await service.pendingLimitSorted(account, 50, '100');
+    expect(request).toHaveBeenCalledWith('receivable', { ...base, threshold: '100', sorting: true }, false);
+    expect(request).toHaveBeenCalledTimes(4);
+  });
+});
