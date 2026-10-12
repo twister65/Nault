@@ -1,17 +1,19 @@
-import { TestBed, inject } from '@angular/core/testing';
-
+import { of } from 'rxjs';
 import { WalletService } from './wallet.service';
 
 describe('WalletService', () => {
-  beforeEach(() => {
-    TestBed.configureTestingModule({
-      providers: [WalletService]
-    });
+  it('initializes with isolated websocket and address-book event streams', () => {
+    // Constructor smoke test: no real RPC connection, Ledger or wallet secrets.
+    const service = new WalletService(
+      null as any, null as any, null as any,
+      { addressBook$: of(null) } as any,
+      null as any, null as any,
+      { newTransactions$: of(null) } as any,
+      null as any, null as any, null as any, null as any
+    );
+    expect(service.wallet.accounts).toEqual([]);
+    expect(service.wallet.updatingBalance).toBe(false);
   });
-
-  it('should be created', inject([WalletService], (service: WalletService) => {
-    expect(service).toBeTruthy();
-  }));
 });
 
 
