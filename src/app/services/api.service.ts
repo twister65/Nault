@@ -114,11 +114,24 @@ export class ApiService {
     return await this.request('representatives_online', { }, false);
   }
 
+  // Nano Node can return JSON-encoded block contents, while RsNano returns a JSON object.
+  // Keep the string shape expected by existing Nault callers using JSON.parse(contents).
+  private normalizeBlockContents(blockInfo: any): void {
+    if (blockInfo && blockInfo.contents !== null && typeof blockInfo.contents === 'object' && !Array.isArray(blockInfo.contents)) {
+      blockInfo.contents = JSON.stringify(blockInfo.contents);
+    }
+  }
   async blocksInfo(blocks): Promise<{blocks: any, error?: string}> {
-    return await this.request('blocks_info', { hashes: blocks, pending: true, source: true }, false);
+    const response = await this.request('blocks_info', { hashes: blocks, pending: true, source: true }, false);
+    if (response && response.blocks && typeof response.blocks === 'object') {
+      Object.keys(response.blocks).forEach(hash => this.normalizeBlockContents(response.blocks[hash]));
+    }
+    return response;
   }
   async blockInfo(hash): Promise<any> {
-    return await this.request('block_info', { hash: hash }, false);
+    const response = await this.request('block_info', { hash: hash }, false);
+    this.normalizeBlockContents(response);
+    return response;
   }
   async blockCount(): Promise<{count: number, unchecked: number, cemented: number }> {
     return await this.request('block_count', { include_cemented: 'true'}, false);
