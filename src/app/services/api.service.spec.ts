@@ -25,7 +25,7 @@ describe('ApiService.process', () => {
         block,
         subtype: TxType[subtype]
       }, false);
-      const payload = request.calls.mostRecent().args[1];
+      const payload = request.calls.mostRecent().args[1] as any;
       expect(payload.block).toBe(block);
       expect(payload.watch_work).toBeUndefined();
     }
