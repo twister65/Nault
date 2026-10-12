@@ -1,6 +1,7 @@
 import { ApiService } from './api.service';
 import { TxType } from './util.service';
-import { of, throwError } from 'rxjs';
+import { of, throwError, NEVER } from 'rxjs';
+import { fakeAsync, tick } from '@angular/core/testing';
 
 describe('ApiService.process', () => {
   it('submits a JSON block without double-encoding it', async () => {
@@ -217,5 +218,95 @@ describe('ApiService RPC proxy fallback', () => {
     expect(error).toBeDefined();
     expect(payloads.map(p => p.action)).toEqual(['accounts_receivable']);
     expect(node.setOffline).toHaveBeenCalled();
+  });
+});
+
+describe('ApiService bounded secure requests', () => {
+  function setup(serverName = 'random') {
+    const http = { post: jasmine.createSpy('post').and.returnValue(throwError({ status: 503 })) };
+    const node = { node: { status: true }, setOnline: jasmine.createSpy(), setOffline: jasmine.createSpy(), setLoading: jasmine.createSpy() };
+    const settings = {
+      settings: { serverName, serverAPI: 'https://a.invalid/rpc', serverAuth: 'test-secret' },
+      serverOptions: ['a', 'b', 'b', 'c', 'd'].map(host => ({ api: `https://${host}.invalid/rpc`, shouldRandom: true }))
+    };
+    return { http, node, settings, api: new ApiService(http as any, node as any, settings as any) };
+  }
+  it('stops after three distinct endpoints and never forwards custom credentials in random mode', async () => {
+    const { api, http, node } = setup();
+    await expectAsync(api.accountsBalances([])).toBeRejected();
+    expect(http.post.calls.allArgs().map(args => args[0])).toEqual([
+      'https://a.invalid/rpc', 'https://b.invalid/rpc', 'https://c.invalid/rpc'
+    ]);
+    http.post.calls.allArgs().forEach(args => expect(args[2].headers).toBeUndefined());
+    expect(node.setOffline).toHaveBeenCalled();
+  });
+  it('does not retry authorization failures or malformed responses', async () => {
+    const { api, http } = setup();
+    http.post.and.returnValue(throwError({ status: 401 }));
+    await expectAsync(api.accountsBalances([])).toBeRejected();
+    expect(http.post).toHaveBeenCalledTimes(1);
+    http.post.calls.reset();
+    http.post.and.returnValue(of({ work: 'invalid' }));
+    await expectAsync(api.workGenerate('hash', 'difficulty')).toBeRejected();
+    expect(http.post).toHaveBeenCalledTimes(1);
+  });
+  it('never automatically replays a signed transaction after a network error', async () => {
+    const { api, http } = setup();
+    await expectAsync(api.process({ signature: 'test' }, TxType.send)).toBeRejected();
+    expect(http.post).toHaveBeenCalledTimes(1);
+  });
+  it('rejects insecure saved settings before sending credentials or data', async () => {
+    const { api, http, settings } = setup('custom');
+    settings.settings.serverAPI = 'http://192.168.1.16:7076';
+    await expectAsync(api.accountsBalances([])).toBeRejected();
+    expect(http.post).not.toHaveBeenCalled();
+  });
+  it('limits authentication to the configured custom RPC, not an explicit PoW server', async () => {
+    const { api, http } = setup('custom');
+    http.post.and.returnValue(of({ work: 'A'.repeat(16) }));
+    await api.accountsBalances([]);
+    expect(http.post.calls.mostRecent().args[2].headers.get('Authorization')).toBe('test-secret');
+    await api.workGenerate('hash', 'difficulty', 'https://work.invalid');
+    expect(http.post.calls.mostRecent().args[2].headers).toBeUndefined();
+    await api.workGenerate('hash', 'difficulty', 'https://a.invalid/rpc');
+    expect(http.post.calls.mostRecent().args[2].headers).toBeUndefined();
+  });
+  it('times out stalled reads within the 45 second total budget', fakeAsync(() => {
+    const { api, http, node } = setup();
+    http.post.and.returnValue(NEVER);
+    let rejected = false;
+    api.accountsBalances([]).catch(() => { rejected = true; });
+    tick(44999);
+    expect(rejected).toBe(false);
+    tick(1);
+    expect(rejected).toBe(true);
+    expect(http.post).toHaveBeenCalledTimes(3);
+    expect(node.setOffline).toHaveBeenCalled();
+  }));
+  it('gives PoW one bounded two-minute attempt', fakeAsync(() => {
+    const { api, http } = setup();
+    http.post.and.returnValue(NEVER);
+    let rejected = false;
+    api.workGenerate('hash', 'difficulty').catch(() => { rejected = true; });
+    tick(119999);
+    expect(rejected).toBe(false);
+    tick(1);
+    expect(rejected).toBe(true);
+    expect(http.post).toHaveBeenCalledTimes(1);
+  }));
+  it('recovers on a second server without mutating the configured endpoint', async () => {
+    const { api, http, settings } = setup();
+    http.post.and.returnValues(throwError({ status: 503 }), of({ balances: {} }));
+    expect(await api.accountsBalances([])).toEqual({ balances: {} });
+    expect(settings.settings.serverAPI).toBe('https://a.invalid/rpc');
+    expect(http.post).toHaveBeenCalledTimes(2);
+  });
+  it('counts legacy fallback against the same total attempt budget', async () => {
+    const { api, http } = setup();
+    http.post.and.callFake((_url, payload) => throwError(payload.action === 'receivable'
+      ? { status: 500, error: { error: 'Action receivable not allowed' } } : { status: 503 }));
+    await expectAsync(api.pending('nano_test', 5)).toBeRejected();
+    expect(http.post).toHaveBeenCalledTimes(3);
+    expect(http.post.calls.allArgs().map(args => args[1].action)).toEqual(['receivable', 'pending', 'receivable']);
   });
 });

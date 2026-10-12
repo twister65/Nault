@@ -1,3 +1,4 @@
+import { secureEndpoint } from '../../services/endpoint-policy';
 import { Component, OnInit, Renderer2 } from '@angular/core';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
@@ -350,6 +351,11 @@ export class ConfigureAppComponent implements OnInit {
   }
 
   async updateWalletSettings() {
+    if (this.customWorkServer && this.customWorkServer.trim()) {
+      try { this.customWorkServer = secureEndpoint(this.customWorkServer, 'rpc'); } catch (_) {
+        return this.notifications.sendWarning('Use HTTPS for the work server; HTTP is allowed only on loopback.');
+      }
+    }
     const newStorage = this.selectedStorage;
     const resaveWallet = this.appSettings.settings.walletStore !== newStorage;
 
@@ -467,24 +473,16 @@ export class ConfigureAppComponent implements OnInit {
       serverAuth: null,
     };
 
-    // Custom... do some basic validation
-    if (this.serverAPI != null && this.serverAPI.trim().length > 1) {
-      if (this.serverAPI.startsWith('https://') || this.serverAPI.startsWith('http://')) {
-        newSettings.serverAPI = this.serverAPI;
-      } else {
-        return this.notifications.sendWarning(this.translocoService.translate('configure-app.custom-api-server-has-an-invalid-address'));
+    if (this.selectedServer === 'custom') {
+      try {
+        if (this.serverAPI && this.serverAPI.trim()) newSettings.serverAPI = secureEndpoint(this.serverAPI, 'rpc');
+        if (this.serverWS && this.serverWS.trim()) newSettings.serverWS = secureEndpoint(this.serverWS, 'ws');
+      } catch (_) {
+        return this.notifications.sendWarning('Use HTTPS/WSS. HTTP/WS is allowed only for localhost, 127.0.0.1 or [::1].');
       }
     }
 
-    if (this.serverWS != null && this.serverWS.trim().length > 1) {
-      if (this.serverWS.startsWith('wss://') || this.serverWS.startsWith('ws://')) {
-        newSettings.serverWS = this.serverWS;
-      } else {
-        return this.notifications.sendWarning(this.translocoService.translate('configure-app.custom-update-server-has-an-invalid-address'));
-      }
-    }
-
-    if (this.serverAuth != null && this.serverAuth.trim().length > 1) {
+    if (this.selectedServer === 'custom' && this.serverAuth != null && this.serverAuth.trim().length > 1) {
       newSettings.serverAuth = this.serverAuth;
     }
 
@@ -496,8 +494,11 @@ export class ConfigureAppComponent implements OnInit {
     this.node.node.status = false; // Directly set node to offline since API url changed.  Status will get set by reloadBalances
 
     // Reload balances which triggers an api check + reconnect to websocket server
-    await this.walletService.reloadBalances();
-    this.websocket.forceReconnect();
+    try {
+      await this.walletService.reloadBalances();
+    } finally {
+      this.websocket.forceReconnect();
+    }
     // this is updated after setting server to random and doing recheck of wallet balance
     this.serverAPIUpdated = this.appSettings.settings.serverAPI;
     this.serverAPI = this.serverAPIUpdated;

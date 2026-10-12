@@ -28,7 +28,7 @@ getTestBed().initTestEnvironment(
 );
 // Then we find all the tests.
 // Isolate compatibility regression tests from unrelated, legacy Angular component smoke tests.
-const context = require.context('./app/services', false, /(?:api|wallet)\.service\.spec\.ts$/);
+const context = require.context('./app/services', false, /(?:api|wallet|websocket|rpc-transport|endpoint-policy)\.service\.spec\.ts$/);
 // And load the modules.
 context.keys().map(context);
 // Finally, start Karma to run the tests.
