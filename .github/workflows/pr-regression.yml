@@ -1,0 +1,68 @@
+name: Nault regression checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: regression-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    name: Angular tests and desktop build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      # Angular 13's webpack build needs this when running on supported Node 22.
+      NODE_OPTIONS: --openssl-legacy-provider
+      # Only typecheck Electron; downloading its binary is unnecessary.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install native module build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+
+      - name: Install dependencies from lockfile
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Locate Chrome
+        shell: bash
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v chromium || true)"
+          if [ -z "$CHROME_BIN" ]; then
+            echo "::error::Chrome is not installed on the runner."
+            exit 1
+          fi
+          echo "CHROME_BIN=$CHROME_BIN" >> "$GITHUB_ENV"
+          "$CHROME_BIN" --version
+
+      - name: Build Angular desktop renderer
+        run: npm run wallet:build-desktop
+
+      - name: Typecheck and compile Electron main/preload
+        run: npm run desktop:compile
+
+      # The upstream full Jasmine suite currently has 44 unrelated, unmocked
+      # component smoke tests (NullInjectorError); test those separately later.
+      - name: Run focused Nano / RsNano RPC regression tests
+        run: npm test -- --main=src/test-rpc.ts --watch=false --browsers=ChromeHeadlessCI --progress=false

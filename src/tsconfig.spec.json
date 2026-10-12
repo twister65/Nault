@@ -10,11 +10,12 @@
   },
   "files": [
     "test.ts",
+    "test-rpc.ts",
     "polyfills.ts"
   ],
   "include": [
-    "src/**/*.spec.ts",
-    "src/**/*.d.ts"
+    "**/*.spec.ts",
+    "**/*.d.ts"
   ],
   "exclude": [
     "node_modules"
