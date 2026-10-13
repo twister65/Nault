@@ -275,7 +275,26 @@ function reportLedgerIpcFailure(operation: string, error: unknown): void {
 }
 
 // Create a copy of the ledger service and register listeners with the browser window
-export function initialize(isTrustedSender: (event: IpcMainEvent) => boolean) {
+export function initialize(isTrustedSender: (event: IpcMainEvent) => boolean, webHidOnly = false) {
+  // Fixed at startup by Electron main, never by a renderer message. In the
+  // diagnostic profile do not construct a native service or start its polling.
+  if (webHidOnly) {
+    ipcMain.on('ledger', (event, message) => {
+      if (!isTrustedSender(event) || !message) return;
+      const errorMessage = 'Native Ledger transport is disabled in the WebHID test profile.';
+      if (message.event === 'get-ledger-status') {
+        event.sender.send('ledger', { event: 'ledger-status', data: {
+          status: LedgerStatus.NOT_CONNECTED, statusText: errorMessage
+        } });
+      } else if (['account-details', 'cache-block', 'sign-block'].includes(message.event)) {
+        // Preserve the response type/index so pending renderer requests reject.
+        event.sender.send('ledger', { event: message.event, data: {
+          accountIndex: message.data?.accountIndex ?? 0, error: true, errorMessage
+        } });
+      }
+    });
+    return;
+  }
   console.log('Ledger service initializing');
   const Ledger = new LedgerService();
 

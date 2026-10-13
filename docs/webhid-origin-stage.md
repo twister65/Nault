@@ -1,3 +1,59 @@
+## Current stage — native transport exclusion (2026-10-13)
+
+This section supersedes earlier instructions that native Connect/Reconnect
+remains usable while both experimental flags are enabled.
+
+With **both** `NAULT_TEST_APP_ORIGIN=1` and `NAULT_TEST_WEBHID=1`, Electron
+main now rejects every native Ledger IPC command for the entire process
+lifetime, including Bluetooth. It does not construct the native Ledger
+service or start its polling. Reconnect returns `not-connected` with an
+explicit explanation; account, cache and signing requests return matching
+errors so renderer callers are not left waiting. Sender checks still apply.
+With either flag absent, the existing native path is unchanged.
+
+This makes transport exclusion independent of UI state or a user's ability
+to avoid the normal Reconnect button. It does not enable WebHID signing or
+DMK. Close the experimental process and restart without the WebHID flag to
+test the native transport, using the appropriate separate profile.
+
+### Next hardware tests (results pending)
+
+Rebuild using the command sequence below and start a fresh isolated profile.
+Close other applications that can hold the Ledger. Never import a seed.
+
+1. Repeat the four numbered diagnostic buttons. Account 0 must still match
+   the device display. Repeat the address read to check release/reopening.
+2. Try normal Connect/Reconnect in this experimental process. It must fail
+   with `Native Ledger transport is disabled in the WebHID test profile.`
+   The WebHID buttons must still work afterwards. There must be no native
+   worker initialization or native polling in the logs.
+3. Cancel the Electron device-consent dialog. No address or successful
+   open result should appear. Retry selection and the four steps.
+4. If the Nano app offers an address rejection action, reject the display
+   request, record the visible error, then retry. Do not approve a signature.
+5. Unplug the Ledger while idle, retry the open/read test and record the
+   error. Reconnect, unlock, open Nano and repeat selection, enumeration,
+   open/close and address read. Repeat unplugging during an address request;
+   if the UI stays busy, record the elapsed time and restart the isolated
+   process. Do not claim bounded recovery until tested on hardware.
+6. Test with Ledger locked and with the Nano app closed; record the errors,
+   then unlock/open Nano and repeat the numbered steps.
+7. Exit the process. Start a fresh profile with the flags and verify access
+   again requires selection/consent. Separately restart without the WebHID
+   flag and verify the existing native address-read flow still works.
+
+Report each result as PASS / FAIL / NOT TESTED, the OS, Nano app version,
+step and visible error (no address, serial, APDU or seed). These checks are
+read-only. Hardware signing, cache authorization, transaction construction,
+RPC and DMK remain separate unvalidated milestones. The successful hardware
+result from October 11 below applies only to that earlier four-step run.
+
+Automated coverage: `npm run desktop:test-origin` includes mocked IPC tests
+for native exclusion, matching error replies, untrusted senders and normal
+native dispatch. These tests cannot establish physical USB recovery.
+
+---
+
 ## Hardware validation recorded — 2026-10-11
 
 **Reported successful by the maintainer on an actual Ledger Nano S Plus**

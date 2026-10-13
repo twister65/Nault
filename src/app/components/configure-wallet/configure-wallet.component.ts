@@ -296,6 +296,10 @@ export class ConfigureWalletComponent implements OnInit {
   }
 
   async importLedgerWallet(refreshOnly = false) {
+    if (this.experimentalWebHidReadOnly) {
+      this.notifications.sendWarning('Native Ledger transport is disabled in the WebHID test profile.');
+      return;
+    }
      // If a wallet exists already, make sure they know they are overwriting it
      if (!refreshOnly && this.isConfigured()) {
       const confirmed = await this.confirmWalletOverwrite();

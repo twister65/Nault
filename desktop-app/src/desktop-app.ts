@@ -207,7 +207,7 @@ function isTrustedLedgerSender(event: IpcMainEvent): boolean {
 // Validate the sender before handling any Ledger IPC, including account reads
 // and signing requests. This does not replace transaction confirmation on
 // the physical Ledger display.
-initialize(isTrustedLedgerSender);
+initialize(isTrustedLedgerSender, useExperimentalWebHID);
 
 function createWindow () {
   // Visible before any navigator.hid request; no device IDs or wallet data.
@@ -259,8 +259,8 @@ function createWindow () {
     }
   });
 
-  // Native HID remains Nault's active desktop transport. This opt-in WebHID
-  // permission experiment does not modify LedgerService or issue any APDUs.
+  // The opt-in WebHID profile excludes native Ledger IPC for its whole lifetime.
+  // Other profiles retain the native transport.
   // No HID permission is granted automatically, not even to Ledger devices.
   const walletSession = mainWindow.webContents.session;
   const permittedWebFeatures = new Set(['media', 'clipboard-read', 'clipboard-sanitized-write']);
