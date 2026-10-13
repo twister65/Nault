@@ -1,26 +1,97 @@
 name: Docker Hub
 
-# on all branches, tags, PRs
 on:
   push:
-    branches:
-      - '*'
-    tags:
-      - '*'
+    branches: ['**']
+    tags: ['*']
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build_and_push:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
-    
-      - name: Build and push Docker images
-        uses: docker/build-push-action@v1
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and load image for validation
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          push: false
+          tags: nault-ci:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test nginx, application assets and SPA routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm nault-ci:test nginx -t
+          docker run --detach --name nault-smoke --publish 127.0.0.1:8080:80 nault-ci:test
+          trap 'docker logs nault-smoke; docker rm --force nault-smoke' EXIT
+          curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 1 \
+            http://127.0.0.1:8080/ --output /tmp/nault-index.html
+          curl --fail --silent --show-error http://127.0.0.1:8080/configure-app \
+            --output /tmp/nault-route.html
+          cmp /tmp/nault-index.html /tmp/nault-route.html
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from urllib.request import urlopen
+          from urllib.parse import urljoin, urlsplit
+          from pathlib import Path
+
+          class Scripts(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.sources = []
+              def handle_starttag(self, tag, attrs):
+                  if tag == 'script' and dict(attrs).get('src'):
+                      self.sources.append(dict(attrs)['src'])
+
+          html = Path('/tmp/nault-index.html').read_text()
+          assert '<app-root' in html, 'Nault application shell is missing'
+          parser = Scripts()
+          parser.feed(html)
+          assert parser.sources, 'Application scripts are missing'
+          for source in parser.sources:
+              address = urljoin('http://127.0.0.1:8080/', source)
+              assert urlsplit(address).netloc == '127.0.0.1:8080', 'Unexpected external script'
+              with urlopen(address, timeout=10) as response:
+                  assert response.status == 200
+                  assert 'javascript' in response.headers.get('Content-Type', ''), source
+                  assert response.read(1), f'Empty script: {source}'
+          print(f'Nault shell, SPA route and {len(parser.sources)} scripts passed')
+          PY
+
+      # Preserve upstream publishing, but never use upstream Docker Hub credentials
+      # or attempt to publish nault/nault from a fork or a pull request.
+      - name: Log in to Docker Hub (upstream releases only)
+        if: github.repository == 'Nault/Nault' && github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-          repository: nault/nault
-          tag_with_ref: true
-          push: ${{ startsWith(github.ref, 'refs/tags/') || startsWith(github.ref, 'refs/heads/') }}
+
+      - name: Publish the tested image (upstream releases only)
+        if: github.repository == 'Nault/Nault' && github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_tag="${GITHUB_REF_NAME//\//-}"
+          docker tag nault-ci:test "nault/nault:${image_tag}"
+          docker push "nault/nault:${image_tag}"
