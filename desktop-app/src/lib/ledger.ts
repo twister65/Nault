@@ -88,9 +88,15 @@ export class LedgerService {
           found = true;
           if (sub) sub.unsubscribe();
           clearTimeout(timeoutId);
-          this.ledger.transport = await transport.open(e.descriptor);
-          this.ledger.nano = new Nano(this.ledger.transport);
-          resolve(this.ledger.transport);
+          try {
+            this.ledger.transport = await transport.open(e.descriptor);
+            this.ledger.nano = new Nano(this.ledger.transport);
+            resolve(this.ledger.transport);
+          } catch (error) {
+            // Observer callbacks are not awaited by listen(): propagate an
+            // opening failure to the connection request instead of hanging.
+            reject(error);
+          }
         },
         error: (e) => {
           clearTimeout(timeoutId);
