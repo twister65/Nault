@@ -160,5 +160,8 @@
       ],
       "role": "Viewer"
     }
+  },
+  "overrides": {
+    "nan": "2.22.2"
   }
 }
