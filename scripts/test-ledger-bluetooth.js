@@ -110,17 +110,17 @@ async function main() {
     const frames = new (require('rxjs').Subject)();
     let disconnected = false;
     const transport = new RealBLE({ id: 'test', gatt: { disconnect() { disconnected = true; } } }, {}, frames, {});
-    transport.mtuSize = 20;
+    transport.mtuSize = 153;
     control.handleLedgerBleControl(transport);
     transport.write = async () => {};
     const result = transport.exchange(Buffer.from('0102', 'hex'));
-    frames.next(Buffer.from('080000000114', 'hex'));
+    frames.next(Buffer.from('080000990199', 'hex'));
     frames.next(Buffer.from('0500000004aabb', 'hex'));
-    frames.next(Buffer.from('080000000114', 'hex'));
+    frames.next(Buffer.from('080000000199', 'hex'));
     frames.next(Buffer.from('0500019000', 'hex'));
     assert.equal((await result).toString('hex'), 'aabb9000');
     assert.equal(disconnected, false);
-    for (const hex of ['090000000114', '080000000115', '08000000011400']) {
+    for (const hex of ['090000000199', '080000000198', '08000099019900', '080000980199']) {
       const pending = transport.exchange(Buffer.from('0102', 'hex'));
       const rejected = assert.rejects(pending, error => error.id === 'InvalidTag');
       frames.next(Buffer.from(hex, 'hex'));
