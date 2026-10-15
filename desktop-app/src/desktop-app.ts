@@ -5,8 +5,12 @@ import { autoUpdater } from 'electron-updater';
 import * as url from 'url';
 import * as path from 'path';
 import { initialize } from './lib/ledger';
+import { configureWebBluetooth } from './lib/web-bluetooth';
 import * as settings from 'electron-settings';
 const log = require('electron-log');
+
+// Chromium's BlueZ-backed Web Bluetooth on Linux; no raw-socket capability.
+if (process.platform === 'linux') app.commandLine.appendSwitch('enable-features', 'WebBluetooth');
 
 // Diagnostic-only listener: record native main-process exceptions without
 // swallowing them or changing Electron's normal uncaught-error behavior.
@@ -267,6 +271,8 @@ function createWindow () {
     event.preventDefault();
     callback();
   });
+
+  configureWebBluetooth(mainWindow, isTrustedWalletURL);
 
   // Track window state
   mainWindowStateKeeper.track(mainWindow);

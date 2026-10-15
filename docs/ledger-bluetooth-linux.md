@@ -1,47 +1,64 @@
-# Ledger Bluetooth on Linux / Electron 44
+# Ledger Web Bluetooth in Nault Desktop
 
-`@abandonware/bluetooth-hci-socket` uses NAN and is tied to the runtime ABI.
-An addon installed by Node 22 (ABI 127) cannot be loaded by Electron 44.7.0
-(ABI 149). NAN 2.22.2 also fails against Electron's V8 15.2 headers at
-`v8::External::Value()`. This branch pins NAN 2.29.0 and provides an explicit
-Electron rebuild, without changing Ledger or Noble versions.
+Desktop Bluetooth now uses `@ledgerhq/hw-transport-web-ble` in the sandboxed
+renderer, with Chromium / BlueZ handling Bluetooth on Linux. USB continues to
+use the existing native HID worker. Noble, bluetooth-hci-socket and NAN are no
+longer dependencies, and no Bluetooth native rebuild is needed.
 
-## Install, build, run
+## Update and launch
 
-Run as your ordinary user from the repository directory:
+Close Nault. If a capability was previously added to Electron, remove it first:
 
 ```sh
+getcap node_modules/electron/dist/electron
+# Only if the preceding command reports capabilities:
+sudo setcap -r node_modules/electron/dist/electron
+```
+
+Then run each step, stopping on any failure:
+
+```sh
+git pull --ff-only
 npm ci --legacy-peer-deps --include=optional --foreground-scripts
 NODE_OPTIONS=--openssl-legacy-provider npm run desktop:build
-npm run desktop:rebuild-bluetooth
 node scripts/test-ledger-bluetooth.js
 env -u NODE_OPTIONS npm run desktop:dev
 ```
 
-Stop if any command fails. Repeat `desktop:rebuild-bluetooth` after each
-`npm ci` or Electron version change. It uses the installed Electron version,
-supplies the variables required by the addon's `binding.gyp`, copies the
-result to the path loaded by Noble, and verifies loading in Electron itself.
-Success must include:
+Do not run Nault as root, grant capabilities to Electron, or disable its sandbox.
+The Linux Bluetooth service / adapter must be enabled and accessible to your
+logged-in desktop session. This integration does not change system permissions.
 
-```
-PASS: Bluetooth binding loaded in Electron 44.7.0 (ABI 149)
-```
+## Connect
 
-The check loads the native binding without creating a Bluetooth socket or
-scanning. It does not validate adapter permissions, pairing, or a Ledger
-transaction. No root execution or capability changes are part of this command.
+1. Disconnect the Ledger USB cable, unlock the Nano X, enable Bluetooth, and
+   open the Nano application. Close other applications using that Ledger.
+2. In Nault, click **Connect via Bluetooth**. For an existing Bluetooth wallet,
+   click **Reconnect**; selection is intentionally not launched in the background.
+3. Select your Ledger in Nault's native dialog. Use **Refresh** if the initial
+   list is empty. No device is selected automatically. Device names are labels,
+   not a guarantee of identity; verify addresses on the Ledger display.
+4. When a pairing code is shown, confirm only if it matches the Ledger screen.
+   Cancel if it differs. PIN-entry pairing modes are rejected; this integration
+   supports confirmation and numeric comparison used by Nano X.
+5. Verify the account address on the Ledger. Test rejection and approval of a
+   small transaction, receipt, representative change, disconnect and reconnect.
+   Re-test USB independently.
 
-## Verification, 2026-10-15
+## Design and tests
 
-- Reproduced the NAN 2.22.2 `External::Value()` failure with the exact official
-  Electron 44.7.0 headers.
-- Built and linked the real bluetooth-hci-socket 0.5.3-8 addon with NAN 2.29.0.
-- Ran the repository rebuild command with downloaded Electron 44.7.0 headers;
-  `node-gyp` completed successfully.
-- Loaded the resulting `lib/binding/bluetooth_hci_socket.node` in Electron
-  44.7.0 (V8 15.2.124.28, ABI 149); verified the BluetoothHciSocket export.
-- Electron TypeScript compilation and all four mock BLE regression tests passed.
-- Lockfile validation passed. Ledger 6.27.5 / Noble 1.9.2-15 remain unchanged.
-- The old C++ source still emits compiler warnings; build success is not a
-  complete audit of that dependency. Actual Nano X Bluetooth testing is pending.
+Ledger's existing Web BLE transport filters devices by Ledger service UUIDs.
+The main process controls selection and pairing, bound to the trusted wallet
+window. Pairing also checks the initiating main frame and selected device ID.
+Cancellation, navigation, renderer exit and timeouts reject pending requests.
+Node integration stays disabled; context isolation and the renderer sandbox stay
+enabled. No new renderer-to-main IPC surface is added for Bluetooth.
+
+Address, block-cache and signing requests use the same selected transport.
+Native USB status messages are ignored while using Bluetooth. Disconnect clears
+transport state and reconnection requires a user action. Native BLE IPC is
+explicitly rejected, without loading Noble.
+
+Run `npm run test:ledger-bluetooth` for hardware-free regression tests. These
+exercise selection, pairing, cancellation, timeouts, trust checks and renderer
+routing using mocked hardware. Actual Nano X / BlueZ validation remains manual.
