@@ -578,17 +578,19 @@ export class LedgerService {
       const accountDetails = await this.getLedgerAccount(0);
       this.ledger.status = LedgerStatus.READY;
     } catch (err) {
-      // Ignore race condition error, which means an action is pending on the ledger (such as block confirmation)
-      if (err.name !== 'TransportRaceCondition') {
-        console.log('Check ledger status failed ', JSON.stringify(err));
-        if (err.statusCode === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
-          this.ledger.status = LedgerStatus.LOCKED;
-        } else {
-          this.ledger.status = LedgerStatus.NOT_CONNECTED;
-        }
-        this.pollingLedger = false;
-        this.resetLedger();
+      // App methods hold TransportLocked throughout device confirmation;
+      // exchange-level contention uses TransportRaceCondition. Neither means
+      // the device disconnected: resetting here interrupts the pending signature.
+      if (err.name === 'TransportRaceCondition' || err.id === 'TransportRaceCondition' ||
+          err.id === 'TransportLocked') return;
+      console.log('Check ledger status failed ', JSON.stringify(err));
+      if (err.statusCode === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
+        this.ledger.status = LedgerStatus.LOCKED;
+      } else {
+        this.ledger.status = LedgerStatus.NOT_CONNECTED;
       }
+      this.pollingLedger = false;
+      this.resetLedger();
     }
 
     this.ledgerStatus$.next({ status: this.ledger.status, statusText: `` });
