@@ -141,6 +141,32 @@ async function main() {
     listener(null, { event: 'ledger-status', data: { status: 'not-connected', statusText: '' } });
     assert.equal(service.ledger.status, 'ready');
   });
+  await check('polling preserves a pending Ledger signature while the app API is locked', async () => {
+    const Transport = require('@ledgerhq/hw-transport').default;
+    const transport = new Transport();
+    let confirm;
+    const nano = service.ledger.nano;
+    const ble = service.ledger.transport;
+    const pendingNano = {
+      signBlock: () => new Promise(resolve => { confirm = resolve; }),
+      getAddress: async () => ({ address: 'mock' })
+    };
+    transport.decorateAppAPIMethods(pendingNano, ['signBlock', 'getAddress'], 'nano');
+    service.ledger.nano = pendingNano;
+    calls.length = 0;
+    const signing = service.signBlock(0, {});
+    await flush();
+    await service.checkLedgerStatus();
+    await service.checkLedgerStatus();
+    assert.equal(service.ledger.status, 'ready');
+    assert.equal(service.ledger.transport, ble);
+    assert.equal(calls.includes('disconnect'), false);
+    confirm({ signature: 'confirmed-signature' });
+    assert.deepEqual(await signing, { signature: 'confirmed-signature' });
+    await service.checkLedgerStatus();
+    assert.equal(service.ledger.status, 'ready');
+    service.ledger.nano = nano;
+  });
   await check('GATT disconnect resets connection; reconnect needs gesture', async () => {
     service.ledger.transport.emit('disconnect'); assert.equal(service.ledger.status, 'not-connected');
     navigator.userActivation.isActive = false; calls.length = 0;
