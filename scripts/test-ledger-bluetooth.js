@@ -101,9 +101,35 @@ async function main() {
     await assert.rejects(new LedgerService().loadTransport(true), /Native Bluetooth is disabled/);
   });
 
+  const controlCode = ts.transpileModule(fs.readFileSync(path.join(root, 'src/app/services/ledger-ble-control.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017 }
+  }).outputText;
+  const control = load(controlCode, { 'rxjs/operators': require('rxjs/operators') });
+  await check('real BLE exchange tolerates repeated MTU replies and returns the signature bytes', async () => {
+    const RealBLE = require('@ledgerhq/hw-transport-web-ble').default;
+    const frames = new (require('rxjs').Subject)();
+    let disconnected = false;
+    const transport = new RealBLE({ id: 'test', gatt: { disconnect() { disconnected = true; } } }, {}, frames, {});
+    transport.mtuSize = 20;
+    control.handleLedgerBleControl(transport);
+    transport.write = async () => {};
+    const result = transport.exchange(Buffer.from('0102', 'hex'));
+    frames.next(Buffer.from('080000000114', 'hex'));
+    frames.next(Buffer.from('0500000004aabb', 'hex'));
+    frames.next(Buffer.from('080000000114', 'hex'));
+    frames.next(Buffer.from('0500019000', 'hex'));
+    assert.equal((await result).toString('hex'), 'aabb9000');
+    assert.equal(disconnected, false);
+    for (const hex of ['090000000114', '080000000115', '08000000011400']) {
+      const pending = transport.exchange(Buffer.from('0102', 'hex'));
+      const rejected = assert.rejects(pending, error => error.id === 'InvalidTag');
+      frames.next(Buffer.from(hex, 'hex'));
+      await rejected;
+    }
+  });
   const calls = [];
   class BLE extends EventEmitter {
-    constructor() { super(); this.device = { gatt: { disconnect: () => calls.push('disconnect') } }; }
+    constructor() { super(); this.notifyObservable = new (require('rxjs').Subject)(); this.device = { gatt: { disconnect: () => calls.push('disconnect') } }; }
     static isSupported() { return Promise.resolve(true); }
     static async create() { calls.push('create'); if (BLE.fail) throw Error('GATT failed'); return new BLE(); }
   }
@@ -118,6 +144,7 @@ async function main() {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, experimentalDecorators: true }
   }).outputText;
   const { LedgerService } = load(code, {
+    './ledger-ble-control': control,
     '@angular/core': { Injectable: () => value => value }, 'hw-app-nano': { default: Nano },
     '@ledgerhq/hw-transport-u2f': { default: BLE }, '@ledgerhq/hw-transport-webusb': { default: BLE },
     '@ledgerhq/hw-transport-webhid': { default: BLE }, '@ledgerhq/hw-transport-web-ble': { default: BLE },
