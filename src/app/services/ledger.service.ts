@@ -4,6 +4,7 @@ import TransportU2F from '@ledgerhq/hw-transport-u2f';
 import TransportUSB from '@ledgerhq/hw-transport-webusb';
 import TransportHID from '@ledgerhq/hw-transport-webhid';
 import TransportBLE from '@ledgerhq/hw-transport-web-ble';
+import { handleLedgerBleControl } from './ledger-ble-control';
 import Transport from '@ledgerhq/hw-transport';
 import {Subject} from 'rxjs';
 import {ApiService} from './api.service';
@@ -445,6 +446,7 @@ export class LedgerService {
           transport.device.gatt.disconnect();
           throw new Error('Bluetooth connection cancelled');
         }
+        handleLedgerBleControl(transport);
         this.ledger.transport = transport;
         this.ledger.nano = new Nano(transport);
         transport.on('disconnect', () => {
