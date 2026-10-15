@@ -33,7 +33,7 @@ logged-in desktop session. This integration does not change system permissions.
 
 1. Disconnect the Ledger USB cable, unlock the Nano X, enable Bluetooth, and
    open the Nano application. Close other applications using that Ledger.
-2. In Nault, follow **Settings → Configure new wallet → Connect via Bluetooth**.
+2. In Nault, follow **Settings → Configure new wallet → Use Ledger -> Connect via Bluetooth**.
    This is the entry point used for the Nano X manual connection test.
    For an existing Bluetooth wallet, click **Reconnect**; selection is
    intentionally not launched in the background.
