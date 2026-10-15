@@ -61,6 +61,12 @@ export class LedgerService {
   // isDesktop = true;
   isDesktop = environment.desktop;
   queryingDesktopLedger = false;
+  private bluetoothConnecting = false;
+  private bluetoothGeneration = 0;
+
+  get usesDesktopUsb() {
+    return this.isDesktop && this.transportMode !== 'Bluetooth';
+  }
 
   supportsU2F = false;
   supportsWebHID = false;
@@ -91,8 +97,17 @@ export class LedgerService {
 
   // Scraps binding to any existing transport/nano object
   resetLedger() {
+    const transport = this.ledger.transport;
     this.ledger.transport = null;
     this.ledger.nano = null;
+    this.pollingLedger = false;
+    this.bluetoothGeneration++;
+    if (transport instanceof TransportBLE) {
+      // close() in Ledger Web BLE does not disconnect GATT.
+      transport.device.gatt.disconnect();
+    } else if (transport) {
+      Promise.resolve(transport.close()).catch(() => {});
+    }
   }
 
   /**
@@ -102,7 +117,7 @@ export class LedgerService {
   configureDesktop() {
     this.desktop.connect();
     this.desktop.on('ledger', (event, message) => {
-      if (!message || !message.event) return;
+      if (!message || !message.event || !this.usesDesktopUsb) return;
       switch (message.event) {
         case 'ledger-status':
           this.ledger.status = message.data.status;
@@ -117,7 +132,12 @@ export class LedgerService {
       }
     });
     this.supportsUSB = true;
-    this.supportsBluetooth = true;
+    TransportBLE.isSupported().then(supported => {
+      this.supportsBluetooth = supported;
+      if (supported && this.appSettings.getAppSetting('ledgerReconnect') === 'bluetooth') {
+        this.enableBluetoothMode(true);
+      }
+    });
   }
 
   /**
@@ -157,6 +177,11 @@ export class LedgerService {
    * @param enabled   The bluetooth enabled state
    */
   enableBluetoothMode(enabled: boolean) {
+    if ((this.transportMode === 'Bluetooth') !== enabled) {
+      this.resetLedger();
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      if (this.isDesktop) this.desktop.send('ledger', { event: 'disconnect' });
+    }
     if (this.supportsBluetooth && enabled) {
       this.transportMode = 'Bluetooth';
       this.DynamicTransport = TransportBLE;
@@ -279,6 +304,7 @@ export class LedgerService {
    * @returns {Promise<any>}
    */
   async loadLedger(hideNotifications = false) {
+    if (this.transportMode === 'Bluetooth') return this.loadWebBluetooth(hideNotifications);
     return new Promise(async (resolve, reject) => {
 
       // Desktop is handled completely differently.  Send a message for status instead of setting anything up
@@ -399,6 +425,67 @@ export class LedgerService {
 
   }
 
+  private async loadWebBluetooth(hideNotifications: boolean) {
+    if (this.bluetoothConnecting) return false;
+    // Device selection requires a deliberate click, including after disconnect.
+    const activation = (navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation;
+    if (!this.ledger.transport && activation && !activation.isActive) {
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      this.ledgerStatus$.next({ status: this.ledger.status, statusText: 'Click Reconnect to select your Ledger via Bluetooth.' });
+      return false;
+    }
+    this.bluetoothConnecting = true;
+    const generation = this.bluetoothGeneration;
+    let timeout;
+    let active = true;
+    const connect = async () => {
+      if (!this.ledger.transport) {
+        const transport = await TransportBLE.create(this.waitTimeout, 60000) as TransportBLE;
+        if (!active || generation !== this.bluetoothGeneration) {
+          transport.device.gatt.disconnect();
+          throw new Error('Bluetooth connection cancelled');
+        }
+        this.ledger.transport = transport;
+        this.ledger.nano = new Nano(transport);
+        transport.on('disconnect', () => {
+          if (this.ledger.transport !== transport) return;
+          this.resetLedger();
+          this.ledger.status = LedgerStatus.NOT_CONNECTED;
+          this.ledgerStatus$.next({ status: this.ledger.status, statusText: 'Ledger Bluetooth disconnected. Click Reconnect.' });
+        });
+      }
+      await this.ledger.nano.getAppConfiguration();
+      await this.ledger.nano.getAddress(this.ledgerPath(0), false);
+    };
+    try {
+      await Promise.race([
+        connect(),
+        new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('Bluetooth connection timed out')), 90000); })
+      ]);
+      if (generation !== this.bluetoothGeneration) return false;
+      this.appSettings.setAppSetting('ledgerReconnect', 'bluetooth');
+      this.ledger.status = LedgerStatus.READY;
+      this.ledgerStatus$.next({ status: this.ledger.status, statusText: 'Nano Ledger application connected via Bluetooth' });
+      if (!this.pollingLedger) {
+        this.pollingLedger = true;
+        this.pollLedgerStatus();
+      }
+      return true;
+    } catch (error) {
+      if (generation !== this.bluetoothGeneration) return false;
+      this.resetLedger();
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      const message = error.name === 'TransportOpenUserCancelled' ? 'Bluetooth selection cancelled' : `Bluetooth connection failed: ${error.message || error}`;
+      this.ledgerStatus$.next({ status: this.ledger.status, statusText: message });
+      if (!hideNotifications) this.notifications.sendWarning(message);
+      return false;
+    } finally {
+      active = false;
+      clearTimeout(timeout);
+      this.bluetoothConnecting = false;
+    }
+  }
+
   async updateCache(accountIndex, blockHash) {
     if (this.ledger.status !== LedgerStatus.READY) {
       await this.loadLedger(); // Make sure ledger is ready
@@ -415,7 +502,7 @@ export class LedgerService {
       sourceBlock: blockData.contents.link,
     };
 
-    if (this.isDesktop) {
+    if (this.usesDesktopUsb) {
       return await this.updateCacheDesktop(accountIndex, cacheData, blockData.contents.signature);
     } else {
       return await this.ledger.nano.cacheBlock(this.ledgerPath(accountIndex), cacheData, blockData.contents.signature);
@@ -434,7 +521,7 @@ export class LedgerService {
       sourceBlock: blockData.link,
     };
 
-    if (this.isDesktop) {
+    if (this.usesDesktopUsb) {
       return await this.updateCacheDesktop(accountIndex, cacheData, blockData.signature);
     } else {
       return await this.ledger.nano.cacheBlock(this.ledgerPath(accountIndex), cacheData, blockData.signature);
@@ -445,7 +532,7 @@ export class LedgerService {
     if (this.ledger.status !== LedgerStatus.READY) {
       await this.loadLedger(); // Make sure ledger is ready
     }
-    if (this.isDesktop) {
+    if (this.usesDesktopUsb) {
       return await this.signBlockDesktop(accountIndex, blockData);
     } else {
       return await this.ledger.nano.signBlock(this.ledgerPath(accountIndex), blockData);
@@ -465,7 +552,7 @@ export class LedgerService {
   }
 
   async getLedgerAccount(accountIndex: number, showOnScreen = false) {
-    if (this.isDesktop) {
+    if (this.usesDesktopUsb) {
       return await this.getLedgerAccountDesktop(accountIndex, showOnScreen);
     } else {
       return await this.getLedgerAccountWeb(accountIndex, showOnScreen);
@@ -474,8 +561,9 @@ export class LedgerService {
 
   pollLedgerStatus() {
     if (!this.pollingLedger) return;
+    const generation = this.bluetoothGeneration;
     setTimeout(async () => {
-      if (!this.pollingLedger) return;
+      if (!this.pollingLedger || generation !== this.bluetoothGeneration) return;
       await this.checkLedgerStatus();
       this.pollLedgerStatus();
     }, this.transportMode === 'U2F' ? this.u2fPollInterval : this.pollInterval);
