@@ -22,7 +22,8 @@
     "desktop:build": "npm run wallet:build-desktop && npm run desktop:compile",
     "desktop:build-local": "npm run desktop:build && npm run desktop:local",
     "desktop:dev": "npm run desktop:compile && electron desktop-app/dist/desktop-app.js",
-    "desktop:local": "electron-builder -p never -c.npmRebuild=false"
+    "desktop:local": "electron-builder -p never -c.npmRebuild=false",
+    "desktop:rebuild-bluetooth": "node scripts/rebuild-desktop-bluetooth.js"
   },
   "private": true,
   "dependencies": {
@@ -162,6 +163,6 @@
     }
   },
   "overrides": {
-    "nan": "2.22.2"
+    "nan": "2.29.0"
   }
 }
