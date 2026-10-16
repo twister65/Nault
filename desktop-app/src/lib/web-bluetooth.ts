@@ -24,6 +24,7 @@ export function configureWebBluetooth(window: BrowserWindow, isTrustedURL: (url:
     clearTimeout(request.refresh);
     request.abort.abort();
     if (id) selected.add(id);
+    console.info('[Ledger BLE chooser] selection completed', { selected: !!id });
     request.callback(id);
   }
 
@@ -45,6 +46,7 @@ export function configureWebBluetooth(window: BrowserWindow, isTrustedURL: (url:
       request.showing = false;
       if (!trusted()) return finish(request);
       if (result.response === 1) {
+        console.info('[Ledger BLE chooser] refreshed', { visibleDevices: request.devices.length });
         request.refresh = setTimeout(() => { void show(request); }, 500);
       } else {
         const device = devices[result.response - 2];
@@ -60,8 +62,10 @@ export function configureWebBluetooth(window: BrowserWindow, isTrustedURL: (url:
     if (!trusted()) return callback('');
     if (scan) {
       scan.devices = devices;
+      console.info('[Ledger BLE chooser] scan updated', { devices: devices.length });
       return;
     }
+    console.info('[Ledger BLE chooser] scan started', { devices: devices.length });
     const request: Scan = {
       callback, devices, timer: null, abort: new AbortController(), showing: false
     };
