@@ -87,10 +87,21 @@ export class WalletWidgetComponent implements OnInit {
     }
   }
 
+  async reconnectBluetooth() {
+    if (!this.ledgerService.isDesktop || !this.ledgerService.supportsBluetooth) return;
+    // Switch transport without going through "Configure Wallet", which can
+    // overwrite an existing wallet configuration. Keep the user gesture for
+    // navigator.bluetooth.requestDevice().
+    this.ledgerService.enableBluetoothMode(true);
+    await this.reloadLedger();
+  }
+
   async reloadLedger() {
     this.notificationService.sendInfo(`Checking Ledger Status...`, { identifier: 'ledger-status', length: 0 });
     try {
-      await this.ledgerService.loadLedger();
+      // A manual status click is an explicit reconnect request for Bluetooth.
+      // Do not reuse a transport whose radio session might be stale.
+      await this.ledgerService.loadLedger(false, this.ledgerService.transportMode === 'Bluetooth');
       this.notificationService.removeNotification('ledger-status');
       if (this.ledgerStatus.status === LedgerStatus.READY) {
         this.notificationService.sendSuccess(`Successfully connected to Ledger device`);
@@ -100,6 +111,26 @@ export class WalletWidgetComponent implements OnInit {
       this.notificationService.removeNotification('ledger-status');
       // this.notificationService.sendError(`Unable to load Ledger Device: ${err.message}`);
     }
+  }
+
+  /**
+   * Chromium/BlueZ may acknowledge BLE notifications but stop dispatching
+   * characteristicvaluechanged after a radio reconnect. Recreating the
+   * document gives Web Bluetooth a fresh execution context without restarting
+   * the native Electron process. This is an explicit recovery action only.
+   */
+  get canResetBluetoothSession(): boolean {
+    return this.ledgerService.isDesktop &&
+      this.ledgerService.transportMode === 'Bluetooth' &&
+      this.ledgerStatus.status === LedgerStatus.NOT_CONNECTED &&
+      (this.ledgerStatus.statusText || '').includes('MTU negotiation timed out');
+  }
+
+  resetBluetoothSession() {
+    if (!this.canResetBluetoothSession) return;
+    // No automatic retry of pending Ledger signatures or transfers.
+    // The user explicitly requests this reload after the failed handshake.
+    window.location.reload();
   }
 
   allowUnlock(params: any) {

@@ -62,6 +62,9 @@ jobs:
       - name: Typecheck and compile Electron main/preload
         run: npm run desktop:compile
 
+      - name: Web Bluetooth selection, pairing and routing tests
+        run: node scripts/test-ledger-bluetooth.js
+
       # The upstream full Jasmine suite currently has 44 unrelated, unmocked
       # component smoke tests (NullInjectorError); test those separately later.
       - name: Run focused Nano / RsNano RPC regression tests

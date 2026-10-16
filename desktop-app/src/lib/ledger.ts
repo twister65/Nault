@@ -79,36 +79,7 @@ export class LedgerService {
       return hidTransport;
     }
 
-    return new Promise((resolve, reject) => {
-      // Keep the optional Bluetooth transport lazy-loaded and unchanged.
-      const transport = require('@ledgerhq/hw-transport-node-ble').default;
-      let found = false;
-      const sub = transport.listen({
-        next: async(e) => {
-          found = true;
-          if (sub) sub.unsubscribe();
-          clearTimeout(timeoutId);
-          this.ledger.transport = await transport.open(e.descriptor);
-          this.ledger.nano = new Nano(this.ledger.transport);
-          resolve(this.ledger.transport);
-        },
-        error: (e) => {
-          clearTimeout(timeoutId);
-          reject(e);
-        },
-        complete: () => {
-          clearTimeout(timeoutId);
-          if (!found) {
-            reject(new Error(transport.ErrorMessage_NoDeviceFound));
-          }
-        }
-      })
-
-      const timeoutId = setTimeout(() => {
-        sub.unsubscribe();
-        reject(new Error(transport.ErrorMessage_ListenTimeout));
-      }, this.waitTimeout);
-    });
+    throw new Error('Native Bluetooth is disabled. Use the Web Bluetooth connection button.');
   }
 
   async loadAppConfig(): Promise<any> {
@@ -297,6 +268,10 @@ export function initialize(isTrustedSender: (event: IpcMainEvent) => boolean) {
     sendingWindow = event.sender;
     if (!data || !data.event) return;
     switch (data.event) {
+      case 'disconnect':
+        Ledger.pollingLedger = false;
+        Ledger.resetLedger();
+        break;
       case 'get-ledger-status':
         Ledger.loadLedger(data.data.bluetooth);
         break;
