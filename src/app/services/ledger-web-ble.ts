@@ -22,6 +22,7 @@ export default class LedgerWebBle extends TransportBLE {
     const dispose = () => {
       if (disposed) return;
       disposed = true;
+      console.info('[Ledger BLE GATT] session disposed', { connected: device.gatt.connected });
       clearTimeout(timer);
       device.removeEventListener('gattserverdisconnected', dispose);
       if (characteristic) {
@@ -42,7 +43,7 @@ export default class LedgerWebBle extends TransportBLE {
       if (!disposed && value) {
         const frame = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
         // Only report protocol metadata, never APDU payloads or signatures.
-        if (frame[0] === 0x08) console.info('[Ledger BLE GATT] MTU response received', { length: frame.length });
+        console.info('[Ledger BLE GATT] notification received', { tag: frame.length ? frame[0] : null, length: frame.length });
         frames.next(frame);
       }
     };
