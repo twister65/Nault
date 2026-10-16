@@ -240,10 +240,20 @@ async function main() {
     rxjs: require('rxjs'), '../../environments/environment': { environment: { desktop: true } }
   }, { navigator });
   const sends = []; let listener;
+  const preferences = {};
   const service = new LedgerService({}, { connect() {}, on(_channel, fn) { listener = fn; }, send(_channel, data) { sends.push(data); return true; } },
-    { sendWarning() {} }, { getAppSetting() {}, setAppSetting() {} });
+    { sendWarning() {} }, { getAppSetting(key) { return preferences[key]; }, setAppSetting(key, value) { preferences[key] = value; } });
   service.pollLedgerStatus = () => {};
   await flush();
+  await check('explicit Bluetooth choice persists even if Windows pairing fails', async () => {
+    BLE.fail = true;
+    service.enableBluetoothMode(true);
+    assert.equal(preferences.ledgerReconnect, 'bluetooth');
+    assert.equal(await service.loadLedger(), false);
+    assert.equal(service.transportMode, 'Bluetooth');
+    assert.equal(preferences.ledgerReconnect, 'bluetooth');
+    BLE.fail = false;
+  });
   await check('desktop Bluetooth connects through renderer, not native IPC', async () => {
     service.enableBluetoothMode(true); sends.length = 0;
     assert.equal(await service.loadLedger(), true); assert.equal(service.ledger.status, 'ready'); assert.equal(sends.length, 0);
@@ -359,6 +369,7 @@ async function main() {
   });
   await check('USB mode retains native IPC routing', async () => {
     service.enableBluetoothMode(false); assert.equal(service.usesDesktopUsb, true);
+    assert.equal(preferences.ledgerReconnect, 'usb');
     let used = false; service.getLedgerAccountDesktop = async () => { used = true; };
     await service.getLedgerAccount(0); assert(used);
   });
