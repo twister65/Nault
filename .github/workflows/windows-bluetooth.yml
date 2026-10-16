@@ -7,6 +7,13 @@ on:
     paths:
       - '.github/workflows/windows-bluetooth.yml'
       - 'desktop-app/windows-bluetooth.json'
+      - 'desktop-app/src/**'
+      - 'src/app/services/ledger*.ts'
+      - 'src/app/components/wallet-widget/**'
+      - 'src/app/components/configure-wallet/**'
+      - 'scripts/test-ledger-bluetooth.js'
+      - 'package.json'
+      - 'package-lock.json'
 
 permissions:
   contents: read
