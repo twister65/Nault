@@ -29,7 +29,7 @@ function mainHarness() {
   const code = fs.readFileSync(path.join(root, 'desktop-app/dist/lib/web-bluetooth.js'), 'utf8');
   const { configureWebBluetooth } = load(code, { electron: { dialog: {
     showMessageBox(_window, options) { return new Promise(resolve => dialogs.push({ options, resolve })); }
-  } } }, {
+  } }, 'electron-log': { info() {}, warn() {} } }, {
     setTimeout(fn, delay) { timers.set(++next, { fn, delay }); return next; },
     clearTimeout(id) { timers.delete(id); }
   });
@@ -192,6 +192,21 @@ async function main() {
     await fresh.close();
     await flush();
     assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
+  });
+  await check('Windows authentication error fails closed before MTU and removes listeners', async () => {
+    const h = gattHarness();
+    h.notifications.startNotifications = async () => {
+      const error = new Error('Authentication failed.');
+      error.name = 'NetworkError';
+      throw error;
+    };
+    await assert.rejects(SessionBLE.open(h.device, 1000), error =>
+      error.name === 'LedgerBluetoothAuthenticationError' &&
+      error.message.includes('Bluetooth settings')
+    );
+    assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
+    assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
+    assert.equal(h.device.gatt.connected, false);
   });
   await check('disconnect during notification setup rejects opening promptly', async () => {
     const h = gattHarness();
