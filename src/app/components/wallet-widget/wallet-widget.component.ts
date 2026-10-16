@@ -104,6 +104,26 @@ export class WalletWidgetComponent implements OnInit {
     }
   }
 
+  /**
+   * Chromium/BlueZ may acknowledge BLE notifications but stop dispatching
+   * characteristicvaluechanged after a radio reconnect. Recreating the
+   * document gives Web Bluetooth a fresh execution context without restarting
+   * the native Electron process. This is an explicit recovery action only.
+   */
+  get canResetBluetoothSession(): boolean {
+    return this.ledgerService.isDesktop &&
+      this.ledgerService.transportMode === 'Bluetooth' &&
+      this.ledgerStatus.status === LedgerStatus.NOT_CONNECTED &&
+      (this.ledgerStatus.statusText || '').includes('MTU negotiation timed out');
+  }
+
+  resetBluetoothSession() {
+    if (!this.canResetBluetoothSession) return;
+    // No automatic retry of pending Ledger signatures or transfers.
+    // The user explicitly requests this reload after the failed handshake.
+    window.location.reload();
+  }
+
   allowUnlock(params: any) {
     this.mayAttemptUnlock = true;
     this.timeoutIdAllowingUnlock = null;
