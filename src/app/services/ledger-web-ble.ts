@@ -68,7 +68,23 @@ export default class LedgerWebBle extends TransportBLE {
       checkActive();
       characteristic.addEventListener('characteristicvaluechanged', onValue);
       console.info('[Ledger BLE GATT] starting notifications');
-      await characteristic.startNotifications();
+      try {
+        await characteristic.startNotifications();
+      } catch (error) {
+        // Windows may connect to GATT and discover services but fail to
+        // authenticate the encrypted notification subscription. This is not
+        // an MTU or Ledger Nano application failure.
+        if (error && /authentication failed/i.test(String(error.message || error))) {
+          const pairingError = new Error(
+            'Bluetooth authentication failed while enabling notifications. ' +
+            'Remove the Ledger from the computer Bluetooth settings, pair it again, ' +
+            'and retry the connection in Nault.'
+          );
+          pairingError.name = 'LedgerBluetoothAuthenticationError';
+          throw pairingError;
+        }
+        throw error;
+      }
       console.info('[Ledger BLE GATT] notifications started');
       checkActive();
       // Instrument only the BLE MTU control frame (tag 0x08).
