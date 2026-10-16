@@ -127,11 +127,84 @@ async function main() {
       await rejected;
     }
   });
+  const sessionCode = ts.transpileModule(fs.readFileSync(path.join(root, 'src/app/services/ledger-web-ble.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017 }
+  }).outputText;
+  const SessionBLE = load(sessionCode, {
+    '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
+    '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+  }).default;
+  function gattHarness() {
+    const device = new EventEmitter();
+    device.id = 'same-ledger';
+    device.addEventListener = device.on.bind(device);
+    device.removeEventListener = device.removeListener.bind(device);
+    const notifications = new EventEmitter();
+    notifications.addEventListener = notifications.on.bind(notifications);
+    notifications.removeEventListener = notifications.removeListener.bind(notifications);
+    notifications.startNotifications = async () => {};
+    let stops = 0;
+    notifications.stopNotifications = async () => {
+      stops++;
+      if (!device.gatt.connected) throw Error('GATT Server is disconnected');
+    };
+    function receive(hex) {
+      const bytes = Buffer.from(hex, 'hex');
+      // A DataView can reference only part of its backing buffer.
+      const padded = Buffer.concat([Buffer.from([0xff]), bytes, Buffer.from([0xff])]);
+      notifications.value = new DataView(padded.buffer, padded.byteOffset + 1, bytes.length);
+      notifications.emit('characteristicvaluechanged');
+    }
+    const devices = require('@ledgerhq/devices');
+    const uuid = devices.getBluetoothServiceUuids()[0];
+    const info = devices.getInfosForServiceUuid(uuid);
+    const writer = { writeValue: async frame => {
+      if (frame[0] === 8) receive('080000990199');
+    } };
+    const service = { uuid, getCharacteristic: async id => id === info.notifyUuid ? notifications : writer };
+    device.gatt = {
+      connected: false,
+      async connect() { this.connected = true; },
+      disconnect() { this.connected = false; device.emit('gattserverdisconnected'); },
+      async getPrimaryServices() { return [service]; }
+    };
+    return { device, notifications, receive, stops: () => stops };
+  }
+  await check('GATT loss rejects an in-flight exchange and reconnects on the same device without stale listeners', async () => {
+    const h = gattHarness();
+    for (let i = 0; i < 3; i++) {
+      const transport = await SessionBLE.open(h.device, 1000);
+      assert.equal(transport.mtuSize, 153);
+      assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 1);
+      const pending = transport.exchange(Buffer.from('0102', 'hex'));
+      const rejected = assert.rejects(pending, e => e.name === 'DisconnectedDevice');
+      h.device.gatt.disconnect();
+      await rejected;
+      assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
+      assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
+      assert.equal(transport.exchangeBusyPromise, undefined);
+    }
+    assert.equal(h.stops(), 0);
+    const fresh = await SessionBLE.open(h.device, 1000);
+    const response = fresh.exchange(Buffer.from('0102', 'hex'));
+    h.receive('05000000029000');
+    assert.equal((await response).toString('hex'), '9000');
+    await fresh.close();
+    await flush();
+    assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
+  });
+  await check('disconnect during notification setup rejects opening promptly', async () => {
+    const h = gattHarness();
+    h.notifications.startNotifications = async () => { h.device.gatt.disconnect(); };
+    await assert.rejects(SessionBLE.open(h.device, 1000), /disconnected|closed/);
+    assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
+  });
   const calls = [];
   class BLE extends EventEmitter {
     constructor() { super(); this.notifyObservable = new (require('rxjs').Subject)(); this.device = { gatt: { disconnect: () => calls.push('disconnect') } }; }
     static isSupported() { return Promise.resolve(true); }
     static async create() { calls.push('create'); if (BLE.fail) throw Error('GATT failed'); return new BLE(); }
+    async close() { this.device.gatt.disconnect(); }
   }
   class Nano {
     async getAppConfiguration() { return {}; }
@@ -144,6 +217,7 @@ async function main() {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, experimentalDecorators: true }
   }).outputText;
   const { LedgerService } = load(code, {
+    './ledger-web-ble': { default: BLE },
     './ledger-ble-control': control,
     '@angular/core': { Injectable: () => value => value }, 'hw-app-nano': { default: Nano },
     '@ledgerhq/hw-transport-u2f': { default: BLE }, '@ledgerhq/hw-transport-webusb': { default: BLE },
@@ -199,6 +273,20 @@ async function main() {
     navigator.userActivation.isActive = false; calls.length = 0;
     assert.equal(await service.loadLedger(), false); assert.equal(calls.length, 0);
     navigator.userActivation.isActive = true;
+  });
+  await check('an old status failure cannot reset a reconnected Bluetooth session', async () => {
+    assert.equal(await service.loadLedger(), true);
+    let failOld;
+    service.ledger.nano.getAddress = () => new Promise((_resolve, reject) => { failOld = reject; });
+    const checking = service.checkLedgerStatus();
+    service.ledger.transport.emit('disconnect');
+    assert.equal(await service.loadLedger(), true);
+    const fresh = service.ledger.transport;
+    failOld(Error('Old session disconnected'));
+    await checking;
+    assert.equal(service.ledger.transport, fresh);
+    assert.equal(service.ledger.status, 'ready');
+    service.ledger.transport.emit('disconnect');
   });
   await check('GATT opening failure returns disconnected, not ready', async () => {
     BLE.fail = true; assert.equal(await service.loadLedger(), false); assert.equal(service.ledger.status, 'not-connected'); BLE.fail = false;

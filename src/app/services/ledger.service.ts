@@ -3,7 +3,7 @@ import Nano from 'hw-app-nano';
 import TransportU2F from '@ledgerhq/hw-transport-u2f';
 import TransportUSB from '@ledgerhq/hw-transport-webusb';
 import TransportHID from '@ledgerhq/hw-transport-webhid';
-import TransportBLE from '@ledgerhq/hw-transport-web-ble';
+import TransportBLE from './ledger-web-ble';
 import { handleLedgerBleControl } from './ledger-ble-control';
 import Transport from '@ledgerhq/hw-transport';
 import {Subject} from 'rxjs';
@@ -103,10 +103,7 @@ export class LedgerService {
     this.ledger.nano = null;
     this.pollingLedger = false;
     this.bluetoothGeneration++;
-    if (transport instanceof TransportBLE) {
-      // close() in Ledger Web BLE does not disconnect GATT.
-      transport.device.gatt.disconnect();
-    } else if (transport) {
+    if (transport) {
       Promise.resolve(transport.close()).catch(() => {});
     }
   }
@@ -441,9 +438,9 @@ export class LedgerService {
     let active = true;
     const connect = async () => {
       if (!this.ledger.transport) {
-        const transport = await TransportBLE.create(this.waitTimeout, 60000) as TransportBLE;
+        const transport = await TransportBLE.create(90000, 60000) as TransportBLE;
         if (!active || generation !== this.bluetoothGeneration) {
-          transport.device.gatt.disconnect();
+          await transport.close();
           throw new Error('Bluetooth connection cancelled');
         }
         handleLedgerBleControl(transport);
@@ -567,6 +564,7 @@ export class LedgerService {
     setTimeout(async () => {
       if (!this.pollingLedger || generation !== this.bluetoothGeneration) return;
       await this.checkLedgerStatus();
+      if (generation !== this.bluetoothGeneration) return;
       this.pollLedgerStatus();
     }, this.transportMode === 'U2F' ? this.u2fPollInterval : this.pollInterval);
   }
@@ -576,10 +574,13 @@ export class LedgerService {
       return;
     }
 
+    const generation = this.bluetoothGeneration;
     try {
       const accountDetails = await this.getLedgerAccount(0);
+      if (generation !== this.bluetoothGeneration) return;
       this.ledger.status = LedgerStatus.READY;
     } catch (err) {
+      if (generation !== this.bluetoothGeneration) return;
       // App methods hold TransportLocked throughout device confirmation;
       // exchange-level contention uses TransportRaceCondition. Neither means
       // the device disconnected: resetting here interrupts the pending signature.
