@@ -16,7 +16,7 @@ describe('WebSocket bounded connections', () => {
     service = new WebsocketService(settings);
   });
   it('blocks insecure saved endpoints', () => {
-    settings.settings.serverWS = 'ws://192.168.1.16:7078';
+    settings.settings.serverWS = 'ws://192.0.2.10:7078';
     service.connect();
     expect(sockets.length).toBe(0);
   });
