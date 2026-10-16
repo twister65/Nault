@@ -432,6 +432,10 @@ export class LedgerService {
       this.ledgerStatus$.next({ status: this.ledger.status, statusText: 'Click Reconnect to select your Ledger via Bluetooth.' });
       return false;
     }
+    // Avoid reusing a stale Bluetooth transport after a failed status check.
+    if (this.ledger.transport && this.ledger.status !== LedgerStatus.READY) {
+      this.resetLedger();
+    }
     this.bluetoothConnecting = true;
     const generation = this.bluetoothGeneration;
     let timeout;
