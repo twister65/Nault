@@ -90,7 +90,9 @@ export class WalletWidgetComponent implements OnInit {
   async reloadLedger() {
     this.notificationService.sendInfo(`Checking Ledger Status...`, { identifier: 'ledger-status', length: 0 });
     try {
-      await this.ledgerService.loadLedger();
+      // A manual status click is an explicit reconnect request for Bluetooth.
+      // Do not reuse a transport whose radio session might be stale.
+      await this.ledgerService.loadLedger(false, this.ledgerService.transportMode === 'Bluetooth');
       this.notificationService.removeNotification('ledger-status');
       if (this.ledgerStatus.status === LedgerStatus.READY) {
         this.notificationService.sendSuccess(`Successfully connected to Ledger device`);
