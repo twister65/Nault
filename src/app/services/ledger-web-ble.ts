@@ -39,7 +39,12 @@ export default class LedgerWebBle extends TransportBLE {
     };
     const onValue = () => {
       const value: DataView = characteristic.value;
-      if (!disposed && value) frames.next(Buffer.from(value.buffer, value.byteOffset, value.byteLength));
+      if (!disposed && value) {
+        const frame = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+        // Only report protocol metadata, never APDU payloads or signatures.
+        if (frame[0] === 0x08) console.info('[Ledger BLE GATT] MTU response received', { length: frame.length });
+        frames.next(frame);
+      }
     };
     const checkActive = () => {
       if (disposed || !device.gatt.connected) throw new Error('Ledger Bluetooth connection closed');
@@ -68,7 +73,19 @@ export default class LedgerWebBle extends TransportBLE {
       transport = new LedgerWebBle(device, write, frames, infos.deviceModel);
       transport.disposeSession = dispose;
       console.info('[Ledger BLE GATT] negotiating MTU');
-      await transport.inferMTU();
+      // A radio reconnect may establish GATT without delivering the MTU reply.
+      // Bound this handshake; do not guess the MTU or allow a stuck session.
+      let mtuTimer: ReturnType<typeof setTimeout>;
+      try {
+        await Promise.race([
+          transport.inferMTU(),
+          new Promise<never>((_, reject) => {
+            mtuTimer = setTimeout(() => reject(new Error('Ledger Bluetooth MTU negotiation timed out; reconnect the device')), 12000);
+          })
+        ]);
+      } finally {
+        clearTimeout(mtuTimer);
+      }
       console.info('[Ledger BLE GATT] MTU negotiated');
       checkActive();
       return transport;
