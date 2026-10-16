@@ -247,6 +247,15 @@ async function main() {
     assert.equal(service.ledger.status, 'ready');
     assert(calls.includes('create'));
   });
+  await check('manual BLE reconnect replaces an apparently connected stale session', async () => {
+    const stale = service.ledger.transport;
+    stale.device.gatt.connected = true;
+    calls.length = 0;
+    assert.equal(await service.loadLedger(false, true), true);
+    assert.notEqual(service.ledger.transport, stale);
+    assert.equal(service.ledger.status, 'ready');
+    assert(calls.includes('create'));
+  });
   await check('stale USB statuses cannot overwrite Bluetooth state', async () => {
     listener(null, { event: 'ledger-status', data: { status: 'not-connected', statusText: '' } });
     assert.equal(service.ledger.status, 'ready');
