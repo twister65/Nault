@@ -87,6 +87,15 @@ export class WalletWidgetComponent implements OnInit {
     }
   }
 
+  async reconnectBluetooth() {
+    if (!this.ledgerService.isDesktop || !this.ledgerService.supportsBluetooth) return;
+    // Switch transport without going through "Configure Wallet", which can
+    // overwrite an existing wallet configuration. Keep the user gesture for
+    // navigator.bluetooth.requestDevice().
+    this.ledgerService.enableBluetoothMode(true);
+    await this.reloadLedger();
+  }
+
   async reloadLedger() {
     this.notificationService.sendInfo(`Checking Ledger Status...`, { identifier: 'ledger-status', length: 0 });
     try {
