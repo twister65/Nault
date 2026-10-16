@@ -257,7 +257,7 @@ describe('ApiService bounded secure requests', () => {
   });
   it('rejects insecure saved settings before sending credentials or data', async () => {
     const { api, http, settings } = setup('custom');
-    settings.settings.serverAPI = 'http://192.168.1.16:7076';
+    settings.settings.serverAPI = 'http://192.0.2.10:7076';
     await expectAsync(api.accountsBalances([])).toBeRejected();
     expect(http.post).not.toHaveBeenCalled();
   });
