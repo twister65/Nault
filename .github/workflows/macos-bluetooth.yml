@@ -1,0 +1,111 @@
+name: macOS Web Bluetooth test build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/ledger-bluetooth]
+    paths:
+      - '.github/workflows/macos-bluetooth.yml'
+      - 'desktop-app/macos-bluetooth.json'
+      - 'desktop-app/src/**'
+      - 'src/app/services/ledger*.ts'
+      - 'src/app/components/wallet-widget/**'
+      - 'src/app/components/configure-wallet/**'
+      - 'scripts/test-ledger-bluetooth.js'
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
+    paths:
+      - '.github/workflows/macos-bluetooth.yml'
+      - 'desktop-app/macos-bluetooth.json'
+      - 'desktop-app/src/**'
+      - 'src/app/services/ledger*.ts'
+      - 'src/app/components/wallet-widget/**'
+      - 'src/app/components/configure-wallet/**'
+      - 'scripts/test-ledger-bluetooth.js'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: ${{ matrix.arch }} unsigned package and smoke tests
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: x64
+          - runner: macos-15-arm64
+            arch: arm64
+    env:
+      CI: 'true'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Set up Python 3.11 for node-gyp
+        uses: actions/setup-python@v5
+        id: python
+        with:
+          python-version: '3.11'
+      - name: Install lockfile dependencies and native modules
+        env:
+          npm_config_python: ${{ steps.python.outputs.python-path }}
+        run: npm ci --legacy-peer-deps --include=optional --no-audit --no-fund
+      - name: Build Angular desktop renderer and Electron
+        env:
+          NODE_OPTIONS: --openssl-legacy-provider
+        run: npm run desktop:build
+      - name: Hardware-free Bluetooth regression tests
+        run: node scripts/test-ledger-bluetooth.js
+      - name: Create unsigned macOS ZIP
+        run: npx --no-install electron-builder --config desktop-app/macos-bluetooth.json --mac --${{ matrix.arch }} --publish never
+      - name: Check bundle and native dependencies under Electron
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="$(find desktop-app/build-macos -type d -name 'Nault.app' -print -quit)"
+          test -n "$app_path"
+          export NAULT_SMOKE_APP="$app_path/Contents/Resources/app.asar"
+          export ELECTRON_RUN_AS_NODE=1
+          "$app_path/Contents/MacOS/Nault" -e '
+            const fs=require("fs"), p=require("path");
+            const app=process.env.NAULT_SMOKE_APP;
+            for (const f of ["dist/index.html","desktop-app/dist/desktop-app.js","desktop-app/dist/preload.js"]) {
+              if (!fs.existsSync(p.join(app,f))) throw Error("Missing "+f);
+            }
+            const req=require("module").createRequire(p.join(app,"package.json"));
+            req("node-hid");
+            req("usb");
+            req("@ledgerhq/hw-transport-node-hid");
+            console.log("macOS package and native modules OK; Electron",process.versions.electron);
+          '
+      - name: Record build revision and SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd desktop-app/build-macos
+          zip="Nault-WebBluetooth-macOS-${{ matrix.arch }}.zip"
+          test -s "$zip"
+          shasum -a 256 "$zip" > SHA256SUMS.txt
+          printf 'Source: %s\nCommit: %s\nArchitecture: %s\nUnsigned and not notarized macOS test package. Hardware pairing and Ledger signing are NOT tested.\n' "$GITHUB_REPOSITORY" "$GITHUB_SHA" "${{ matrix.arch }}" > BUILD.txt
+      - name: Upload unsigned macOS test build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nault-WebBluetooth-macOS-${{ matrix.arch }}
+          path: |
+            desktop-app/build-macos/Nault-WebBluetooth-macOS-${{ matrix.arch }}.zip
+            desktop-app/build-macos/SHA256SUMS.txt
+            desktop-app/build-macos/BUILD.txt
+          if-no-files-found: error
+          retention-days: 14
