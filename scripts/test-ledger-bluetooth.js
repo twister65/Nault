@@ -238,6 +238,15 @@ async function main() {
     await service.updateCacheOffline(0, { previous: '1', representative: 'r', balance: '0', link: 'l', signature: 's' });
     await service.signBlock(0, {}); assert.deepEqual(calls, ['address', 'cache', 'sign']); assert.equal(sends.length, 0);
   });
+  await check('missed GATT disconnect does not reuse a READY transport', async () => {
+    const stale = service.ledger.transport;
+    stale.device.gatt.connected = false;
+    calls.length = 0;
+    assert.equal(await service.loadLedger(), true);
+    assert.notEqual(service.ledger.transport, stale);
+    assert.equal(service.ledger.status, 'ready');
+    assert(calls.includes('create'));
+  });
   await check('stale USB statuses cannot overwrite Bluetooth state', async () => {
     listener(null, { event: 'ledger-status', data: { status: 'not-connected', statusText: '' } });
     assert.equal(service.ledger.status, 'ready');
