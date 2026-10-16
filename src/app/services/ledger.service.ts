@@ -432,9 +432,13 @@ export class LedgerService {
       this.ledgerStatus$.next({ status: this.ledger.status, statusText: 'Click Reconnect to select your Ledger via Bluetooth.' });
       return false;
     }
-    // Avoid reusing a stale Bluetooth transport after a failed status check.
-    if (this.ledger.transport && this.ledger.status !== LedgerStatus.READY) {
+    // Never reuse a dead GATT session, including when a disconnect event
+    // was missed and the UI still reports READY.
+    const previous = this.ledger.transport as TransportBLE | null;
+    if (previous && (this.ledger.status !== LedgerStatus.READY ||
+        !previous.device || !previous.device.gatt || !previous.device.gatt.connected)) {
       this.resetLedger();
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
     }
     this.bluetoothConnecting = true;
     const generation = this.bluetoothGeneration;
