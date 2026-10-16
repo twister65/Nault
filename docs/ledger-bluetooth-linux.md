@@ -47,6 +47,23 @@ logged-in desktop session. This integration does not change system permissions.
    small transaction, receipt, representative change, disconnect and reconnect.
    Re-test USB independently.
 
+## Reconnect after a disconnection
+
+Keep the Nano X charged and close to the Bluetooth adapter. After a radio
+disconnection, unlock it, open Nano, and click **Reconnect** in the wallet widget.
+Select the device again; restarting Nault should not be necessary.
+
+To validate recovery, disconnect while Nault is idle, reconnect, then repeat
+while an address verification or signing request is pending. The interrupted
+request must fail instead of remaining pending, and a new connection must work
+in the same application session. Check the account history before repeating an
+interrupted send; reconnection never automatically retries a transaction.
+
+The renderer owns each GATT notification session: disconnect rejects pending
+exchanges, removes listeners, and prevents old status checks from resetting a
+new connection. Cleanup does not call `stopNotifications` on a disconnected
+server. Ledger's transport still handles APDU framing and exchange locking.
+
 ## Design and tests
 
 Ledger's existing Web BLE transport filters devices by Ledger service UUIDs.
