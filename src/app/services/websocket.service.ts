@@ -1,3 +1,4 @@
+import { secureEndpoint } from './endpoint-policy';
 import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import {AppSettingsService} from './app-settings.service';
@@ -11,6 +12,12 @@ export class WebsocketService {
   reconnectTimeout = 5 * 1000;
 
   keepaliveSet = false;
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout>;
+  private connectionTimer: ReturnType<typeof setTimeout>;
+  private keepaliveTimer: ReturnType<typeof setTimeout>;
+  // A finite budget per explicit connection cycle, including short-lived opens.
+  private readonly maxReconnectAttempts = 5;
 
   socket = {
     connected: false,
@@ -24,37 +31,44 @@ export class WebsocketService {
   constructor(private appSettings: AppSettingsService) { }
 
   forceReconnect() {
-    console.log('Reconnecting Websocket...');
-    if (this.socket.connected && this.socket.ws) {
-      // Override the onclose event so it doesnt try to reconnect the old instance
-      this.socket.ws.onclose = event => {
-      };
+    clearTimeout(this.reconnectTimer);
+    clearTimeout(this.connectionTimer);
+    clearTimeout(this.keepaliveTimer);
+    this.keepaliveSet = false;
+    if (this.socket.ws) {
+      this.socket.ws.onclose = null;
+      this.socket.ws.onopen = null;
+      this.socket.ws.onmessage = null;
       this.socket.ws.close();
-      delete this.socket.ws;
-      this.socket.connected = false;
     }
-
-    setTimeout(() => this.connect(), 250);
+    this.socket.ws = null;
+    this.socket.connected = false;
+    this.reconnectAttempts = 0;
+    this.reconnectTimeout = 5000;
+    this.reconnectTimer = setTimeout(() => this.connect(), 250);
   }
 
   connect() {
-    if (this.socket.connected && this.socket.ws) {
-      // Already connected
+    if (this.socket.ws) return;
+    if (!this.appSettings.settings.serverWS) return;
+    let wsUrl: string;
+    try { wsUrl = secureEndpoint(this.appSettings.settings.serverWS, 'ws'); } catch (_) {
+      console.warn('WebSocket blocked: use WSS (WS is allowed only on loopback).');
       return;
     }
-    if (!this.appSettings.settings.serverWS) {
-      console.log('No Websocket server available.');
-      return;
-    }
-    delete this.socket.ws; // Maybe this will erase old connections
-
-    const wsUrl = this.appSettings.settings.serverWS;
     const ws = new WebSocket(wsUrl);
     this.socket.ws = ws;
+    this.connectionTimer = setTimeout(() => {
+      if (this.socket.ws === ws && !this.socket.connected) ws.close();
+    }, 15000);
 
     ws.onopen = event => {
+      if (this.socket.ws !== ws) return;
+      clearTimeout(this.connectionTimer);
       this.socket.connected = true;
       this.queuedCommands.forEach(queueevent => ws.send(JSON.stringify(queueevent)));
+
+      this.queuedCommands = [];
 
       // Resubscribe to accounts?
       if (this.subscribedAccounts.length) {
@@ -66,17 +80,23 @@ export class WebsocketService {
       }
     };
     ws.onerror = event => {
-      // this.socket.connected = false;
-      console.log(`Socket error`, event);
+      console.warn('WebSocket connection error.');
     };
     ws.onclose = event => {
+      if (this.socket.ws !== ws) return;
+      clearTimeout(this.connectionTimer);
+      clearTimeout(this.keepaliveTimer);
+      this.keepaliveSet = false;
       this.socket.connected = false;
-      console.log(`Socket close`, event);
-
-      // Start attempting to recconect
-      setTimeout(() => this.attemptReconnect(), this.reconnectTimeout);
+      this.socket.ws = null;
+      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        this.reconnectTimer = setTimeout(() => this.attemptReconnect(), this.reconnectTimeout);
+      } else {
+        console.warn('WebSocket retry limit reached. Save server settings to reconnect.');
+      }
     };
     ws.onmessage = event => {
+      if (this.socket.ws !== ws) return;
       try {
         const newEvent = JSON.parse(event.data);
         console.log('WS', newEvent);
@@ -91,6 +111,8 @@ export class WebsocketService {
   }
 
   attemptReconnect() {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) return;
+    this.reconnectAttempts++;
     this.connect();
     if (this.reconnectTimeout < 30 * 1000) {
       this.reconnectTimeout += 5 * 1000; // Slowly increase the timeout up to 30 seconds
@@ -103,7 +125,7 @@ export class WebsocketService {
       this.socket.ws.send(JSON.stringify({ action: 'ping' }));
     }
 
-    setTimeout(() => {
+    this.keepaliveTimer = setTimeout(() => {
       this.keepalive();
     }, this.keepaliveTimeout);
   }

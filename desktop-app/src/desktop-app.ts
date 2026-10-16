@@ -386,8 +386,17 @@ if (!appLock) {
   });
 }
 
-function checkForUpdates() {
-  autoUpdater.checkForUpdates();
+async function checkForUpdates() {
+  // Source checkouts have no packaged updater configuration. Never contact the
+  // release feed while testing a development branch.
+  if (!app.isPackaged) return;
+
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (error) {
+    // The updater error event does not consume the rejected check promise.
+    log.warn('Update check failed:', error);
+  }
 }
 
 // Build up the menu bar options based on platform
@@ -459,6 +468,7 @@ function getApplicationMenu() {
         {type: 'separator'},
         {
           label: `Check for Updates`,
+          enabled: app.isPackaged,
           click (menuItem, browserWindow) {
             checkForUpdates();
           }
@@ -475,6 +485,7 @@ function getApplicationMenu() {
         {type: 'separator'},
         {
           label: `Check for Updates`,
+          enabled: app.isPackaged,
           click (menuItem, browserWindow) {
             checkForUpdates();
           }

@@ -1,5 +1,7 @@
 import { Injectable } from '@angular/core';
-import {HttpClient} from '@angular/common/http';
+import { RpcTransportService } from './rpc-transport.service';
+import { secureEndpoint } from './endpoint-policy';
+import { timeout } from 'rxjs/operators';
 import {HttpHeaders} from '@angular/common/http';
 import {NodeService} from './node.service';
 import {AppSettingsService} from './app-settings.service';
@@ -8,7 +10,7 @@ import { TxType } from './util.service';
 @Injectable()
 export class ApiService {
   storeKey = `nanovault-active-difficulty`;
-  constructor(private http: HttpClient, private node: NodeService, private appSettings: AppSettingsService) { }
+  constructor(private http: RpcTransportService, private node: NodeService, private appSettings: AppSettingsService) { }
 
   // Some public RPC proxies still whitelist the legacy pending action names.
   // Only retry when the proxy explicitly denies the modern action; never retry
@@ -24,86 +26,76 @@ export class ApiService {
   }
 
   private async request(action, data, skipError, url = '', validateResponse?): Promise<any> {
-    data.action = action;
-    const apiUrl = url === '' ? this.appSettings.settings.serverAPI : url;
-    if (!apiUrl) {
-      this.node.setOffline(null); // offline mode
+    // Snapshot settings: a pending request must not acquire another server's credentials.
+    const settings = { ...this.appSettings.settings };
+    const firstUrl = url || settings.serverAPI;
+    if (!firstUrl) {
+      this.node.setOffline(null);
       return;
     }
-    if (this.node.node.status === false) {
-      if (!skipError) {
-        this.node.setLoading();
+    let apiUrl: string;
+    try { apiUrl = secureEndpoint(firstUrl, 'rpc'); } catch (error) {
+      this.node.setOffline('Unsafe server address: use HTTPS (HTTP is allowed only on loopback).');
+      if (skipError) return;
+      throw error;
+    }
+    const endpoints = [apiUrl];
+    // Never automatically replay publication after an ambiguous network failure.
+    if (!url && !skipError && settings.serverName === 'random' && action !== 'process' && action !== 'work_generate') {
+      for (const server of this.appSettings.serverOptions || []) {
+        if (!server.shouldRandom || !server.api) continue;
+        try {
+          const candidate = secureEndpoint(server.api, 'rpc');
+          if (!endpoints.includes(candidate)) endpoints.push(candidate);
+        } catch (_) { /* Ignore insecure built-in candidates. */ }
       }
     }
-    let options: any = {
-      responseType: 'json',
-    };
-    if (this.appSettings.settings.serverAuth != null && this.appSettings.settings.serverAuth !== '') {
-      options =
-        Object.assign(
-          {},
-          options,
-          {
-            headers: new HttpHeaders()
-              .set('Authorization', this.appSettings.settings.serverAuth)
+    if (this.node.node.status === false && !skipError) this.node.setLoading();
+    // Includes legacy compatibility calls; PoW gets one longer, cancellable attempt.
+    const deadline = Date.now() + (action === 'work_generate' ? 120000 : 45000);
+    let attempts = 0;
+    let lastError: any;
+    for (const endpoint of endpoints.slice(0, 3)) {
+      let requestAction = action;
+      while (attempts < 3 && Date.now() < deadline) {
+        attempts++;
+        const options: any = { responseType: 'json' };
+        // Explicit work servers never inherit RPC credentials, even at the same origin.
+        if (!url && settings.serverName === 'custom' && endpoint === apiUrl && settings.serverAuth) {
+          options.headers = new HttpHeaders().set('Authorization', settings.serverAuth);
+        }
+        try {
+          const remaining = deadline - Date.now();
+          const res = await this.http.post(endpoint, { ...data, action: requestAction }, options)
+            .pipe(timeout(Math.max(1, Math.min(action === 'work_generate' ? 120000 : 15000, remaining)))).toPromise();
+          if (typeof validateResponse === 'function' && validateResponse(res).err != null) {
+            throw { isValidationFailure: true };
           }
-        );
-    }
-    return await this.http.post(apiUrl, data, options).toPromise()
-      .then(res => {
-        if ( typeof validateResponse === 'function' ) {
-          const { err } = validateResponse(res);
-          const isValidResponse = (err == null);
-
-          if (isValidResponse === false) {
-            throw {
-              isValidationFailure: true,
-              status: 500,
-              reason: err,
-              res,
-            };
-          };
-        };
-
-        this.node.setOnline();
-        return res;
-      })
-      .catch(async err => {
-        if (skipError) return;
-
-        const legacyAction = this.legacyReceivableAction(action, err);
-        if (legacyAction) {
-          // Retry the same request against the same endpoint with the legacy
-          // action name, even when a random server was selected.
-          console.info(`RPC proxy rejected ${action}; retrying with ${legacyAction}`);
-          return this.request(legacyAction, data, skipError, apiUrl, validateResponse);
-        }
-
-        if ( err.isValidationFailure === true ) {
-          console.log(
-            'Node response failed validation.',
-            err.reason,
-            err.res
-          );
-        } else {
-          console.log('Node responded with error', err.status);
-        }
-
-        if (this.appSettings.settings.serverName === 'random') {
-          // choose a new backend and do the request again
-          this.appSettings.loadServerSettings();
-          await this.sleep(1000); // delay if all servers are down
-          return this.request(action, data, skipError, '', validateResponse);
-        } else {
-          // hard exit
-          if (err.status === 429) {
-            this.node.setOffline('Too Many Requests to the node. Try again later or choose a different node.');
-          } else {
+          this.node.setOnline();
+          return res;
+        } catch (error) {
+          lastError = error;
+          if (skipError) return;
+          const legacy = this.legacyReceivableAction(requestAction, error);
+          if (legacy && attempts < 3) {
+            requestAction = legacy;
+            continue;
+          }
+          const retryable = !error.isValidationFailure &&
+            (error.status === 0 || error.status === 408 || error.status === 429 ||
+             error.status >= 500 || error.name === 'TimeoutError' || error instanceof TypeError);
+          if (!retryable) {
             this.node.setOffline();
+            throw error;
           }
-          throw err;
+          break;
         }
-      });
+      }
+    }
+    this.node.setOffline(lastError && lastError.status === 429
+      ? 'Too Many Requests to the node. Try again later or choose a different node.'
+      : 'RPC unavailable. Retry later or choose another node.');
+    throw lastError || new Error('RPC request deadline exceeded.');
   }
 
   async accountsBalances(accounts: string[]): Promise<{balances: any }> {
@@ -159,7 +151,7 @@ export class ApiService {
   }
   async workGenerate(hash, difficulty, workServer = ''): Promise<{ work: string }> {
     const validateResponse = (res) => {
-      if(res.work == null) {
+      if(!res || res.work == null) {
         return {
           err: `Missing field "work".`,
         };
@@ -228,7 +220,4 @@ export class ApiService {
     localStorage.removeItem(this.storeKey);
   }
 
-  sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
 }
