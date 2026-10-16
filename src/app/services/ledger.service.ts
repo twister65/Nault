@@ -428,8 +428,21 @@ export class LedgerService {
     // Explicit user reconnect always discards the old session, even if Chromium
     // still reports GATT connected after a dropped radio link.
     if (forceReconnect && this.ledger.transport) {
-      this.resetLedger();
+      // Close the previous GATT session before Chromium starts a new one.
+      // resetLedger() normally closes in the background; that can race
+      // with requestDevice() and the next MTU negotiation.
+      const staleTransport = this.ledger.transport;
+      this.ledger.transport = null;
+      this.ledger.nano = null;
+      this.pollingLedger = false;
+      this.bluetoothGeneration++;
       this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      try {
+        await staleTransport.close();
+        console.info('[Ledger BLE] previous GATT session closed before reconnect');
+      } catch (error) {
+        console.warn('[Ledger BLE] previous GATT close failed', error);
+      }
     }
     // Device selection requires a deliberate click, including after disconnect.
     const activation = (navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation;
