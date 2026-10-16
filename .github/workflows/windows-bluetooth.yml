@@ -23,7 +23,14 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      # node-hid 2.x falls back to node-gyp 8, which requires distutils.
+      - uses: actions/setup-python@v5
+        id: python
+        with:
+          python-version: '3.11'
       - name: Install locked dependencies and Windows native binaries
+        env:
+          npm_config_python: ${{ steps.python.outputs.python-path }}
         run: npm ci --legacy-peer-deps --include=optional --no-audit --no-fund
       - name: Compile application
         env:
