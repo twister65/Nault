@@ -1,4 +1,5 @@
 import { BrowserWindow, dialog } from 'electron';
+const log = require('electron-log');
 
 // Chromium filters requestDevice by the Ledger service UUIDs in TransportWebBLE.
 // A name is only a label: never automatically select or pair based on a name.
@@ -75,13 +76,20 @@ export function configureWebBluetooth(window: BrowserWindow, isTrustedURL: (url:
   });
 
   contents.session.setBluetoothPairingHandler((details, callback) => {
-    if (!trusted() || details.frame !== contents.mainFrame ||
-        !isTrustedURL(details.frame.url) || !selected.has(details.deviceId) ||
-        !['confirm', 'confirmPin'].includes(details.pairingKind)) {
-      callback({ confirmed: false });
-      return;
-    }
-    if (details.pairingKind === 'confirmPin' && !/^\d{6}$/.test(details.pin || '')) {
+    // Do not log device identifiers or pairing PINs. Windows can initiate
+    // encryption when enabling notifications, after GATT discovery succeeded.
+    const trustedDocument = trusted();
+    const trustedFrame = !!details.frame && details.frame === contents.mainFrame &&
+      isTrustedURL(details.frame.url);
+    const previouslySelected = selected.has(details.deviceId);
+    const knownKind = ['confirm', 'confirmPin'].includes(details.pairingKind);
+    const validPin = details.pairingKind !== 'confirmPin' || /^\d{6}$/.test(details.pin || '');
+    log.info('[Ledger BLE pairing] request', {
+      kind: details.pairingKind, trustedDocument, trustedFrame,
+      previouslySelected, knownKind, validPin
+    });
+    if (!trustedDocument || !trustedFrame || !previouslySelected || !knownKind || !validPin) {
+      log.warn('[Ledger BLE pairing] denied by device or frame policy');
       callback({ confirmed: false });
       return;
     }
@@ -94,6 +102,7 @@ export function configureWebBluetooth(window: BrowserWindow, isTrustedURL: (url:
       clearTimeout(timer);
       pairingCancels.delete(cancel);
       abort.abort();
+      log.info('[Ledger BLE pairing] user response', { confirmed });
       callback({ confirmed });
     };
     const cancel = () => finishPairing(false);
