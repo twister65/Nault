@@ -1,0 +1,29 @@
+{
+  "appId": "cc.nault",
+  "productName": "Nault",
+  "directories": {
+    "output": "desktop-app/build-macos",
+    "buildResources": "desktop-app/assets"
+  },
+  "files": ["dist/**/*", "desktop-app/dist/**/*", "package.json"],
+  "npmRebuild": false,
+  "publish": null,
+  "mac": {
+    "target": [{ "target": "zip" }],
+    "category": "public.app-category.finance",
+    "identity": null,
+    "hardenedRuntime": false,
+    "artifactName": "Nault-WebBluetooth-macOS-${arch}.zip",
+    "extendInfo": {
+      "CFBundleURLTypes": [{
+        "CFBundleURLName": "nano",
+        "CFBundleURLSchemes": ["nano"]
+      }]
+    }
+  },
+  "protocols": {
+    "name": "nano",
+    "schemes": ["nano", "nanorep", "nanoseed", "nanokey", "nanosign", "nanoprocess"],
+    "role": "Viewer"
+  }
+}
