@@ -309,6 +309,39 @@ async function main() {
   await check('GATT opening failure returns disconnected, not ready', async () => {
     BLE.fail = true; assert.equal(await service.loadLedger(), false); assert.equal(service.ledger.status, 'not-connected'); BLE.fail = false;
   });
+  await check('Bluetooth session reset is explicit and limited to disconnected MTU failures', async () => {
+    let reloads = 0;
+    const widgetCode = ts.transpileModule(
+      fs.readFileSync(path.join(root, 'src/app/components/wallet-widget/wallet-widget.component.ts'), 'utf8'),
+      { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, experimentalDecorators: true } }
+    ).outputText;
+    const { WalletWidgetComponent } = load(widgetCode, {
+      '@angular/core': { Component: () => value => value, ViewChild: () => () => {} },
+      '../../services/wallet.service': {},
+      '../../services/notification.service': {},
+      '../../services/ledger.service': { LedgerStatus: { READY: 'ready', NOT_CONNECTED: 'not-connected' } },
+      '../../services/app-settings.service': {},
+      '../../services/pow.service': {}
+    }, { window: { location: { reload() { reloads++; } } } });
+    const ledger = { isDesktop: true, transportMode: 'Bluetooth' };
+    const widget = new WalletWidgetComponent({ wallet: {} }, {}, ledger, {}, {});
+    widget.ledgerStatus = { status: 'ready', statusText: 'MTU negotiation timed out' };
+    assert.equal(widget.canResetBluetoothSession, false);
+    widget.resetBluetoothSession();
+    ledger.transportMode = 'USB';
+    widget.ledgerStatus.status = 'not-connected';
+    assert.equal(widget.canResetBluetoothSession, false);
+    widget.resetBluetoothSession();
+    ledger.transportMode = 'Bluetooth';
+    widget.ledgerStatus.statusText = 'Ledger disconnected';
+    assert.equal(widget.canResetBluetoothSession, false);
+    widget.resetBluetoothSession();
+    assert.equal(reloads, 0);
+    widget.ledgerStatus.statusText = 'Bluetooth connection failed: Ledger Bluetooth MTU negotiation timed out';
+    assert.equal(widget.canResetBluetoothSession, true);
+    widget.resetBluetoothSession();
+    assert.equal(reloads, 1);
+  });
   await check('USB mode retains native IPC routing', async () => {
     service.enableBluetoothMode(false); assert.equal(service.usesDesktopUsb, true);
     let used = false; service.getLedgerAccountDesktop = async () => { used = true; };
