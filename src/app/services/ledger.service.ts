@@ -183,8 +183,14 @@ export class LedgerService {
     if (this.supportsBluetooth && enabled) {
       this.transportMode = 'Bluetooth';
       this.DynamicTransport = TransportBLE;
+      // Remember an explicit Bluetooth selection even if first-time pairing
+      // fails. Otherwise restarting Nault silently falls back to native USB,
+      // and clicking Reconnect reports the misleading "NoDevice" error.
+      if (this.isDesktop) this.appSettings.setAppSetting('ledgerReconnect', 'bluetooth');
     } else {
       this.detectUsbTransport();
+      // An explicit switch back to USB must also update the saved mode.
+      if (this.isDesktop && !enabled) this.appSettings.setAppSetting('ledgerReconnect', 'usb');
     }
   }
 
