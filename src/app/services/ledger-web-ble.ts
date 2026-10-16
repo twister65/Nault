@@ -43,7 +43,7 @@ export default class LedgerWebBle extends TransportBLE {
       if (!disposed && value) {
         const frame = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
         // Only report protocol metadata, never APDU payloads or signatures.
-        console.info('[Ledger BLE GATT] notification received', { tag: frame.length ? frame[0] : null, length: frame.length });
+        if (frame[0] === 0x08) console.info('[Ledger BLE GATT] MTU response received', { length: frame.length });
         frames.next(frame);
       }
     };
@@ -87,25 +87,6 @@ export default class LedgerWebBle extends TransportBLE {
       }
       console.info('[Ledger BLE GATT] notifications started');
       checkActive();
-      // Instrument only the BLE MTU control frame (tag 0x08).
-      // Avoid logging APDU contents or addresses.
-      const writable = write as any;
-      const originalWriteValue = writable.writeValue.bind(write);
-      writable.writeValue = async (payload: any) => {
-        const bytes = payload instanceof ArrayBuffer
-          ? new Uint8Array(payload)
-          : new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
-        if (bytes[0] !== 0x08) return originalWriteValue(payload);
-        console.info('[Ledger BLE GATT] MTU write started');
-        try {
-          const result = await originalWriteValue(payload);
-          console.info('[Ledger BLE GATT] MTU write completed');
-          return result;
-        } catch (error) {
-          console.error('[Ledger BLE GATT] MTU write failed', error);
-          throw error;
-        }
-      };
       transport = new LedgerWebBle(device, write, frames, infos.deviceModel);
       transport.disposeSession = dispose;
       console.info('[Ledger BLE GATT] negotiating MTU');
