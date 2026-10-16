@@ -78,6 +78,7 @@ jobs:
           set -euo pipefail
           app_path="$(find desktop-app/build-macos -type d -name 'Nault.app' -print -quit)"
           test -n "$app_path"
+          app_path="$(cd "$app_path" && pwd -P)"
           export NAULT_SMOKE_APP="$app_path/Contents/Resources/app.asar"
           export ELECTRON_RUN_AS_NODE=1
           "$app_path/Contents/MacOS/Nault" -e '
