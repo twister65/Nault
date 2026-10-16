@@ -447,12 +447,15 @@ export class LedgerService {
       this.ledger.status = LedgerStatus.NOT_CONNECTED;
     }
     this.bluetoothConnecting = true;
+    console.info('[Ledger BLE] reconnect started', { forceReconnect, hadTransport: !!previous });
     const generation = this.bluetoothGeneration;
     let timeout;
     let active = true;
     const connect = async () => {
       if (!this.ledger.transport) {
+        console.info('[Ledger BLE] requesting device and opening GATT');
         const transport = await TransportBLE.create(90000, 60000) as TransportBLE;
+        console.info('[Ledger BLE] GATT and MTU ready');
         if (!active || generation !== this.bluetoothGeneration) {
           await transport.close();
           throw new Error('Bluetooth connection cancelled');
@@ -467,8 +470,11 @@ export class LedgerService {
           this.ledgerStatus$.next({ status: this.ledger.status, statusText: 'Ledger Bluetooth disconnected. Click Reconnect.' });
         });
       }
+      console.info('[Ledger BLE] reading Nano app configuration');
       await this.ledger.nano.getAppConfiguration();
+      console.info('[Ledger BLE] reading account address');
       await this.ledger.nano.getAddress(this.ledgerPath(0), false);
+      console.info('[Ledger BLE] account address read successfully');
     };
     try {
       await Promise.race([
@@ -476,6 +482,7 @@ export class LedgerService {
         new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('Bluetooth connection timed out')), 90000); })
       ]);
       if (generation !== this.bluetoothGeneration) return false;
+      console.info('[Ledger BLE] reconnect successful');
       this.appSettings.setAppSetting('ledgerReconnect', 'bluetooth');
       this.ledger.status = LedgerStatus.READY;
       this.ledgerStatus$.next({ status: this.ledger.status, statusText: 'Nano Ledger application connected via Bluetooth' });
@@ -485,6 +492,7 @@ export class LedgerService {
       }
       return true;
     } catch (error) {
+      console.error('[Ledger BLE] reconnect failed', error);
       if (generation !== this.bluetoothGeneration) return false;
       this.resetLedger();
       this.ledger.status = LedgerStatus.NOT_CONNECTED;
