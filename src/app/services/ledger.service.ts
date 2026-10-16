@@ -301,8 +301,8 @@ export class LedgerService {
    * @param {boolean} hideNotifications
    * @returns {Promise<any>}
    */
-  async loadLedger(hideNotifications = false) {
-    if (this.transportMode === 'Bluetooth') return this.loadWebBluetooth(hideNotifications);
+  async loadLedger(hideNotifications = false, forceBluetoothReconnect = false) {
+    if (this.transportMode === 'Bluetooth') return this.loadWebBluetooth(hideNotifications, forceBluetoothReconnect);
     return new Promise(async (resolve, reject) => {
 
       // Desktop is handled completely differently.  Send a message for status instead of setting anything up
@@ -423,8 +423,14 @@ export class LedgerService {
 
   }
 
-  private async loadWebBluetooth(hideNotifications: boolean) {
+  private async loadWebBluetooth(hideNotifications: boolean, forceReconnect = false) {
     if (this.bluetoothConnecting) return false;
+    // Explicit user reconnect always discards the old session, even if Chromium
+    // still reports GATT connected after a dropped radio link.
+    if (forceReconnect && this.ledger.transport) {
+      this.resetLedger();
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
+    }
     // Device selection requires a deliberate click, including after disconnect.
     const activation = (navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation;
     if (!this.ledger.transport && activation && !activation.isActive) {
