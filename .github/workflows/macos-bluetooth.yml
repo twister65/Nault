@@ -38,13 +38,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-15
+          - runner: macos-15-intel
             arch: x64
-          - runner: macos-15-arm64
+          - runner: macos-15
             arch: arm64
     env:
       CI: 'true'
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # usb@2.0.3/node-gyp may default to C++14; Node 22/V8 requires C++17.
+      CXXFLAGS: '-std=c++17'
     steps:
       - name: Check out source
         uses: actions/checkout@v4
