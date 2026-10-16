@@ -64,6 +64,26 @@ exchanges, removes listeners, and prevents old status checks from resetting a
 new connection. Cleanup does not call `stopNotifications` on a disconnected
 server. Ledger's transport still handles APDU framing and exchange locking.
 
+## Chromium notification recovery after an MTU timeout
+
+On some Linux Chromium/BlueZ reconnects, `startNotifications()` resolves
+and a Ledger MTU reply appears in `btmon`, yet
+`characteristicvaluechanged` never fires in the renderer. This is a
+notification-delivery failure, not proof that the Ledger failed to respond.
+
+After a reported `MTU negotiation timed out` failure, the Ledger wallet
+widget offers **Reset Bluetooth session**. Use it only when disconnected.
+It reloads Nault's renderer (a fresh Web Bluetooth page context), **without
+restarting the Electron process**, then you can click **Reconnect** and
+reselect the Ledger. This is a manual, experimental recovery path, not an
+automatic reconnect or a bypass of MTU/APDU validation. Unsaved form fields
+will be lost; check account history before retrying any interrupted send.
+This does not change or delete the wallet seed on the Ledger.
+
+If resetting the renderer still fails, restart Nault normally. The issue
+may also be in Chromium's native Bluetooth stack and not only in the page
+context. USB remains a supported fallback.
+
 ## Design and tests
 
 Ledger's existing Web BLE transport filters devices by Ledger service UUIDs.
