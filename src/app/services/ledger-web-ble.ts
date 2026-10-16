@@ -45,31 +45,41 @@ export default class LedgerWebBle extends TransportBLE {
       if (disposed || !device.gatt.connected) throw new Error('Ledger Bluetooth connection closed');
     };
     const connect = async () => {
+      console.info('[Ledger BLE GATT] opening connection', { alreadyConnected: device.gatt.connected });
       if (!device.gatt.connected) await device.gatt.connect();
+      console.info('[Ledger BLE GATT] connected');
       checkActive();
+      console.info('[Ledger BLE GATT] discovering services');
       const services = await device.gatt.getPrimaryServices();
       checkActive();
       const service = services.find(item => getBluetoothServiceUuids().includes(item.uuid));
       const infos = service && getInfosForServiceUuid(service.uuid);
       if (!infos) throw new Error('Ledger Bluetooth service not found');
+      console.info('[Ledger BLE GATT] Ledger service found; discovering characteristics');
       const write = await service.getCharacteristic(infos.writeUuid);
       checkActive();
       characteristic = await service.getCharacteristic(infos.notifyUuid);
       checkActive();
       characteristic.addEventListener('characteristicvaluechanged', onValue);
+      console.info('[Ledger BLE GATT] starting notifications');
       await characteristic.startNotifications();
+      console.info('[Ledger BLE GATT] notifications started');
       checkActive();
       transport = new LedgerWebBle(device, write, frames, infos.deviceModel);
       transport.disposeSession = dispose;
+      console.info('[Ledger BLE GATT] negotiating MTU');
       await transport.inferMTU();
+      console.info('[Ledger BLE GATT] MTU negotiated');
       checkActive();
       return transport;
     };
     device.addEventListener('gattserverdisconnected', dispose);
     timer = setTimeout(dispose, openTimeout);
     try {
+      console.info('[Ledger BLE GATT] device selected; initializing session');
       return await Promise.race([connect(), disconnected]);
     } catch (error) {
+      console.error('[Ledger BLE GATT] session opening failed', error);
       dispose();
       if (device.gatt.connected) device.gatt.disconnect();
       throw error;
