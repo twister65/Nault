@@ -87,6 +87,15 @@ export class WalletWidgetComponent implements OnInit {
     }
   }
 
+  async reconnectUsb() {
+    if (!this.ledgerService.isDesktop) return;
+    // Transport choice is explicit. Disabling Bluetooth on the hardware
+    // does not reset Nault's persisted Bluetooth preference.
+    // Keep the existing wallet and switch only the Ledger transport.
+    this.ledgerService.enableBluetoothMode(false);
+    await this.reloadLedger();
+  }
+
   async reconnectBluetooth() {
     if (!this.ledgerService.isDesktop || !this.ledgerService.supportsBluetooth) return;
     // Switch transport without going through "Configure Wallet", which can
