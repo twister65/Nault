@@ -68,6 +68,12 @@ jobs:
       - name: Typecheck and compile Electron main/preload
         run: npm run desktop:compile
 
+      - name: Test Ledger Bluetooth transport and reconnect handling
+        run: node scripts/test-ledger-bluetooth.js
+
+      - name: Run focused Nano / RsNano RPC tests
+        run: npm test -- --main=src/test-rpc.ts --watch=false --browsers=ChromeHeadlessCI --progress=false
+
       - name: Run all Angular tests
         run: npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false
 

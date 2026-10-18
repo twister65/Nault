@@ -22,7 +22,8 @@
     "desktop:build": "npm run wallet:build-desktop && npm run desktop:compile",
     "desktop:build-local": "npm run desktop:build && npm run desktop:local",
     "desktop:dev": "npm run desktop:compile && electron desktop-app/dist/desktop-app.js",
-    "desktop:local": "electron-builder -p never -c.npmRebuild=false"
+    "desktop:local": "electron-builder -p never -c.npmRebuild=false",
+    "test:ledger-bluetooth": "npm run desktop:compile && node scripts/test-ledger-bluetooth.js"
   },
   "private": true,
   "dependencies": {
@@ -39,7 +40,6 @@
     "@angular/service-worker": "^13.1.1",
     "@ledgerhq/devices": "7.0.2",
     "@ledgerhq/hw-transport": "^6.27.1",
-    "@ledgerhq/hw-transport-node-ble": "^6.27.1",
     "@ledgerhq/hw-transport-node-hid": "^6.27.1",
     "@ledgerhq/hw-transport-node-hid-noevents": "6.27.5",
     "@ledgerhq/hw-transport-u2f": "^5.34.0",
