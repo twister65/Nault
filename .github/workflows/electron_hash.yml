@@ -26,6 +26,11 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - name: Set up Python with distutils for legacy node-gyp
+        if: runner.os != 'Linux'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
       - name: Install Linux build libraries
         if: runner.os == 'Linux'
         run: |
