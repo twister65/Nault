@@ -1,7 +1,8 @@
 # CI/security gate (separate from runtime RPC and IPC)
 
-This change modifies workflows and test infrastructure only. It is stacked on
-`fix/vulnerabilities`; review the diff against that branch, not master.
+This change modifies workflows and test infrastructure only. PR #9 now targets
+`master` after the merges of PR #6 (RPC) and PR #7 (Bluetooth), and includes
+both regression suites. Review the diff against `master`.
 
 ## Required checks to configure on master
 
@@ -22,8 +23,10 @@ proof that protection is active. Verify the actual settings before merging.
 
 ## Code scanning evidence
 
-`check-code-scanning.cjs` reads GitHub's published analyses and open alerts for
-`GITHUB_REF`. Both CodeQL categories must have a successful analysis at
+`check-code-scanning.cjs` reads GitHub's published analyses for `GITHUB_REF`
+and reads open alerts for **both** `GITHUB_REF` and the target `master` branch.
+This prevents PR refs with no matching alerts from bypassing open findings on
+`master`. Both CodeQL categories must have a successful analysis at
 `GITHUB_SHA`. Every open CodeQL alert blocks the security gate; nothing is
 silently dismissed or excluded. HTTP failures, missing access and malformed
 responses fail closed. The JSON artifact records alert IDs, rules, severity,
@@ -34,7 +37,8 @@ findings may keep the gate red; fixes to RPC/IPC belong in their own changes.
 
 ## Angular scope
 
-CI runs `src/test.ts`, the entire Jasmine suite, rather than only `test-rpc.ts`.
+CI runs `src/test.ts`, the entire Jasmine suite, and additionally runs the
+focused Nano/RsNano RPC tests and the Ledger Web Bluetooth regression script.
 Generated constructor smoke tests now use the real application's DI declarations,
 HTTP testing and router testing modules. They intentionally test construction;
 starting all lifecycle hooks without inputs previously caused uncontrolled
