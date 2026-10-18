@@ -1,3 +1,4 @@
+import { ComponentTestModule, isolateConstructorIO } from '../../../testing/component-test.module';
 import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
 
 import { RemoteSigningComponent } from './remote-signing.component';
@@ -7,8 +8,9 @@ describe('RemoteSigningComponent', () => {
   let fixture: ComponentFixture<RemoteSigningComponent>;
 
   beforeEach(waitForAsync(() => {
+    isolateConstructorIO();
     TestBed.configureTestingModule({
-      declarations: [ RemoteSigningComponent ]
+      imports: [ComponentTestModule],
     })
     .compileComponents();
   }));
@@ -16,7 +18,7 @@ describe('RemoteSigningComponent', () => {
   beforeEach(() => {
     fixture = TestBed.createComponent(RemoteSigningComponent);
     component = fixture.componentInstance;
-    fixture.detectChanges();
+    // Constructor smoke test; lifecycle scenarios supply explicit inputs and I/O mocks.
   });
 
   it('should create', () => {

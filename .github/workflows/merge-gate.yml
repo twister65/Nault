@@ -1,0 +1,27 @@
+name: Merge gate
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+jobs:
+  regression:
+    uses: ./.github/workflows/pr-regression.yml
+  security:
+    uses: ./.github/workflows/codeql.yml
+  gate:
+    name: Merge gate
+    if: always()
+    needs: [regression, security]
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Require successful tests, build, lint and published CodeQL results
+        env:
+          REGRESSION: ${{ needs.regression.result }}
+          SECURITY: ${{ needs.security.result }}
+        run: |
+          test "$REGRESSION" = success
+          test "$SECURITY" = success
