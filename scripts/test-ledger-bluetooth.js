@@ -101,6 +101,36 @@ async function main() {
     await assert.rejects(new LedgerService().loadTransport(true), /Native Bluetooth is disabled/);
   });
 
+  await check('USB reconnect ignores the intentional disconnect event until native HID is ready', async () => {
+    const callbacks = {};
+    let opens = 0;
+    class FakeNano {
+      async getAddress() { return { address: 'nano_mock' }; }
+    }
+    const compiled = fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8');
+    const { initialize, LedgerService: NativeLedgerService } = load(compiled, {
+      './ledger-hid-worker-transport': { async open() {
+        opens++;
+        return { async close() {} };
+      } },
+      'hw-app-nano': FakeNano,
+      rxjs: require('rxjs'),
+      electron: { ipcMain: { on(channel, fn) { callbacks[channel] = fn; } } }
+    });
+    // Avoid a background poller when exercising just the IPC handshake.
+    NativeLedgerService.prototype.pollLedgerStatus = () => {};
+    initialize(() => true);
+    const messages = [];
+    const event = { sender: { send(_channel, msg) { messages.push(msg); } } };
+    callbacks.ledger(event, { event: 'disconnect' });
+    assert.deepEqual(messages.filter(m => m.event === 'ledger-status'), [],
+      'an intentional transport switch must not report a failed USB status');
+    callbacks.ledger(event, { event: 'get-ledger-status', data: { bluetooth: false } });
+    for (let i = 0; i < 5; i++) await flush();
+    assert.equal(opens, 1);
+    assert.deepEqual(messages.filter(m => m.event === 'ledger-status').map(m => m.data.status), ['ready']);
+  });
+
   const controlCode = ts.transpileModule(fs.readFileSync(path.join(root, 'src/app/services/ledger-ble-control.ts'), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017 }
   }).outputText;
@@ -218,7 +248,7 @@ async function main() {
   class BLE extends EventEmitter {
     constructor() { super(); this.notifyObservable = new (require('rxjs').Subject)(); this.device = { gatt: { disconnect: () => calls.push('disconnect') } }; }
     static isSupported() { return Promise.resolve(true); }
-    static async create() { calls.push('create'); if (BLE.fail) throw Error('GATT failed'); return new BLE(); }
+    static async create() { calls.push('create'); if (BLE.fail) throw BLE.fail instanceof Error ? BLE.fail : Error('GATT failed'); return new BLE(); }
     async close() { this.device.gatt.disconnect(); }
   }
   class Nano {
@@ -334,6 +364,59 @@ async function main() {
   await check('GATT opening failure returns disconnected, not ready', async () => {
     BLE.fail = true; assert.equal(await service.loadLedger(), false); assert.equal(service.ledger.status, 'not-connected'); BLE.fail = false;
   });
+  await check('Bluetooth adapter unavailable is not reported as device selection cancelled', async () => {
+    const radioError = Error('Bluetooth adapter not available.');
+    radioError.name = 'TransportOpenUserCancelled';
+    BLE.fail = radioError;
+    let status;
+    const sub = service.ledgerStatus$.subscribe(value => { status = value; });
+    try {
+      assert.equal(await service.loadLedger(), false);
+      assert.match(status.statusText, /Bluetooth unavailable/);
+      assert.match(status.statusText, /Reconnect via USB/);
+      assert.doesNotMatch(status.statusText, /selection cancelled/);
+    } finally {
+      sub.unsubscribe();
+      BLE.fail = false;
+    }
+  });
+  await check('wallet widget switches Bluetooth to native USB only on explicit click', async () => {
+    const widgetCode = ts.transpileModule(
+      fs.readFileSync(path.join(root, 'src/app/components/wallet-widget/wallet-widget.component.ts'), 'utf8'),
+      { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, experimentalDecorators: true } }
+    ).outputText;
+    const { WalletWidgetComponent } = load(widgetCode, {
+      '@angular/core': { Component: () => value => value, ViewChild: () => () => {} },
+      '../../services/wallet.service': {},
+      '../../services/notification.service': {},
+      '../../services/ledger.service': { LedgerStatus: { READY: 'ready', NOT_CONNECTED: 'not-connected' } },
+      '../../services/app-settings.service': {},
+      '../../services/pow.service': {}
+    });
+    const operations = [];
+    const ledger = {
+      isDesktop: true, supportsBluetooth: true, transportMode: 'Bluetooth',
+      enableBluetoothMode(enabled) {
+        operations.push(['mode', enabled]);
+        this.transportMode = enabled ? 'Bluetooth' : 'U2F';
+      },
+      async loadLedger(hide, forceBle) { operations.push(['load', hide, forceBle]); return true; }
+    };
+    const notifications = {
+      sendInfo() {}, removeNotification() {}, sendSuccess() {}
+    };
+    const widget = new WalletWidgetComponent({ wallet: {} }, notifications, ledger, {}, {});
+    widget.ledgerStatus = { status: 'ready', statusText: '' };
+    await widget.reconnectUsb();
+    assert.equal(ledger.transportMode, 'U2F');
+    assert.deepEqual(operations, [['mode', false], ['load', false, false]]);
+    operations.length = 0;
+    await widget.reloadLedger();
+    assert.deepEqual(operations, [['load', false, false]], 'normal USB reconnect must not ask for Bluetooth');
+    operations.length = 0;
+    await widget.reconnectBluetooth();
+    assert.deepEqual(operations, [['mode', true], ['load', false, true]]);
+  });
   await check('Bluetooth session reset is explicit and limited to disconnected MTU failures', async () => {
     let reloads = 0;
     const widgetCode = ts.transpileModule(
@@ -372,6 +455,13 @@ async function main() {
     assert.equal(preferences.ledgerReconnect, 'usb');
     let used = false; service.getLedgerAccountDesktop = async () => { used = true; };
     await service.getLedgerAccount(0); assert(used);
+    sends.length = 0;
+    const statusRequest = service.loadLedger();
+    assert.equal(sends.length, 1);
+    assert.equal(sends[0].event, 'get-ledger-status');
+    assert.equal(sends[0].data.bluetooth, false, 'USB reconnect must use native HID IPC');
+    listener(null, { event: 'ledger-status', data: { status: 'ready', statusText: 'Ledger device ready' } });
+    assert.equal(await statusRequest, true);
   });
   console.log(`${passed} Web Bluetooth regression tests passed`);
 }
