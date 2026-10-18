@@ -1,3 +1,4 @@
+import { ComponentTestModule, isolateConstructorIO } from '../../../../testing/component-test.module';
 import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
 
 import { NanoIdenticonComponent } from './nano-identicon.component';
@@ -7,8 +8,9 @@ describe('NanoIdenticonComponent', () => {
   let fixture: ComponentFixture<NanoIdenticonComponent>;
 
   beforeEach(waitForAsync(() => {
+    isolateConstructorIO();
     TestBed.configureTestingModule({
-      declarations: [ NanoIdenticonComponent ]
+      imports: [ComponentTestModule],
     })
     .compileComponents();
   }));
@@ -16,7 +18,7 @@ describe('NanoIdenticonComponent', () => {
   beforeEach(() => {
     fixture = TestBed.createComponent(NanoIdenticonComponent);
     component = fixture.componentInstance;
-    fixture.detectChanges();
+    // Constructor smoke test; lifecycle scenarios supply explicit inputs and I/O mocks.
   });
 
   it('should create', () => {

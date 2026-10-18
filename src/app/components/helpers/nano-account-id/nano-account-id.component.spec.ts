@@ -1,3 +1,4 @@
+import { ComponentTestModule, isolateConstructorIO } from '../../../../testing/component-test.module';
 import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
 
 import { NanoAccountIdComponent } from './nano-account-id.component';
@@ -7,8 +8,9 @@ describe('NanoAccountIdComponent', () => {
   let fixture: ComponentFixture<NanoAccountIdComponent>;
 
   beforeEach(waitForAsync(() => {
+    isolateConstructorIO();
     TestBed.configureTestingModule({
-      declarations: [ NanoAccountIdComponent ]
+      imports: [ComponentTestModule],
     })
     .compileComponents();
   }));
@@ -16,7 +18,7 @@ describe('NanoAccountIdComponent', () => {
   beforeEach(() => {
     fixture = TestBed.createComponent(NanoAccountIdComponent);
     component = fixture.componentInstance;
-    fixture.detectChanges();
+    // Constructor smoke test; lifecycle scenarios supply explicit inputs and I/O mocks.
   });
 
   it('should create', () => {

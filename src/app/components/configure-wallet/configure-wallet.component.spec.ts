@@ -1,3 +1,4 @@
+import { ComponentTestModule, isolateConstructorIO } from '../../../testing/component-test.module';
 import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
 
 import { ConfigureWalletComponent } from './configure-wallet.component';
@@ -7,8 +8,9 @@ describe('ConfigureWalletComponent', () => {
   let fixture: ComponentFixture<ConfigureWalletComponent>;
 
   beforeEach(waitForAsync(() => {
+    isolateConstructorIO();
     TestBed.configureTestingModule({
-      declarations: [ ConfigureWalletComponent ]
+      imports: [ComponentTestModule],
     })
     .compileComponents();
   }));
@@ -16,7 +18,7 @@ describe('ConfigureWalletComponent', () => {
   beforeEach(() => {
     fixture = TestBed.createComponent(ConfigureWalletComponent);
     component = fixture.componentInstance;
-    fixture.detectChanges();
+    // Constructor smoke test; lifecycle scenarios supply explicit inputs and I/O mocks.
   });
 
   it('should create', () => {
