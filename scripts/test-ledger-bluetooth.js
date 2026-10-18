@@ -109,11 +109,11 @@ async function main() {
     }
     const compiled = fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8');
     const { initialize, LedgerService: NativeLedgerService } = load(compiled, {
-      './ledger-hid-worker-transport': { default: { async open() {
+      './ledger-hid-worker-transport': { async open() {
         opens++;
         return { async close() {} };
-      } } },
-      'hw-app-nano': { default: FakeNano },
+      } },
+      'hw-app-nano': FakeNano,
       rxjs: require('rxjs'),
       electron: { ipcMain: { on(channel, fn) { callbacks[channel] = fn; } } }
     });
