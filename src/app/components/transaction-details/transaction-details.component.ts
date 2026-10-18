@@ -75,17 +75,27 @@ export class TransactionDetailsComponent implements OnInit {
     this.hashID = hash;
 
     this.loadingBlock = true;
+    // Route parameters are untrusted object keys. Nano block hashes contain
+    // exactly 64 hexadecimal characters, so "__proto__" cannot be a lookup key.
+    const validHash = (value: unknown): value is string =>
+      typeof value === 'string' && /^[0-9a-f]{64}$/i.test(value);
+    if (!validHash(hash)) {
+      this.loadingBlock = false;
+      this.transaction = null;
+      return;
+    }
     const blockData = await this.api.blocksInfo([hash]);
-
-    if ( !blockData || blockData.error || !blockData.blocks[hash] ) {
+    if (!blockData || blockData.error || !blockData.blocks ||
+        !Object.prototype.hasOwnProperty.call(blockData.blocks, hash)) {
       this.loadingBlock = false;
       this.transaction = null;
       return;
     }
 
-    const hashData = blockData.blocks[hash];
-    const hashContents = JSON.parse(hashData.contents);
-    hashData.contents = hashContents;
+    // Do not mutate a nested object obtained through an RPC-controlled map.
+    // Build a new block record with an own "contents" property instead.
+    const block = blockData.blocks[hash];
+    const hashData = { ...block, contents: JSON.parse(block.contents) };
 
     this.transactionJSON = JSON.stringify(hashData.contents, null , 4);
 
@@ -101,9 +111,21 @@ export class TransactionDetailsComponent implements OnInit {
       if (isOpen) {
         this.blockType = 'open';
       } else {
-        const prevRes = await this.api.blocksInfo([hashData.contents.previous]);
-        const prevData = prevRes.blocks[hashData.contents.previous];
-        prevData.contents = JSON.parse(prevData.contents);
+        const previous = hashData.contents.previous;
+        if (!validHash(previous)) {
+          this.loadingBlock = false;
+          this.transaction = null;
+          return;
+        }
+        const prevRes = await this.api.blocksInfo([previous]);
+        if (!prevRes || prevRes.error || !prevRes.blocks ||
+            !Object.prototype.hasOwnProperty.call(prevRes.blocks, previous)) {
+          this.loadingBlock = false;
+          this.transaction = null;
+          return;
+        }
+        const previousBlock = prevRes.blocks[previous];
+        const prevData = { ...previousBlock, contents: JSON.parse(previousBlock.contents) };
         if (!prevData.contents.balance) {
           // Previous block is not a state block.
           this.blockType = prevData.contents.type;
