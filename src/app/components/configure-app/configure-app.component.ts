@@ -515,13 +515,12 @@ export class ConfigureAppComponent implements OnInit {
 
     this.node.node.status = false; // Directly set node to offline since API url changed.  Status will get set by reloadBalances
 
-    // Reload balances which triggers an api check + reconnect to websocket server
+    // Restore notifications immediately, independently of slow/offline RPC reads.
+    this.websocket.forceReconnect();
     try {
       await this.walletService.reloadBalances();
     } catch (_) {
       this.notifications.sendWarning('Unable to refresh balances. Check your connection or select another server.');
-    } finally {
-      this.websocket.forceReconnect();
     }
     // this is updated after setting server to random and doing recheck of wallet balance
     this.serverAPIUpdated = this.appSettings.settings.serverAPI;

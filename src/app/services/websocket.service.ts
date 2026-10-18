@@ -33,6 +33,7 @@ export class WebsocketService {
   constructor(private appSettings: AppSettingsService) { }
 
   forceReconnect() {
+    console.info('WebSocket reconnect requested. Retry budget reset.');
     clearTimeout(this.reconnectTimer);
     clearTimeout(this.connectionTimer);
     clearTimeout(this.keepaliveTimer);
@@ -42,6 +43,7 @@ export class WebsocketService {
       this.socket.ws.onclose = null;
       this.socket.ws.onopen = null;
       this.socket.ws.onmessage = null;
+      this.socket.ws.onerror = null;
       this.socket.ws.close();
     }
     this.socket.ws = null;
@@ -53,12 +55,16 @@ export class WebsocketService {
 
   connect() {
     if (this.socket.ws) return;
-    if (!this.appSettings.settings.serverWS) return;
+    if (!this.appSettings.settings.serverWS) {
+      console.info('WebSocket disabled: no server configured.');
+      return;
+    }
     let wsUrl: string;
     try { wsUrl = secureEndpoint(this.appSettings.settings.serverWS, 'ws'); } catch (_) {
       console.warn('WebSocket blocked: use WSS (WS is allowed only on loopback).');
       return;
     }
+    console.info('WebSocket connecting.');
     const ws = new WebSocket(wsUrl);
     this.socket.ws = ws;
     this.connectionTimer = setTimeout(() => {
@@ -69,6 +75,7 @@ export class WebsocketService {
       if (this.socket.ws !== ws) return;
       clearTimeout(this.connectionTimer);
       this.socket.connected = true;
+      console.info('WebSocket connected. Restoring account subscriptions.');
       // The current account list is authoritative, including offline unsubscribes.
       this.queuedCommands = [];
       if (this.subscribedAccounts.length) {

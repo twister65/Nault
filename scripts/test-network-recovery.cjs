@@ -31,7 +31,7 @@ function load(file, name) {
       : n === 'rxjs' ? { BehaviorSubject }
       : n.endsWith('/endpoint-policy') ? { secureEndpoint: u => u } : {},
     setTimeout: schedule, clearTimeout: x => timers.delete(x), WebSocket: FakeSocket,
-    console: { log() {}, warn: m => warnings.push(m) }
+    console: { log() {}, info() {}, warn: m => warnings.push(m) }
   }, { filename: file });
   return exports[name];
 }
@@ -62,6 +62,12 @@ async function main() {
   tick(300000); assert.equal(sockets.length, 6); assert.equal(timers.size, 0);
   assert(warnings.some(x => x.includes('retry limit reached')));
   service.forceReconnect(); tick(250); assert.equal(sockets.length, 7);
+  sockets[6].onopen();
+  sockets[6].onmessage({ data: '{"ack":"pong"}' });
+  sockets[6].onmessage({ data: '{"topic":"confirmation","message":"after-exhaustion"}' });
+  tick(15000);
+  assert.equal(service.socket.connected, true);
+  assert.equal(service.newTransactions$.value, 'after-exhaustion');
   settings.settings.serverWS = null; service.forceReconnect(); tick(250);
   console.log('PASS five-retry limit and explicit recovery after exhaustion');
 
@@ -93,6 +99,13 @@ async function main() {
   await Promise.resolve();
   assert.equal(reconnects, 1); assert.equal(notices, 1);
   console.log('PASS failed settings refresh is handled and still reconnects WebSocket');
+  let releaseRefresh;
+  c.walletService.reloadBalances = () => new Promise(r => releaseRefresh = r);
+  const saving = c.updateServerSettings();
+  assert.equal(reconnects, 2, 'WebSocket must restart before the pending RPC refresh completes');
+  releaseRefresh(); await saving;
+  assert.equal(reconnects, 2, 'RPC completion must not restart the recovered socket again');
+  console.log('PASS manual reconnect does not wait for RPC and is not duplicated');
 
   const rep = Object.create(Reps.prototype);
   rep.api = { representativesOnline: async () => { throw { statusCode: 400, message: 'Unsupported RPC action' }; } };
