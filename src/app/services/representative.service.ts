@@ -7,7 +7,7 @@ import {UtilService} from './util.service';
 import { NinjaService } from './ninja.service';
 
 export interface RepresentativeStatus {
-  online: boolean;
+  online: boolean | null;
   veryHighWeight: boolean;
   highWeight: boolean;
   veryLowUptime: boolean;
@@ -131,7 +131,7 @@ export class RepresentativeService {
 
     // Now, loop through each representative and determine some details about it
     for (const representative of representatives) {
-      const repOnline = onlineReps.indexOf(representative.account) !== -1;
+      const repOnline = onlineReps === null ? null : onlineReps.indexOf(representative.account) !== -1;
       const knownRep = this.getRepresentative(representative.account);
       const knownRepNinja = await this.ninja.getAccount(representative.account);
 
@@ -314,10 +314,16 @@ export class RepresentativeService {
    * Get a list of all online representatives
    * @returns {Promise<string[]>}
    */
-  async getOnlineRepresentatives(): Promise<string[]> {
+  async getOnlineRepresentatives(): Promise<string[] | null> {
     const representatives = [];
-    const reps = await this.api.representativesOnline();
-    if (!reps) return representatives;
+    let reps;
+    try {
+      reps = await this.api.representativesOnline();
+    } catch (_) {
+      console.warn('Online representative information is unavailable from this RPC server.');
+      return null;
+    }
+    if (!reps || reps.error || !reps.representatives) return null;
     for (const representative in reps.representatives) {
       if (!reps.representatives.hasOwnProperty(representative)) continue;
       representatives.push(reps.representatives[representative]);

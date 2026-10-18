@@ -9,12 +9,14 @@ export class WebsocketService {
   queuedCommands = [];
 
   keepaliveTimeout = 60 * 1000;
+  pongTimeout = 15 * 1000;
   reconnectTimeout = 5 * 1000;
 
   keepaliveSet = false;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout>;
   private connectionTimer: ReturnType<typeof setTimeout>;
+  private pongTimer: ReturnType<typeof setTimeout>;
   private keepaliveTimer: ReturnType<typeof setTimeout>;
   // A finite budget per explicit connection cycle, including short-lived opens.
   private readonly maxReconnectAttempts = 5;
@@ -34,6 +36,7 @@ export class WebsocketService {
     clearTimeout(this.reconnectTimer);
     clearTimeout(this.connectionTimer);
     clearTimeout(this.keepaliveTimer);
+    clearTimeout(this.pongTimer);
     this.keepaliveSet = false;
     if (this.socket.ws) {
       this.socket.ws.onclose = null;
@@ -59,20 +62,17 @@ export class WebsocketService {
     const ws = new WebSocket(wsUrl);
     this.socket.ws = ws;
     this.connectionTimer = setTimeout(() => {
-      if (this.socket.ws === ws && !this.socket.connected) ws.close();
+      if (this.socket.ws === ws && !this.socket.connected) this.disconnect(ws);
     }, 15000);
 
     ws.onopen = event => {
       if (this.socket.ws !== ws) return;
       clearTimeout(this.connectionTimer);
       this.socket.connected = true;
-      this.queuedCommands.forEach(queueevent => ws.send(JSON.stringify(queueevent)));
-
+      // The current account list is authoritative, including offline unsubscribes.
       this.queuedCommands = [];
-
-      // Resubscribe to accounts?
       if (this.subscribedAccounts.length) {
-        this.subscribeAccounts(this.subscribedAccounts);
+        this.subscribeAccounts([...this.subscribedAccounts]);
       }
 
       if (!this.keepaliveSet) {
@@ -82,24 +82,14 @@ export class WebsocketService {
     ws.onerror = event => {
       console.warn('WebSocket connection error.');
     };
-    ws.onclose = event => {
-      if (this.socket.ws !== ws) return;
-      clearTimeout(this.connectionTimer);
-      clearTimeout(this.keepaliveTimer);
-      this.keepaliveSet = false;
-      this.socket.connected = false;
-      this.socket.ws = null;
-      if (this.reconnectAttempts < this.maxReconnectAttempts) {
-        this.reconnectTimer = setTimeout(() => this.attemptReconnect(), this.reconnectTimeout);
-      } else {
-        console.warn('WebSocket retry limit reached. Save server settings to reconnect.');
-      }
-    };
+    ws.onclose = () => this.disconnect(ws);
     ws.onmessage = event => {
       if (this.socket.ws !== ws) return;
       try {
         const newEvent = JSON.parse(event.data);
         console.log('WS', newEvent);
+
+        if (newEvent.ack === 'pong') clearTimeout(this.pongTimer);
 
         if (newEvent.topic === 'confirmation') {
           this.newTransactions$.next(newEvent.message);
@@ -119,18 +109,40 @@ export class WebsocketService {
     }
   }
 
-  keepalive() {
-    this.keepaliveSet = true;
-    if (this.socket.connected) {
-      this.socket.ws.send(JSON.stringify({ action: 'ping' }));
+  private disconnect(ws: WebSocket) {
+    if (this.socket.ws !== ws) return;
+    clearTimeout(this.connectionTimer);
+    clearTimeout(this.keepaliveTimer);
+    clearTimeout(this.pongTimer);
+    this.keepaliveSet = false;
+    this.socket.connected = false;
+    this.socket.ws = null;
+    ws.onclose = ws.onopen = ws.onmessage = ws.onerror = null;
+    // Do not wait for the TCP close handshake on a disconnected network.
+    ws.close();
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectTimer = setTimeout(() => this.attemptReconnect(), this.reconnectTimeout);
+    } else {
+      console.warn('WebSocket retry limit reached. Save server settings to reconnect.');
     }
-
-    this.keepaliveTimer = setTimeout(() => {
-      this.keepalive();
-    }, this.keepaliveTimeout);
   }
 
-
+  keepalive() {
+    const ws = this.socket.ws;
+    if (!ws || !this.socket.connected) return;
+    this.keepaliveSet = true;
+    this.pongTimer = setTimeout(() => {
+      console.warn('WebSocket pong timeout. Reconnecting.');
+      this.disconnect(ws);
+    }, this.pongTimeout);
+    try {
+      ws.send(JSON.stringify({ action: 'ping' }));
+    } catch (_) {
+      this.disconnect(ws);
+      return;
+    }
+    this.keepaliveTimer = setTimeout(() => this.keepalive(), this.keepaliveTimeout);
+  }
 
   subscribeAccounts(accountIDs: string[]) {
     const event = {

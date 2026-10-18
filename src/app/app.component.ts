@@ -117,7 +117,7 @@ export class AppComponent implements OnInit {
       this.wallet.selectedAccount = currentUpdatedAccount;
     }
 
-    await this.walletService.reloadBalances();
+    await this.walletService.reloadBalances().catch(() => this.notifications.sendWarning('Unable to refresh balances. Check your connection.'));
 
     // Workaround fix for github pages when Nault is refreshed (or externally linked) and there is a subpath for example to the send screen.
     // This data is saved from the 404.html page
@@ -336,7 +336,7 @@ export class AppComponent implements OnInit {
       this.notifications.sendInfo(`Wallet server settings is set to offline mode. Please change server first!`);
       return;
     }
-    this.walletService.reloadBalances();
+    this.walletService.reloadBalances().catch(() => this.notifications.sendWarning('Unable to refresh balances. Check your connection.'));
     this.notifications.sendInfo(`Attempting to reconnect to nano node`);
   }
 

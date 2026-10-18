@@ -42,4 +42,39 @@ describe('WebSocket bounded connections', () => {
     service.forceReconnect();
     tick(250);
   }));
+  it('detects a silent socket without waiting for its close event and restores subscriptions', fakeAsync(() => {
+    service.subscribeAccounts(['nano_test']);
+    service.connect();
+    const old = sockets[0];
+    old.close = jasmine.createSpy('close'); // A cable cut may never deliver onclose.
+    old.onopen({});
+    tick(15000);
+    expect(service.socket.connected).toBe(false);
+    expect(old.close).toHaveBeenCalled();
+    tick(5000);
+    const fresh = sockets[1];
+    fresh.onopen({});
+    expect(fresh.send).toHaveBeenCalledWith(JSON.stringify({
+      action: 'subscribe', topic: 'confirmation', options: { accounts: ['nano_test'] }
+    }));
+    fresh.onmessage({ data: JSON.stringify({ ack: 'pong' }) });
+    fresh.onmessage({ data: JSON.stringify({ topic: 'confirmation', message: { hash: 'new' } }) });
+    expect(service.newTransactions$.value).toEqual({ hash: 'new' });
+    tick(15000);
+    expect(service.socket.connected).toBe(true);
+    settings.settings.serverWS = null;
+    service.forceReconnect();
+    tick(250);
+  }));
+  it('bounds silent open connections to five retries', fakeAsync(() => {
+    service.connect();
+    for (let i = 0; i < 6; i++) {
+      sockets[i].onopen({});
+      tick(15000);
+      if (i < 5) tick((i + 1) * 5000);
+    }
+    tick(300000);
+    expect(sockets.length).toBe(6);
+  }));
+
 });

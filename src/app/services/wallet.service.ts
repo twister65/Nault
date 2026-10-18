@@ -254,7 +254,9 @@ export class WalletService {
       );
 
       if (shouldReloadBalances === true) {
-        await this.reloadBalances();
+        await this.reloadBalances().catch(() => {
+          this.notifications.sendWarning('Unable to refresh balances. Check your connection.');
+        });
       }
     });
 
@@ -557,7 +559,7 @@ export class WalletService {
     }
 
     // Reload balances for all accounts
-    this.reloadBalances();
+    this.reloadBalances().catch(() => this.notifications.sendWarning('Unable to refresh balances. Check your connection.'));
   }
 
   createNewWallet(seed: string) {
