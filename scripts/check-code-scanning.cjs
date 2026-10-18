@@ -1,6 +1,13 @@
 // Read the published GitHub results, never infer an empty alert list from a green upload job.
 const fs = require('node:fs');
 const expectedCategories = ['/language:actions', '/language:javascript-typescript'];
+function uniqueAlerts(...sources) {
+  const seen = new Map();
+  for (const list of sources) {
+    for (const alert of list) seen.set(alert.number, alert);
+  }
+  return [...seen.values()];
+}
 function assess(analyses, alerts, sha) {
   const current = analyses.filter(a => a.commit_sha === sha && a.tool?.name === 'CodeQL' && !a.error);
   const missing = expectedCategories.filter(category => !current.some(a => a.category === category));
@@ -14,10 +21,10 @@ function assess(analyses, alerts, sha) {
 async function main() {
   const { GITHUB_REPOSITORY: repo, GITHUB_REF: ref, GITHUB_SHA: sha, GH_TOKEN: token } = process.env;
   if (!repo || !ref || !sha || !token) throw new Error('Missing GitHub Actions context or token.');
-  async function pages(resource, extra = '') {
+  async function pages(resource, extra = '', queryRef = ref) {
     const rows = [];
     for (let page = 1; ; page++) {
-      const response = await fetch(`https://api.github.com/repos/${repo}/code-scanning/${resource}?ref=${encodeURIComponent(ref)}&per_page=100&page=${page}${extra}`, {
+      const response = await fetch(`https://api.github.com/repos/${repo}/code-scanning/${resource}?ref=${encodeURIComponent(queryRef)}&per_page=100&page=${page}${extra}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
         signal: AbortSignal.timeout(30000)
       });
@@ -29,13 +36,18 @@ async function main() {
     }
   }
   const analyses = await pages('analyses');
-  const alerts = await pages('alerts', '&state=open');
-  const report = { repository: repo, ref, ...assess(analyses, alerts, sha) };
+  const branchAlerts = await pages('alerts', '&state=open');
+  // A pull-request ref can have no alerts while master still has open findings.
+  // Do not let that make the PR merge gate green: check both sets explicitly.
+  const targetRef = `refs/heads/${process.env.GITHUB_BASE_REF || 'master'}`;
+  const targetAlerts = targetRef === ref ? [] : await pages('alerts', '&state=open', targetRef);
+  const report = { repository: repo, ref, checkedAlertRefs: [...new Set([ref, targetRef])],
+    ...assess(analyses, uniqueAlerts(branchAlerts, targetAlerts), sha) };
   fs.writeFileSync('code-scanning-summary.json', JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   if (!report.passed) throw new Error('Merge blocked: missing current analysis or open CodeQL alerts.');
 }
-module.exports = { assess };
+module.exports = { assess, uniqueAlerts };
 if (require.main === module) main().catch(error => {
   if (!fs.existsSync('code-scanning-summary.json')) fs.writeFileSync('code-scanning-summary.json', JSON.stringify({ passed: false, error: error.message }));
   console.error(error.message);
