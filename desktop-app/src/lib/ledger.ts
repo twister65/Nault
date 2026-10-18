@@ -51,7 +51,7 @@ export class LedgerService {
   }
 
   // Reset connection to the ledger device, update the status
-  resetLedger(errorMessage = '') {
+  resetLedger(errorMessage = '', notifyStatus = true) {
     const transport = this.ledger.transport;
     this.ledger.transport = null;
     this.ledger.nano = null;
@@ -61,7 +61,11 @@ export class LedgerService {
         console.warn('Could not close Ledger transport:', error);
       });
     }
-    this.setLedgerStatus(LedgerStatus.NOT_CONNECTED, errorMessage);
+    // The renderer already manages its transport-mode transition. In that
+    // case, notifying "not-connected" before the new USB status arrives would
+    // be consumed as the result of the new get-ledger-status request.
+    if (notifyStatus) this.setLedgerStatus(LedgerStatus.NOT_CONNECTED, errorMessage);
+    else this.ledger.status = LedgerStatus.NOT_CONNECTED;
   }
 
   // Open a connection to the usb device and initialize up the Nano Ledger library
@@ -270,7 +274,9 @@ export function initialize(isTrustedSender: (event: IpcMainEvent) => boolean) {
     switch (data.event) {
       case 'disconnect':
         Ledger.pollingLedger = false;
-        Ledger.resetLedger();
+        // Explicit transport switching is not a failed USB connection.
+        // Avoid a stale empty status racing the next get-ledger-status reply.
+        Ledger.resetLedger('', false);
         break;
       case 'get-ledger-status':
         Ledger.loadLedger(data.data.bluetooth);

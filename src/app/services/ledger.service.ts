@@ -515,7 +515,14 @@ export class LedgerService {
       if (generation !== this.bluetoothGeneration) return false;
       this.resetLedger();
       this.ledger.status = LedgerStatus.NOT_CONNECTED;
-      const message = error.name === 'TransportOpenUserCancelled' ? 'Bluetooth selection cancelled' : `Bluetooth connection failed: ${error.message || error}`;
+      const detail = String(error && (error.message || error) || '');
+      const adapterUnavailable = error && error.name === 'TransportOpenUserCancelled' &&
+        /bluetooth adapter not available|adapter not available|bluetooth unavailable|bluetooth is disabled/i.test(detail);
+      const message = adapterUnavailable
+        ? 'Bluetooth unavailable. Check Bluetooth on your computer and Ledger, or choose Reconnect via USB.'
+        : error && error.name === 'TransportOpenUserCancelled'
+          ? 'Bluetooth selection cancelled'
+          : `Bluetooth connection failed: ${detail}`;
       this.ledgerStatus$.next({ status: this.ledger.status, statusText: message });
       if (!hideNotifications) this.notifications.sendWarning(message);
       return false;
