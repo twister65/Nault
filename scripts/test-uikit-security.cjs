@@ -21,6 +21,7 @@ const chrome = process.env.CHROME_BIN || 'google-chrome';
 const fixture = `<!doctype html><meta charset="utf-8">
 <script src="${pathToFileURL(path.join(base,'purify.min.js')).href}"></script>
 <script src="${pathToFileURL(path.join(base,'uikit.min.js')).href}"></script>
+<body><main id="fixture"></main>
 <script>
   (() => {
     try {
