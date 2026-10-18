@@ -29,12 +29,12 @@ jobs:
           const lock = require('./package-lock.json');
           const packages = Object.entries(lock.packages || {});
           for (const [name, expected] of Object.entries({'cipher-base':'1.0.5','pbkdf2':'3.1.7','sha.js':'2.4.12'})) {
-            const resolved = packages.filter(([path]) => path.endsWith('/node_modules/' + name));
+            const resolved = packages.filter(([path]) => (path === 'node_modules/' + name || path.endsWith('/node_modules/' + name)));
             if (!resolved.length || resolved.some(([,data]) => data.version !== expected)) {
               throw new Error(name + ' did not resolve to ' + expected + ': ' + JSON.stringify(resolved));
             }
           }
-          const forms = packages.filter(([path]) => path.endsWith('/node_modules/form-data'));
+          const forms = packages.filter(([path]) => (path === 'node_modules/form-data' || path.endsWith('/node_modules/form-data')));
           if (forms.length < 2 || forms.some(([, data]) => !['2.5.6','4.0.6'].includes(data.version))) {
             throw new Error('Unexpected form-data versions: ' + JSON.stringify(forms));
           }
