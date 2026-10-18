@@ -10,6 +10,8 @@ permissions:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write # GitHub Pages branch push only; other jobs remain read-only.
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       NODE_OPTIONS: --openssl-legacy-provider
@@ -39,6 +41,5 @@ jobs:
       - name: Deploy to gh-pages
         uses: JamesIves/github-pages-deploy-action@4.0.0
         with:
-          ssh-key: ${{ secrets.DEPLOY_KEY }}
           branch: gh-pages # The branch the action should deploy to.
           folder: dist # The folder the action should deploy.
