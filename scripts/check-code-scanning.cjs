@@ -37,12 +37,13 @@ async function main() {
   }
   const analyses = await pages('analyses');
   const branchAlerts = await pages('alerts', '&state=open');
-  // A pull-request ref can have no alerts while master still has open findings.
-  // Do not let that make the PR merge gate green: check both sets explicitly.
-  const targetRef = `refs/heads/${process.env.GITHUB_BASE_REF || 'master'}`;
-  const targetAlerts = targetRef === ref ? [] : await pages('alerts', '&state=open', targetRef);
-  const report = { repository: repo, ref, checkedAlertRefs: [...new Set([ref, targetRef])],
-    ...assess(analyses, uniqueAlerts(branchAlerts, targetAlerts), sha) };
+  // A temporary refs/pull/N/merge ref can have no indexed alerts even when
+  // the candidate branch has open CodeQL findings. Inspect both refs, but do
+  // not block on master-only alerts that this PR has already fixed.
+  const headRef = process.env.GITHUB_HEAD_REF ? `refs/heads/${process.env.GITHUB_HEAD_REF}` : ref;
+  const headAlerts = headRef === ref ? [] : await pages('alerts', '&state=open', headRef);
+  const report = { repository: repo, ref, checkedAlertRefs: [...new Set([ref, headRef])],
+    ...assess(analyses, uniqueAlerts(branchAlerts, headAlerts), sha) };
   fs.writeFileSync('code-scanning-summary.json', JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   if (!report.passed) throw new Error('Merge blocked: missing current analysis or open CodeQL alerts.');
