@@ -1198,14 +1198,15 @@
 
     function fragment(html) {
 
-        var matches = singleTagRe.exec(html);
-        if (matches) {
-            return document.createElement(matches[1]);
-        }
-
         var container = document.createElement('div');
-        if (fragmentRe.test(html)) {
-            container.insertAdjacentHTML('beforeend', html.trim());
+        // The renderer must load the reviewed DOMPurify bundle before UIkit.
+        // If it is unavailable, fail closed and show text instead of HTML.
+        var purifier = typeof window !== 'undefined' && window.DOMPurify;
+        if (fragmentRe.test(html) && purifier && typeof purifier.sanitize === 'function') {
+            var cleanFragment = purifier.sanitize(html.trim(), { RETURN_DOM_FRAGMENT: true });
+            // Insert already-sanitized DOM nodes. Never parse untrusted HTML
+            // via innerHTML or insertAdjacentHTML at this trust boundary.
+            container.appendChild(cleanFragment);
         } else {
             container.textContent = html;
         }
