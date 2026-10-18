@@ -31,6 +31,7 @@ jobs:
         run: node scripts/patch-uikit-fragment.cjs
       - name: Generate matched minified UIkit distribution
         run: ./node_modules/.bin/terser src/assets/lib/base/uikit.js --compress --mangle --comments some --output src/assets/lib/base/uikit.min.js
+      # The browser fixture mounts a body before DOM operations.
       - name: Verify source and minified bundles against XSS payloads in Chrome
         shell: bash
         run: |
