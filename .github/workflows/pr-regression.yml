@@ -45,6 +45,9 @@ jobs:
       - name: Install dependencies from lockfile
         run: npm ci --legacy-peer-deps --no-audit --no-fund
 
+      - name: Test silent network recovery and server state
+        run: node scripts/test-network-recovery.cjs
+
       - name: Locate Chrome
         shell: bash
         run: |
