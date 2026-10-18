@@ -101,6 +101,36 @@ async function main() {
     await assert.rejects(new LedgerService().loadTransport(true), /Native Bluetooth is disabled/);
   });
 
+  await check('USB reconnect ignores the intentional disconnect event until native HID is ready', async () => {
+    const callbacks = {};
+    let opens = 0;
+    class FakeNano {
+      async getAddress() { return { address: 'nano_mock' }; }
+    }
+    const compiled = fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8');
+    const { initialize, LedgerService: NativeLedgerService } = load(compiled, {
+      './ledger-hid-worker-transport': { default: { async open() {
+        opens++;
+        return { async close() {} };
+      } } },
+      'hw-app-nano': { default: FakeNano },
+      rxjs: require('rxjs'),
+      electron: { ipcMain: { on(channel, fn) { callbacks[channel] = fn; } } }
+    });
+    // Avoid a background poller when exercising just the IPC handshake.
+    NativeLedgerService.prototype.pollLedgerStatus = () => {};
+    initialize(() => true);
+    const messages = [];
+    const event = { sender: { send(_channel, msg) { messages.push(msg); } } };
+    callbacks.ledger(event, { event: 'disconnect' });
+    assert.deepEqual(messages.filter(m => m.event === 'ledger-status'), [],
+      'an intentional transport switch must not report a failed USB status');
+    callbacks.ledger(event, { event: 'get-ledger-status', data: { bluetooth: false } });
+    for (let i = 0; i < 5; i++) await flush();
+    assert.equal(opens, 1);
+    assert.deepEqual(messages.filter(m => m.event === 'ledger-status').map(m => m.data.status), ['ready']);
+  });
+
   const controlCode = ts.transpileModule(fs.readFileSync(path.join(root, 'src/app/services/ledger-ble-control.ts'), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017 }
   }).outputText;
