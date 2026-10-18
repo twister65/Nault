@@ -24,9 +24,10 @@ proof that protection is active. Verify the actual settings before merging.
 ## Code scanning evidence
 
 `check-code-scanning.cjs` reads GitHub's published analyses for `GITHUB_REF`
-and reads open alerts for **both** `GITHUB_REF` and the target `master` branch.
-This prevents PR refs with no matching alerts from bypassing open findings on
-`master`. Both CodeQL categories must have a successful analysis at
+and reads open alerts for the **tested merge ref** and the **candidate head
+branch ref**. This prevents PR merge refs with no indexed alerts from bypassing
+real findings on the candidate, without re-blocking alerts in `master` that
+have already been fixed by the PR. Both CodeQL categories must have a successful analysis at
 `GITHUB_SHA`. Every open CodeQL alert blocks the security gate; nothing is
 silently dismissed or excluded. HTTP failures, missing access and malformed
 responses fail closed. The JSON artifact records alert IDs, rules, severity,
