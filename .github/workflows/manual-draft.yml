@@ -4,6 +4,9 @@ on:
   # only allow manual run, for example to analyze changes before a realease
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   manual-draft:
     runs-on: ubuntu-latest

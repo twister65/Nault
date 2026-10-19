@@ -5,8 +5,12 @@ import { autoUpdater } from 'electron-updater';
 import * as url from 'url';
 import * as path from 'path';
 import { initialize } from './lib/ledger';
+import { configureWebBluetooth } from './lib/web-bluetooth';
 import * as settings from 'electron-settings';
 const log = require('electron-log');
+
+// Chromium's BlueZ-backed Web Bluetooth on Linux; no raw-socket capability.
+if (process.platform === 'linux') app.commandLine.appendSwitch('enable-features', 'WebBluetooth');
 
 // Diagnostic-only listener: record native main-process exceptions without
 // swallowing them or changing Electron's normal uncaught-error behavior.
@@ -268,6 +272,8 @@ function createWindow () {
     callback();
   });
 
+  configureWebBluetooth(mainWindow, isTrustedWalletURL);
+
   // Track window state
   mainWindowStateKeeper.track(mainWindow);
 
@@ -386,8 +392,17 @@ if (!appLock) {
   });
 }
 
-function checkForUpdates() {
-  autoUpdater.checkForUpdates();
+async function checkForUpdates() {
+  // Source checkouts have no packaged updater configuration. Never contact the
+  // release feed while testing a development branch.
+  if (!app.isPackaged) return;
+
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (error) {
+    // The updater error event does not consume the rejected check promise.
+    log.warn('Update check failed:', error);
+  }
 }
 
 // Build up the menu bar options based on platform
@@ -459,6 +474,7 @@ function getApplicationMenu() {
         {type: 'separator'},
         {
           label: `Check for Updates`,
+          enabled: app.isPackaged,
           click (menuItem, browserWindow) {
             checkForUpdates();
           }
@@ -475,6 +491,7 @@ function getApplicationMenu() {
         {type: 'separator'},
         {
           label: `Check for Updates`,
+          enabled: app.isPackaged,
           click (menuItem, browserWindow) {
             checkForUpdates();
           }

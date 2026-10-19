@@ -3,3 +3,6 @@ npm-debug.log
 dist
 desktop-app/dist
 desktop-app/build
+.git
+.github
+coverage

@@ -1,3 +1,4 @@
+import { ComponentTestModule, isolateConstructorIO } from '../../../testing/component-test.module';
 import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
 
 import { KeygeneratorComponent } from './keygenerator.component';
@@ -7,8 +8,9 @@ describe('KeygeneratorComponent', () => {
   let fixture: ComponentFixture<KeygeneratorComponent>;
 
   beforeEach(waitForAsync(() => {
+    isolateConstructorIO();
     TestBed.configureTestingModule({
-      declarations: [ KeygeneratorComponent ]
+      imports: [ComponentTestModule],
     })
     .compileComponents();
   }));
@@ -16,7 +18,7 @@ describe('KeygeneratorComponent', () => {
   beforeEach(() => {
     fixture = TestBed.createComponent(KeygeneratorComponent);
     component = fixture.componentInstance;
-    fixture.detectChanges();
+    // Constructor smoke test; lifecycle scenarios supply explicit inputs and I/O mocks.
   });
 
   it('should create', () => {

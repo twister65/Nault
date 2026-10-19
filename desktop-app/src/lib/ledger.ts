@@ -51,7 +51,7 @@ export class LedgerService {
   }
 
   // Reset connection to the ledger device, update the status
-  resetLedger(errorMessage = '') {
+  resetLedger(errorMessage = '', notifyStatus = true) {
     const transport = this.ledger.transport;
     this.ledger.transport = null;
     this.ledger.nano = null;
@@ -61,7 +61,11 @@ export class LedgerService {
         console.warn('Could not close Ledger transport:', error);
       });
     }
-    this.setLedgerStatus(LedgerStatus.NOT_CONNECTED, errorMessage);
+    // The renderer already manages its transport-mode transition. In that
+    // case, notifying "not-connected" before the new USB status arrives would
+    // be consumed as the result of the new get-ledger-status request.
+    if (notifyStatus) this.setLedgerStatus(LedgerStatus.NOT_CONNECTED, errorMessage);
+    else this.ledger.status = LedgerStatus.NOT_CONNECTED;
   }
 
   // Open a connection to the usb device and initialize up the Nano Ledger library
@@ -79,36 +83,7 @@ export class LedgerService {
       return hidTransport;
     }
 
-    return new Promise((resolve, reject) => {
-      // Keep the optional Bluetooth transport lazy-loaded and unchanged.
-      const transport = require('@ledgerhq/hw-transport-node-ble').default;
-      let found = false;
-      const sub = transport.listen({
-        next: async(e) => {
-          found = true;
-          if (sub) sub.unsubscribe();
-          clearTimeout(timeoutId);
-          this.ledger.transport = await transport.open(e.descriptor);
-          this.ledger.nano = new Nano(this.ledger.transport);
-          resolve(this.ledger.transport);
-        },
-        error: (e) => {
-          clearTimeout(timeoutId);
-          reject(e);
-        },
-        complete: () => {
-          clearTimeout(timeoutId);
-          if (!found) {
-            reject(new Error(transport.ErrorMessage_NoDeviceFound));
-          }
-        }
-      })
-
-      const timeoutId = setTimeout(() => {
-        sub.unsubscribe();
-        reject(new Error(transport.ErrorMessage_ListenTimeout));
-      }, this.waitTimeout);
-    });
+    throw new Error('Native Bluetooth is disabled. Use the Web Bluetooth connection button.');
   }
 
   async loadAppConfig(): Promise<any> {
@@ -297,6 +272,12 @@ export function initialize(isTrustedSender: (event: IpcMainEvent) => boolean) {
     sendingWindow = event.sender;
     if (!data || !data.event) return;
     switch (data.event) {
+      case 'disconnect':
+        Ledger.pollingLedger = false;
+        // Explicit transport switching is not a failed USB connection.
+        // Avoid a stale empty status racing the next get-ledger-status reply.
+        Ledger.resetLedger('', false);
+        break;
       case 'get-ledger-status':
         Ledger.loadLedger(data.data.bluetooth);
         break;

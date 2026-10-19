@@ -171,6 +171,8 @@ export class AppSettingsService {
   }
 
   loadServerSettings() {
+    // Credentials belong exclusively to the custom RPC configuration.
+    if (this.settings.serverName !== 'custom') this.settings.serverAuth = null;
     const matchingServerOption = this.serverOptions.find(d => d.value === this.settings.serverName);
 
     if (this.settings.serverName === 'random' || !matchingServerOption) {

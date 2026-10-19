@@ -1,0 +1,73 @@
+name: Windows Web Bluetooth test build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/ledger-bluetooth, fix/ledger-usb-reconnect]
+    paths:
+      - '.github/workflows/windows-bluetooth.yml'
+      - 'desktop-app/windows-bluetooth.json'
+      - 'desktop-app/src/**'
+      - 'src/app/services/ledger*.ts'
+      - 'src/app/components/wallet-widget/**'
+      - 'src/app/components/configure-wallet/**'
+      - 'scripts/test-ledger-bluetooth.js'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      # node-hid 2.x falls back to node-gyp 8, which requires distutils.
+      - uses: actions/setup-python@v5
+        id: python
+        with:
+          python-version: '3.11'
+      - name: Install locked dependencies and Windows native binaries
+        env:
+          npm_config_python: ${{ steps.python.outputs.python-path }}
+        run: npm ci --legacy-peer-deps --include=optional --no-audit --no-fund
+      - name: Compile application
+        env:
+          NODE_OPTIONS: --openssl-legacy-provider
+        run: npm run desktop:build
+      - name: Bluetooth regression tests
+        run: node scripts/test-ledger-bluetooth.js
+      - name: Package Windows x64 ZIP
+        run: npx --no-install electron-builder --config desktop-app/windows-bluetooth.json --win --x64 --publish never
+      - name: Verify packaged files and native modules under Electron
+        shell: pwsh
+        run: |
+          $env:ELECTRON_RUN_AS_NODE = '1'
+          $app = (Resolve-Path 'desktop-app/build-windows/win-unpacked/resources/app.asar').Path
+          $env:NAULT_SMOKE_APP = $app
+          & 'desktop-app/build-windows/win-unpacked/Nault.exe' -e "const fs=require('fs'); const p=require('path'); const app=process.env.NAULT_SMOKE_APP; for(const f of ['dist/index.html','desktop-app/dist/desktop-app.js','desktop-app/dist/preload.js']) { if(!fs.existsSync(p.join(app,f))) throw Error('Missing '+f); } const r=require('module').createRequire(p.join(app,'package.json')); r('node-hid'); r('usb'); r('@ledgerhq/hw-transport-node-hid'); console.log('Packaged native modules loaded under Electron',process.versions.electron);"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Record source revision and SHA256
+        shell: pwsh
+        run: |
+          $zip = 'desktop-app/build-windows/Nault-WebBluetooth-Windows-x64.zip'
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  Nault-WebBluetooth-Windows-x64.zip" | Set-Content 'desktop-app/build-windows/SHA256SUMS.txt'
+          "Source: $env:GITHUB_REPOSITORY`nCommit: $env:GITHUB_SHA`nUnsigned Windows x64 test build. Extract the full ZIP, then launch Nault.exe." | Set-Content 'desktop-app/build-windows/BUILD.txt'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nault-WebBluetooth-Windows-x64
+          path: |
+            desktop-app/build-windows/Nault-WebBluetooth-Windows-x64.zip
+            desktop-app/build-windows/SHA256SUMS.txt
+            desktop-app/build-windows/BUILD.txt
+          if-no-files-found: error
+          retention-days: 14

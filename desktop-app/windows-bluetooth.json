@@ -1,0 +1,16 @@
+{
+  "appId": "cc.nault",
+  "productName": "Nault",
+  "directories": {
+    "output": "desktop-app/build-windows",
+    "buildResources": "desktop-app/assets"
+  },
+  "files": ["dist/**/*", "desktop-app/dist/**/*", "package.json"],
+  "npmRebuild": false,
+  "publish": null,
+  "win": {
+    "target": [{ "target": "zip", "arch": ["x64"] }],
+    "signAndEditExecutable": false,
+    "artifactName": "Nault-WebBluetooth-Windows-x64.zip"
+  }
+}

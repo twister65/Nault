@@ -4,19 +4,27 @@ on:
   push:
     branches: [ master ]
 
+permissions:
+  contents: read
+
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # GitHub Pages branch push only; other jobs remain read-only.
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      NODE_OPTIONS: --openssl-legacy-provider
     steps:
       - name: Checkout
-        uses: actions/checkout@v2 # If you're using actions/checkout@v2 you must set persist-credentials to false in most cases for the deployment to work correctly.
+        uses: actions/checkout@v7 # If you're using actions/checkout@v7 you must set persist-credentials to false in most cases for the deployment to work correctly.
         with:
           persist-credentials: false
 
       - name: Setup NodeJS
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v7
         with:
-          node-version: 16
+          node-version: 22
 
       - name: Install APT dependencies
         run: |
@@ -27,12 +35,11 @@ jobs:
 
       - name: Install and Build
         run: |
-          npm install
+          npm ci --legacy-peer-deps --no-audit --no-fund
           npm run wallet:build
 
       - name: Deploy to gh-pages
         uses: JamesIves/github-pages-deploy-action@4.0.0
         with:
-          ssh-key: ${{ secrets.DEPLOY_KEY }}
           branch: gh-pages # The branch the action should deploy to.
           folder: dist # The folder the action should deploy.

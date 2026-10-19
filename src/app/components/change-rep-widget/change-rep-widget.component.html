@@ -66,9 +66,10 @@
       <p class="uk-text-warning" *ngIf="rep.status.lowUptime && rep.status.uptime > 0">
         <span uk-icon="icon: warning;"></span>{{ 'change-rep-widget.this-representative-is-sometimes-offline' | transloco: { percent: rep.status.uptime.toFixed(1) } }}
       </p>
-      <p class="uk-text-danger" *ngIf="!rep.status.online && rep.status.uptime === 0">
+      <p class="uk-text-danger" *ngIf="rep.status.online === false && rep.status.uptime === 0">
         <span uk-icon="icon: warning;"></span>{{ 'change-rep-widget.this-representative-has-been-offline-for-the-past-days' | transloco: { days: rep.status.daysSinceLastVoted } }}
       </p>
+      <p class="uk-text-muted" *ngIf="rep.status.online === null">Online representative status unavailable from this server.</p>
       <ng-container [ngSwitch]="true">
         <p *ngSwitchCase="(rep.statusText == 'trusted')">
           {{ 'change-rep-widget.you-have-marked-this-representative-as-trusted' | transloco }}

@@ -1,8 +1,9 @@
 name: Critical dependency audit
 on:
   push:
-    branches: [fix/dependabot-critical]
+    branches: [master, fix/dependabot-critical]
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 jobs:

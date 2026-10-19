@@ -1,207 +1,82 @@
 name: Electron App Release
-
 on:
   push:
+    tags: ['v*']
   pull_request:
-
+  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
-  # Release draft and share app version via package.json
-  pre_build:
-    runs-on: ubuntu-20.04
-    outputs:
-      output1: ${{ steps.release_drafter.outputs.upload_url }}
-      output2: ${{ steps.package-version.outputs.current-version }}
-    steps:
-      - name: Check out Git repository
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/checkout@v1
-
-      - name: Store NPM version
-        if: startsWith(github.ref, 'refs/tags/')
-        id: package-version
-        uses: martinbeentjes/npm-get-version-action@master
-
-      - uses: release-drafter/release-drafter@v5
-        if: startsWith(github.ref, 'refs/tags/')
-        id: release_drafter
-        with:
-          name: ${{ steps.package-version.outputs.current-version }}
-          tag: v${{ steps.package-version.outputs.current-version }}
-          version: ${{ steps.package-version.outputs.current-version }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   release:
+    name: Package (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.experimental }}
-
-    # Run different jobs for each OS
+    timeout-minutes: 40
+    env:
+      NODE_OPTIONS: --openssl-legacy-provider
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-20.04
-            artifact_name: checksums
-            asset_name: checksums
-            app_ext: AppImage
-            app_os: linux
-            experimental: false
-          - os: macos-11
-            artifact_name: checksums
-            asset_name: checksums
-            app_ext: dmg
-            app_os: mac
-            experimental: false
-          - os: windows-2022
-            artifact_name: checksums
-            asset_name: checksums
-            app_ext: exe
-            app_os: windows
-            experimental: true
-
-    needs: pre_build # job dependency and shared variables
+        os: [ubuntu-24.04, macos-15-intel, windows-2022]
     steps:
-      - name: Check out Git repository
-        uses: actions/checkout@v1
-
-      - name: Install Node.js, NPM and Yarn
-        uses: actions/setup-node@v3
+      - uses: actions/checkout@v7
         with:
-          node-version: 16
-          cache: 'npm'
-
-      - name: Install APT dependencies
-        if: matrix.os == 'ubuntu-20.04'
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Set up Python with distutils for legacy node-gyp
+        if: runner.os != 'Linux'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Linux build libraries
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential git -y
-          sudo apt-get install libudev-dev -y
-          sudo apt-get install libusb-1.0-0-dev -y
-
-      - name: Install and Build Desktop App
+          sudo apt-get install -y build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Install locked dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Build and package without publishing
         run: |
-          npm install -g @angular/cli
-          npm install
           npm run desktop:build
-
-      - name: Build Electron app
-        run: |
-          npm run desktop:local --openssl_fips=''
-
-      - name: Create Hashes
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          openssl sha1 desktop-app/build/*.${{ matrix.app_ext }}       | tee -a desktop-app/build/${{ matrix.artifact_name }} 
-          openssl md5 desktop-app/build/*.${{ matrix.app_ext }}        | tee -a desktop-app/build/${{ matrix.artifact_name }} 
-          openssl sha256 desktop-app/build/*.${{ matrix.app_ext }}     | tee -a desktop-app/build/${{ matrix.artifact_name }} 
-          openssl sha512 desktop-app/build/*.${{ matrix.app_ext }}     | tee -a desktop-app/build/${{ matrix.artifact_name }} 
-          openssl sha3-512 desktop-app/build/*.${{ matrix.app_ext }}   | tee -a desktop-app/build/${{ matrix.artifact_name }} 
-          openssl blake2b512 desktop-app/build/*.${{ matrix.app_ext }} | tee -a desktop-app/build/${{ matrix.artifact_name }} 
-        shell: bash
-
-      - name: Rename file paths in .yml (Linux)
-        if: matrix.os == 'ubuntu-20.04' && startsWith(github.ref, 'refs/tags/')
-        run: |
-          sed -i '/.AppImage/ s//-Linux.AppImage/g' desktop-app/build/latest-linux.yml | bash
-        shell: bash
-
-      # Special sed command for mac
-      - name: Rename file paths in .yml (Mac)
-        if: matrix.os == 'macos-11' && startsWith(github.ref, 'refs/tags/')
-        run: |
-          sed -i '' '/.dmg/ s//-Mac.dmg/g' desktop-app/build/latest-mac.yml
-        shell: bash
-
-      - name: Rename file paths in .yml (Windows)
-        if: matrix.os == 'windows-2022' && startsWith(github.ref, 'refs/tags/')
-        run: |
-          sed -i '/.exe/ s//-Windows.exe/g' desktop-app/build/latest.yml | bash
-        shell: bash
-
-      # Upload binaries separately for better control which release draft they go into
-      - name: Upload Binaries Linux
-        if: matrix.os == 'ubuntu-20.04' && startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm run desktop:local
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
         with:
-          upload_url: ${{ needs.pre_build.outputs.output1 }} # This pulls ID from the Release Drafter step
-          asset_path: desktop-app/build/Nault-${{ needs.pre_build.outputs.output2 }}.${{ matrix.app_ext }}
-          asset_name: Nault-${{ needs.pre_build.outputs.output2 }}-Linux.${{ matrix.app_ext }}
-          asset_content_type: application/octet-stream
-
-      - name: Upload Binaries Mac
-        if: matrix.os == 'macos-11' && startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.pre_build.outputs.output1 }} # This pulls ID from the Release Drafter step
-          asset_path: desktop-app/build/Nault-${{ needs.pre_build.outputs.output2 }}.${{ matrix.app_ext }}
-          asset_name: Nault-${{ needs.pre_build.outputs.output2 }}-Mac.${{ matrix.app_ext }}
-          asset_content_type: application/octet-stream
-
-      - name: Upload Binaries Windows
-        if: matrix.os == 'windows-2022' && startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.pre_build.outputs.output1 }} # This pulls ID from the Release Drafter step
-          asset_path: desktop-app/build/Nault Setup ${{ needs.pre_build.outputs.output2 }}.${{ matrix.app_ext }}
-          asset_name: Nault-Setup-${{ needs.pre_build.outputs.output2 }}-Windows.${{ matrix.app_ext }}
-          asset_content_type: application/octet-stream
-
-      - name: Upload Checksums
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.pre_build.outputs.output1 }} # This pulls ID from the Release Drafter step
-          asset_path: desktop-app/build/${{ matrix.artifact_name }}
-          asset_name: ${{ matrix.asset_name }}-${{ needs.pre_build.outputs.output2}}-${{ matrix.app_os }}.txt
-          asset_content_type: application/octet-stream
-
-      - name: Upload yml Linux
-        if: matrix.os == 'ubuntu-20.04' && startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.pre_build.outputs.output1 }} # This pulls ID from the Release Drafter step
-          asset_path: desktop-app/build/latest-linux.yml
-          asset_name: latest-linux.yml
-          asset_content_type: application/octet-stream
-
-      - name: Upload yml Mac
-        if: matrix.os == 'macos-11' && startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.pre_build.outputs.output1 }} # This pulls ID from the Release Drafter step
-          asset_path: desktop-app/build/latest-mac.yml
-          asset_name: latest-mac.yml
-          asset_content_type: application/octet-stream
-
-      - name: Upload yml Windows
-        if: matrix.os == 'windows-2022' && startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.pre_build.outputs.output1 }} # This pulls ID from the Release Drafter step
-          asset_path: desktop-app/build/latest.yml
-          asset_name: latest.yml
-          asset_content_type: application/octet-stream
-
-      # Artifacts are always uploaded. Both untagged pushes and PRs
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.os }}
+          name: desktop-${{ matrix.os }}
+          if-no-files-found: error
           path: |
             desktop-app/build/*.AppImage
             desktop-app/build/*.dmg
             desktop-app/build/*.exe
+            desktop-app/build/*.yml
+            desktop-app/build/*.blockmap
+  draft-release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: desktop-*
+          path: packages
+          merge-multiple: true
+      - name: Create or update a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > draft-state; then
+            test "$(cat draft-state)" = true
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --draft --title "$RELEASE_TAG" --notes 'Desktop build artifacts; validation required before publication.'
+          fi
+          (cd packages && sha256sum * > SHA256SUMS)
+          gh release upload "$RELEASE_TAG" packages/* --clobber

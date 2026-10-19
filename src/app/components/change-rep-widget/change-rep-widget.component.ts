@@ -55,7 +55,7 @@ export class ChangeRepWidgetComponent implements OnInit {
     // Detect if a new open block is received
     this.blockService.newOpenBlock$.subscribe(async shouldReload => {
       if (shouldReload) {
-        await this.repService.getRepresentativesOverview(); // calls walletReps$.next
+        await this.refreshRepresentatives(); // calls walletReps$.next
       }
     });
 
@@ -72,7 +72,17 @@ export class ChangeRepWidgetComponent implements OnInit {
 
     this.selectedAccount = this.walletService.wallet.selectedAccount;
     this.updateSelectedAccountHasRep();
-    await this.repService.getRepresentativesOverview(); // calls walletReps$.next
+    await this.refreshRepresentatives(); // calls walletReps$.next
+  }
+
+  private async refreshRepresentatives() {
+    try {
+      await this.repService.getRepresentativesOverview();
+    } catch (_) {
+      console.warn('Unable to refresh representative information.');
+    } finally {
+      this.initialLoadComplete = true;
+    }
   }
 
   async resetRepresentatives() {
@@ -83,7 +93,7 @@ export class ChangeRepWidgetComponent implements OnInit {
     this.changeableRepresentatives = [];
     this.showRepChangeRequired = false;
     this.updateDisplayedRepresentatives();
-    await this.repService.getRepresentativesOverview(); // calls walletReps$.next
+    await this.refreshRepresentatives(); // calls walletReps$.next
     console.log('Representatives reloaded');
   }
 

@@ -3,7 +3,8 @@ import Nano from 'hw-app-nano';
 import TransportU2F from '@ledgerhq/hw-transport-u2f';
 import TransportUSB from '@ledgerhq/hw-transport-webusb';
 import TransportHID from '@ledgerhq/hw-transport-webhid';
-import TransportBLE from '@ledgerhq/hw-transport-web-ble';
+import TransportBLE from './ledger-web-ble';
+import { handleLedgerBleControl } from './ledger-ble-control';
 import Transport from '@ledgerhq/hw-transport';
 import {Subject} from 'rxjs';
 import {ApiService} from './api.service';
@@ -61,6 +62,12 @@ export class LedgerService {
   // isDesktop = true;
   isDesktop = environment.desktop;
   queryingDesktopLedger = false;
+  private bluetoothConnecting = false;
+  private bluetoothGeneration = 0;
+
+  get usesDesktopUsb() {
+    return this.isDesktop && this.transportMode !== 'Bluetooth';
+  }
 
   supportsU2F = false;
   supportsWebHID = false;
@@ -91,8 +98,14 @@ export class LedgerService {
 
   // Scraps binding to any existing transport/nano object
   resetLedger() {
+    const transport = this.ledger.transport;
     this.ledger.transport = null;
     this.ledger.nano = null;
+    this.pollingLedger = false;
+    this.bluetoothGeneration++;
+    if (transport) {
+      Promise.resolve(transport.close()).catch(() => {});
+    }
   }
 
   /**
@@ -102,7 +115,7 @@ export class LedgerService {
   configureDesktop() {
     this.desktop.connect();
     this.desktop.on('ledger', (event, message) => {
-      if (!message || !message.event) return;
+      if (!message || !message.event || !this.usesDesktopUsb) return;
       switch (message.event) {
         case 'ledger-status':
           this.ledger.status = message.data.status;
@@ -117,7 +130,12 @@ export class LedgerService {
       }
     });
     this.supportsUSB = true;
-    this.supportsBluetooth = true;
+    TransportBLE.isSupported().then(supported => {
+      this.supportsBluetooth = supported;
+      if (supported && this.appSettings.getAppSetting('ledgerReconnect') === 'bluetooth') {
+        this.enableBluetoothMode(true);
+      }
+    });
   }
 
   /**
@@ -157,11 +175,22 @@ export class LedgerService {
    * @param enabled   The bluetooth enabled state
    */
   enableBluetoothMode(enabled: boolean) {
+    if ((this.transportMode === 'Bluetooth') !== enabled) {
+      this.resetLedger();
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      if (this.isDesktop) this.desktop.send('ledger', { event: 'disconnect' });
+    }
     if (this.supportsBluetooth && enabled) {
       this.transportMode = 'Bluetooth';
       this.DynamicTransport = TransportBLE;
+      // Remember an explicit Bluetooth selection even if first-time pairing
+      // fails. Otherwise restarting Nault silently falls back to native USB,
+      // and clicking Reconnect reports the misleading "NoDevice" error.
+      if (this.isDesktop) this.appSettings.setAppSetting('ledgerReconnect', 'bluetooth');
     } else {
       this.detectUsbTransport();
+      // An explicit switch back to USB must also update the saved mode.
+      if (this.isDesktop && !enabled) this.appSettings.setAppSetting('ledgerReconnect', 'usb');
     }
   }
 
@@ -278,7 +307,8 @@ export class LedgerService {
    * @param {boolean} hideNotifications
    * @returns {Promise<any>}
    */
-  async loadLedger(hideNotifications = false) {
+  async loadLedger(hideNotifications = false, forceBluetoothReconnect = false) {
+    if (this.transportMode === 'Bluetooth') return this.loadWebBluetooth(hideNotifications, forceBluetoothReconnect);
     return new Promise(async (resolve, reject) => {
 
       // Desktop is handled completely differently.  Send a message for status instead of setting anything up
@@ -399,6 +429,110 @@ export class LedgerService {
 
   }
 
+  private async loadWebBluetooth(hideNotifications: boolean, forceReconnect = false) {
+    if (this.bluetoothConnecting) return false;
+    // Explicit user reconnect always discards the old session, even if Chromium
+    // still reports GATT connected after a dropped radio link.
+    if (forceReconnect && this.ledger.transport) {
+      // Close the previous GATT session before Chromium starts a new one.
+      // resetLedger() normally closes in the background; that can race
+      // with requestDevice() and the next MTU negotiation.
+      const staleTransport = this.ledger.transport;
+      this.ledger.transport = null;
+      this.ledger.nano = null;
+      this.pollingLedger = false;
+      this.bluetoothGeneration++;
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      try {
+        await staleTransport.close();
+        console.info('[Ledger BLE] previous GATT session closed before reconnect');
+      } catch (error) {
+        console.warn('[Ledger BLE] previous GATT close failed', error);
+      }
+    }
+    // Device selection requires a deliberate click, including after disconnect.
+    const activation = (navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation;
+    if (!this.ledger.transport && activation && !activation.isActive) {
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      this.ledgerStatus$.next({ status: this.ledger.status, statusText: 'Click Reconnect to select your Ledger via Bluetooth.' });
+      return false;
+    }
+    // Never reuse a dead GATT session, including when a disconnect event
+    // was missed and the UI still reports READY.
+    const previous = this.ledger.transport as TransportBLE | null;
+    if (previous && (this.ledger.status !== LedgerStatus.READY ||
+        !previous.device || !previous.device.gatt || !previous.device.gatt.connected)) {
+      this.resetLedger();
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
+    }
+    this.bluetoothConnecting = true;
+    console.info('[Ledger BLE] reconnect started', { forceReconnect, hadTransport: !!previous });
+    const generation = this.bluetoothGeneration;
+    let timeout;
+    let active = true;
+    const connect = async () => {
+      if (!this.ledger.transport) {
+        console.info('[Ledger BLE] requesting device and opening GATT');
+        const transport = await TransportBLE.create(90000, 60000) as TransportBLE;
+        console.info('[Ledger BLE] GATT and MTU ready');
+        if (!active || generation !== this.bluetoothGeneration) {
+          await transport.close();
+          throw new Error('Bluetooth connection cancelled');
+        }
+        handleLedgerBleControl(transport);
+        this.ledger.transport = transport;
+        this.ledger.nano = new Nano(transport);
+        transport.on('disconnect', () => {
+          if (this.ledger.transport !== transport) return;
+          this.resetLedger();
+          this.ledger.status = LedgerStatus.NOT_CONNECTED;
+          this.ledgerStatus$.next({ status: this.ledger.status, statusText: 'Ledger Bluetooth disconnected. Click Reconnect.' });
+        });
+      }
+      console.info('[Ledger BLE] reading Nano app configuration');
+      await this.ledger.nano.getAppConfiguration();
+      console.info('[Ledger BLE] reading account address');
+      await this.ledger.nano.getAddress(this.ledgerPath(0), false);
+      console.info('[Ledger BLE] account address read successfully');
+    };
+    try {
+      await Promise.race([
+        connect(),
+        new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('Bluetooth connection timed out')), 90000); })
+      ]);
+      if (generation !== this.bluetoothGeneration) return false;
+      console.info('[Ledger BLE] reconnect successful');
+      this.appSettings.setAppSetting('ledgerReconnect', 'bluetooth');
+      this.ledger.status = LedgerStatus.READY;
+      this.ledgerStatus$.next({ status: this.ledger.status, statusText: 'Nano Ledger application connected via Bluetooth' });
+      if (!this.pollingLedger) {
+        this.pollingLedger = true;
+        this.pollLedgerStatus();
+      }
+      return true;
+    } catch (error) {
+      console.error('[Ledger BLE] reconnect failed', error);
+      if (generation !== this.bluetoothGeneration) return false;
+      this.resetLedger();
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      const detail = String(error && (error.message || error) || '');
+      const adapterUnavailable = error && error.name === 'TransportOpenUserCancelled' &&
+        /bluetooth adapter not available|adapter not available|bluetooth unavailable|bluetooth is disabled/i.test(detail);
+      const message = adapterUnavailable
+        ? 'Bluetooth unavailable. Check Bluetooth on your computer and Ledger, or choose Reconnect via USB.'
+        : error && error.name === 'TransportOpenUserCancelled'
+          ? 'Bluetooth selection cancelled'
+          : `Bluetooth connection failed: ${detail}`;
+      this.ledgerStatus$.next({ status: this.ledger.status, statusText: message });
+      if (!hideNotifications) this.notifications.sendWarning(message);
+      return false;
+    } finally {
+      active = false;
+      clearTimeout(timeout);
+      this.bluetoothConnecting = false;
+    }
+  }
+
   async updateCache(accountIndex, blockHash) {
     if (this.ledger.status !== LedgerStatus.READY) {
       await this.loadLedger(); // Make sure ledger is ready
@@ -415,7 +549,7 @@ export class LedgerService {
       sourceBlock: blockData.contents.link,
     };
 
-    if (this.isDesktop) {
+    if (this.usesDesktopUsb) {
       return await this.updateCacheDesktop(accountIndex, cacheData, blockData.contents.signature);
     } else {
       return await this.ledger.nano.cacheBlock(this.ledgerPath(accountIndex), cacheData, blockData.contents.signature);
@@ -434,7 +568,7 @@ export class LedgerService {
       sourceBlock: blockData.link,
     };
 
-    if (this.isDesktop) {
+    if (this.usesDesktopUsb) {
       return await this.updateCacheDesktop(accountIndex, cacheData, blockData.signature);
     } else {
       return await this.ledger.nano.cacheBlock(this.ledgerPath(accountIndex), cacheData, blockData.signature);
@@ -445,7 +579,7 @@ export class LedgerService {
     if (this.ledger.status !== LedgerStatus.READY) {
       await this.loadLedger(); // Make sure ledger is ready
     }
-    if (this.isDesktop) {
+    if (this.usesDesktopUsb) {
       return await this.signBlockDesktop(accountIndex, blockData);
     } else {
       return await this.ledger.nano.signBlock(this.ledgerPath(accountIndex), blockData);
@@ -465,7 +599,7 @@ export class LedgerService {
   }
 
   async getLedgerAccount(accountIndex: number, showOnScreen = false) {
-    if (this.isDesktop) {
+    if (this.usesDesktopUsb) {
       return await this.getLedgerAccountDesktop(accountIndex, showOnScreen);
     } else {
       return await this.getLedgerAccountWeb(accountIndex, showOnScreen);
@@ -474,9 +608,11 @@ export class LedgerService {
 
   pollLedgerStatus() {
     if (!this.pollingLedger) return;
+    const generation = this.bluetoothGeneration;
     setTimeout(async () => {
-      if (!this.pollingLedger) return;
+      if (!this.pollingLedger || generation !== this.bluetoothGeneration) return;
       await this.checkLedgerStatus();
+      if (generation !== this.bluetoothGeneration) return;
       this.pollLedgerStatus();
     }, this.transportMode === 'U2F' ? this.u2fPollInterval : this.pollInterval);
   }
@@ -486,21 +622,26 @@ export class LedgerService {
       return;
     }
 
+    const generation = this.bluetoothGeneration;
     try {
       const accountDetails = await this.getLedgerAccount(0);
+      if (generation !== this.bluetoothGeneration) return;
       this.ledger.status = LedgerStatus.READY;
     } catch (err) {
-      // Ignore race condition error, which means an action is pending on the ledger (such as block confirmation)
-      if (err.name !== 'TransportRaceCondition') {
-        console.log('Check ledger status failed ', JSON.stringify(err));
-        if (err.statusCode === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
-          this.ledger.status = LedgerStatus.LOCKED;
-        } else {
-          this.ledger.status = LedgerStatus.NOT_CONNECTED;
-        }
-        this.pollingLedger = false;
-        this.resetLedger();
+      if (generation !== this.bluetoothGeneration) return;
+      // App methods hold TransportLocked throughout device confirmation;
+      // exchange-level contention uses TransportRaceCondition. Neither means
+      // the device disconnected: resetting here interrupts the pending signature.
+      if (err.name === 'TransportRaceCondition' || err.id === 'TransportRaceCondition' ||
+          err.id === 'TransportLocked') return;
+      console.log('Check ledger status failed ', JSON.stringify(err));
+      if (err.statusCode === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
+        this.ledger.status = LedgerStatus.LOCKED;
+      } else {
+        this.ledger.status = LedgerStatus.NOT_CONNECTED;
       }
+      this.pollingLedger = false;
+      this.resetLedger();
     }
 
     this.ledgerStatus$.next({ status: this.ledger.status, statusText: `` });
