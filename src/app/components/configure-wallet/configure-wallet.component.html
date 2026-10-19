@@ -314,12 +314,13 @@
       <div class="uk-width-1-1">
         <h3>Use Ledger Hardware Wallet</h3>
         <div *ngIf="ledger.status === ledgerStatus.NOT_CONNECTED">
-          <p>Make sure you have the nano app installed and running on your Ledger, then click one of the buttons below to connect via either USB or Bluetooth.</p>
+          <p *ngIf="!ledgerService.isAndroidWeb">Make sure you have the nano app installed and running on your Ledger, then click one of the buttons below to connect via either USB or Bluetooth.</p>
+          <p *ngIf="ledgerService.isAndroidWeb">Make sure the Nano app is running on your Ledger, then connect via Bluetooth. USB Ledger connections are disabled on Android.</p>
           <p *ngIf="!ledgerService.isDesktop && !ledgerService.supportsBluetooth">Bluetooth is currently not supported by your browser, please use Chrome, Edge, Opera or Brave</p>
           <p><a href="https://docs.nault.cc/2020/08/04/ledger-guide.html" target="_blank" rel="noopener noreferrer">Ledger/Nault User Guide and Troubleshooting</a></p>
           <br>
         </div>
-        <div *ngIf="!ledgerService.supportsUSB">
+        <div *ngIf="!ledgerService.supportsUSB && !ledgerService.isAndroidWeb">
           <div class="uk-alert uk-alert-warning nlt-inline-alert">
             <div class="icon-column">
               <div uk-icon="icon: warning; ratio: 2;"></div>
@@ -331,7 +332,7 @@
             </p>
           </div>
         </div>
-        <div *ngIf="ledgerService.supportsUSB">
+        <div *ngIf="ledgerService.supportsUSB || ledgerService.isAndroidWeb">
           <div *ngIf="ledger.status === ledgerStatus.NOT_CONNECTED">
             <div class="uk-alert uk-alert-warning nlt-inline-alert">
               <div class="icon-column">
@@ -413,7 +414,7 @@
     <button *ngIf="selectedImportOption === 'mnemonic'" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="setPasswordInit()">Import From Mnemonic</button>
     <button *ngIf="selectedImportOption === 'bip39-mnemonic'" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" [disabled]="!validIndex" (click)="setPasswordInit()">Import From Mnemonic</button>
     <button *ngIf="selectedImportOption === 'seed'" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="setPasswordInit()">Import From Seed</button>
-    <button *ngIf="selectedImportOption === 'ledger' && ledger.status === ledgerStatus.NOT_CONNECTED" [disabled]="!ledgerService.supportsUSB" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="connectLedgerByUsb()">Connect via USB</button>
+    <button *ngIf="selectedImportOption === 'ledger' && ledger.status === ledgerStatus.NOT_CONNECTED && !ledgerService.isAndroidWeb" [disabled]="!ledgerService.supportsUSB" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="connectLedgerByUsb()">Connect via USB</button>
     <button *ngIf="selectedImportOption === 'ledger' && ledger.status === ledgerStatus.NOT_CONNECTED" [disabled]="!ledgerService.supportsBluetooth" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="connectLedgerByBluetooth()">Connect via Bluetooth</button>
     <button *ngIf="selectedImportOption === 'ledger' && ledger.status !== ledgerStatus.NOT_CONNECTED" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="importLedgerWallet(true)">Refresh Ledger Status</button>
     <button *ngIf="selectedImportOption === 'privateKey'" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="setPasswordInit()">Import From Private Key</button>

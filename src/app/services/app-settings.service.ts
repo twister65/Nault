@@ -99,13 +99,22 @@ export class AppSettingsService {
       api: 'https://node.somenano.com/proxy',
       ws: 'wss://node.somenano.com/websocket',
       auth: null,
-      shouldRandom: true,
+      shouldRandom: false,
     },
     {
       name: 'SpyNano (New Node - Use with caution)',
       value: 'spynano',
       api: 'https://node.spynano.org/proxy',
       ws: 'wss://node.spynano.org/websocket',
+      auth: null,
+      shouldRandom: false,
+    },
+    {
+      // Optional personal node, excluded from random selection while RPC is being repaired.
+      name: 'Twister32 RsNano (test only)',
+      value: 'twister32-rsnano',
+      api: 'https://twister32.changeip.net/proxy',
+      ws: 'wss://twister32.changeip.net/ws',
       auth: null,
       shouldRandom: false,
     },

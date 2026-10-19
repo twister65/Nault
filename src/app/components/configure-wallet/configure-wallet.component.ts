@@ -137,6 +137,7 @@ export class ConfigureWalletComponent implements OnInit {
   }
 
   async connectLedgerByUsb() {
+    if (this.ledgerService.isAndroidWeb) return; // The Android browser uses Ledger Bluetooth only.
     this.ledgerService.enableBluetoothMode(false);
     await this.importLedgerWallet();
   }
