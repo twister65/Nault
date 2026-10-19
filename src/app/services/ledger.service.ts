@@ -41,6 +41,11 @@ export interface LedgerLog {
   date: Date;
 }
 
+// This app uses Web Bluetooth, rather than experimental WebUSB, on Android browsers.
+export function isAndroidBrowser(userAgent: string): boolean {
+  return /\bAndroid\b/i.test(userAgent || '');
+}
+
 const zeroBlock = '0000000000000000000000000000000000000000000000000000000000000000';
 
 @Injectable()
@@ -61,6 +66,7 @@ export class LedgerService {
 
   // isDesktop = true;
   isDesktop = environment.desktop;
+  readonly isAndroidWeb = !this.isDesktop && typeof navigator !== 'undefined' && isAndroidBrowser(navigator.userAgent);
   queryingDesktopLedger = false;
   private bluetoothConnecting = false;
   private bluetoothGeneration = 0;
@@ -89,7 +95,8 @@ export class LedgerService {
       this.configureDesktop();
     } else {
       this.checkBrowserSupport().then(() => {
-        if (appSettings.getAppSetting('ledgerReconnect') === 'bluetooth') {
+        // Android web builds always use Bluetooth when available; never fall back to USB.
+        if (this.supportsBluetooth && (this.isAndroidWeb || appSettings.getAppSetting('ledgerReconnect') === 'bluetooth')) {
           this.enableBluetoothMode(true);
         }
       });
@@ -148,7 +155,7 @@ export class LedgerService {
       TransportUSB.isSupported().then(supported => this.supportsWebUSB = supported),
       TransportBLE.isSupported().then(supported => this.supportsBluetooth = supported),
     ]);
-    this.supportsUSB = this.supportsU2F || this.supportsWebHID || this.supportsWebUSB;
+    this.supportsUSB = !this.isAndroidWeb && (this.supportsU2F || this.supportsWebHID || this.supportsWebUSB);
   }
 
   /**
@@ -175,6 +182,8 @@ export class LedgerService {
    * @param enabled   The bluetooth enabled state
    */
   enableBluetoothMode(enabled: boolean) {
+    // Disallow accidental USB selection from old wallet state or indirect UI paths.
+    if (this.isAndroidWeb && !enabled) return;
     if ((this.transportMode === 'Bluetooth') !== enabled) {
       this.resetLedger();
       this.ledger.status = LedgerStatus.NOT_CONNECTED;
@@ -308,6 +317,14 @@ export class LedgerService {
    * @returns {Promise<any>}
    */
   async loadLedger(hideNotifications = false, forceBluetoothReconnect = false) {
+    if (this.isAndroidWeb && this.transportMode !== 'Bluetooth') {
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      this.ledgerStatus$.next({
+        status: this.ledger.status,
+        statusText: 'USB Ledger connection is disabled on Android. Connect via Bluetooth.'
+      });
+      return false;
+    }
     if (this.transportMode === 'Bluetooth') return this.loadWebBluetooth(hideNotifications, forceBluetoothReconnect);
     return new Promise(async (resolve, reject) => {
 
