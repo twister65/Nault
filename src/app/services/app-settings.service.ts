@@ -110,6 +110,15 @@ export class AppSettingsService {
       shouldRandom: false,
     },
     {
+      // Optional personal node, excluded from random selection while RPC is being repaired.
+      name: 'Twister32 RsNano (test only)',
+      value: 'twister32-rsnano',
+      api: 'https://twister32.changeip.net/proxy',
+      ws: 'wss://twister32.changeip.net/ws',
+      auth: null,
+      shouldRandom: false,
+    },
+    {
       name: 'Custom',
       value: 'custom',
       api: null,
