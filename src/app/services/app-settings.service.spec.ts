@@ -23,4 +23,13 @@ describe('AppSettingsService', () => {
     expect(server.ws).toBe('wss://twister32.changeip.net/ws');
     expect(server.shouldRandom).toBe(false);
   }));
+
+  it('only rotates among tested public nodes', inject([AppSettingsService], (service: AppSettingsService) => {
+    const active = service.serverOptions.filter(server => server.shouldRandom).map(server => server.value);
+    expect(active).toEqual(['berrypay', 'rainstorm', 'nanoslo']);
+    ['somenano', 'spynano', 'twister32-rsnano'].forEach(name => {
+      expect(active).not.toContain(name);
+      expect(service.serverOptions.some(server => server.value === name)).toBe(true);
+    });
+  }));
 });
