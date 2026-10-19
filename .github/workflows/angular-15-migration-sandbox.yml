@@ -1,0 +1,56 @@
+name: Upgrade Angular 14 to 15 sandbox
+on:
+  push:
+    branches: ['upgrade/angular-15']
+permissions:
+  contents: write
+jobs:
+  migrate:
+    if: github.repository == 'twister65/Nault' && startsWith(github.event.head_commit.message, 'ci(angular15)')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: 'upgrade/angular-15'
+          persist-credentials: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '16.20.2'
+          cache: npm
+      - name: Build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Install tested Angular 14 dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Execute Angular 15 official migration schematics
+        run: ./node_modules/.bin/ng update @angular/cli@15 @angular/core@15 --force
+      - name: Align Angular ESLint 15
+        run: |
+          npm install --save-dev --legacy-peer-deps --no-audit --no-fund \
+            @angular-eslint/builder@15 \
+            @angular-eslint/eslint-plugin@15 \
+            @angular-eslint/eslint-plugin-template@15 \
+            @angular-eslint/schematics@15 \
+            @angular-eslint/template-parser@15
+      - name: Check Angular and TypeScript versions
+        run: |
+          node -e "const p=require('./package.json'); console.log({angular:p.dependencies['@angular/core'],cli:p.devDependencies['@angular/cli'],ts:p.devDependencies.typescript}); if (!/^(\^|~)?15\./.test(p.dependencies['@angular/core'])) process.exit(1);"
+          ./node_modules/.bin/ng version
+      - name: Commit migration outputs only to experimental branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "build(angular): migrate framework, CLI and ESLint from 14 to 15"
+            git push origin HEAD:upgrade/angular-15
+          fi
+      - name: Test Angular 15 Web production build
+        run: npm run wallet:build
