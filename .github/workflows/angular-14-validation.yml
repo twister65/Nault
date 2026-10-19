@@ -1,0 +1,42 @@
+name: Validate Angular 14 migration
+on:
+  push:
+    branches: ['upgrade/angular-14']
+  pull_request:
+    branches: [master]
+permissions:
+  contents: read
+concurrency:
+  group: angular14-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    if: github.repository == 'twister65/Nault'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '16.20.2'
+          cache: npm
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Reinstall strictly from the Angular 14 lockfile
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Print Angular toolchain and Webpack resolution
+        run: |
+          node -e "const p=require('./package.json'); console.log({angular:p.dependencies['@angular/core'],cli:p.devDependencies['@angular/cli'],ts:p.devDependencies.typescript});"
+          npm ls webpack --depth=1 || true
+          ./node_modules/.bin/ng version
+      - name: Build Angular 14 production Web app
+        run: npm run wallet:build
+      - name: Compile Electron TypeScript
+        run: npm run desktop:compile
+      - name: Test Ledger Web Bluetooth and USB regression
+        run: node scripts/test-ledger-bluetooth.js
