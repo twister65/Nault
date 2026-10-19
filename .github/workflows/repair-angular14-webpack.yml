@@ -6,7 +6,7 @@ permissions:
   contents: write
 jobs:
   repair:
-    if: github.repository == 'twister65/Nault' && github.event.head_commit.message == 'fix(angular14): add top-level Webpack dependency'
+    if: github.repository == 'twister65/Nault' && startsWith(github.event.head_commit.message, 'fix(angular14)')
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
