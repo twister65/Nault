@@ -40,3 +40,15 @@ jobs:
         run: npm run desktop:compile
       - name: Test Ledger Web Bluetooth and USB regression
         run: node scripts/test-ledger-bluetooth.js
+      - name: Run focused Nano / RsNano RPC tests
+        shell: bash
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          export CHROME_BIN
+          npm test -- --main=src/test-rpc.ts --watch=false --browsers=ChromeHeadlessCI --progress=false
+      - name: Run full Angular unit tests
+        shell: bash
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          export CHROME_BIN
+          npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false
