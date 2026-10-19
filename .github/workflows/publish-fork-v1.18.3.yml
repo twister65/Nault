@@ -1,0 +1,148 @@
+name: Publish fork Nault 1.18.3
+on:
+  push:
+    branches: ['release/v1.18.3-publication']
+permissions:
+  contents: read
+concurrency:
+  group: publish-nault-v1.18.3
+  cancel-in-progress: false
+jobs:
+  package:
+    name: Package 1.18.3 (${{ matrix.os }})
+    if: github.repository == 'twister65/Nault'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15-intel, windows-2022]
+    env:
+      NODE_OPTIONS: --openssl-legacy-provider
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Check out exact frozen release source
+        uses: actions/checkout@v7
+        with:
+          ref: '62f6f79a3e37d024893c16a9804a71e8fa18405c'
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Python 3.11 for native dependencies
+        if: runner.os != 'Linux'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Linux native build requirements
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Install frozen dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Verify native tar build APIs
+        run: node scripts/test-build-dependencies.cjs
+      - name: Build Angular desktop and Electron main
+        run: npm run desktop:build
+      - name: Package unsigned desktop application
+        run: npm run desktop:local
+      - name: Upload unsigned OS build
+        uses: actions/upload-artifact@v7
+        with:
+          name: fork-1.18.3-${{ runner.os }}
+          if-no-files-found: error
+          path: |
+            desktop-app/build/*.AppImage
+            desktop-app/build/*.dmg
+            desktop-app/build/*.exe
+            desktop-app/build/*.yml
+            desktop-app/build/*.blockmap
+
+  publish:
+    name: Create verified fork release with checksums
+    needs: package
+    if: github.repository == 'twister65/Nault'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Get release notes and verify GitHub token scope
+        uses: actions/checkout@v7
+        with:
+          ref: 'release/v1.18.3-publication'
+          persist-credentials: false
+      - name: Collect platform builds
+        uses: actions/download-artifact@v8
+        with:
+          pattern: fork-1.18.3-*
+          path: packages
+          merge-multiple: false
+      - name: Normalize asset names and generate actual SHA-256 checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p publish
+          mapfile -t linux < <(find packages/fork-1.18.3-Linux -maxdepth 1 -name '*.AppImage' -type f | sort)
+          mapfile -t mac < <(find packages/fork-1.18.3-macOS -maxdepth 1 -name '*.dmg' -type f | sort)
+          mapfile -t windows < <(find packages/fork-1.18.3-Windows -maxdepth 1 -name '*.exe' -type f | sort)
+          test "${#linux[@]}" -eq 1
+          test "${#mac[@]}" -eq 1
+          test "${#windows[@]}" -eq 1
+
+          linux_out='Nault-1.18.3-Linux.AppImage'
+          mac_out='Nault-1.18.3-Mac.dmg'
+          windows_out='Nault-Setup-1.18.3-Windows.exe'
+          cp "${linux[0]}" "publish/$linux_out"
+          cp "${mac[0]}" "publish/$mac_out"
+          cp "${windows[0]}" "publish/$windows_out"
+
+          (
+            cd publish
+            sha256sum "$linux_out" > checksums-1.18.3-linux.txt
+            sha256sum "$mac_out" > checksums-1.18.3-mac.txt
+            sha256sum "$windows_out" > checksums-1.18.3-windows.txt
+            sha256sum "$linux_out" "$mac_out" "$windows_out" > SHA256SUMS
+          )
+          # Preserve electron-updater metadata, correcting renamed asset references.
+          for os in Linux macOS Windows; do
+            case "$os" in
+              Linux) metadata='latest-linux.yml'; original="${linux[0]}"; renamed="$linux_out";;
+              macOS) metadata='latest-mac.yml'; original="${mac[0]}"; renamed="$mac_out";;
+              Windows) metadata='latest.yml'; original="${windows[0]}"; renamed="$windows_out";;
+            esac
+            source="packages/fork-1.18.3-$os/$metadata"
+            if test -f "$source"; then
+              sed "s|$(basename "$original")|$renamed|g" "$source" > "publish/$metadata"
+            fi
+          done
+          echo 'Verifying final binary checksums:'
+          (cd publish && sha256sum -c SHA256SUMS)
+          echo 'Exact assets for publication:'
+          ls -lh publish/
+      - name: Create release tag at the already-tested master commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GH_REPO/git/ref/tags/v1.18.3" >/dev/null 2>&1; then
+            echo '::error::Tag v1.18.3 already exists; publication stopped to prevent overwriting'
+            exit 1
+          fi
+          gh api -X POST "repos/$GH_REPO/git/refs" -f ref='refs/tags/v1.18.3' -f sha='62f6f79a3e37d024893c16a9804a71e8fa18405c' --silent
+          gh api "repos/$GH_REPO/git/ref/tags/v1.18.3" --jq '.object.sha' | grep -Fx '62f6f79a3e37d024893c16a9804a71e8fa18405c'
+      - name: Publish 1.18.3 release after all platform builds passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create 'v1.18.3' --verify-tag --draft --title '1.18.3 (twister65 fork)' --notes-file '.github/release-notes-v1.18.3.md'
+          gh release upload 'v1.18.3' publish/* --clobber
+          gh release edit 'v1.18.3' --draft=false --prerelease=false
+          gh release view 'v1.18.3' --json name,isDraft,isPrerelease,tagName,assets,url
