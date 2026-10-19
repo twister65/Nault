@@ -65,6 +65,11 @@ jobs:
       - name: Build Angular desktop renderer
         run: npm run wallet:build-desktop
 
+      - name: Validate production Web service worker and offline shell
+        run: |
+          npm run wallet:build
+          node --test scripts/test-service-worker-config.test.cjs
+
       - name: Typecheck and compile Electron main/preload
         run: npm run desktop:compile
 

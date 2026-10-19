@@ -30,7 +30,9 @@
   "dataGroups": [
     {
       "name": "coingecko",
-      "urls": ["https://api.coingecko.com/**"],
+      "urls": [
+        "https://api.coingecko.com/**"
+      ],
       "cacheConfig": {
         "maxSize": 3,
         "maxAge": "60d",
@@ -39,12 +41,15 @@
     },
     {
       "name": "ninja",
-      "urls": ["https://mynano.ninja/api/**"],
+      "urls": [
+        "https://mynano.ninja/api/**"
+      ],
       "cacheConfig": {
         "maxSize": 50,
         "maxAge": "60d",
         "strategy": "freshness"
       }
     }
-  ]
+  ],
+  "navigationRequestStrategy": "freshness"
 }
