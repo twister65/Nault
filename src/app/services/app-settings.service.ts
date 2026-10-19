@@ -115,6 +115,8 @@ export class AppSettingsService {
       value: 'twister32-rsnano',
       api: 'https://twister32.changeip.net/proxy',
       ws: 'wss://twister32.changeip.net/ws',
+      // Separate PoW proxy; the RPC endpoint is not a substitute for /pow.
+      work: 'https://twister32.changeip.net/pow',
       auth: null,
       shouldRandom: false,
     },
@@ -205,6 +207,14 @@ export class AppSettingsService {
       this.settings.serverAPI = matchingServerOption.api;
       this.settings.serverWS = matchingServerOption.ws;
     }
+  }
+
+  // Only use a dedicated PoW endpoint when the explicitly selected server
+  // advertises one. Preserve the existing RPC work_generate path for all
+  // other servers and never use a previous custom PoW URL implicitly.
+  getSelectedServerWorkUrl(): string {
+    const selected = this.serverOptions.find(server => server.value === this.settings.serverName);
+    return selected && selected.work ? selected.work : '';
   }
 
   saveAppSettings() {
