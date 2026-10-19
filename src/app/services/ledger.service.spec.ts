@@ -1,7 +1,7 @@
 import { ComponentTestModule, isolateConstructorIO } from '../../testing/component-test.module';
 import { TestBed, inject } from '@angular/core/testing';
 
-import { LedgerService } from './ledger.service';
+import { LedgerService, isAndroidBrowser } from './ledger.service';
 
 describe('LedgerService', () => {
   beforeEach(() => {
