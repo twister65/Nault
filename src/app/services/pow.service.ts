@@ -155,7 +155,10 @@ export class PowService {
     switch (powSource) {
       default:
       case 'server':
-        const serverWork = await this.getHashServer(queueItem.hash, queueItem.multiplier);
+        // A named RPC server may expose PoW at a different URL (e.g. /pow,
+        // while account RPC uses /proxy). All other nodes keep the RPC default.
+        const selectedWorkServer = this.appSettings.getSelectedServerWorkUrl();
+        const serverWork = await this.getHashServer(queueItem.hash, queueItem.multiplier, selectedWorkServer);
         if (serverWork) {
           work.work = serverWork;
           work.state = workState.success;
