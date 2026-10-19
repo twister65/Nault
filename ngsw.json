@@ -1,6 +1,6 @@
 {
   "configVersion": 1,
-  "timestamp": 1792349708910,
+  "timestamp": 1792387963823,
   "index": "/index.html",
   "assetGroups": [
     {
@@ -13,10 +13,10 @@
       "urls": [
         "/cpupow.3be9f48e84d5a685.worker.js",
         "/index.html",
-        "/main.925fab00ccd06ff0.js",
+        "/main.391fbb2267cf5b76.js",
         "/manifest.webmanifest",
         "/polyfills.6ff8b11604869675.js",
-        "/runtime.acd48c295d3b4cdb.js",
+        "/runtime.e847fbf2b9bc75ca.js",
         "/styles.4a21958ab3d4dd96.css",
         "/translation0.560177baba07ff80.js",
         "/translation1.5bdae6ab977e0768.js"
@@ -269,8 +269,8 @@
     "/assets/logo_source/nault-logo.eps": "a2147e36015ef5497c846a0b74dfb2a4828fd2cd",
     "/assets/logo_source/nault-logo.svg": "d9682092a80a1e825c646a1e7cebd8e4e9aead49",
     "/cpupow.3be9f48e84d5a685.worker.js": "31a4b50f0860137efd737684aa1780bcbfa60e02",
-    "/index.html": "a28f2aaf3513b69786ab1a1be5fdb152e5327792",
-    "/main.925fab00ccd06ff0.js": "66cae7f9b19eb999b857cb5575018e0589714396",
+    "/index.html": "806f87c0f3542669614e1a09675860ee5bc9c3c0",
+    "/main.391fbb2267cf5b76.js": "cecf0aaa077081d7ecaec1be314867064c054940",
     "/manifest.webmanifest": "fb9ce0116a92808e43c4203fa61fdcb255708437",
     "/montserrat-v15-latin-300.169464b41fd5a6ed.woff2": "cf6855b4b8fd9b7fc4d7adecd97080a70ad75c23",
     "/montserrat-v15-latin-300.1fb23400394501d6.eot": "79ffc50c09de54d30478eb89c6984bbcb41ba5f9",
@@ -312,7 +312,7 @@
     "/roboto-mono-v13-latin-regular.897854091e34f10a.eot": "b0b3dc4d2c0877eef3f9032a142c2bd57349a89a",
     "/roboto-mono-v13-latin-regular.898c8f1605bccd5e.ttf": "78b1b85542fec9c2239186aa495e2aa944456577",
     "/roboto-mono-v13-latin-regular.cecd954c0606bb3f.svg": "23049436a09c54fd366e30d8da2d14ecdc561afe",
-    "/runtime.acd48c295d3b4cdb.js": "156fe560f98078a154092b60f7c0aec3fe9d18af",
+    "/runtime.e847fbf2b9bc75ca.js": "6f5d0ce863a60c37873d313ef7f0c3d85526edf7",
     "/styles.4a21958ab3d4dd96.css": "14a9b76e54cd89bb9e0e67702e42a3617b80dc6f",
     "/translation0.560177baba07ff80.js": "4255f98b8300f023ff5026b3a4bcaeff2af8f810",
     "/translation1.5bdae6ab977e0768.js": "b3371a70d3a3a2a1165962d8cb1e91f8671002da",
