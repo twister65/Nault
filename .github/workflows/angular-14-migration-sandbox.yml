@@ -14,7 +14,6 @@ jobs:
     timeout-minutes: 60
     env:
       CI: 'true'
-      NODE_OPTIONS: --openssl-legacy-provider
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - name: Checkout dedicated experimental branch
