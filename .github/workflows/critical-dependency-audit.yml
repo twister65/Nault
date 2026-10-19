@@ -1,0 +1,46 @@
+name: Critical dependency audit
+on:
+  push:
+    branches: [master, fix/dependabot-critical]
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Audit the exact lockfile without auto-remediation
+        shell: bash
+        run: |
+          npm audit --json --audit-level=critical > npm-audit-results.json || true
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync('npm-audit-results.json', 'utf8'));
+          if (report.error || !report.vulnerabilities || !report.metadata?.vulnerabilities) {
+            throw new Error('npm audit did not return a complete vulnerability report');
+          }
+          const vulns = Object.entries(report.vulnerabilities)
+            .filter(([, item]) => item.severity === 'critical')
+            .map(([name, item]) => ({
+              name, isDirect: item.isDirect,
+              range: item.range, fixAvailable: item.fixAvailable,
+              advisories: (item.via || []).filter(v => typeof v === 'object')
+                .map(v => ({title: v.title, url: v.url, range: v.range, source: v.source}))
+            }));
+          console.log(JSON.stringify({totals: report.metadata.vulnerabilities, critical: vulns}, null, 2));
+          if (vulns.length) process.exitCode = 1;
+          NODE
+      - name: Archive audit evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: npm-audit-critical
+          path: npm-audit-results.json
+          if-no-files-found: error

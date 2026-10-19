@@ -11,10 +11,12 @@ jobs:
     uses: ./.github/workflows/pr-regression.yml
   security:
     uses: ./.github/workflows/codeql.yml
+  dependencies:
+    uses: ./.github/workflows/critical-dependency-audit.yml
   gate:
     name: Merge gate
     if: always()
-    needs: [regression, security]
+    needs: [regression, security, dependencies]
     runs-on: ubuntu-24.04
     permissions: {}
     steps:
@@ -22,6 +24,8 @@ jobs:
         env:
           REGRESSION: ${{ needs.regression.result }}
           SECURITY: ${{ needs.security.result }}
+          DEPENDENCIES: ${{ needs.dependencies.result }}
         run: |
           test "$REGRESSION" = success
           test "$SECURITY" = success
+          test "$DEPENDENCIES" = success
