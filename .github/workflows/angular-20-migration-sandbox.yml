@@ -1,0 +1,72 @@
+name: Migrate Angular 19 to 20 (sandbox)
+on:
+  push:
+    branches: ['upgrade/angular-20']
+permissions:
+  contents: write
+jobs:
+  migrate:
+    if: github.repository == 'twister65/Nault' && startsWith(github.event.head_commit.message, 'ci(angular20)')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: 'upgrade/angular-20'
+          persist-credentials: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.14.0'
+          cache: npm
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Restore Angular 19 validated baseline
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Run official Angular 20 upgrade schematics
+        run: ./node_modules/.bin/ng update @angular/cli@20 @angular/core@20 --force
+      - name: Align Angular framework and PWA
+        run: |
+          npm install --save --legacy-peer-deps --no-audit --no-fund \
+            @angular-devkit/core@20 \
+            @angular/localize@20 \
+            @angular/service-worker@20 \
+            zone.js@~0.15.1
+      - name: Align Angular ESLint and supported TypeScript
+        run: |
+          npm install --save-dev --legacy-peer-deps --no-audit --no-fund \
+            @angular-eslint/builder@20 \
+            @angular-eslint/eslint-plugin@20 \
+            @angular-eslint/eslint-plugin-template@20 \
+            @angular-eslint/schematics@20 \
+            @angular-eslint/template-parser@20 \
+            @angular/language-service@20 \
+            typescript@~5.8.3
+      - name: Deduplicate Webpack for PoW worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(node -p "require('@angular-devkit/build-angular/package.json').dependencies.webpack")"
+          npm install --save-dev --save-exact --legacy-peer-deps --no-audit --no-fund "webpack@$expected"
+          node -e "const p=require('path');const root=require.resolve('webpack');const builder=require.resolve('webpack',{paths:[p.dirname(require.resolve('@angular-devkit/build-angular/package.json'))]});if(root!==builder)throw Error('Webpack mismatch');console.log(root)"
+      - name: Verify Angular 20 toolchain
+        run: |
+          node -e "const p=require('./package.json');for(const [name,v] of Object.entries({...p.dependencies,...p.devDependencies})){if((name.startsWith('@angular/')||name.startsWith('@angular-eslint/')||name==='@angular-devkit/build-angular'||name==='@angular-devkit/core')&&!/^[~^]?20\./.test(v))throw Error(name+': '+v)}if(!/^[~^]?5\.8\./.test(p.devDependencies.typescript))throw Error('Invalid TypeScript version')}"
+          ./node_modules/.bin/ng version
+      - name: Commit migration only on experimental branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "build(angular): migrate Angular 19 to 20"
+            git push origin HEAD:upgrade/angular-20
+          fi
+      - name: Smoke test Angular 20 production Web build
+        run: npm run wallet:build
