@@ -1,0 +1,72 @@
+name: Migrate Angular 20 to 21 (sandbox)
+on:
+  push:
+    branches: ['upgrade/angular-21']
+permissions:
+  contents: write
+jobs:
+  migrate:
+    if: github.repository == 'twister65/Nault' && startsWith(github.event.head_commit.message, 'ci(angular21)')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: 'upgrade/angular-21'
+          persist-credentials: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.14.0'
+          cache: npm
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Install validated Angular 20 baseline
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Run official Angular 21 update schematics
+        run: ./node_modules/.bin/ng update @angular/cli@21 @angular/core@21 --force
+      - name: Align Angular runtime and service worker
+        run: |
+          npm install --save --legacy-peer-deps --no-audit --no-fund \
+            @angular-devkit/core@21 \
+            @angular/localize@21 \
+            @angular/service-worker@21 \
+            zone.js@~0.15.1
+      - name: Align Angular ESLint and TypeScript 5.9
+        run: |
+          npm install --save-dev --legacy-peer-deps --no-audit --no-fund \
+            @angular-eslint/builder@21 \
+            @angular-eslint/eslint-plugin@21 \
+            @angular-eslint/eslint-plugin-template@21 \
+            @angular-eslint/schematics@21 \
+            @angular-eslint/template-parser@21 \
+            @angular/language-service@21 \
+            typescript@~5.9.3
+      - name: Preserve one Webpack instance for PoW worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(node -p "require('@angular-devkit/build-angular/package.json').dependencies.webpack")"
+          npm install --save-dev --save-exact --legacy-peer-deps --no-audit --no-fund "webpack@$expected"
+          node -e "const p=require('path');const angular=require.resolve('webpack',{paths:[p.dirname(require.resolve('@angular-devkit/build-angular/package.json'))]});const root=require.resolve('webpack');if(angular!==root)throw Error('Webpack copies differ');console.log(root)"
+      - name: Check Angular 21 versions
+        run: |
+          node -e "const p=require('./package.json');for(const [n,v] of Object.entries({...p.dependencies,...p.devDependencies})){if((n.startsWith('@angular/')||n.startsWith('@angular-eslint/')||n==='@angular-devkit/core'||n==='@angular-devkit/build-angular')&&!/^[~^]?21\./.test(v))throw Error(n+': '+v)}if(!/^[~^]?5\.9\./.test(p.devDependencies.typescript))throw Error('TypeScript invalid')"
+          ./node_modules/.bin/ng version
+      - name: Commit migration only to Angular 21 branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "build(angular): migrate Angular 20 to 21"
+            git push origin HEAD:upgrade/angular-21
+          fi
+      - name: Smoke test Angular 21 Web production build
+        run: npm run wallet:build
