@@ -59,5 +59,6 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "ignoreCommand": "exit 1"
 }
