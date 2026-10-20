@@ -10,7 +10,7 @@ concurrency:
 jobs:
   migrate:
     # One-shot, branch-only migration. The output commit does not retrigger it.
-    if: github.repository == 'twister65/Nault' && startsWith(github.event.head_commit.message, 'ci(angular16): run official')
+    if: github.repository == 'twister65/Nault' && startsWith(github.event.head_commit.message, 'ci(angular16)')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
