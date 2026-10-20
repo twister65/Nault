@@ -32,7 +32,7 @@ jobs:
       - name: Verify Angular 17 toolchain and Webpack
         run: |
           ./node_modules/.bin/ng version
-          node -e "const p=require('./package.json');const w=require('webpack/package.json').version;if(!p.dependencies['@angular/core'].match(/16\./)||w!==p.devDependencies.webpack)throw Error('Version mismatch')"
+          node -e "const p=require('./package.json');const w=require('webpack/package.json').version;if(!p.dependencies['@angular/core'].match(/17\./)||w!==p.devDependencies.webpack)throw Error('Version mismatch')"
       - name: Build production Web wallet with PWA service worker
         run: npm run wallet:build
       - name: Check generated PWA manifest
