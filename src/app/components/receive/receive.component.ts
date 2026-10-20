@@ -141,8 +141,8 @@ export class ReceiveComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.mobileTransactionMenuModal.hide();
-    this.merchantModeModal.hide();
+    this.mobileTransactionMenuModal?.hide();
+    this.merchantModeModal?.hide();
     if (this.routerSub) {
       this.routerSub.unsubscribe();
     }
