@@ -12,6 +12,7 @@ jobs:
     env:
       CI: 'true'
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      NPM_CONFIG_LEGACY_PEER_DEPS: 'true'
     steps:
       - uses: actions/checkout@v7
         with:
