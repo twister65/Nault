@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import BigNumber from 'bignumber.js';
 import {AddressBookService} from '../../services/address-book.service';
 import {BehaviorSubject} from 'rxjs';
@@ -23,6 +23,7 @@ const nacl = window['nacl'];
     selector: 'app-send',
     templateUrl: './send.component.html',
     styleUrls: ['./send.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class SendComponent implements OnInit {

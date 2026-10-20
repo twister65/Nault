@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {ChildActivationEnd, Router} from '@angular/router';
 import {WalletService, WalletAccount} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
@@ -19,6 +19,7 @@ import { TranslocoService } from '@ngneat/transloco';
     selector: 'app-receive',
     templateUrl: './receive.component.html',
     styleUrls: ['./receive.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 

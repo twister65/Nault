@@ -1,4 +1,4 @@
-import {AfterViewInit, Component, OnInit, OnDestroy} from '@angular/core';
+import {AfterViewInit, Component, OnInit, OnDestroy, ChangeDetectionStrategy} from '@angular/core';
 import {AddressBookService} from '../../services/address-book.service';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
@@ -24,6 +24,7 @@ export interface BalanceAccount {
     selector: 'app-address-book',
     templateUrl: './address-book.component.html',
     styleUrls: ['./address-book.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 

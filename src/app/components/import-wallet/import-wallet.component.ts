@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {ActivatedRoute, Router} from '@angular/router';
 import {NotificationService} from '../../services/notification.service';
 import * as CryptoJS from 'crypto-js';
@@ -9,6 +9,7 @@ import {UtilService} from '../../services/util.service';
     selector: 'app-import-wallet',
     templateUrl: './import-wallet.component.html',
     styleUrls: ['./import-wallet.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class ImportWalletComponent implements OnInit {

@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
+import { Component, ElementRef, OnInit, ViewChild, ChangeDetectionStrategy } from '@angular/core';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {LedgerService, LedgerStatus} from '../../services/ledger.service';
@@ -9,6 +9,7 @@ import {PowService} from '../../services/pow.service';
     selector: 'app-wallet-widget',
     templateUrl: './wallet-widget.component.html',
     styleUrls: ['./wallet-widget.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class WalletWidgetComponent implements OnInit {

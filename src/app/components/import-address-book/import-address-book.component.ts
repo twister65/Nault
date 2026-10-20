@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {NotificationService} from '../../services/notification.service';
 import {ActivatedRoute} from '@angular/router';
 import {AddressBookService} from '../../services/address-book.service';
@@ -8,6 +8,7 @@ import {Router} from '@angular/router';
     selector: 'app-import-address-book',
     templateUrl: './import-address-book.component.html',
     styleUrls: ['./import-address-book.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class ImportAddressBookComponent implements OnInit {

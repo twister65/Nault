@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {WalletService, NotificationService, RepresentativeService} from '../../services';
 import {ActivatedRoute, Router} from '@angular/router';
 import * as bip39 from 'bip39';
@@ -23,6 +23,7 @@ const INDEX_MAX = 4294967295; // seed index
     selector: 'app-configure-wallet',
     templateUrl: './configure-wallet.component.html',
     styleUrls: ['./configure-wallet.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class ConfigureWalletComponent implements OnInit {

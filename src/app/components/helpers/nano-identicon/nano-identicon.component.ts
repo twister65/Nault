@@ -1,10 +1,11 @@
-import { AfterViewInit, Component, ElementRef, Input, OnChanges, HostBinding, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, Input, OnChanges, HostBinding, ViewChild, ChangeDetectionStrategy } from '@angular/core';
 import { createIcon } from '../../../../assets/lib/nanoidenticons.min.js';
 
 @Component({
     selector: 'app-nano-identicon',
     templateUrl: './nano-identicon.component.html',
     styleUrls: ['./nano-identicon.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class NanoIdenticonComponent implements OnChanges, AfterViewInit {

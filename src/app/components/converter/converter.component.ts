@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import {UtilService} from '../../services/util.service';
 import {AppSettingsService} from '../../services/app-settings.service';
 import * as nanocurrency from 'nanocurrency';
@@ -10,6 +10,7 @@ import {NotificationService} from '../../services/notification.service';
     selector: 'app-converter',
     templateUrl: './converter.component.html',
     styleUrls: ['./converter.component.less'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class ConverterComponent implements OnInit, OnDestroy {

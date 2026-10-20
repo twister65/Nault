@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {UtilService} from '../../services/util.service';
 import { Router } from '@angular/router';
 import { NotificationService } from '../../services/notification.service';
@@ -11,6 +11,7 @@ import {BehaviorSubject} from 'rxjs';
     selector: 'app-send',
     templateUrl: './remote-signing.component.html',
     styleUrls: ['./remote-signing.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RemoteSigningComponent implements OnInit {

@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { BarcodeFormat } from '@zxing/library';
 import { NotificationService } from 'app/services';
 import { BehaviorSubject } from 'rxjs';
@@ -8,6 +8,7 @@ import { DeeplinkService } from '../../services/deeplink.service';
     selector: 'app-qr-scan',
     templateUrl: './qr-scan.component.html',
     styleUrls: ['./qr-scan.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class QrScanComponent implements OnInit {

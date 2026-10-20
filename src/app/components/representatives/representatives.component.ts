@@ -1,4 +1,4 @@
-import {Component, OnInit, ViewChild} from '@angular/core';
+import {Component, OnInit, ViewChild, ChangeDetectionStrategy} from '@angular/core';
 import {ActivatedRoute} from '@angular/router';
 import BigNumber from 'bignumber.js';
 import {BehaviorSubject} from 'rxjs';
@@ -21,6 +21,7 @@ import { TranslocoService } from '@ngneat/transloco';
     selector: 'app-representatives',
     templateUrl: './representatives.component.html',
     styleUrls: ['./representatives.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RepresentativesComponent implements OnInit {

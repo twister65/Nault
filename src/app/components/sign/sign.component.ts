@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, ViewChild, ElementRef, ChangeDetectionStrategy } from '@angular/core';
 import BigNumber from 'bignumber.js';
 import {AddressBookService} from '../../services/address-book.service';
 import {BehaviorSubject} from 'rxjs';
@@ -27,6 +27,7 @@ enum navSource {'remote', 'multisig'}
     selector: 'app-sign',
     templateUrl: './sign.component.html',
     styleUrls: ['./sign.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 

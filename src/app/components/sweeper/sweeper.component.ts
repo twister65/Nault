@@ -1,4 +1,4 @@
-import { Component, OnInit, ElementRef, ViewChild } from '@angular/core';
+import { Component, OnInit, ElementRef, ViewChild, ChangeDetectionStrategy } from '@angular/core';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {ModalService} from '../../services/modal.service';
@@ -20,6 +20,7 @@ const SWEEP_MAX_PENDING = 100; // max pending blocks to process per run
     selector: 'app-sweeper',
     templateUrl: './sweeper.component.html',
     styleUrls: ['./sweeper.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 

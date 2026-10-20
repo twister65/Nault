@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, ViewChild, ElementRef, ChangeDetectionStrategy } from '@angular/core';
 import { UtilService } from '../../services/util.service';
 import { Router } from '@angular/router';
 import { NotificationService } from '../../services/notification.service';
@@ -10,6 +10,7 @@ import { MusigService } from '../../services/musig.service';
     selector: 'app-multisig',
     templateUrl: './multisig.component.html',
     styleUrls: ['./multisig.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class MultisigComponent implements OnInit {

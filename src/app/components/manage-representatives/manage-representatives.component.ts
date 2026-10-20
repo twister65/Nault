@@ -1,6 +1,6 @@
 
 import {map} from 'rxjs/operators';
-import {AfterViewInit, Component, OnInit} from '@angular/core';
+import {AfterViewInit, Component, OnInit, ChangeDetectionStrategy} from '@angular/core';
 import {AddressBookService} from '../../services/address-book.service';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
@@ -14,6 +14,7 @@ import {UtilService} from '../../services/util.service';
     selector: 'app-manage-representatives',
     templateUrl: './manage-representatives.component.html',
     styleUrls: ['./manage-representatives.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class ManageRepresentativesComponent implements OnInit, AfterViewInit {

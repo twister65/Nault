@@ -1,5 +1,5 @@
 import { secureEndpoint } from '../../services/endpoint-policy';
-import { Component, OnInit, Renderer2 } from '@angular/core';
+import { Component, OnInit, Renderer2, ChangeDetectionStrategy } from '@angular/core';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {AppSettingsService} from '../../services/app-settings.service';
@@ -21,6 +21,7 @@ import { TranslocoService } from '@ngneat/transloco';
     selector: 'app-configure-app',
     templateUrl: './configure-app.component.html',
     styleUrls: ['./configure-app.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 

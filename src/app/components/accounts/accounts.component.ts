@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {Subject, timer} from 'rxjs';
 import {debounce} from 'rxjs/operators';
 import {Router} from '@angular/router';
@@ -17,6 +17,7 @@ import { TranslocoService } from '@ngneat/transloco';
     selector: 'app-accounts',
     templateUrl: './accounts.component.html',
     styleUrls: ['./accounts.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class AccountsComponent implements OnInit {

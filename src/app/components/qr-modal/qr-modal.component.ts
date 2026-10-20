@@ -1,4 +1,4 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {NgbActiveModal} from '@ng-bootstrap/ng-bootstrap';
 import { NotificationService } from '../../services/notification.service';
 import { BarcodeFormat } from '@zxing/library';
@@ -12,6 +12,7 @@ export type QRType = 'account' | 'hash' | 'mnemonic' | 'generic';
     selector: 'app-qr-modal',
     templateUrl: './qr-modal.component.html',
     styleUrls: ['./qr-modal.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class QrModalComponent implements OnInit {

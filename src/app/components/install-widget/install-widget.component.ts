@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { NotificationService } from 'app/services/notification.service';
 
 interface InstallEvent extends Event {
@@ -10,6 +10,7 @@ interface InstallEvent extends Event {
     selector: 'app-install-widget',
     templateUrl: './install-widget.component.html',
     styleUrls: ['./install-widget.component.less'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class InstallWidgetComponent implements OnInit {

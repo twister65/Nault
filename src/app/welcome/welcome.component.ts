@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { environment } from 'environments/environment';
 import {WalletService} from '../services/wallet.service';
 import {AppSettingsService} from '../services/app-settings.service';
@@ -7,6 +7,7 @@ import {AppSettingsService} from '../services/app-settings.service';
     selector: 'app-welcome',
     templateUrl: './welcome.component.html',
     styleUrls: ['./welcome.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class WelcomeComponent implements OnInit {

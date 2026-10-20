@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {ActivatedRoute, ChildActivationEnd, Router} from '@angular/router';
 import {WalletService} from '../../services/wallet.service';
 import {ApiService} from '../../services/api.service';
@@ -12,6 +12,7 @@ import { TranslocoService } from '@ngneat/transloco';
     selector: 'app-transaction-details',
     templateUrl: './transaction-details.component.html',
     styleUrls: ['./transaction-details.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class TransactionDetailsComponent implements OnInit {

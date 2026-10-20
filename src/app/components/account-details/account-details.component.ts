@@ -1,4 +1,4 @@
-import {Component, OnDestroy, OnInit} from '@angular/core';
+import {Component, OnDestroy, OnInit, ChangeDetectionStrategy} from '@angular/core';
 import {ActivatedRoute, ChildActivationEnd, Router, NavigationEnd} from '@angular/router';
 import {formatDate} from '@angular/common';
 import {AddressBookService} from '../../services/address-book.service';
@@ -22,6 +22,7 @@ import { TranslocoService } from '@ngneat/transloco';
     selector: 'app-account-details',
     templateUrl: './account-details.component.html',
     styleUrls: ['./account-details.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class AccountDetailsComponent implements OnInit, OnDestroy {

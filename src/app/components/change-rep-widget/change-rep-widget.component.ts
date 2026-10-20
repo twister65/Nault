@@ -1,4 +1,4 @@
-import {Component, OnInit} from '@angular/core';
+import {Component, OnInit, ChangeDetectionStrategy} from '@angular/core';
 import {WalletService} from '../../services/wallet.service';
 import {NanoBlockService} from '../../services/nano-block.service';
 import {RepresentativeService} from '../../services/representative.service';
@@ -8,6 +8,7 @@ import {Router} from '@angular/router';
     selector: 'app-change-rep-widget',
     templateUrl: './change-rep-widget.component.html',
     styleUrls: ['./change-rep-widget.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class ChangeRepWidgetComponent implements OnInit {

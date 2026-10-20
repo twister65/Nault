@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {ApiService} from '../../services/api.service';
@@ -12,6 +12,7 @@ import {formatDate} from '@angular/common';
     selector: 'app-manage-wallet',
     templateUrl: './manage-wallet.component.html',
     styleUrls: ['./manage-wallet.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class ManageWalletComponent implements OnInit {
