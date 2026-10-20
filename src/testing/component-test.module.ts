@@ -1,5 +1,5 @@
 import { NgModule } from '@angular/core';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpClientTestingModule, provideHttpClientTesting } from '@angular/common/http/testing';
 import { RouterTestingModule } from '@angular/router/testing';
 import { EMPTY } from 'rxjs';
 import { AppModule } from '../app/app.module';
