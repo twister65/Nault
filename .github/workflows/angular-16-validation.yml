@@ -1,19 +1,19 @@
-name: Validate Angular 15 migration
+name: Validate Angular 16 migration
 on:
   push:
-    branches: ['upgrade/angular-15']
+    branches: ['upgrade/angular-16']
   pull_request:
     branches: [master]
 permissions:
   contents: read
 concurrency:
-  group: angular15-${{ github.ref }}
+  group: angular16-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   check:
     if: github.repository == 'twister65/Nault'
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 50
     env:
       CI: 'true'
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
@@ -21,39 +21,36 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: '16.20.2'
+          node-version: '18.20.8'
           cache: npm
-      - name: Install build dependencies
+      - name: Install native dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
-      - name: Reinstall strictly from the Angular 15 lockfile
+      - name: Install locked Angular 16 dependencies
         run: npm ci --legacy-peer-deps --no-audit --no-fund
-      - name: Print Angular toolchain and Webpack resolution
+      - name: Verify Angular 16 toolchain and Webpack
         run: |
-          node -e "const p=require('./package.json'); console.log({angular:p.dependencies['@angular/core'],cli:p.devDependencies['@angular/cli'],ts:p.devDependencies.typescript});"
-          npm ls webpack --depth=1 || true
           ./node_modules/.bin/ng version
-      - name: Build Angular 15 production Web app
+          node -e "const p=require('./package.json');const w=require('webpack/package.json').version;if(!p.dependencies['@angular/core'].match(/16\./)||w!=='5.94.0')throw Error('Version mismatch')"
+      - name: Build production Web wallet with PWA service worker
         run: npm run wallet:build
-      - name: Compile Electron TypeScript
-        run: npm run desktop:compile
-      - name: Test Ledger Web Bluetooth and USB regression
+      - name: Build Electron desktop bundle and compile TypeScript
+        run: npm run desktop:build
+      - name: Test Ledger Web Bluetooth and USB regressions
         run: node scripts/test-ledger-bluetooth.js
-      - name: Run focused Nano / RsNano RPC tests
+      - name: Run Nano / RsNano RPC regression tests
         shell: bash
         run: |
           CHROME_BIN="$(command -v google-chrome || command -v chromium)"
           export CHROME_BIN
-          # Angular 15 automatically discovers specs: avoid the obsolete require.context
-          # bootstrap and select the RPC regression specs with supported --include flags.
           npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false \
             --include=src/app/services/api.service.spec.ts \
             --include=src/app/services/wallet.service.spec.ts \
             --include=src/app/services/websocket.service.spec.ts \
             --include=src/app/services/rpc-transport.service.spec.ts \
             --include=src/app/services/endpoint-policy.service.spec.ts
-      - name: Run full Angular unit tests
+      - name: Run full Angular unit test suite
         shell: bash
         run: |
           CHROME_BIN="$(command -v google-chrome || command -v chromium)"
