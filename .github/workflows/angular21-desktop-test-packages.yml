@@ -1,0 +1,110 @@
+name: Angular 21 desktop test packages (Windows + Linux)
+on:
+  push:
+    branches: [build/angular-21-desktop-20261020]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-x64:
+    name: Windows x64 unsigned ZIP
+    runs-on: windows-2022
+    timeout-minutes: 70
+    env:
+      CI: 'true'
+      NODE_OPTIONS: --openssl-legacy-provider
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        id: py
+        with:
+          python-version: '3.11'
+      - name: Install exact Angular 21 lockfile and native modules
+        env:
+          npm_config_python: ${{ steps.py.outputs.python-path }}
+        run: npm ci --legacy-peer-deps --include=optional --no-audit --no-fund
+      - name: Compile Angular 21 renderer and Electron
+        run: npm run desktop:build
+      - name: Run hardware-free Ledger BLE regression suite
+        run: node scripts/test-ledger-bluetooth.js
+      - name: Produce unsigned Windows x64 ZIP without publishing
+        run: npx --no-install electron-builder --config desktop-app/windows-bluetooth.json --win --x64 --publish never
+      - name: Smoke-test packaged Electron dependencies
+        shell: pwsh
+        run: |
+          $env:ELECTRON_RUN_AS_NODE = '1'
+          $app = (Resolve-Path 'desktop-app/build-windows/win-unpacked/resources/app.asar').Path
+          $env:NAULT_SMOKE_APP = $app
+          & 'desktop-app/build-windows/win-unpacked/Nault.exe' -e "const fs=require('fs');const p=require('path');const app=process.env.NAULT_SMOKE_APP;for(const f of ['dist/index.html','desktop-app/dist/desktop-app.js','desktop-app/dist/preload.js']){if(!fs.existsSync(p.join(app,f)))throw Error('Missing '+f)}const req=require('module').createRequire(p.join(app,'package.json'));req('node-hid');req('usb');req('@ledgerhq/hw-transport-node-hid');console.log('Electron native modules OK',process.versions.electron)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Include revision and checksum
+        shell: pwsh
+        run: |
+          $zip='desktop-app/build-windows/Nault-WebBluetooth-Windows-x64.zip'
+          if (!(Test-Path $zip)) { throw "Windows ZIP missing" }
+          $hash=(Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  Nault-WebBluetooth-Windows-x64.zip" | Set-Content desktop-app/build-windows/SHA256SUMS.txt
+          "Experimental Angular 21 desktop wallet`nSource commit: $env:GITHUB_SHA`nUnsigned Windows x64 ZIP. Extract completely and launch Nault.exe.`nValidate Ledger and transfers using only small amounts." | Set-Content desktop-app/build-windows/BUILD.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nault-Angular21-Windows-x64
+          path: |
+            desktop-app/build-windows/Nault-WebBluetooth-Windows-x64.zip
+            desktop-app/build-windows/SHA256SUMS.txt
+            desktop-app/build-windows/BUILD.txt
+          if-no-files-found: error
+          retention-days: 14
+  linux-x64:
+    name: Linux x64 unsigned AppImage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    env:
+      CI: 'true'
+      NODE_OPTIONS: --openssl-legacy-provider
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install native compilation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Install Angular 21 dependencies from lockfile
+        run: npm ci --legacy-peer-deps --include=optional --no-audit --no-fund
+      - name: Compile Angular 21 renderer and Electron
+        run: npm run desktop:build
+      - name: Run hardware-free Ledger BLE regression suite
+        run: node scripts/test-ledger-bluetooth.js
+      - name: Produce Linux x64 AppImage without publishing
+        run: npx --no-install electron-builder --linux AppImage --x64 --publish never -c.npmRebuild=false
+      - name: Verify output and write checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          images=(desktop-app/build/*.AppImage)
+          test "${#images[@]}" -eq 1
+          test -s "${images[0]}"
+          (cd desktop-app/build && sha256sum *.AppImage > SHA256SUMS.txt)
+          printf 'Experimental Nault Angular 21 desktop test build\\nSource commit: %s\\nUnsigned Linux x64 AppImage. Run chmod +x; use --no-sandbox only in an isolated test environment if necessary.\\nLedger/hardware transfers are not tested by CI.\\n' "$GITHUB_SHA" > desktop-app/build/BUILD.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nault-Angular21-Linux-x64
+          path: |
+            desktop-app/build/*.AppImage
+            desktop-app/build/SHA256SUMS.txt
+            desktop-app/build/BUILD.txt
+          if-no-files-found: error
+          retention-days: 14
