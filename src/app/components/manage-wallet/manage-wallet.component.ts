@@ -9,9 +9,10 @@ import * as bip from 'bip39';
 import {formatDate} from '@angular/common';
 
 @Component({
-  selector: 'app-manage-wallet',
-  templateUrl: './manage-wallet.component.html',
-  styleUrls: ['./manage-wallet.component.css']
+    selector: 'app-manage-wallet',
+    templateUrl: './manage-wallet.component.html',
+    styleUrls: ['./manage-wallet.component.css'],
+    standalone: false
 })
 export class ManageWalletComponent implements OnInit {
 

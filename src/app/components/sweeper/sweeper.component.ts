@@ -17,9 +17,10 @@ const SWEEP_MAX_INDEX = 100; // max index keys to sweep
 const SWEEP_MAX_PENDING = 100; // max pending blocks to process per run
 
 @Component({
-  selector: 'app-sweeper',
-  templateUrl: './sweeper.component.html',
-  styleUrls: ['./sweeper.component.css'],
+    selector: 'app-sweeper',
+    templateUrl: './sweeper.component.html',
+    styleUrls: ['./sweeper.component.css'],
+    standalone: false
 })
 
 export class SweeperComponent implements OnInit {

@@ -16,9 +16,10 @@ import BigNumber from 'bignumber.js';
 import { TranslocoService } from '@ngneat/transloco';
 
 @Component({
-  selector: 'app-receive',
-  templateUrl: './receive.component.html',
-  styleUrls: ['./receive.component.css']
+    selector: 'app-receive',
+    templateUrl: './receive.component.html',
+    styleUrls: ['./receive.component.css'],
+    standalone: false
 })
 
 

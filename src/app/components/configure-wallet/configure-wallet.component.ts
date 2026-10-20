@@ -20,9 +20,10 @@ enum panels {
 const INDEX_MAX = 4294967295; // seed index
 
 @Component({
-  selector: 'app-configure-wallet',
-  templateUrl: './configure-wallet.component.html',
-  styleUrls: ['./configure-wallet.component.css']
+    selector: 'app-configure-wallet',
+    templateUrl: './configure-wallet.component.html',
+    styleUrls: ['./configure-wallet.component.css'],
+    standalone: false
 })
 export class ConfigureWalletComponent implements OnInit {
   panels = panels;

@@ -20,9 +20,10 @@ import * as nanocurrency from 'nanocurrency';
 const nacl = window['nacl'];
 
 @Component({
-  selector: 'app-send',
-  templateUrl: './send.component.html',
-  styleUrls: ['./send.component.css']
+    selector: 'app-send',
+    templateUrl: './send.component.html',
+    styleUrls: ['./send.component.css'],
+    standalone: false
 })
 export class SendComponent implements OnInit {
   nano = 1000000000000000000000000;

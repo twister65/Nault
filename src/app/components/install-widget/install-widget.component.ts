@@ -7,9 +7,10 @@ interface InstallEvent extends Event {
 }
 
 @Component({
-  selector: 'app-install-widget',
-  templateUrl: './install-widget.component.html',
-  styleUrls: ['./install-widget.component.less'],
+    selector: 'app-install-widget',
+    templateUrl: './install-widget.component.html',
+    styleUrls: ['./install-widget.component.less'],
+    standalone: false
 })
 export class InstallWidgetComponent implements OnInit {
 

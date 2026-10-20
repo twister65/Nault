@@ -6,9 +6,10 @@ import {WalletService, WalletType} from '../../services/wallet.service';
 import {UtilService} from '../../services/util.service';
 
 @Component({
-  selector: 'app-import-wallet',
-  templateUrl: './import-wallet.component.html',
-  styleUrls: ['./import-wallet.component.css']
+    selector: 'app-import-wallet',
+    templateUrl: './import-wallet.component.html',
+    styleUrls: ['./import-wallet.component.css'],
+    standalone: false
 })
 export class ImportWalletComponent implements OnInit {
   activePanel = 'error';

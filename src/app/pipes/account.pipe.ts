@@ -3,7 +3,8 @@ import {UtilService} from '../services/util.service';
 import {AppSettingsService} from '../services/app-settings.service';
 
 @Pipe({
-  name: 'account'
+    name: 'account',
+    standalone: false
 })
 export class AccountPipe implements PipeTransform {
 

@@ -4,9 +4,10 @@ import {WalletService} from '../services/wallet.service';
 import {AppSettingsService} from '../services/app-settings.service';
 
 @Component({
-  selector: 'app-welcome',
-  templateUrl: './welcome.component.html',
-  styleUrls: ['./welcome.component.css']
+    selector: 'app-welcome',
+    templateUrl: './welcome.component.html',
+    styleUrls: ['./welcome.component.css'],
+    standalone: false
 })
 export class WelcomeComponent implements OnInit {
 

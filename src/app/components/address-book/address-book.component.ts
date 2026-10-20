@@ -21,9 +21,10 @@ export interface BalanceAccount {
 }
 
 @Component({
-  selector: 'app-address-book',
-  templateUrl: './address-book.component.html',
-  styleUrls: ['./address-book.component.css']
+    selector: 'app-address-book',
+    templateUrl: './address-book.component.html',
+    styleUrls: ['./address-book.component.css'],
+    standalone: false
 })
 
 export class AddressBookComponent implements OnInit, AfterViewInit, OnDestroy {

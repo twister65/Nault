@@ -8,9 +8,10 @@ import { AddressBookService } from 'app/services/address-book.service';
 import {BehaviorSubject} from 'rxjs';
 
 @Component({
-  selector: 'app-send',
-  templateUrl: './remote-signing.component.html',
-  styleUrls: ['./remote-signing.component.css']
+    selector: 'app-send',
+    templateUrl: './remote-signing.component.html',
+    styleUrls: ['./remote-signing.component.css'],
+    standalone: false
 })
 export class RemoteSigningComponent implements OnInit {
   toAccountID = '';

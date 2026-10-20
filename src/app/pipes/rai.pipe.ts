@@ -1,7 +1,8 @@
 import { Pipe, PipeTransform } from '@angular/core';
 
 @Pipe({
-  name: 'rai'
+    name: 'rai',
+    standalone: false
 })
 export class RaiPipe implements PipeTransform {
   precision = 6;

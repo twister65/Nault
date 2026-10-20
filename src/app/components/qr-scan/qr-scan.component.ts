@@ -5,9 +5,10 @@ import { BehaviorSubject } from 'rxjs';
 import { DeeplinkService } from '../../services/deeplink.service';
 
 @Component({
-  selector: 'app-qr-scan',
-  templateUrl: './qr-scan.component.html',
-  styleUrls: ['./qr-scan.component.css']
+    selector: 'app-qr-scan',
+    templateUrl: './qr-scan.component.html',
+    styleUrls: ['./qr-scan.component.css'],
+    standalone: false
 })
 export class QrScanComponent implements OnInit {
   [x: string]: any;

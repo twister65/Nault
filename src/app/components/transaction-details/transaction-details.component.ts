@@ -9,9 +9,10 @@ import {AddressBookService} from '../../services/address-book.service';
 import { TranslocoService } from '@ngneat/transloco';
 
 @Component({
-  selector: 'app-transaction-details',
-  templateUrl: './transaction-details.component.html',
-  styleUrls: ['./transaction-details.component.css']
+    selector: 'app-transaction-details',
+    templateUrl: './transaction-details.component.html',
+    styleUrls: ['./transaction-details.component.css'],
+    standalone: false
 })
 export class TransactionDetailsComponent implements OnInit {
   nano = 1000000000000000000000000;

@@ -9,9 +9,10 @@ import * as bip39 from 'bip39';
 export type QRType = 'account' | 'hash' | 'mnemonic' | 'generic';
 
 @Component({
-  selector: 'app-qr-modal',
-  templateUrl: './qr-modal.component.html',
-  styleUrls: ['./qr-modal.component.css']
+    selector: 'app-qr-modal',
+    templateUrl: './qr-modal.component.html',
+    styleUrls: ['./qr-modal.component.css'],
+    standalone: false
 })
 export class QrModalComponent implements OnInit {
 

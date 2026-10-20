@@ -18,9 +18,10 @@ import {QrModalService} from '../../services/qr-modal.service';
 import { TranslocoService } from '@ngneat/transloco';
 
 @Component({
-  selector: 'app-configure-app',
-  templateUrl: './configure-app.component.html',
-  styleUrls: ['./configure-app.component.css']
+    selector: 'app-configure-app',
+    templateUrl: './configure-app.component.html',
+    styleUrls: ['./configure-app.component.css'],
+    standalone: false
 })
 
 export class ConfigureAppComponent implements OnInit {
