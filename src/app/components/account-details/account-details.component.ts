@@ -579,8 +579,8 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.mobileAccountMenuModal.hide();
-    this.mobileTransactionMenuModal.hide();
+    this.mobileAccountMenuModal?.hide();
+    this.mobileTransactionMenuModal?.hide();
     if (this.routerSub) {
       this.routerSub.unsubscribe();
     }
