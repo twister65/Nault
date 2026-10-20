@@ -1,0 +1,69 @@
+name: Upgrade Angular 15 to 16 sandbox
+on:
+  push:
+    branches: ['upgrade/angular-16']
+permissions:
+  contents: write
+concurrency:
+  group: angular16-migrate-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  migrate:
+    # One-shot, branch-only migration. The output commit does not retrigger it.
+    if: github.repository == 'twister65/Nault' && startsWith(github.event.head_commit.message, 'ci(angular16): run official')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: 'upgrade/angular-16'
+          persist-credentials: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '18.20.8'
+          cache: npm
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Install last validated Angular 15 lockfile
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Run Angular 16 migration schematics
+        run: ./node_modules/.bin/ng update @angular/cli@16 @angular/core@16 --force
+      - name: Align Angular 16 runtime and PWA dependencies
+        run: |
+          npm install --save --legacy-peer-deps --no-audit --no-fund \
+            @angular-devkit/core@16 \
+            @angular/localize@16 \
+            @angular/service-worker@16 \
+            zone.js@~0.13.3
+      - name: Align Angular ESLint, language service and TypeScript
+        run: |
+          npm install --save-dev --legacy-peer-deps --no-audit --no-fund \
+            @angular-eslint/builder@16 \
+            @angular-eslint/eslint-plugin@16 \
+            @angular-eslint/eslint-plugin-template@16 \
+            @angular-eslint/schematics@16 \
+            @angular-eslint/template-parser@16 \
+            @angular/language-service@16 \
+            typescript@~5.1.6
+      - name: Check Angular 16 version consistency
+        run: |
+          node -e "const p=require('./package.json');for(const [name,version] of Object.entries({...p.dependencies,...p.devDependencies})){if((name.startsWith('@angular/')||name==='@angular-devkit/build-angular'||name==='@angular-devkit/core'||name.startsWith('@angular-eslint/'))&&!/^[~^]?16\./.test(version))throw Error(name+': '+version)};if(!/^~?5\.1\./.test(p.devDependencies.typescript))throw Error('TypeScript mismatch');if(!/^~?0\.13\./.test(p.dependencies['zone.js']))throw Error('Zone.js mismatch');console.log('Angular 16 package versions aligned')"
+          ./node_modules/.bin/ng version
+      - name: Commit migration outputs to experimental branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "build(angular): migrate framework, CLI and ESLint from 15 to 16"
+            git push origin HEAD:upgrade/angular-16
+          fi
+      - name: Check Angular 16 production Web compilation
+        run: npm run wallet:build
