@@ -1,13 +1,13 @@
-name: Validate Angular 20 migration
+name: Validate Angular 21 migration
 on:
   push:
-    branches: ['upgrade/angular-20']
+    branches: ['upgrade/angular-21']
   pull_request:
     branches: [master]
 permissions:
   contents: read
 concurrency:
-  group: angular20-${{ github.ref }}
+  group: angular21-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   check:
@@ -27,12 +27,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
-      - name: Install locked Angular 20 dependencies
+      - name: Install locked Angular 21 dependencies
         run: npm ci --legacy-peer-deps --no-audit --no-fund
-      - name: Verify Angular 20 toolchain and Webpack
+      - name: Verify Angular 21 toolchain and Webpack
         run: |
           ./node_modules/.bin/ng version
-          node -e "const p=require('./package.json');const w=require('webpack/package.json').version;if(!p.dependencies['@angular/core'].match(/20\./)||w!==p.devDependencies.webpack)throw Error('Version mismatch')"
+          node -e "const p=require('./package.json');const w=require('webpack/package.json').version;if(!p.dependencies['@angular/core'].match(/21\./)||w!==p.devDependencies.webpack)throw Error('Version mismatch')"
       - name: Build production Web wallet with PWA service worker
         run: npm run wallet:build
       - name: Check generated PWA manifest
@@ -40,7 +40,7 @@ jobs:
           node -e "const fs=require('fs');const manifest=JSON.parse(fs.readFileSync('dist/ngsw.json','utf8'));if(!manifest.hashTable||!manifest.assetGroups?.length)throw Error('Service worker manifest missing required entries');console.log('Service worker manifest generated')"
       - name: Build Electron desktop bundle and compile TypeScript
         run: npm run desktop:build
-      - name: Lint Angular 20 sources
+      - name: Lint Angular 21 sources
         run: npm run lint
       - name: Test Ledger Web Bluetooth and USB regressions
         run: node scripts/test-ledger-bluetooth.js
