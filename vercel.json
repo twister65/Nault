@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "buildCommand": "npm run wallet:build",
-  "installCommand": "npm ci --legacy-peer-deps --no-audit --no-fund",
+  "installCommand": "npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund",
   "outputDirectory": "dist",
   "headers": [
     {
