@@ -13,3 +13,9 @@ interface NaultDesktopBridge {
 interface Window {
   naultDesktop?: NaultDesktopBridge;
 }
+
+// nanoidenticons is a bundled CommonJS JavaScript asset without TypeScript declarations.
+// Preserve its runtime import while declaring the canvas creation contract.
+declare module '*nanoidenticons.min.js' {
+  export function createIcon(options: { seed: string; scale: number }): HTMLCanvasElement;
+}
