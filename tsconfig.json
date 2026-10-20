@@ -14,10 +14,6 @@
       "node_modules/@types",
       "./src/typings"
     ],
-    "lib": [
-      "es2020",
-      "dom"
-    ],
     "module": "es2020",
     "baseUrl": "./",
     "paths": {
