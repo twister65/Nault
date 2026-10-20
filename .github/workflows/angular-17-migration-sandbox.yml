@@ -1,0 +1,73 @@
+name: Migrate Angular 16 to 17 (sandbox)
+on:
+  push:
+    branches: ['upgrade/angular-17']
+permissions:
+  contents: write
+jobs:
+  migrate:
+    if: github.repository == 'twister65/Nault' && startsWith(github.event.head_commit.message, 'ci(angular17)')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: 'upgrade/angular-17'
+          persist-credentials: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20.19.5'
+          cache: npm
+      - name: Install native build requirements
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Reinstall Angular 16 validated lockfile
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Execute official Angular 17 CLI and core migrations
+        run: ./node_modules/.bin/ng update @angular/cli@17 @angular/core@17 --force
+      - name: Align Angular 17 PWA and framework dependencies
+        run: |
+          npm install --save --legacy-peer-deps --no-audit --no-fund \
+            @angular-devkit/core@17 \
+            @angular/localize@17 \
+            @angular/service-worker@17 \
+            zone.js@~0.14.10
+      - name: Align Angular ESLint and supported TypeScript
+        run: |
+          npm install --save-dev --legacy-peer-deps --no-audit --no-fund \
+            @angular-eslint/builder@17 \
+            @angular-eslint/eslint-plugin@17 \
+            @angular-eslint/eslint-plugin-template@17 \
+            @angular-eslint/schematics@17 \
+            @angular-eslint/template-parser@17 \
+            @angular/language-service@17 \
+            typescript@~5.4.5
+      - name: Deduplicate Webpack used by Angular and worker-loader
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(node -p "require('@angular-devkit/build-angular/package.json').dependencies.webpack")"
+          echo "Angular 17 builder Webpack requirement: $expected"
+          npm install --save-dev --save-exact --legacy-peer-deps --no-audit --no-fund "webpack@$expected"
+          node -e "const p=require('path'); const builder=require.resolve('webpack',{paths:[p.dirname(require.resolve('@angular-devkit/build-angular/package.json'))]}); const root=require.resolve('webpack'); console.log({builder,root}); if(builder!==root)throw Error('Different Webpack instances')"
+      - name: Check Angular 17 runtime and build version alignment
+        run: |
+          node -e "const p=require('./package.json');for(const [name,version] of Object.entries({...p.dependencies,...p.devDependencies})){if((name.startsWith('@angular/')||name==='@angular-devkit/core'||name==='@angular-devkit/build-angular'||name.startsWith('@angular-eslint/'))&&!/^[~^]?17\./.test(version))throw Error(name+': '+version)};if(!/^[~^]?5\.4\./.test(p.devDependencies.typescript))throw Error('TypeScript version mismatch');if(!/^[~^]?0\.14\./.test(p.dependencies['zone.js']))throw Error('Zone.js version mismatch');console.log('Angular 17, TypeScript and Zone.js aligned')"
+          ./node_modules/.bin/ng version
+      - name: Save migration artifacts on experimental branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "build(angular): migrate Angular, CLI and lint tooling from 16 to 17"
+            git push origin HEAD:upgrade/angular-17
+          fi
+      - name: Smoke test Angular 17 production web build
+        run: npm run wallet:build
