@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import * as url from 'url';
-import { TranslocoService, getBrowserCultureLang, getBrowserLang } from '@ngneat/transloco';
+import { TranslocoService, getBrowserCultureLang, getBrowserLang } from '@jsverse/transloco';
 
 export type WalletStore = 'localStorage'|'none';
 export type PoWSource = 'server'|'clientCPU'|'clientWebGL'|'best'|'custom';

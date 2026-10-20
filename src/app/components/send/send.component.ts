@@ -13,7 +13,7 @@ import {PriceService} from '../../services/price.service';
 import {NanoBlockService} from '../../services/nano-block.service';
 import { QrModalService } from '../../services/qr-modal.service';
 import { environment } from 'environments/environment';
-import { TranslocoService } from '@ngneat/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 import { HttpClient } from '@angular/common/http';
 import * as nanocurrency from 'nanocurrency';
 

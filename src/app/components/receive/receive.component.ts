@@ -13,7 +13,7 @@ import {PriceService} from '../../services/price.service';
 import {WebsocketService} from '../../services/websocket.service';
 import * as QRCode from 'qrcode';
 import BigNumber from 'bignumber.js';
-import { TranslocoService } from '@ngneat/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 
 @Component({
     selector: 'app-receive',

@@ -11,7 +11,7 @@ import {BigNumber} from 'bignumber.js';
 import {ApiService} from '../../services/api.service';
 import {PriceService} from '../../services/price.service';
 import {AppSettingsService} from '../../services/app-settings.service';
-import {TranslocoService} from '@ngneat/transloco';
+import {TranslocoService} from '@jsverse/transloco';
 
 export interface BalanceAccount {
   balance: BigNumber;

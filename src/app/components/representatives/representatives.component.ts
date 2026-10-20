@@ -15,7 +15,7 @@ import {
   WalletService,
   NinjaService
 } from '../../services';
-import { TranslocoService } from '@ngneat/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 
 @Component({
     selector: 'app-representatives',

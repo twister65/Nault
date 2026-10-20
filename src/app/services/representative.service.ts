@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import {BehaviorSubject} from 'rxjs';
-import {BaseApiAccount, WalletApiAccount, WalletService} from './wallet.service';
+import {WalletService} from './wallet.service';
+import type {BaseApiAccount, WalletApiAccount} from './wallet.service';
 import BigNumber from 'bignumber.js';
 import {ApiService} from './api.service';
 import {UtilService} from './util.service';
