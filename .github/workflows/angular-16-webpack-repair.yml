@@ -1,0 +1,48 @@
+name: Repair Angular 16 Webpack resolution
+on:
+  push:
+    branches: ['upgrade/angular-16']
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.repository == 'twister65/Nault' && startsWith(github.event.head_commit.message, 'fix(angular16)')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: 'upgrade/angular-16'
+          persist-credentials: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '18.20.8'
+          cache: npm
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Install Angular 16 dependency baseline
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Align top-level Webpack to Angular 16 builder
+        run: npm install --save-dev --save-exact --legacy-peer-deps --no-audit --no-fund webpack@5.94.0
+      - name: Verify builder and application resolve the same Webpack instance
+        run: |
+          npm ls webpack --depth=2 || true
+          node -e "const p=require('path');const app=require.resolve('webpack');const angular=require.resolve('webpack',{paths:[p.dirname(require.resolve('@angular-devkit/build-angular/package.json'))]});console.log({app,angular});if(app!==angular)throw Error('Duplicate Webpack instances');if(require('webpack/package.json').version!=='5.94.0')throw Error('Expected webpack 5.94.0')"
+      - name: Commit repaired dependency and lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "build(angular16): unify Webpack with Angular 16 builder"
+            git push origin HEAD:upgrade/angular-16
+          fi
+      - name: Build Angular 16 production Web wallet
+        run: npm run wallet:build
