@@ -45,7 +45,14 @@ jobs:
         run: |
           CHROME_BIN="$(command -v google-chrome || command -v chromium)"
           export CHROME_BIN
-          npm test -- --main=src/test-rpc.ts --watch=false --browsers=ChromeHeadlessCI --progress=false
+          # Angular 15 automatically discovers specs: avoid the obsolete require.context
+          # bootstrap and select the RPC regression specs with supported --include flags.
+          npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false \
+            --include=src/app/services/api.service.spec.ts \
+            --include=src/app/services/wallet.service.spec.ts \
+            --include=src/app/services/websocket.service.spec.ts \
+            --include=src/app/services/rpc-transport.service.spec.ts \
+            --include=src/app/services/endpoint-policy.service.spec.ts
       - name: Run full Angular unit tests
         shell: bash
         run: |
