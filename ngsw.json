@@ -1,6 +1,6 @@
 {
   "configVersion": 1,
-  "timestamp": 1792618485970,
+  "timestamp": 1792619191512,
   "index": "/index.html",
   "assetGroups": [
     {
@@ -11,15 +11,15 @@
         "ignoreVary": true
       },
       "urls": [
-        "/cpupow.3be9f48e84d5a685.worker.js",
+        "/cpupow.45a01b67efef7ca2.worker.js",
         "/index.html",
-        "/main.ac90a864daa8321a.js",
+        "/main.51b325e12f6bc7f7.js",
         "/manifest.webmanifest",
-        "/polyfills.6ff8b11604869675.js",
-        "/runtime.e847fbf2b9bc75ca.js",
-        "/styles.4a21958ab3d4dd96.css",
-        "/translation0.560177baba07ff80.js",
-        "/translation1.5bdae6ab977e0768.js"
+        "/polyfills.7143fc2a42d74a21.js",
+        "/runtime.7f9f78b5e7b26aa1.js",
+        "/styles.a239d14ba4407357.css",
+        "/translation0.e220133cf50c9f58.js",
+        "/translation1.0048009a845b641c.js"
       ],
       "patterns": []
     },
@@ -268,9 +268,9 @@
     "/assets/logo_source/nault-logo.ai": "22d5d60e0e6c226c118b5faf41e90a5dcd977fed",
     "/assets/logo_source/nault-logo.eps": "a2147e36015ef5497c846a0b74dfb2a4828fd2cd",
     "/assets/logo_source/nault-logo.svg": "d9682092a80a1e825c646a1e7cebd8e4e9aead49",
-    "/cpupow.3be9f48e84d5a685.worker.js": "31a4b50f0860137efd737684aa1780bcbfa60e02",
-    "/index.html": "19b1e4ee498b152646d48adc934e0360fc85b420",
-    "/main.ac90a864daa8321a.js": "2bad4d108a1b3c69c715dc302a26fe7980223916",
+    "/cpupow.45a01b67efef7ca2.worker.js": "543bab35d40f84d39d27caf7850ec67f8bfdaffc",
+    "/index.html": "b25100f0e4566c777399bae371f9e46e5b03ba35",
+    "/main.51b325e12f6bc7f7.js": "f60811c8b8f67dd52766ed20ec49969320dadbe4",
     "/manifest.webmanifest": "fb9ce0116a92808e43c4203fa61fdcb255708437",
     "/montserrat-v15-latin-300.169464b41fd5a6ed.woff2": "cf6855b4b8fd9b7fc4d7adecd97080a70ad75c23",
     "/montserrat-v15-latin-300.1fb23400394501d6.eot": "79ffc50c09de54d30478eb89c6984bbcb41ba5f9",
@@ -305,17 +305,17 @@
     "/open-sans-v20-latin-regular.7fa232ca6b4174dc.woff2": "f821770af8dcac25fd51b691be779fb56dde7783",
     "/open-sans-v20-latin-regular.9afa6b0f58199011.woff": "023d6720d92a54a3bb0ab219818d2e6e6aad24a7",
     "/open-sans-v20-latin-regular.e12beb98cfee8b95.ttf": "3b0b17c64586286b6f5e894b398086fbd9dd8ecf",
-    "/polyfills.6ff8b11604869675.js": "4f871ba19b72fa33c50377b7b6aa2c9153519869",
+    "/polyfills.7143fc2a42d74a21.js": "533dbdefa76c50c522a17f9463130562260266c5",
     "/qr-code.b97e9eeb5e6f1567.svg": "a694020661b8f41d2b6a4eb4ffb98243a0cb9ab9",
     "/roboto-mono-v13-latin-regular.5ebb8c5b1b99813a.woff": "3f1bdd2cb69992c6cbf901c013c80302f4f6d54e",
     "/roboto-mono-v13-latin-regular.72a36365d70383c3.woff2": "6bdf57408a458ab19e554ed1cec1f73107dae3ce",
     "/roboto-mono-v13-latin-regular.897854091e34f10a.eot": "b0b3dc4d2c0877eef3f9032a142c2bd57349a89a",
     "/roboto-mono-v13-latin-regular.898c8f1605bccd5e.ttf": "78b1b85542fec9c2239186aa495e2aa944456577",
     "/roboto-mono-v13-latin-regular.cecd954c0606bb3f.svg": "23049436a09c54fd366e30d8da2d14ecdc561afe",
-    "/runtime.e847fbf2b9bc75ca.js": "6f5d0ce863a60c37873d313ef7f0c3d85526edf7",
-    "/styles.4a21958ab3d4dd96.css": "14a9b76e54cd89bb9e0e67702e42a3617b80dc6f",
-    "/translation0.560177baba07ff80.js": "4255f98b8300f023ff5026b3a4bcaeff2af8f810",
-    "/translation1.5bdae6ab977e0768.js": "b3371a70d3a3a2a1165962d8cb1e91f8671002da",
+    "/runtime.7f9f78b5e7b26aa1.js": "ffbf842289cbdba11d55ca05acbfbd01409e7acd",
+    "/styles.a239d14ba4407357.css": "062c0e8bd96c563817484fe94d19de40c3fdf6a3",
+    "/translation0.e220133cf50c9f58.js": "e98077dd536fe361a01db5df5ca5976016e636c9",
+    "/translation1.0048009a845b641c.js": "a08beda8a3c9161083d7e5d242a4e4c6244ca514",
     "/xno-symbol.3cb95f098aabf0a4.svg": "4f9266fc765ef47c314f159b02f74304445b9f7c"
   },
   "navigationUrls": [
