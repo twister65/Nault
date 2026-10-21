@@ -490,7 +490,7 @@ export class LedgerService {
       console.log(`error when loading ledger `, err);
       if (!hideNotifications) {
         if (this.isUnavailableError(err)) {
-          this.notifyPendingReconnect();
+          this.notifications.sendWarning('Ledger unavailable. Unlock your Ledger, open the Nano app, then click Reconnect.', { identifier: 'ledger-connection-help', length: 10000 });
         } else {
           this.notifications.sendWarning(`Error loading Ledger device: ${typeof err === 'string' ? err : err.message}`, { length: 6000 });
         }
