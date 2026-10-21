@@ -489,7 +489,11 @@ export class LedgerService {
     }).catch(err => {
       console.log(`error when loading ledger `, err);
       if (!hideNotifications) {
-        this.notifications.sendWarning(`Error loading Ledger device: ${typeof err === 'string' ? err : err.message}`, { length: 6000 });
+        if (this.isUnavailableError(err)) {
+          this.notifyPendingReconnect();
+        } else {
+          this.notifications.sendWarning(`Error loading Ledger device: ${typeof err === 'string' ? err : err.message}`, { length: 6000 });
+        }
       }
 
       return null;
