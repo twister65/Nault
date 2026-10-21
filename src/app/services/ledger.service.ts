@@ -26,6 +26,14 @@ export const LedgerStatus = {
   READY: 'ready',
 };
 
+// Not a rejected transaction: the device cannot currently sign a receive block.
+export class LedgerNotReadyError extends Error {
+  constructor() {
+    super('Ledger is not ready. Unlock your Ledger, open the Nano app, then click Reconnect.');
+    this.name = 'LedgerNotReadyError';
+  }
+}
+
 
 export interface LedgerData {
   status: string;
@@ -70,6 +78,49 @@ export class LedgerService {
   queryingDesktopLedger = false;
   private bluetoothConnecting = false;
   private bluetoothGeneration = 0;
+  private pendingReconnectNotified = false;
+
+  // Incoming funds remain pending on the network until the Ledger can sign.
+  // Show a single persistent instruction instead of a toast per WebSocket block.
+  notifyPendingReconnect(): void {
+    if (this.pendingReconnectNotified) return;
+    this.pendingReconnectNotified = true;
+    this.notifications.sendWarning(
+      'Incoming XNO is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.',
+      { identifier: 'ledger-pending-reconnect', length: 0 }
+    );
+  }
+
+  clearPendingReconnect(): void {
+    if (!this.pendingReconnectNotified) return;
+    this.pendingReconnectNotified = false;
+    this.notifications.removeNotification('ledger-pending-reconnect');
+  }
+
+  // These errors indicate that the Nano app is unavailable, not a denied payment.
+  isUnavailableError(err: any): boolean {
+    if (this.ledger.status !== LedgerStatus.READY || err instanceof LedgerNotReadyError) return true;
+    const message = String((err && err.message) || err || '');
+    return /0x6e01|Cannot read properties of null \(reading '(?:cacheBlock|signBlock)'\)/i.test(message);
+  }
+
+  handleUnavailableReceive(): void {
+    if (this.ledger.status === LedgerStatus.READY) {
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      this.ledgerStatus$.next({
+        status: LedgerStatus.NOT_CONNECTED,
+        statusText: 'Ledger is not ready. Unlock it, open the Nano app and reconnect.'
+      });
+    }
+    this.notifyPendingReconnect();
+  }
+
+  private async requireReadyForSigning(): Promise<void> {
+    if (this.ledger.status !== LedgerStatus.READY) {
+      await this.loadLedger(true);
+    }
+    if (this.ledger.status !== LedgerStatus.READY) throw new LedgerNotReadyError();
+  }
 
   get usesDesktopUsb() {
     return this.isDesktop && this.transportMode !== 'Bluetooth';
@@ -438,7 +489,11 @@ export class LedgerService {
     }).catch(err => {
       console.log(`error when loading ledger `, err);
       if (!hideNotifications) {
-        this.notifications.sendWarning(`Error loading Ledger device: ${typeof err === 'string' ? err : err.message}`, { length: 6000 });
+        if (this.isUnavailableError(err)) {
+          this.notifications.sendWarning('Ledger unavailable. Unlock your Ledger, open the Nano app, then click Reconnect.', { identifier: 'ledger-connection-help', length: 10000 });
+        } else {
+          this.notifications.sendWarning(`Error loading Ledger device: ${typeof err === 'string' ? err : err.message}`, { length: 6000 });
+        }
       }
 
       return null;
@@ -551,9 +606,7 @@ export class LedgerService {
   }
 
   async updateCache(accountIndex, blockHash) {
-    if (this.ledger.status !== LedgerStatus.READY) {
-      await this.loadLedger(); // Make sure ledger is ready
-    }
+    await this.requireReadyForSigning();
     const blockResponse = await this.api.blocksInfo([blockHash]);
     const blockData = blockResponse.blocks[blockHash];
     if (!blockData) throw new Error(`Unable to load block data`);
@@ -574,9 +627,7 @@ export class LedgerService {
   }
 
   async updateCacheOffline(accountIndex, blockData) {
-    if (this.ledger.status !== LedgerStatus.READY) {
-      await this.loadLedger(); // Make sure ledger is ready
-    }
+    await this.requireReadyForSigning();
 
     const cacheData = {
       representative: blockData.representative,
@@ -593,9 +644,7 @@ export class LedgerService {
   }
 
   async signBlock(accountIndex: number, blockData: any) {
-    if (this.ledger.status !== LedgerStatus.READY) {
-      await this.loadLedger(); // Make sure ledger is ready
-    }
+    await this.requireReadyForSigning();
     if (this.usesDesktopUsb) {
       return await this.signBlockDesktop(accountIndex, blockData);
     } else {

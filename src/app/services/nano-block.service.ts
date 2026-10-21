@@ -5,7 +5,7 @@ import {WorkPoolService} from './work-pool.service';
 import BigNumber from 'bignumber.js';
 import {NotificationService} from './notification.service';
 import {AppSettingsService} from './app-settings.service';
-import {LedgerService} from './ledger.service';
+import {LedgerService, LedgerStatus} from './ledger.service';
 import { WalletAccount } from './wallet.service';
 import {BehaviorSubject} from 'rxjs';
 import { tools as nanocurrencyWebTools } from 'nanocurrency-web';
@@ -285,6 +285,10 @@ export class NanoBlockService {
 
     // We have everything we need, we need to obtain a signature
     if (ledger) {
+      if (this.ledgerService.ledger.status !== LedgerStatus.READY) {
+        this.ledgerService.notifyPendingReconnect();
+        return null;
+      }
       const ledgerBlock: any = {
         representative: representative,
         balance: newBalanceDecimal,
@@ -304,8 +308,12 @@ export class NanoBlockService {
         blockData.signature = sig.signature.toUpperCase();
       } catch (err) {
         this.notifications.removeNotification('ledger-sign');
-        this.notifications.sendWarning(err.message || `Transaction denied on Ledger device`);
-        return;
+        if (this.ledgerService.isUnavailableError(err)) {
+          this.ledgerService.handleUnavailableReceive();
+        } else {
+          this.notifications.sendWarning(err.message || `Transaction denied on Ledger device`);
+        }
+        return null;
       }
     } else {
       this.signStateBlock(walletAccount, blockData);
