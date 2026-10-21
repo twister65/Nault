@@ -24,9 +24,10 @@ const INDEX_MAX = 4294967295;
 // navigation source for cancel command (excluding camera source because too complicated to fix)
 enum navSource {'remote', 'multisig'}
 @Component({
-  selector: 'app-sign',
-  templateUrl: './sign.component.html',
-  styleUrls: ['./sign.component.css']
+    selector: 'app-sign',
+    templateUrl: './sign.component.html',
+    styleUrls: ['./sign.component.css'],
+    standalone: false
 })
 
 export class SignComponent implements OnInit {

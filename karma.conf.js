@@ -33,6 +33,12 @@ module.exports = function (config) {
         flags: ['--no-sandbox', '--disable-dev-shm-usage']
       }
     },
+    // Angular 15's larger test bundle can block Chrome's event loop for longer
+    // than Karma's default 30-second inactivity window on hosted CI runners.
+    // Keep a finite limit so genuinely hung tests still fail the CI gate.
+    browserNoActivityTimeout: 120000,
+    captureTimeout: 120000,
+    browserDisconnectTolerance: 0,
     singleRun: false
   });
 };

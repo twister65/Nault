@@ -16,9 +16,10 @@ import BigNumber from 'bignumber.js';
 import { TranslocoService } from '@ngneat/transloco';
 
 @Component({
-  selector: 'app-receive',
-  templateUrl: './receive.component.html',
-  styleUrls: ['./receive.component.css']
+    selector: 'app-receive',
+    templateUrl: './receive.component.html',
+    styleUrls: ['./receive.component.css'],
+    standalone: false
 })
 
 
@@ -141,8 +142,8 @@ export class ReceiveComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.mobileTransactionMenuModal.hide();
-    this.merchantModeModal.hide();
+    this.mobileTransactionMenuModal?.hide();
+    this.merchantModeModal?.hide();
     if (this.routerSub) {
       this.routerSub.unsubscribe();
     }

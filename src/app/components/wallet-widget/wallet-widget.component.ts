@@ -6,9 +6,10 @@ import {AppSettingsService} from '../../services/app-settings.service';
 import {PowService} from '../../services/pow.service';
 
 @Component({
-  selector: 'app-wallet-widget',
-  templateUrl: './wallet-widget.component.html',
-  styleUrls: ['./wallet-widget.component.css']
+    selector: 'app-wallet-widget',
+    templateUrl: './wallet-widget.component.html',
+    styleUrls: ['./wallet-widget.component.css'],
+    standalone: false
 })
 export class WalletWidgetComponent implements OnInit {
   wallet = this.walletService.wallet;

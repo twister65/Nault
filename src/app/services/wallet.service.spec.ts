@@ -9,7 +9,7 @@ describe('WalletService', () => {
       null as any, null as any, null as any,
       { addressBook$: of(null) } as any,
       null as any, null as any,
-      { newTransactions$: of(null) } as any,
+      { newTransactions$: of(null), connected$: new Subject<void>() } as any,
       null as any, { ledgerStatus$: new Subject() } as any, null as any, null as any
     );
     expect(service.wallet.accounts).toEqual([]);
@@ -70,6 +70,50 @@ describe('WalletService.reloadBalances when confirmations overlap', () => {
     } finally {
       jasmine.clock().uninstall();
     }
+  });
+});
+
+
+describe('WalletService reconciling missed confirmations after reconnect', () => {
+  it('refreshes balances and pending blocks via RPC after the WebSocket connects', async () => {
+    const connected$ = new Subject<void>();
+    const notifications = { sendWarning: jasmine.createSpy('sendWarning') };
+    const service = new WalletService(
+      null as any, null as any, null as any,
+      { addressBook$: of(null) } as any,
+      null as any, null as any,
+      { newTransactions$: of(null), connected$ } as any,
+      null as any, { ledgerStatus$: new Subject() } as any, null as any, notifications as any
+    );
+    const refresh = spyOn(service, 'reloadBalances').and.returnValue(Promise.resolve());
+
+    connected$.next(); // No wallet configured: avoid unnecessary RPC calls.
+    expect(refresh).not.toHaveBeenCalled();
+
+    service.wallet.accounts = [{ id: 'nano_test' }] as any;
+    connected$.next(); // The confirmation could have occurred while offline.
+    await Promise.resolve();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(notifications.sendWarning).not.toHaveBeenCalled();
+  });
+
+  it('handles RPC failures after reconnect without unhandled rejections', async () => {
+    const connected$ = new Subject<void>();
+    const notifications = { sendWarning: jasmine.createSpy('sendWarning') };
+    const service = new WalletService(
+      null as any, null as any, null as any,
+      { addressBook$: of(null) } as any,
+      null as any, null as any,
+      { newTransactions$: of(null), connected$ } as any,
+      null as any, { ledgerStatus$: new Subject() } as any, null as any, notifications as any
+    );
+    service.wallet.accounts = [{ id: 'nano_test' }] as any;
+    spyOn(service, 'reloadBalances').and.returnValue(Promise.reject(new Error('RPC offline')));
+
+    connected$.next();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(notifications.sendWarning).toHaveBeenCalled();
   });
 });
 

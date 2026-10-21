@@ -47,6 +47,14 @@
 	@media (max-width: 939px) {
 		position: absolute;
 		width: 360px;
+
+		// In the collapsed mobile/tablet layout the sidebar stays underneath
+		// the page. Hide its own scrollbar as well, otherwise WebKit can
+		// paint it through the content around the 940px breakpoint.
+		&:not(.nav-open) {
+			visibility: hidden;
+			pointer-events: none;
+		}
 	}
 
 	// Scrollbar - Gecko (Firefox)

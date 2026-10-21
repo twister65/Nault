@@ -262,6 +262,15 @@ export class WalletService {
       }
     });
 
+    // Subscriptions only deliver future WebSocket confirmations. A confirmation
+    // missed during a network outage must be recovered from the RPC node.
+    this.websocket.connected$.subscribe(() => {
+      if (!this.wallet.accounts.length) return;
+      this.reloadBalances().catch(() => {
+        this.notifications.sendWarning('Unable to refresh balances. Check your connection.');
+      });
+    });
+
     this.ledgerService.ledgerStatus$.subscribe(({ status }) => {
       if (status !== LedgerStatus.READY) return;
       this.ledgerService.clearPendingReconnect();
@@ -1069,6 +1078,7 @@ export class WalletService {
       this.ledgerService.notifyPendingReconnect();
       return;
     }
+
 
     // Sort pending by amount
     if (this.appSettings.settings.pendingOption === 'amount') {

@@ -19,9 +19,10 @@ import { QrModalService } from '../../services/qr-modal.service';
 import { TranslocoService } from '@ngneat/transloco';
 
 @Component({
-  selector: 'app-account-details',
-  templateUrl: './account-details.component.html',
-  styleUrls: ['./account-details.component.css']
+    selector: 'app-account-details',
+    templateUrl: './account-details.component.html',
+    styleUrls: ['./account-details.component.css'],
+    standalone: false
 })
 export class AccountDetailsComponent implements OnInit, OnDestroy {
   nano = 1000000000000000000000000;
@@ -579,8 +580,8 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.mobileAccountMenuModal.hide();
-    this.mobileTransactionMenuModal.hide();
+    this.mobileAccountMenuModal?.hide();
+    this.mobileTransactionMenuModal?.hide();
     if (this.routerSub) {
       this.routerSub.unsubscribe();
     }

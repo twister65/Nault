@@ -9,8 +9,6 @@
     ]
   },
   "files": [
-    "test.ts",
-    "test-rpc.ts",
     "polyfills.ts"
   ],
   "include": [

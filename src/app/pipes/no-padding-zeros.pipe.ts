@@ -1,7 +1,8 @@
 import { Pipe, PipeTransform } from '@angular/core';
 
 @Pipe({
-  name: 'noPaddingZeros'
+    name: 'noPaddingZeros',
+    standalone: false
 })
 export class NoPaddingZerosPipe implements PipeTransform {
   transform(input: string): string {

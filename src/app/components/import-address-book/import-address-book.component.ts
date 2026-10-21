@@ -5,9 +5,10 @@ import {AddressBookService} from '../../services/address-book.service';
 import {Router} from '@angular/router';
 
 @Component({
-  selector: 'app-import-address-book',
-  templateUrl: './import-address-book.component.html',
-  styleUrls: ['./import-address-book.component.css']
+    selector: 'app-import-address-book',
+    templateUrl: './import-address-book.component.html',
+    styleUrls: ['./import-address-book.component.css'],
+    standalone: false
 })
 export class ImportAddressBookComponent implements OnInit {
   activePanel = 'error';

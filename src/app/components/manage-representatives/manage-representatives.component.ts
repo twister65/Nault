@@ -11,9 +11,10 @@ import {RepresentativeService} from '../../services/representative.service';
 import {UtilService} from '../../services/util.service';
 
 @Component({
-  selector: 'app-manage-representatives',
-  templateUrl: './manage-representatives.component.html',
-  styleUrls: ['./manage-representatives.component.css']
+    selector: 'app-manage-representatives',
+    templateUrl: './manage-representatives.component.html',
+    styleUrls: ['./manage-representatives.component.css'],
+    standalone: false
 })
 export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
 

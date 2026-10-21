@@ -7,9 +7,10 @@ import { BigNumber } from 'bignumber.js';
 import {NotificationService} from '../../services/notification.service';
 
 @Component({
-  selector: 'app-converter',
-  templateUrl: './converter.component.html',
-  styleUrls: ['./converter.component.less']
+    selector: 'app-converter',
+    templateUrl: './converter.component.html',
+    styleUrls: ['./converter.component.less'],
+    standalone: false
 })
 export class ConverterComponent implements OnInit, OnDestroy {
   Mnano = '1';

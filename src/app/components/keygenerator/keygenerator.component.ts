@@ -4,9 +4,10 @@ import * as bip39 from 'bip39';
 import {NotificationService} from '../../services/notification.service';
 
 @Component({
-  selector: 'app-keygenerator',
-  templateUrl: './keygenerator.component.html',
-  styleUrls: ['./keygenerator.component.css']
+    selector: 'app-keygenerator',
+    templateUrl: './keygenerator.component.html',
+    styleUrls: ['./keygenerator.component.css'],
+    standalone: false
 })
 export class KeygeneratorComponent implements OnInit {
   seed = '';

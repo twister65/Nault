@@ -5,9 +5,10 @@ import {RepresentativeService} from '../../services/representative.service';
 import {Router} from '@angular/router';
 
 @Component({
-  selector: 'app-change-rep-widget',
-  templateUrl: './change-rep-widget.component.html',
-  styleUrls: ['./change-rep-widget.component.css']
+    selector: 'app-change-rep-widget',
+    templateUrl: './change-rep-widget.component.html',
+    styleUrls: ['./change-rep-widget.component.css'],
+    standalone: false
 })
 export class ChangeRepWidgetComponent implements OnInit {
 

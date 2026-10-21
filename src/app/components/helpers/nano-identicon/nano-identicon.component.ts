@@ -2,9 +2,10 @@ import { AfterViewInit, Component, ElementRef, Input, OnChanges, HostBinding, Vi
 import { createIcon } from '../../../../assets/lib/nanoidenticons.min.js';
 
 @Component({
-  selector: 'app-nano-identicon',
-  templateUrl: './nano-identicon.component.html',
-  styleUrls: ['./nano-identicon.component.css'],
+    selector: 'app-nano-identicon',
+    templateUrl: './nano-identicon.component.html',
+    styleUrls: ['./nano-identicon.component.css'],
+    standalone: false
 })
 export class NanoIdenticonComponent implements OnChanges, AfterViewInit {
 

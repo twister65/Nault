@@ -7,9 +7,10 @@ import { QrModalService } from '../../services/qr-modal.service';
 import { MusigService } from '../../services/musig.service';
 
 @Component({
-  selector: 'app-multisig',
-  templateUrl: './multisig.component.html',
-  styleUrls: ['./multisig.component.css']
+    selector: 'app-multisig',
+    templateUrl: './multisig.component.html',
+    styleUrls: ['./multisig.component.css'],
+    standalone: false
 })
 export class MultisigComponent implements OnInit {
   accountAdd = '';

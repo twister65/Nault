@@ -18,9 +18,10 @@ import {
 import { TranslocoService } from '@ngneat/transloco';
 
 @Component({
-  selector: 'app-representatives',
-  templateUrl: './representatives.component.html',
-  styleUrls: ['./representatives.component.css']
+    selector: 'app-representatives',
+    templateUrl: './representatives.component.html',
+    styleUrls: ['./representatives.component.css'],
+    standalone: false
 })
 export class RepresentativesComponent implements OnInit {
   @ViewChild('repInput') repInput;

@@ -1,7 +1,8 @@
 import { Pipe, PipeTransform } from '@angular/core';
 
 @Pipe({
-  name: 'amountsplit'
+    name: 'amountsplit',
+    standalone: false
 })
 export class AmountSplitPipe implements PipeTransform {
   transform(input: string, idx: number): string {

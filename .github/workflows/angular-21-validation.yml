@@ -1,0 +1,63 @@
+name: Validate Angular 21 migration
+on:
+  push:
+    branches: ['upgrade/angular-21']
+  pull_request:
+    branches: [master]
+permissions:
+  contents: read
+concurrency:
+  group: angular21-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    if: github.repository == 'twister65/Nault'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.14.0'
+          cache: npm
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Install locked Angular 21 dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Verify Angular 21 toolchain and Webpack
+        run: |
+          ./node_modules/.bin/ng version
+          node -e "const p=require('./package.json');const w=require('webpack/package.json').version;if(!p.dependencies['@angular/core'].match(/21\./)||w!==p.devDependencies.webpack)throw Error('Version mismatch')"
+      - name: Build production Web wallet with PWA service worker
+        run: npm run wallet:build
+      - name: Check generated PWA manifest
+        run: |
+          node -e "const fs=require('fs');const manifest=JSON.parse(fs.readFileSync('dist/ngsw.json','utf8'));if(!manifest.hashTable||!manifest.assetGroups?.length)throw Error('Service worker manifest missing required entries');console.log('Service worker manifest generated')"
+      - name: Build Electron desktop bundle and compile TypeScript
+        run: npm run desktop:build
+      - name: Lint Angular 21 sources
+        run: npm run lint
+      - name: Test Ledger Web Bluetooth and USB regressions
+        run: node scripts/test-ledger-bluetooth.js
+      - name: Run Nano / RsNano RPC regression tests
+        shell: bash
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          export CHROME_BIN
+          npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false \
+            --include=src/app/services/api.service.spec.ts \
+            --include=src/app/services/wallet.service.spec.ts \
+            --include=src/app/services/websocket.service.spec.ts \
+            --include=src/app/services/rpc-transport.service.spec.ts \
+            --include=src/app/services/endpoint-policy.service.spec.ts
+      - name: Run full Angular unit test suite
+        shell: bash
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          export CHROME_BIN
+          npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false

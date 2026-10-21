@@ -6,22 +6,21 @@
     "outDir": "./dist/out-tsc",
     "sourceMap": true,
     "declaration": false,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
-    "target": "es2017",
+    "target": "ES2022",
     "typeRoots": [
       "node_modules/@types",
       "./src/typings"
     ],
-    "lib": [
-      "es2020",
-      "dom"
-    ],
     "module": "es2020",
     "baseUrl": "./",
     "paths": {
-      "stream": ["../node_modules/readable-stream/readable.js"]
-    }
+      "stream": [
+        "../node_modules/readable-stream/readable.js"
+      ]
+    },
+    "useDefineForClassFields": false
   }
 }
