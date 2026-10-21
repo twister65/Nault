@@ -1,0 +1,45 @@
+name: Angular 21 deprecated dependency inventory
+
+on:
+  push:
+    branches: [fix/angular-21-deprecated-dependencies]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+          cache: npm
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Inventory deprecations from exact lockfile
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci --legacy-peer-deps --no-audit --no-fund 2>&1 | tee npm-deprecations-install.log
+          echo "### Deprecated packages (unique)" >> "$GITHUB_STEP_SUMMARY"
+          grep -E 'npm warn deprecated |npm WARN deprecated ' npm-deprecations-install.log | sort -u | tee deprecated-packages.txt || true
+          wc -l deprecated-packages.txt | tee -a "$GITHUB_STEP_SUMMARY"
+          cat deprecated-packages.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Archive inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: angular-21-deprecated-inventory
+          path: |
+            npm-deprecations-install.log
+            deprecated-packages.txt
+          if-no-files-found: warn
