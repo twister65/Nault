@@ -11,7 +11,7 @@ import {NanoBlockService} from './nano-block.service';
 import {NotificationService} from './notification.service';
 import {AppSettingsService} from './app-settings.service';
 import {PriceService} from './price.service';
-import {LedgerService} from './ledger.service';
+import {LedgerService, LedgerStatus} from './ledger.service';
 import { NoPaddingZerosPipe } from 'app/pipes/no-padding-zeros.pipe';
 
 export type WalletType = 'seed' | 'ledger' | 'privateKey' | 'expandedKey';
@@ -259,6 +259,14 @@ export class WalletService {
         await this.reloadBalances().catch(() => {
           this.notifications.sendWarning('Unable to refresh balances. Check your connection.');
         });
+      }
+    });
+
+    this.ledgerService.ledgerStatus$.subscribe(({ status }) => {
+      if (status !== LedgerStatus.READY) return;
+      this.ledgerService.clearPendingReconnect();
+      if (this.isLedgerWallet() && this.wallet.pendingBlocks.length) {
+        this.processPendingBlocks();
       }
     });
 
@@ -1057,6 +1065,10 @@ export class WalletService {
 
   async processPendingBlocks() {
     if (this.processingPending || this.wallet.locked || !this.wallet.pendingBlocks.length || this.appSettings.settings.pendingOption === 'manual') return;
+    if (this.isLedgerWallet() && this.ledgerService.ledger.status !== LedgerStatus.READY) {
+      this.ledgerService.notifyPendingReconnect();
+      return;
+    }
 
     // Sort pending by amount
     if (this.appSettings.settings.pendingOption === 'amount') {
