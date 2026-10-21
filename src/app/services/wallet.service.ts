@@ -262,6 +262,15 @@ export class WalletService {
       }
     });
 
+    // Subscriptions only deliver future WebSocket confirmations. A confirmation
+    // missed during a network outage must be recovered from the RPC node.
+    this.websocket.connected$.subscribe(() => {
+      if (!this.wallet.accounts.length) return;
+      this.reloadBalances().catch(() => {
+        this.notifications.sendWarning('Unable to refresh balances. Check your connection.');
+      });
+    });
+
     this.addressBook.addressBook$.subscribe(newAddressBook => {
       this.reloadAddressBook();
     });
