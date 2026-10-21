@@ -1,6 +1,6 @@
 import { secureEndpoint } from './endpoint-policy';
 import { Injectable } from '@angular/core';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 import {AppSettingsService} from './app-settings.service';
 
 @Injectable()
@@ -29,6 +29,8 @@ export class WebsocketService {
   subscribedAccounts = [];
 
   newTransactions$ = new BehaviorSubject(null);
+  // A new connection does not replay confirmations missed while offline.
+  readonly connected$ = new Subject<void>();
 
   constructor(private appSettings: AppSettingsService) { }
 
@@ -81,6 +83,8 @@ export class WebsocketService {
       if (this.subscribedAccounts.length) {
         this.subscribeAccounts([...this.subscribedAccounts]);
       }
+      // Notify the wallet to reconcile balances and pending blocks via RPC.
+      this.connected$.next();
 
       if (!this.keepaliveSet) {
         this.keepalive(); // Start keepalives!
