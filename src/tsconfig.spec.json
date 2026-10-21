@@ -9,7 +9,8 @@
     ]
   },
   "files": [
-    "polyfills.ts"
+    "polyfills.ts",
+    "test-rpc.ts"
   ],
   "include": [
     "**/*.spec.ts",
