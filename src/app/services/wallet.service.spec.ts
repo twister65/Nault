@@ -36,3 +36,38 @@ describe('WalletService.reloadBalances errors', () => {
     expect(service.wallet.updatingBalance).toBe(false);
   });
 });
+
+describe('WalletService.reloadBalances when confirmations overlap', () => {
+  it('retries once after a refresh was skipped while an RPC call was running', async () => {
+    const service = Object.create(WalletService.prototype) as WalletService;
+    service.wallet = { updatingBalance: false } as any;
+
+    let finishFirst!: () => void;
+    const firstRpc = new Promise<void>(resolve => { finishFirst = resolve; });
+    let callCount = 0;
+    spyOn<any>(service, 'refreshBalances').and.callFake(async () => {
+      callCount++;
+      if (callCount === 1) await firstRpc;
+      // In production refreshBalances resets the spinner when it completes.
+      service.wallet.updatingBalance = false;
+    });
+
+    jasmine.clock().install();
+    try {
+      const initialRefresh = service.reloadBalances();
+      await service.reloadBalances();
+      await service.reloadBalances(); // Several WS confirmations are coalesced.
+      expect(callCount).toBe(1);
+
+      finishFirst();
+      await initialRefresh;
+      expect(callCount).toBe(1);
+
+      jasmine.clock().tick(351);
+      await Promise.resolve();
+      expect(callCount).toBe(2);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+});
