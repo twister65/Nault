@@ -2,8 +2,6 @@ plugins {
     id 'com.android.application'
 }
 
-import java.net.URI
-
 // Deliberately do not bundle wallet keys or an arbitrary debug URL in source control.
 // An Android debug APK is an HTTPS PWA launcher, not an offline copy of Angular dist/.
 def targetUrl = providers.gradleProperty('naultUrl')
@@ -11,7 +9,7 @@ def targetUrl = providers.gradleProperty('naultUrl')
     .getOrElse('')
 def parsedUrl
 try {
-    parsedUrl = new URI(targetUrl)
+    parsedUrl = new java.net.URI(targetUrl)
 } catch (Exception ignored) {
     throw new GradleException('naultUrl must be a valid absolute HTTPS URL')
 }
