@@ -126,6 +126,8 @@ export class WalletService {
   processingPending = false;
   successfulBlocks = [];
   trackedHashes = [];
+  // Coalesce confirmations arriving while a previous balance RPC is still running.
+  private balanceRefreshQueued = false;
 
   constructor(
     private util: UtilService,
@@ -741,8 +743,12 @@ export class WalletService {
   }
 
   async reloadBalances() {
-    // to block two reloads to happen at the same time (websocket)
-    if (this.wallet.updatingBalance) return;
+    // A WebSocket confirmation must not be lost during another balance refresh.
+    // Queue one additional RPC refresh rather than running concurrent requests.
+    if (this.wallet.updatingBalance) {
+      this.balanceRefreshQueued = true;
+      return;
+    }
 
     this.wallet.updatingBalance = true;
     try {
@@ -751,6 +757,16 @@ export class WalletService {
       // A failed RPC must not leave the balance spinner running forever.
       this.wallet.updatingBalance = false;
       throw error;
+    } finally {
+      if (this.balanceRefreshQueued) {
+        this.balanceRefreshQueued = false;
+        // Allow a confirmed receive block to become visible to the RPC backend.
+        setTimeout(() => {
+          this.reloadBalances().catch(() => {
+            this.notifications.sendWarning('Unable to refresh balances. Check your connection.');
+          });
+        }, 350);
+      }
     }
   }
 
