@@ -34,6 +34,31 @@ jobs:
           grep -E 'npm warn deprecated |npm WARN deprecated ' npm-deprecations-install.log | sort -u | tee deprecated-packages.txt || true
           wc -l deprecated-packages.txt | tee -a "$GITHUB_STEP_SUMMARY"
           cat deprecated-packages.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Inventory references to legacy runtime dependencies
+        shell: bash
+        run: |
+          node - <<'NODE' | tee legacy-import-references.txt
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const names = ['babel-polyfill', 'babel-runtime', '@angular/animations', 'rxjs-compat', '@angular/platform-browser-dynamic'];
+          const roots = ['src', 'desktop-app/src', 'scripts', 'e2e'];
+          let found = 0;
+          function walk(dir) {
+            if (!fs.existsSync(dir)) return;
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const file = path.join(dir, entry.name);
+              if (entry.isDirectory()) { walk(file); continue; }
+              if (!/\\.(ts|tsx|js|cjs|mjs|html)$/.test(entry.name)) continue;
+              for (const [i, line] of fs.readFileSync(file, 'utf8').split(/\\r?\\n/).entries()) {
+                for (const name of names) {
+                  if (line.includes(name)) { console.log(file + ':' + (i + 1) + ' [' + name + '] ' + line.trim().slice(0, 160)); found++; }
+                }
+              }
+            }
+          }
+          for (const dir of roots) walk(dir);
+          console.log('TOTAL_MATCHES=' + found);
+          NODE
       - name: Archive inventory
         if: always()
         uses: actions/upload-artifact@v4
@@ -42,4 +67,5 @@ jobs:
           path: |
             npm-deprecations-install.log
             deprecated-packages.txt
+            legacy-import-references.txt
           if-no-files-found: warn
