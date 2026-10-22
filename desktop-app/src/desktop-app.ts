@@ -1,4 +1,4 @@
-import 'babel-polyfill';
+import 'core-js/stable';
 
 import { app, BrowserWindow, shell, Menu, screen, dialog, ipcMain, IpcMainEvent } from 'electron';
 import { autoUpdater } from 'electron-updater';
