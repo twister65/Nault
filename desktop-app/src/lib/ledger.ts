@@ -37,6 +37,9 @@ export class LedgerService {
 
   pollingLedger = false;
   queryingLedger = false;
+  private usbGeneration = 0;
+  private usbOpening: Promise<LedgerHidWorkerTransport> | null = null;
+  private usbClosing: Promise<void> = Promise.resolve();
 
   ledgerStatus$ = new rx.Subject();
   ledgerMessage$ = new rx.Subject();
@@ -57,9 +60,15 @@ export class LedgerService {
     this.ledger.nano = null;
     // Release the worker and HID handle when a device disconnects or fails.
     if (transport) {
-      Promise.resolve(transport.close()).catch(error => {
-        console.warn('Could not close Ledger transport:', error);
-      });
+      const previousClose = this.usbClosing;
+      this.usbClosing = (async () => {
+        await previousClose;
+        try {
+          await transport.close();
+        } catch (error) {
+          console.warn('Could not close Ledger transport:', error);
+        }
+      })();
     }
     // The renderer already manages its transport-mode transition. In that
     // case, notifying "not-connected" before the new USB status arrives would
@@ -75,15 +84,46 @@ export class LedgerService {
       // Electron 44 cannot safely use the legacy node-hid async read
       // callback, while the bounded synchronous read works in the worker.
       console.info('[Ledger diagnosis] Opening USB HID worker transport');
-      const hidTransport = await LedgerHidWorkerTransport.open();
-      console.info('[Ledger diagnosis] USB HID worker ready');
-      this.ledger.transport = hidTransport;
-      this.ledger.nano = new Nano(hidTransport);
-      console.info('[Ledger diagnosis] Nano application transport initialized');
-      return hidTransport;
+      const generation = this.usbGeneration;
+      const opening = LedgerHidWorkerTransport.open();
+      this.usbOpening = opening;
+      try {
+        const hidTransport = await opening;
+        // Switching to Bluetooth can occur while this USB worker is opening.
+        // Never adopt an HID handle after that switch.
+        if (generation !== this.usbGeneration) {
+          await hidTransport.close();
+          throw new Error('Ledger USB opening cancelled by Bluetooth switch');
+        }
+        console.info('[Ledger diagnosis] USB HID worker ready');
+        this.ledger.transport = hidTransport;
+        this.ledger.nano = new Nano(hidTransport);
+        console.info('[Ledger diagnosis] Nano application transport initialized');
+        return hidTransport;
+      } finally {
+        if (this.usbOpening === opening) this.usbOpening = null;
+      }
     }
 
     throw new Error('Native Bluetooth is disabled. Use the Web Bluetooth connection button.');
+  }
+
+  /**
+   * A Bluetooth connection may be selected immediately after USB (or even
+   * while a USB worker is still starting). Wait for all HID handles to close
+   * before Chromium discovers GATT services. No automatic BLE pairing.
+   */
+  async releaseUsbForBluetooth(): Promise<void> {
+    this.usbGeneration++;
+    this.pollingLedger = false;
+    this.resetLedger('', false);
+    const opening = this.usbOpening;
+    if (opening) {
+      // loadTransport() closes its own handle on a generation mismatch.
+      try { await opening; } catch (_error) {}
+    }
+    await this.usbClosing;
+    console.info('[Ledger USB] HID worker released before Bluetooth discovery');
   }
 
   async loadAppConfig(): Promise<any> {
@@ -259,6 +299,16 @@ export function initialize(isTrustedSender: (event: IpcMainEvent) => boolean) {
     if (!sendingWindow) return;
 
     sendingWindow.send('ledger', newMessage);
+  });
+
+  ipcMain.handle('ledger-release-usb', async event => {
+    if (!isTrustedSender(event)) {
+      console.warn('Rejected USB release IPC from an untrusted sender');
+      throw new Error('Untrusted Ledger IPC sender');
+    }
+    sendingWindow = event.sender;
+    await Ledger.releaseUsbForBluetooth();
+    return true;
   });
 
   // Listen for new messages from the browser window and dispatch accordingly
