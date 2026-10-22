@@ -78,6 +78,18 @@ jobs:
           for (const level of ['info', 'low', 'moderate', 'high', 'critical', 'total']) {
             console.log(level + '=' + (counts[level] ?? 'unknown'));
           }
+          const direct = Object.entries(report.vulnerabilities || {})
+            .filter(([, item]) => item.isDirect)
+            .map(([name, item]) => ({
+              name, severity: item.severity, range: item.range,
+              fixAvailable: item.fixAvailable
+            }));
+          fs.writeFileSync('direct-vulnerability-summary.json', JSON.stringify(direct, null, 2) + '\\n');
+          console.log('DIRECT_VULNERABLE_PACKAGES=' + direct.length);
+          for (const item of direct) {
+            console.log('DIRECT_RISK ' + item.name + ' severity=' + item.severity +
+              ' fixAvailable=' + JSON.stringify(item.fixAvailable));
+          }
           NODE
           echo '### npm audit advisories (distinct from deprecations)' >> "$GITHUB_STEP_SUMMARY"
           cat dependency-vulnerability-summary.txt >> "$GITHUB_STEP_SUMMARY"
@@ -92,4 +104,5 @@ jobs:
             legacy-import-references.txt
             npm-audit-results.json
             dependency-vulnerability-summary.txt
+            direct-vulnerability-summary.json
           if-no-files-found: warn
