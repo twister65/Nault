@@ -59,6 +59,28 @@ jobs:
           for (const dir of roots) walk(dir);
           console.log('TOTAL_MATCHES=' + found);
           NODE
+      - name: Snapshot npm security advisories separately from deprecations
+        shell: bash
+        run: |
+          # An audit failure due to advisories is expected; preserve the report without
+          # making this diagnostic inventory an alternative to the security merge gate.
+          npm audit --json --audit-level=low > npm-audit-results.json || true
+          node - <<'NODE' | tee dependency-vulnerability-summary.txt
+          const fs = require('node:fs');
+          let report;
+          try { report = JSON.parse(fs.readFileSync('npm-audit-results.json', 'utf8')); }
+          catch (error) { console.log('AUDIT_UNAVAILABLE: invalid JSON (' + error.message + ')'); process.exit(0); }
+          const counts = report.metadata?.vulnerabilities;
+          if (!counts || report.error) {
+            console.log('AUDIT_UNAVAILABLE: registry/API error, do not report vulnerability totals as zero');
+            process.exit(0);
+          }
+          for (const level of ['info', 'low', 'moderate', 'high', 'critical', 'total']) {
+            console.log(level + '=' + (counts[level] ?? 'unknown'));
+          }
+          NODE
+          echo '### npm audit advisories (distinct from deprecations)' >> "$GITHUB_STEP_SUMMARY"
+          cat dependency-vulnerability-summary.txt >> "$GITHUB_STEP_SUMMARY"
       - name: Archive inventory
         if: always()
         uses: actions/upload-artifact@v4
@@ -68,4 +90,6 @@ jobs:
             npm-deprecations-install.log
             deprecated-packages.txt
             legacy-import-references.txt
+            npm-audit-results.json
+            dependency-vulnerability-summary.txt
           if-no-files-found: warn
