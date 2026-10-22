@@ -124,9 +124,9 @@ async function main() {
     });
     // Avoid a background poller when exercising just the IPC handshake.
     NativeLedgerService.prototype.pollLedgerStatus = () => {};
-    initialize(() => true);
+    initialize(event => event.trusted === true);
     const messages = [];
-    const event = { sender: { send(_channel, msg) { messages.push(msg); } } };
+    const event = { trusted: true, sender: { send(_channel, msg) { messages.push(msg); } } };
     callbacks.ledger(event, { event: 'disconnect' });
     assert.deepEqual(messages.filter(m => m.event === 'ledger-status'), [],
       'an intentional transport switch must not report a failed USB status');
