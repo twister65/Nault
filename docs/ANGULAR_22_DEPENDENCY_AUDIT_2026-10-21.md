@@ -10,14 +10,20 @@
 
 ### Lot 1 — Plateforme Angular sans bootstrap dynamique
 
-**Changement appliqué**, vérification CI sur le commit final encore à relever :
+**Changement appliqué et validé en CI** (run du 22/10/2026) :
 
 - `src/main.ts` : `platformBrowserDynamic()` remplacé par `platformBrowser()` depuis `@angular/platform-browser` ; maintien de `AppModule` et de `provideZoneChangeDetection()`.
 - `src/test.ts` et `src/test-rpc.ts` : `BrowserDynamicTestingModule` / `platformBrowserDynamicTesting()` remplacés par `BrowserTestingModule` / `platformBrowserTesting()`, avec import explicite de `@angular/compiler` pour préserver le JIT des tests Karma.
 - `package.json` et `package-lock.json` : suppression de la dépendance directe et des entrées dédiées à `@angular/platform-browser-dynamic@21.2.25`. Le lockfile version 2 a été synchronisé ; `npm ci` doit encore le confirmer.
 - Commits du lot : [740f57b](https://github.com/twister65/Nault/commit/740f57b64fb84fabfa30070c06856431a2686fe6), [e9de47a](https://github.com/twister65/Nault/commit/e9de47a9b25f994797809d428200ac3bc8f59f25), [ed17326](https://github.com/twister65/Nault/commit/ed173261eb7c0a2cd70c791a63daa3000a74546d), [f721250](https://github.com/twister65/Nault/commit/f721250b0270d510eed227a334830b4115dc2f27), [6e5c1e1](https://github.com/twister65/Nault/commit/6e5c1e1957fd5962d4cff18b0e18b696767f65dc).
 
-**Attendu :** retrait de l'avertissement npm `@angular/platform-browser-dynamic`. Ne pas annoncer la diminution du nombre d'avertissements avant le prochain inventaire GitHub Actions. En cas d'échec CI, corriger sur cette branche sans fusion.
+**Résultat observé :** `npm ci` et l'inventaire ont réussi : **19 → 18 avertissements npm distincts**, l'avertissement `@angular/platform-browser-dynamic` a disparu. [Inventaire CI, run 39709291547](https://github.com/twister65/Nault/actions/runs/39709291547).
+
+**Validation observée :** [Angular 21, run 39709291508](https://github.com/twister65/Nault/actions/runs/39709291508) **success** : build production Web/PWA + manifeste, build Electron + compilation TypeScript, lint, **29 tests Ledger Web Bluetooth**, **31 tests RPC**, **98 tests Angular**. [Lint, run 39709291627](https://github.com/twister65/Nault/actions/runs/39709291627) et [CodeQL Advanced, run 39709291483](https://github.com/twister65/Nault/actions/runs/39709291483) : **success**.
+
+**Lecture des résultats :** la base de référence initiale du rapport était 97/30 tests ; des commits de correctif `wallet.service` déjà présents sur la branche avant ce lot ont porté les suites à **98/31**. Ne pas attribuer ces tests supplémentaires au remplacement de `platform-browser-dynamic`. Aucune validation matérielle Ledger supplémentaire n'a été réalisée.
+
+**État du lot 1 : VALIDÉ par les contrôles automatisés** ; validation manuelle multi-plateforme et fusion restant séparées.
 
 **Conservation du périmètre :** aucun changement au moteur Ledger U2F/WebUSB/WebHID/BLE, ni à l'API RPC. À ce stade, le bootstrap NgModule est conservé ; la migration standalone n'est pas engagée.
 
