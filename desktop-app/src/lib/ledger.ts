@@ -4,7 +4,7 @@ import Nano from 'hw-app-nano';
 
 import * as rx from 'rxjs';
 
-import { ipcMain, IpcMainEvent } from 'electron';
+import { ipcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 
 const STATUS_CODES = {
   SECURITY_STATUS_NOT_SATISFIED: 0x6982,
@@ -283,7 +283,7 @@ export class LedgerService {
 let sendingWindow = null;
 
 // Create a copy of the ledger service and register listeners with the browser window
-export function initialize(isTrustedSender: (event: IpcMainEvent) => boolean) {
+export function initialize(isTrustedSender: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean) {
   console.log('Ledger service initializing');
   const Ledger = new LedgerService();
 
