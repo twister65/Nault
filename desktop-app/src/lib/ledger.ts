@@ -4,7 +4,7 @@ import Nano from 'hw-app-nano';
 
 import * as rx from 'rxjs';
 
-import { ipcMain, IpcMainEvent } from 'electron';
+import { ipcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 
 const STATUS_CODES = {
   SECURITY_STATUS_NOT_SATISFIED: 0x6982,
@@ -37,6 +37,9 @@ export class LedgerService {
 
   pollingLedger = false;
   queryingLedger = false;
+  private usbGeneration = 0;
+  private usbOpening: Promise<LedgerHidWorkerTransport> | null = null;
+  private usbClosing: Promise<void> = Promise.resolve();
 
   ledgerStatus$ = new rx.Subject();
   ledgerMessage$ = new rx.Subject();
@@ -57,9 +60,15 @@ export class LedgerService {
     this.ledger.nano = null;
     // Release the worker and HID handle when a device disconnects or fails.
     if (transport) {
-      Promise.resolve(transport.close()).catch(error => {
-        console.warn('Could not close Ledger transport:', error);
-      });
+      const previousClose = this.usbClosing;
+      this.usbClosing = (async () => {
+        await previousClose;
+        try {
+          await transport.close();
+        } catch (error) {
+          console.warn('Could not close Ledger transport:', error);
+        }
+      })();
     }
     // The renderer already manages its transport-mode transition. In that
     // case, notifying "not-connected" before the new USB status arrives would
@@ -75,15 +84,47 @@ export class LedgerService {
       // Electron 44 cannot safely use the legacy node-hid async read
       // callback, while the bounded synchronous read works in the worker.
       console.info('[Ledger diagnosis] Opening USB HID worker transport');
-      const hidTransport = await LedgerHidWorkerTransport.open();
-      console.info('[Ledger diagnosis] USB HID worker ready');
-      this.ledger.transport = hidTransport;
-      this.ledger.nano = new Nano(hidTransport);
-      console.info('[Ledger diagnosis] Nano application transport initialized');
-      return hidTransport;
+      const generation = this.usbGeneration;
+      // Include any cancellation close in the tracked promise: BLE must not
+      // proceed just because open() resolved while HID is still shutting down.
+      const opening = LedgerHidWorkerTransport.open().then(async hidTransport => {
+        if (generation !== this.usbGeneration) {
+          await hidTransport.close();
+          throw new Error('Ledger USB opening cancelled by Bluetooth switch');
+        }
+        console.info('[Ledger diagnosis] USB HID worker ready');
+        this.ledger.transport = hidTransport;
+        this.ledger.nano = new Nano(hidTransport);
+        console.info('[Ledger diagnosis] Nano application transport initialized');
+        return hidTransport;
+      });
+      this.usbOpening = opening;
+      try {
+        return await opening;
+      } finally {
+        if (this.usbOpening === opening) this.usbOpening = null;
+      }
     }
 
     throw new Error('Native Bluetooth is disabled. Use the Web Bluetooth connection button.');
+  }
+
+  /**
+   * A Bluetooth connection may be selected immediately after USB (or even
+   * while a USB worker is still starting). Wait for all HID handles to close
+   * before Chromium discovers GATT services. No automatic BLE pairing.
+   */
+  async releaseUsbForBluetooth(): Promise<void> {
+    this.usbGeneration++;
+    this.pollingLedger = false;
+    this.resetLedger('', false);
+    const opening = this.usbOpening;
+    if (opening) {
+      // loadTransport() closes its own handle on a generation mismatch.
+      try { await opening; } catch (_error) {}
+    }
+    await this.usbClosing;
+    console.info('[Ledger USB] HID worker released before Bluetooth discovery');
   }
 
   async loadAppConfig(): Promise<any> {
@@ -243,7 +284,7 @@ export class LedgerService {
 let sendingWindow = null;
 
 // Create a copy of the ledger service and register listeners with the browser window
-export function initialize(isTrustedSender: (event: IpcMainEvent) => boolean) {
+export function initialize(isTrustedSender: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean) {
   console.log('Ledger service initializing');
   const Ledger = new LedgerService();
 
@@ -259,6 +300,16 @@ export function initialize(isTrustedSender: (event: IpcMainEvent) => boolean) {
     if (!sendingWindow) return;
 
     sendingWindow.send('ledger', newMessage);
+  });
+
+  ipcMain.handle('ledger-release-usb', async event => {
+    if (!isTrustedSender(event)) {
+      console.warn('Rejected USB release IPC from an untrusted sender');
+      throw new Error('Untrusted Ledger IPC sender');
+    }
+    sendingWindow = event.sender;
+    await Ledger.releaseUsbForBluetooth();
+    return true;
   });
 
   // Listen for new messages from the browser window and dispatch accordingly
