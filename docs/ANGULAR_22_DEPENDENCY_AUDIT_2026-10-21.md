@@ -6,6 +6,27 @@
 **Commit validé :** [b016183b91e0](https://github.com/twister65/Nault/commit/b016183b91e0bd336e86064ab1bdd77464812274)  
 **Statut :** diagnostic et plan de correction ; **les remplacements proposés ne sont pas encore appliqués**.
 
+## Journal de migration — mise à jour du 22 octobre 2026
+
+### Lot 1 — Plateforme Angular sans bootstrap dynamique
+
+**Changement appliqué**, vérification CI sur le commit final encore à relever :
+
+- `src/main.ts` : `platformBrowserDynamic()` remplacé par `platformBrowser()` depuis `@angular/platform-browser` ; maintien de `AppModule` et de `provideZoneChangeDetection()`.
+- `src/test.ts` et `src/test-rpc.ts` : `BrowserDynamicTestingModule` / `platformBrowserDynamicTesting()` remplacés par `BrowserTestingModule` / `platformBrowserTesting()`, avec import explicite de `@angular/compiler` pour préserver le JIT des tests Karma.
+- `package.json` et `package-lock.json` : suppression de la dépendance directe et des entrées dédiées à `@angular/platform-browser-dynamic@21.2.25`. Le lockfile version 2 a été synchronisé ; `npm ci` doit encore le confirmer.
+- Commits du lot : [740f57b](https://github.com/twister65/Nault/commit/740f57b64fb84fabfa30070c06856431a2686fe6), [e9de47a](https://github.com/twister65/Nault/commit/e9de47a9b25f994797809d428200ac3bc8f59f25), [ed17326](https://github.com/twister65/Nault/commit/ed173261eb7c0a2cd70c791a63daa3000a74546d), [f721250](https://github.com/twister65/Nault/commit/f721250b0270d510eed227a334830b4115dc2f27), [6e5c1e1](https://github.com/twister65/Nault/commit/6e5c1e1957fd5962d4cff18b0e18b696767f65dc).
+
+**Attendu :** retrait de l'avertissement npm `@angular/platform-browser-dynamic`. Ne pas annoncer la diminution du nombre d'avertissements avant le prochain inventaire GitHub Actions. En cas d'échec CI, corriger sur cette branche sans fusion.
+
+**Conservation du périmètre :** aucun changement au moteur Ledger U2F/WebUSB/WebHID/BLE, ni à l'API RPC. À ce stade, le bootstrap NgModule est conservé ; la migration standalone n'est pas engagée.
+
+### Préparation des lots suivants
+
+Priorité : isoler `babel-polyfill` et `babel-runtime` (sources de `core-js@2`), après vérification des usages ; ne pas supprimer U2F car `src/app/services/ledger.service.ts` l'utilise encore comme fallback explicite. Vérifier les tests réels après chaque modification du lockfile.
+
+---
+
 ## 1. Synthèse décisionnelle
 
 L'exécution `npm ci --legacy-peer-deps --no-audit --no-fund` sur la branche Angular 21 fait apparaître **19 noms de paquets dépréciés** (le décompte correspond à des entrées uniques du journal d'installation, pas à 19 vulnérabilités ni à 19 dépendances directes). Quatre figurent dans le `package.json` de Nault : `@angular/animations`, `@angular/platform-browser-dynamic`, `@ledgerhq/hw-transport-u2f` et `eslint`. Les quinze autres sont transitives. Le lockfile v2 contient **2 008 entrées** dans `packages`, dont des versions imbriquées distinctes.
