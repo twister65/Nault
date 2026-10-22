@@ -16,13 +16,21 @@ export default class LedgerWebBle extends TransportBLE {
     let transport: LedgerWebBle;
     let characteristic: Characteristic;
     let disposed = false;
+    // Diagnostic phases contain no Bluetooth identifiers or Ledger payloads.
+    let openingPhase = 'selected';
+    let phaseStartedAt = Date.now();
+    const setPhase = (phase: string) => { openingPhase = phase; phaseStartedAt = Date.now(); };
     let timer;
     let rejectDisconnected: (error: Error) => void;
     const disconnected = new Promise<never>((_resolve, reject) => { rejectDisconnected = reject; });
     const dispose = () => {
       if (disposed) return;
       disposed = true;
-      console.info('[Ledger BLE GATT] session disposed', { connected: device.gatt.connected });
+      console.info('[Ledger BLE GATT] session disposed', {
+        connected: device.gatt.connected,
+        phase: openingPhase,
+        phaseElapsedMs: Date.now() - phaseStartedAt
+      });
       clearTimeout(timer);
       device.removeEventListener('gattserverdisconnected', dispose);
       if (characteristic) {
@@ -54,27 +62,44 @@ export default class LedgerWebBle extends TransportBLE {
       // The chooser already completed within the user gesture. Release any
       // native Electron USB/HID worker before initiating GATT; USB shutdown
       // is asynchronous and a pending worker may survive a transport switch.
+      setPhase('USB release');
       if (typeof window !== 'undefined' && window.naultDesktop) {
         const released = await window.naultDesktop.releaseLedgerUsb();
         if (!released) throw new Error('Ledger USB transport could not be released');
       }
       if (disposed) throw new Error('Ledger Bluetooth connection closed');
+      setPhase('GATT connection');
       console.info('[Ledger BLE GATT] opening connection', { alreadyConnected: device.gatt.connected });
       if (!device.gatt.connected) await device.gatt.connect();
       console.info('[Ledger BLE GATT] connected');
       checkActive();
+      setPhase('GATT service discovery');
       console.info('[Ledger BLE GATT] discovering services');
-      const services = await device.gatt.getPrimaryServices();
+      let services;
+      try {
+        services = await device.gatt.getPrimaryServices();
+      } catch (error) {
+        // The disconnect event can win the session race. Preserve the native
+        // Web Bluetooth rejection separately to diagnose BlueZ service discovery.
+        console.warn('[Ledger BLE GATT] service discovery rejected', {
+          name: error instanceof Error ? error.name : 'Unknown',
+          message: error instanceof Error ? error.message : String(error),
+          connected: device.gatt.connected
+        });
+        throw error;
+      }
       checkActive();
       const service = services.find(item => getBluetoothServiceUuids().includes(item.uuid));
       const infos = service && getInfosForServiceUuid(service.uuid);
       if (!infos) throw new Error('Ledger Bluetooth service not found');
+      setPhase('GATT characteristic discovery');
       console.info('[Ledger BLE GATT] Ledger service found; discovering characteristics');
       const write = await service.getCharacteristic(infos.writeUuid);
       checkActive();
       characteristic = await service.getCharacteristic(infos.notifyUuid);
       checkActive();
       characteristic.addEventListener('characteristicvaluechanged', onValue);
+      setPhase('GATT notification subscription');
       console.info('[Ledger BLE GATT] starting notifications');
       try {
         await characteristic.startNotifications();
@@ -97,6 +122,7 @@ export default class LedgerWebBle extends TransportBLE {
       checkActive();
       transport = new LedgerWebBle(device, write, frames, infos.deviceModel);
       transport.disposeSession = dispose;
+      setPhase('Ledger MTU negotiation');
       console.info('[Ledger BLE GATT] negotiating MTU');
       // A radio reconnect may establish GATT without delivering the MTU reply.
       // Bound this handshake; do not guess the MTU or allow a stuck session.
@@ -111,6 +137,7 @@ export default class LedgerWebBle extends TransportBLE {
       } finally {
         clearTimeout(mtuTimer);
       }
+      setPhase('connected');
       console.info('[Ledger BLE GATT] MTU negotiated');
       checkActive();
       return transport;
@@ -121,7 +148,7 @@ export default class LedgerWebBle extends TransportBLE {
       console.info('[Ledger BLE GATT] device selected; initializing session');
       return await Promise.race([connect(), disconnected]);
     } catch (error) {
-      console.error('[Ledger BLE GATT] session opening failed', error);
+      console.error('[Ledger BLE GATT] session opening failed', { phase: openingPhase }, error);
       dispose();
       if (device.gatt.connected) device.gatt.disconnect();
       throw error;
