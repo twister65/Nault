@@ -84,7 +84,7 @@ jobs:
               name, severity: item.severity, range: item.range,
               fixAvailable: item.fixAvailable
             }));
-          fs.writeFileSync('direct-vulnerability-summary.json', JSON.stringify(direct, null, 2) + '\\n');
+          fs.writeFileSync('direct-vulnerability-summary.json', JSON.stringify(direct, null, 2));
           console.log('DIRECT_VULNERABLE_PACKAGES=' + direct.length);
           for (const item of direct) {
             console.log('DIRECT_RISK ' + item.name + ' severity=' + item.severity +
