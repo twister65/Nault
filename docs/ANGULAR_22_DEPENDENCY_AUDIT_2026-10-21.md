@@ -6,6 +6,25 @@
 **Commit validé :** [b016183b91e0](https://github.com/twister65/Nault/commit/b016183b91e0bd336e86064ab1bdd77464812274)  
 **Statut :** diagnostic et plan de correction ; **les remplacements proposés ne sont pas encore appliqués**.
 
+## Linux / Nano X — après réappairage, échec de reconnexion après perte de portée (22 octobre 2026)
+
+**Retour utilisateur (nouvel essai matériel) :** l'appairage a été rétabli via `bluetoothctl`. La première connexion de Nault en Bluetooth réussit : services et caractéristiques GATT trouvés, notifications activées, réponse MTU reçue, configuration Nano et adresse lues. Après éloignement de la Nano X, la connexion tombe normalement. Après rapprochement et clic sur **Reconnect via Bluetooth**, les services et caractéristiques sont à nouveau découverts et `startNotifications()` réussit, mais **aucun `MTU response received` n'arrive** : `Ledger Bluetooth MTU negotiation timed out`. Le journal source est `reconnect-bt-console.log`. Il ne contient pas de nouvelle preuve d'échec d'authentification.
+
+**Interprétation :** une régression ou limitation de reprise des notifications Web Bluetooth/Chromium/BlueZ après une coupure de portée est plausible. Le succès de `startNotifications()` ne prouve pas que les événements `characteristicvaluechanged` sont de nouveau livrés. La cause exacte n'est pas prouvée sans trace HCI/GATT. Le message d'authentification doit rester réservé aux erreurs HCI/DOM d'authentification, pas aux timeouts MTU.
+
+**Correctif expérimental, isolé à la phase de négociation MTU :**
+- Dans `src/app/services/ledger-web-ble.ts`, après le **premier timeout MTU de 12 secondes**, supprimer les listeners et terminer la session, déconnecter GATT, attendre brièvement la libération de Chromium/BlueZ, puis rouvrir une **seule fois** le même `BluetoothDevice` autorisé en redécouvrant les services, caractéristiques et notifications. Pas de second sélecteur, pas de nouvel appairage forcé.
+- Si la seconde négociation MTU échoue également, remonter l'erreur existante et conserver l'action manuelle **Reset Bluetooth session** (rechargement de la fenêtre suivi d'un nouveau clic utilisateur sur Reconnect). Ne pas créer de boucle infinie.
+- Ne jamais rejouer automatiquement les commandes applicatives ou transactions Nano. Cette reprise intervient **avant** la lecture d'adresse et tout échange APDU ; aucun envoi/signature ne doit pouvoir être dupliqué.
+- Tests de simulation pour une réponse MTU manquante sur la première session puis reçue sur la deuxième, et pour deux timeouts consécutifs, avec vérification du nettoyage des listeners et de l'absence de boucle.
+- Commits : [e6b5293](https://github.com/twister65/Nault/commit/e6b5293c7401c29ff823d5c6e7f5b6285f05481c), [8b6082e](https://github.com/twister65/Nault/commit/8b6082ed5abb04c33f64beec6e83cd54fc43562b). [CI Angular 21, run 39822599966](https://github.com/twister65/Nault/actions/runs/39822599966) : **résultat à vérifier**, ne pas annoncer de validation réelle tant que le test matériel manque.
+
+**Protocole manuel de validation :** sur Linux, mettre à jour la branche et tester BLE à courte distance (lecture de l'adresse), éloigner la clé jusqu'à déconnexion, la rapprocher, cliquer une seule fois sur `Reconnect via Bluetooth`. Observer si `retrying one fresh GATT session after missing MTU reply` apparaît et si `MTU negotiated` puis `account address read successfully` sont obtenus. Tester plusieurs cycles, sans signer de transaction. Si échec, essayer l'action `Reset Bluetooth session` puis cliquer Reconnect ; comparer les résultats.
+
+**État : validation matérielle en attente** ; `master` et `upgrade/angular-22` non modifiées.
+
+---
+
 ## Diagnostic HCI décisif — Nano X / appairage BLE, 22 octobre 2026
 
 **Source :** extrait `btmon` fourni après l'échec de la connexion avec la Nano X. Le log transmis contient des adresses matérielles, volontairement **non reproduites** dans ce document.
