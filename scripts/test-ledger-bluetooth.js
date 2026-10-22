@@ -206,7 +206,7 @@ async function main() {
     '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
     '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
   }).default;
-  function gattHarness() {
+  function gattHarness(shouldReplyToMtu = () => true) {
     const device = new EventEmitter();
     device.id = 'same-ledger';
     device.addEventListener = device.on.bind(device);
@@ -231,7 +231,7 @@ async function main() {
     const uuid = devices.getBluetoothServiceUuids()[0];
     const info = devices.getInfosForServiceUuid(uuid);
     const writer = { writeValue: async frame => {
-      if (frame[0] === 8) receive('080000990199');
+      if (frame[0] === 8 && shouldReplyToMtu()) receive('080000990199');
     } };
     const service = { uuid, getCharacteristic: async id => id === info.notifyUuid ? notifications : writer };
     device.gatt = {
@@ -341,6 +341,34 @@ async function main() {
     const disposed = messages.find(m => m.message === '[Ledger BLE GATT] session disposed');
     assert.equal(disposed.detail.phase, 'GATT service discovery');
     assert.equal(disposed.detail.connected, false);
+  });
+  await check('MTU timeout recreates GATT once and then receives a new MTU reply', async () => {
+    let attempts = 0;
+    let connections = 0;
+    const h = gattHarness(() => ++attempts > 1);
+    const originalConnect = h.device.gatt.connect.bind(h.device.gatt);
+    h.device.gatt.connect = async () => { connections++; return originalConnect(); };
+    const transport = await SessionBLE.open(h.device, 1000, 30);
+    assert.equal(attempts, 2, 'one missing MTU response should cause exactly one new handshake');
+    assert.equal(connections, 2, 'fresh Bluetooth GATT connection is required for recovery');
+    assert.equal(transport.mtuSize, 153);
+    assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 1);
+    await transport.close();
+    assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
+    assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
+  });
+  await check('MTU recovery gives up after one retry without entering an APDU exchange', async () => {
+    let attempts = 0;
+    let connections = 0;
+    const h = gattHarness(() => { attempts++; return false; });
+    const originalConnect = h.device.gatt.connect.bind(h.device.gatt);
+    h.device.gatt.connect = async () => { connections++; return originalConnect(); };
+    await assert.rejects(SessionBLE.open(h.device, 1000, 30), /MTU negotiation timed out/);
+    assert.equal(attempts, 2, 'do not loop indefinitely on missing MTU replies');
+    assert.equal(connections, 2);
+    assert.equal(h.device.gatt.connected, false);
+    assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
+    assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
   });
   await check('GATT loss rejects an in-flight exchange and reconnects on the same device without stale listeners', async () => {
     const h = gattHarness();
