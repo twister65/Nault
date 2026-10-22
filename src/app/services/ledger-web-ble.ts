@@ -81,9 +81,14 @@ export default class LedgerWebBle extends TransportBLE {
       } catch (error) {
         // The disconnect event can win the session race. Preserve the native
         // Web Bluetooth rejection separately to diagnose BlueZ service discovery.
+        // Error objects may cross the preload / test-realm boundary, where
+        // instanceof Error is not reliable.
+        const reason = error && typeof error === 'object'
+          ? error as { name?: string; message?: string }
+          : null;
         console.warn('[Ledger BLE GATT] service discovery rejected', {
-          name: error instanceof Error ? error.name : 'Unknown',
-          message: error instanceof Error ? error.message : String(error),
+          name: reason && typeof reason.name === 'string' ? reason.name : 'Unknown',
+          message: reason && typeof reason.message === 'string' ? reason.message : String(error),
           connected: device.gatt.connected
         });
         throw error;
