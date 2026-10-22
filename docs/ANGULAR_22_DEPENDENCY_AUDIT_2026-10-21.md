@@ -6,6 +6,37 @@
 **Commit validé :** [b016183b91e0](https://github.com/twister65/Nault/commit/b016183b91e0bd336e86064ab1bdd77464812274)  
 **Statut :** diagnostic et plan de correction ; **les remplacements proposés ne sont pas encore appliqués**.
 
+## Incident BLE Linux — deuxième échec après libération USB (22/10/2026, 18 h 42)
+
+**Résultat du test matériel : toujours en échec** malgré le handshake de libération USB validé en CI. L'utilisateur confirme en terminal :
+```text
+[Ledger BLE chooser] selection completed { selected: true }
+[Ledger USB] HID worker released before Bluetooth discovery
+... bluetooth_device_bluez.cc:311 Leaking connection to paired device.
+```
+
+Le journal `NanoX-BT-console.log` confirme la suite :
+```text
+[Ledger BLE GATT] connected
+[Ledger BLE GATT] discovering services
+[Ledger BLE GATT] session disposed
+[Ledger BLE GATT] session opening failed DisconnectedDevice
+```
+
+**Conclusion corrigée :** la fermeture de la session native USB est bien effectuée ; **la course USB/HID proposée dans le correctif précédent n'explique pas à elle seule l'échec**. La sélection Web Bluetooth et la connexion GATT réussissent, puis la découverte des services échoue parce que le lien disparaît. Les traces ne contiennent pas le motif HCI de déconnexion, ni le détail `ServicesResolved` de BlueZ.
+
+**Clarification source Chromium :** [`bluetooth_device_bluez.cc` — `DisconnectGatt()`](https://chromium.googlesource.com/chromium/src/+/main/device/bluetooth/bluez/bluetooth_device_bluez.cc) émet `Leaking connection to paired device.` lorsqu'un appareil est déjà *paired* : Chromium refuse volontairement de forcer une déconnexion BlueZ partagée pour éviter d'interrompre un autre consommateur. Ce journal signale cette décision de gestion de connexion ; ce n'est **ni une preuve de fuite mémoire ni une cause de panne**.
+
+**Instrumentation ajoutée, sans changement de protocole ni réessai automatique :**
+- `ledger-web-ble.ts` journalise désormais la phase exacte (`GATT connection`, `GATT service discovery`, `GATT characteristic discovery`, `GATT notification subscription`, `Ledger MTU negotiation`), sa durée en millisecondes, et toute exception native de `getPrimaryServices()` si disponible. Aucune adresse Bluetooth, clé, signature ou APDU n'est ajoutée au journal.
+- Tests simulés de rejet `getPrimaryServices()` et de coupure sur cette phase. Commits : [c56178d](https://github.com/twister65/Nault/commit/c56178d7ad3b28f1289c52b6f8bbbe8bd78bb9c3), [e98bb85](https://github.com/twister65/Nault/commit/e98bb85cf5343bed41ec2107c6c334a143fa0cc2).
+
+**Prochaine discrimination indispensable, sans réinitialiser l'appairage :** relever un court `btmon` en temps réel sur Ubuntu pendant une seule tentative Web Bluetooth ; repérer le motif HCI `Disconnect Complete` et les changements `ServicesResolved`/`Connected` de BlueZ. Vérifier ensuite si une connexion BLE directe, hors Nault mais via le même contrôleur BlueZ, peut découvrir le service Nano X documenté `13d63400-2c97-0004-0000-4c6564676572`. Si elle échoue aussi, la piste système/firmware/appairage prend le dessus ; si elle réussit, analyser le chemin Chromium/Electron et l'appel `getPrimaryServices()`. **Ne pas modifier aveuglément les UUID, désactiver l'appairage sécurisé ni redémarrer Bluetooth en boucle.**
+
+**Statut : incident ouvert — le dernier correctif n'a pas résolu la connexion réelle.** Aucun impact documenté sur les 16 avertissements `npm deprecated`.
+
+---
+
 ## Incident Linux Ledger Nano X — nouvelle analyse du 22/10/2026
 
 **Retour matériel :** une reconnexion Bluetooth à froid après redémarrage de Nault échoue encore, après configuration initiale du portefeuille via **Configure Wallet → Use Ledger → USB**. Les traces BlueZ `journalctl` présentées sont anciennes et ne permettent pas de corréler une erreur nouvelle. Le fait que le chooser sélectionne la clé puis que GATT se ferme lors de la découverte des services demeure le constat antérieur ; **ne pas confondre cette observation avec une cause racine prouvée**.
