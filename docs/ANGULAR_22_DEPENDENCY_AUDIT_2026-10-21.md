@@ -27,6 +27,31 @@
 
 **Conservation du périmètre :** aucun changement au moteur Ledger U2F/WebUSB/WebHID/BLE, ni à l'API RPC. À ce stade, le bootstrap NgModule est conservé ; la migration standalone n'est pas engagée.
 
+### Lot 2 — Fin des dépendances directes Babel 6
+
+**Changement appliqué et validé en CI le 22/10/2026 :**
+
+1. Remplacement de `import 'babel-polyfill'` par `import 'core-js/stable'` dans `src/polyfills.ts` et `desktop-app/src/desktop-app.ts`. Le `core-js@3` existant est conservé ; les versions de Node, Electron et navigateurs cibles prennent en charge les générateurs modernes.
+2. Suppression de `babel-polyfill@6.26.0` et `babel-runtime@6.26.0` des dépendances directes, avec synchronisation du lockfile (retrait de `core-js@2.6.11` et `regenerator-runtime` hérités). Aucune référence directe à ces packages dans le code après remplacement.
+3. Un inventaire automatique des imports legacy a été ajouté au workflow d'audit ; le premier essai contenait une regex incorrectement échappée et a été corrigé dans [86cb17d](https://github.com/twister65/Nault/commit/86cb17d0723459ad97f50e99c79d1b2d50d97ce6), puis a relevé les deux imports Babel qui ont été remplacés.
+4. **Régression détectée par la CI et corrigée :** au premier passage du lot, Karma ne démarrait pas (`ReferenceError: global is not defined`, run [39710402820](https://github.com/twister65/Nault/actions/runs/39710402820)). La ligne `global.Buffer` dépendait d'un alias global implicite. `src/polyfills.ts` initialise désormais explicitement `window.global = window` et `window.Buffer` sans accès préalable à un identifiant `global` inexistant ([d8d6ebd](https://github.com/twister65/Nault/commit/d8d6ebdf6442c7eb14b4ecebd9b0866bdee7534b)). Conserver cette protection pendant la migration du builder.
+5. Commits principaux : [b0b540e](https://github.com/twister65/Nault/commit/b0b540ea17169e702ab005bac0fd32a5b8376ec2), [a8f2ea9](https://github.com/twister65/Nault/commit/a8f2ea90700fc0868e4cbd545fd6b56fb3c628ff), [d2c1507](https://github.com/twister65/Nault/commit/d2c1507ae94608046144da6ce408e551551ae6b9), [ee9a14d](https://github.com/twister65/Nault/commit/ee9a14d9621a0956dfa1a67c61cd72c74599f0a5), [d8d6ebd](https://github.com/twister65/Nault/commit/d8d6ebdf6442c7eb14b4ecebd9b0866bdee7534b).
+
+**Résultat observé :** **19 → 17 noms de paquets dépréciés**, sans `@angular/platform-browser-dynamic` ni `core-js@2.6.11`. [Inventaire npm, run 39710932628](https://github.com/twister65/Nault/actions/runs/39710932628) : **success**, `npm ci` réussi, imports legacy référencés : **0**.
+
+**Validation complète :** [run Angular 21 39710932651](https://github.com/twister65/Nault/actions/runs/39710932651) : **success**, build Web/PWA, build Electron/TS, lint, **98/98 tests Angular**, **31/31 tests RPC**, **29 tests Ledger BLE**. [Lint 39710932630](https://github.com/twister65/Nault/actions/runs/39710932630), [CodeQL Advanced 39710932621](https://github.com/twister65/Nault/actions/runs/39710932621), [Docker Hub 39710932620](https://github.com/twister65/Nault/actions/runs/39710932620) : **success**.
+
+**État du lot 2 : VALIDÉ par la CI**. Les validations matérielles Linux/Windows/Chromebook/Android, Ledger Nano S Plus et Nano X restent à réaliser avant fusion ou publication.
+
+### Prochains lots après cette étape
+
+- Examiner le retrait de `@angular/animations` : aucun import direct n'a été trouvé par la recherche ciblée, mais vérifier les usages indirects des composants et bibliothèques Angular.
+- Moderniser la chaîne ESLint 8 → version compatible avec Angular 22, sans imposer de mise à jour aveugle de packages transitifs.
+- Évaluer `rxjs-compat`, `url/querystring` et les dépendances natives `node-gyp` ; tracer le parent réel avec `npm explain`.
+- Conserver `@ledgerhq/hw-transport-u2f` tant que le fallback U2F dans `ledger.service.ts` n'a pas été remplacé et testé matériellement.
+- Ensuite préparer **une branche Angular 22 dédiée**, Node `^22.22.3` / `^24.15.0` / `^26.0.0`, TypeScript `>=6.0 <6.1`, mise à niveau des composants ng-bootstrap/ZXing, migration et CI isolées.
+
+---
 ### Préparation des lots suivants
 
 Priorité : isoler `babel-polyfill` et `babel-runtime` (sources de `core-js@2`), après vérification des usages ; ne pas supprimer U2F car `src/app/services/ledger.service.ts` l'utilise encore comme fallback explicite. Vérifier les tests réels après chaque modification du lockfile.
@@ -35,7 +60,7 @@ Priorité : isoler `babel-polyfill` et `babel-runtime` (sources de `core-js@2`),
 
 ## 1. Synthèse décisionnelle
 
-L'exécution `npm ci --legacy-peer-deps --no-audit --no-fund` sur la branche Angular 21 fait apparaître **19 noms de paquets dépréciés** (le décompte correspond à des entrées uniques du journal d'installation, pas à 19 vulnérabilités ni à 19 dépendances directes). Quatre figurent dans le `package.json` de Nault : `@angular/animations`, `@angular/platform-browser-dynamic`, `@ledgerhq/hw-transport-u2f` et `eslint`. Les quinze autres sont transitives. Le lockfile v2 contient **2 008 entrées** dans `packages`, dont des versions imbriquées distinctes.
+L'exécution de référence du 21/10/2026 de `npm ci --legacy-peer-deps --no-audit --no-fund` sur la branche Angular 21 faisait apparaître **19 noms de paquets dépréciés** (le décompte correspond à des entrées uniques du journal d'installation, pas à 19 vulnérabilités ni à 19 dépendances directes). Quatre figurent dans le `package.json` de Nault : `@angular/animations`, `@angular/platform-browser-dynamic`, `@ledgerhq/hw-transport-u2f` et `eslint`. Les quinze autres sont transitives. Le lockfile v2 contient **2 008 entrées** dans `packages`, dont des versions imbriquées distinctes.
 
 La base Angular 21 fonctionne : le run de validation du **21/10/2026** est vert, avec **97/97 tests Angular**, **30/30 tests RPC ciblés**, **29 tests Ledger Web Bluetooth**, lint, build Web/PWA, build Electron et compilation TypeScript réussis. Les tests automatisés ne remplacent pas les essais avec une véritable clé Ledger et les deux nœuds Nano/RsNano.
 
