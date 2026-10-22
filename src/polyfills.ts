@@ -9,9 +9,10 @@ import '@angular/localize/init';
     browser: true
 };
 
-// Add global to window, assigning the value of window itself.
-// (window as any).global = window;
-global.Buffer = global.Buffer || require('buffer').Buffer;
+// Preserve the Node-style globals used by Ledger dependencies in a browser context.
+// Babel 6 previously masked the absence of `global` in the test/browser bundle.
+(window as any).global = window;
+(window as any).Buffer = (window as any).Buffer || require('buffer').Buffer;
 
 
 
