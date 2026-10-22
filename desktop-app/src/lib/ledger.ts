@@ -85,12 +85,9 @@ export class LedgerService {
       // callback, while the bounded synchronous read works in the worker.
       console.info('[Ledger diagnosis] Opening USB HID worker transport');
       const generation = this.usbGeneration;
-      const opening = LedgerHidWorkerTransport.open();
-      this.usbOpening = opening;
-      try {
-        const hidTransport = await opening;
-        // Switching to Bluetooth can occur while this USB worker is opening.
-        // Never adopt an HID handle after that switch.
+      // Include any cancellation close in the tracked promise: BLE must not
+      // proceed just because open() resolved while HID is still shutting down.
+      const opening = LedgerHidWorkerTransport.open().then(async hidTransport => {
         if (generation !== this.usbGeneration) {
           await hidTransport.close();
           throw new Error('Ledger USB opening cancelled by Bluetooth switch');
@@ -100,6 +97,10 @@ export class LedgerService {
         this.ledger.nano = new Nano(hidTransport);
         console.info('[Ledger diagnosis] Nano application transport initialized');
         return hidTransport;
+      });
+      this.usbOpening = opening;
+      try {
+        return await opening;
       } finally {
         if (this.usbOpening === opening) this.usbOpening = null;
       }
