@@ -6,6 +6,29 @@
 **Commit validé :** [b016183b91e0](https://github.com/twister65/Nault/commit/b016183b91e0bd336e86064ab1bdd77464812274)  
 **Statut :** diagnostic et plan de correction ; **les remplacements proposés ne sont pas encore appliqués**.
 
+## Incident Linux Ledger Nano X — nouvelle analyse du 22/10/2026
+
+**Retour matériel :** une reconnexion Bluetooth à froid après redémarrage de Nault échoue encore, après configuration initiale du portefeuille via **Configure Wallet → Use Ledger → USB**. Les traces BlueZ `journalctl` présentées sont anciennes et ne permettent pas de corréler une erreur nouvelle. Le fait que le chooser sélectionne la clé puis que GATT se ferme lors de la découverte des services demeure le constat antérieur ; **ne pas confondre cette observation avec une cause racine prouvée**.
+
+**Causes logicielles plausibles, vérifiées dans les sources :**
+
+1. Le passage USB → BLE envoyait un `ledger:disconnect` non bloquant. Côté Electron, `Ledger.resetLedger()` vidait son état et appelait `transport.close()` *sans en attendre l'achèvement*. En parallèle, un worker USB/HID encore en cours d'ouverture pouvait aboutir **après** ce changement d'état. Une ouverture GATT pouvait ainsi commencer sans garantie de libération du transport natif.
+2. Dans `ConfigureWalletComponent`, le bouton de connexion via Bluetooth passait toujours par `importLedgerWallet(false)`, même si un portefeuille Ledger existait déjà : confirmation de remplacement, risque de réinitialisation des comptes locaux et perte du geste utilisateur nécessaire au chooser BLE. **Changer le transport d'un wallet Ledger existant ne doit pas reconfigurer ce wallet**.
+
+**Changements apportés sur `fix/angular-21-deprecated-dependencies` :**
+
+- Nouveau handshake IPC étroit et authentifié : `window.naultDesktop.releaseLedgerUsb()` appelle `ledger-release-usb` ; le processus Electron attend la fermeture du worker USB (et toute ouverture tardive annulée), **avant** `gatt.connect()`. La demande `navigator.bluetooth.requestDevice()` reste déclenchée par l'interaction utilisateur et **précède** cette attente asynchrone, pour ne pas perdre l'activation du chooser.
+- Les générations d'ouverture USB sont invalidées lors du changement vers BLE et le worker termine sa fermeture avant l'accusé de réception. Les émetteurs IPC hors fenêtre principale/document fiable sont rejetés.
+- `ConfigureWalletComponent.connectLedgerByBluetooth()/connectLedgerByUsb()` utilisent `refreshOnly=true` lorsqu'un wallet de type `ledger` existe ; une première importation continue d'utiliser `refreshOnly=false`. Ceci conserve les comptes et évite un dialogue d'écrasement lors d'un simple changement de transport.
+- Régressions ajoutées : USB worker encore en ouverture, attente de fermeture effective avant GATT, refus IPC non autorisé, impossibilité d'ouvrir GATT si la libération échoue, et préservation du portefeuille dans les deux directions USB/Bluetooth.
+- Commits principaux : [641f729](https://github.com/twister65/Nault/commit/641f729e19d94363c357d82b489bf744c6978531), [e4a6322](https://github.com/twister65/Nault/commit/e4a632255c3b798d583637da374351cad4dbb755), [3ca22dc](https://github.com/twister65/Nault/commit/3ca22dcd2f7007e75196aa1c5c9fdaece2d1ff71), [df846de](https://github.com/twister65/Nault/commit/df846deec839d8b346065fb1bf198540096cd55d), [b18c0a3](https://github.com/twister65/Nault/commit/b18c0a3cc48f7439b36742e742ffa0339fb6f939), [42b9a39](https://github.com/twister65/Nault/commit/42b9a396fe62f625923bc473b1b133e988b2c91e).
+
+**Validation :** [GitHub Actions Angular 21](https://github.com/twister65/Nault/actions/runs/39772956885) / autres jobs du commit `42b9a396` : vérifier leur conclusion avant de déclarer le lot validé. **Le correctif cible une course USB/HID → GATT ; son efficacité réelle sur la Nano X n'est pas confirmée tant que l'utilisateur n'a pas retesté son matériel.**
+
+**Essai de confirmation :** reconstruire le dernier commit de la branche, conserver le wallet Ledger configuré en USB, utiliser `Reconnect via Bluetooth` sans recréer de wallet, sélectionner la Nano X, vérifier `[Ledger USB] HID worker released before Bluetooth discovery` **avant** `[Ledger BLE GATT] opening connection`. Puis vérifier l'adresse affichée sur la clé et dans Nault (même compte), ainsi que le retour vers USB. Aucun envoi n'est requis.
+
+---
+
 ## Essai manuel Linux — Ledger Nano X Bluetooth (22 octobre 2026)
 
 **Statut : incident matériel / BLE À REPRODUIRE — non résolu par la CI.**
