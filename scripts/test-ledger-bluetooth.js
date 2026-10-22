@@ -307,6 +307,21 @@ async function main() {
     assert.equal(h.device.gatt.connected, false);
     assert(messages.every(m => !String(m.message).includes('APDU')));
   });
+  await check('native GATT authentication error requests re-pairing', async () => {
+    const h = gattHarness();
+    h.device.gatt.getPrimaryServices = async () => {
+      const error = Error('Authentication failed.');
+      error.name = 'NetworkError';
+      throw error;
+    };
+    await assert.rejects(SessionBLE.open(h.device, 1000), error =>
+      error.name === 'LedgerBluetoothAuthenticationError' &&
+      /authentication failed/i.test(error.message) &&
+      /bluetoothctl/i.test(error.message)
+    );
+    assert.equal(h.device.gatt.connected, false);
+    assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
+  });
   await check('GATT loss reports service discovery as the failing phase', async () => {
     const messages = [];
     const DiagnosticBLE = load(sessionCode, {
@@ -334,7 +349,8 @@ async function main() {
       assert.equal(transport.mtuSize, 153);
       assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 1);
       const pending = transport.exchange(Buffer.from('0102', 'hex'));
-      const rejected = assert.rejects(pending, e => e.name === 'DisconnectedDevice');
+      const rejected = assert.rejects(pending, e => e.name === 'DisconnectedDevice' &&
+        !/pairing|authentication/i.test(e.message));
       h.device.gatt.disconnect();
       await rejected;
       assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
@@ -373,7 +389,9 @@ async function main() {
       return discover();
     };
     await assert.rejects(SessionBLE.open(h.device, 1000), error =>
-      error.name === 'DisconnectedDevice' && /Reconnect/.test(error.message)
+      error.name === 'DisconnectedDevice' && /Reconnect/.test(error.message) &&
+      /pairing may be missing or invalid/i.test(error.message) &&
+      /bluetoothctl/i.test(error.message)
     );
     assert.equal(h.device.gatt.connected, false);
     assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
@@ -428,6 +446,32 @@ async function main() {
     assert.equal(await service.loadLedger(), false);
     assert.equal(service.transportMode, 'Bluetooth');
     assert.equal(preferences.ledgerReconnect, 'bluetooth');
+    BLE.fail = false;
+  });
+  await check('confirmed BLE authentication failure shows actionable pairing advice', async () => {
+    const auth = new Error('Authentication failed');
+    auth.name = 'LedgerBluetoothAuthenticationError';
+    BLE.fail = auth;
+    assert.equal(await service.loadLedger(), false);
+    assert.match(service.bluetoothErrorMessage, /authentication failed/i);
+    assert.match(service.bluetoothErrorMessage, /bluetoothctl/i);
+    BLE.fail = false;
+  });
+  await check('early GATT disconnect mentions possible pairing without asserting it', async () => {
+    const disconnected = new Error('Ledger Nano X Bluetooth pairing may be missing or invalid (authentication may have failed). Re-pair your Ledger in your computer Bluetooth settings (Linux: bluetoothctl), then click Reconnect.');
+    disconnected.name = 'DisconnectedDevice';
+    BLE.fail = disconnected;
+    assert.equal(await service.loadLedger(), false);
+    assert.match(service.bluetoothErrorMessage, /pairing may be missing or invalid/i);
+    assert.doesNotMatch(service.bluetoothErrorMessage, /is not paired/i);
+    BLE.fail = false;
+  });
+  await check('generic radio disconnection does not claim authentication failure', async () => {
+    const disconnected = new Error('Ledger Bluetooth disconnected. Click Reconnect.');
+    disconnected.name = 'DisconnectedDevice';
+    BLE.fail = disconnected;
+    assert.equal(await service.loadLedger(), false);
+    assert.equal(service.bluetoothErrorMessage, '');
     BLE.fail = false;
   });
   await check('desktop Bluetooth connects through renderer, not native IPC', async () => {
