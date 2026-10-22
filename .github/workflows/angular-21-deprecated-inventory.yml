@@ -48,8 +48,8 @@ jobs:
             for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
               const file = path.join(dir, entry.name);
               if (entry.isDirectory()) { walk(file); continue; }
-              if (!/\\.(ts|tsx|js|cjs|mjs|html)$/.test(entry.name)) continue;
-              for (const [i, line] of fs.readFileSync(file, 'utf8').split(/\\r?\\n/).entries()) {
+              if (!/\.(ts|tsx|js|cjs|mjs|html)$/.test(entry.name)) continue;
+              for (const [i, line] of fs.readFileSync(file, 'utf8').split(/\r?\n/).entries()) {
                 for (const name of names) {
                   if (line.includes(name)) { console.log(file + ':' + (i + 1) + ' [' + name + '] ' + line.trim().slice(0, 160)); found++; }
                 }
