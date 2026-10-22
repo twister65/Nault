@@ -34,7 +34,7 @@ Les erreurs citées proviennent des jobs GitHub Actions inspectés le 22 octobre
 **Aucune modification répétée d'Apache n'est souhaitée.** L'instance Apache n'autorise que les origines suivantes pour les tests :
 
 ```apache
-SetEnvIf Origin "^https://(nault-wallet-staging-olaverre-1312|nault-tablet-css-test|nault-android-test(-olaverre-1312)?)\\.vercel\\.app$" NAULT_CORS_ORIGIN=$0
+SetEnvIf Origin "^https://(nault-wallet-staging-olaverre-1312|nault-tablet-css-test|nault-android-test(-olaverre-1312)?)\.vercel\.app$" NAULT_CORS_ORIGIN=$0
 ```
 
 - Privilégier l'URL stable **`https://nault-wallet-staging-olaverre-1312.vercel.app`** pour Angular 22. Les autres domaines autorisés sont `https://nault-tablet-css-test.vercel.app`, `https://nault-android-test.vercel.app` et `https://nault-android-test-olaverre-1312.vercel.app`. **Les URL éphémères** de type `nom-projet-<hash>-olaverre-1312.vercel.app` **ne correspondent pas** à cette règle Apache.
