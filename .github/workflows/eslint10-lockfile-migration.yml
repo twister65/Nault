@@ -1,0 +1,60 @@
+name: Regenerate ESLint 10 lockfile (temporary)
+on:
+  push:
+    branches: [fix/angular-21-deprecated-dependencies]
+    paths:
+      - package.json
+      - eslint.config.cjs
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  lockfile:
+    if: github.repository == 'twister65/Nault' && github.ref == 'refs/heads/fix/angular-21-deprecated-dependencies'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+          cache: npm
+      - name: Recalculate lockfile without executing package scripts
+        run: npm install --package-lock-only --lockfile-version=2 --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Check lockfile and ESLint dependency versions
+        run: |
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          assert.equal(lock.lockfileVersion, 2);
+          assert.equal(lock.packages[''].devDependencies.eslint, p.devDependencies.eslint);
+          assert.equal(lock.packages['node_modules/eslint'].version, '10.13.0');
+          assert.equal(lock.packages['node_modules/@typescript-eslint/parser'].version, '8.56.0');
+          assert.equal(lock.packages['node_modules/@typescript-eslint/eslint-plugin'].version, '8.56.0');
+          assert.ok(fs.existsSync('eslint.config.cjs'));
+          assert.ok(!fs.existsSync('.eslintrc.json'));
+          console.log('ESLint 10 flat-config lockfile is synchronized.');
+          NODE
+      - name: Commit updated npm lockfile to Angular 21 cleanup branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add package-lock.json
+          if git diff --cached --quiet; then
+            echo 'Lockfile already synchronized'
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "build: sync npm lockfile for ESLint 10 flat config"
+          git push origin HEAD:refs/heads/fix/angular-21-deprecated-dependencies

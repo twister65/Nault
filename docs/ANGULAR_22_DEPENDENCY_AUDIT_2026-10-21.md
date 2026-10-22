@@ -6,6 +6,15 @@
 **Commit validé :** [b016183b91e0](https://github.com/twister65/Nault/commit/b016183b91e0bd336e86064ab1bdd77464812274)  
 **Statut :** diagnostic et plan de correction ; **les remplacements proposés ne sont pas encore appliqués**.
 
+## Lot 6 — ESLint 10 et configuration flat (22 octobre 2026, validation en cours)
+
+- Objectif : remplacer **ESLint 8.57.1 (fin de support)** directement par **ESLint 10.13.0**, compatible avec les peer dependencies de `@angular-eslint@21.4.0`. La ligne ESLint 9 étant également en fin de support, elle n'est pas utilisée comme palier.
+- Mettre `@typescript-eslint/parser` et `@typescript-eslint/eslint-plugin` sur **8.56.0**, compatibles avec TypeScript 5.9 et ESLint 10. Ne pas modifier les versions du framework Angular 21.
+- `eslint.config.cjs` remplace `.eslintrc.json`, avec recommandations Angular TypeScript/templates, extraction des templates inline et dérogations existantes (sélecteurs, standalone, inject, contrôle de flux).
+- Le workflow temporaire `Regenerate ESLint 10 lockfile` régénère **uniquement `package-lock.json`** au format v2 sur la branche Angular 21. Le lockfile doit être vérifié par `npm ci --legacy-peer-deps`, `npm run lint`, builds et tests CI avant clôture de ce lot. Retirer ensuite ce workflow temporaire.
+- Les dépendances transitives, bibliothèques Angular tierces, moteurs Ledger/RPC et `upgrade/angular-22` restent hors périmètre. Le défaut de deuxième reconnexion Bluetooth reste ouvert ; **aucun essai matériel supplémentaire demandé**.
+- **Statut : préparation technique, pas encore validé ni fusionné.** Ne pas fusionner jusqu'à vérification de la CI et revue des différences avec `master` (dont les correctifs de réception Ledger indisponible).
+
 ## Lot 5 — mise à jour isolée de `electron-settings` (22 octobre 2026)
 
 **Branche :** `fix/angular-21-deprecated-dependencies`, framework Angular **21 inchangé**. `master` et `upgrade/angular-22` non modifiées.
