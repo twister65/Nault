@@ -134,13 +134,16 @@ export class ConfigureWalletComponent implements OnInit {
 
   async connectLedgerByBluetooth() {
     this.ledgerService.enableBluetoothMode(true);
-    await this.importLedgerWallet();
+    // A configured Ledger wallet is independent of USB vs Bluetooth.
+    // Never ask to overwrite it merely to change transports: that confirmation
+    // also loses the user gesture required by Web Bluetooth's device chooser.
+    await this.importLedgerWallet(this.walletService.isLedgerWallet());
   }
 
   async connectLedgerByUsb() {
     if (this.ledgerService.isAndroidWeb) return; // The Android browser uses Ledger Bluetooth only.
     this.ledgerService.enableBluetoothMode(false);
-    await this.importLedgerWallet();
+    await this.importLedgerWallet(this.walletService.isLedgerWallet());
   }
 
   async importLedgerWallet(refreshOnly = false) {
