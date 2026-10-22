@@ -6,6 +6,34 @@
 **Commit validé :** [b016183b91e0](https://github.com/twister65/Nault/commit/b016183b91e0bd336e86064ab1bdd77464812274)  
 **Statut :** diagnostic et plan de correction ; **les remplacements proposés ne sont pas encore appliqués**.
 
+## Comparaison du Bluetooth stable et suppression U2F — 22 octobre 2026
+
+### Ce qui a réellement changé
+
+L'ancien correctif de reconnexion est bien dans `master`, issu de `fix/ledger-bluetooth` : validation du transport GATT, suppression des listeners et des requêtes en vol, fermeture explicite de la session périmée, reconnexion forcée sans réutilisation du transport, protection contre les réponses de statut USB tardives. **Ces mécanismes n'ont pas été retirés par le nettoyage des dépendances**. `src/app/services/ledger-ble-control.ts` est identique dans `master` et la branche de nettoyage.
+
+Vérification des lockfiles `fix/ledger-bluetooth`, `master`, `upgrade/angular-21` et `fix/angular-21-deprecated-dependencies` : tous verrouillent **Web BLE 6.27.5**, **WebUSB 6.27.5**, **WebHID 6.27.5**, **@ledgerhq/devices 7.0.2** et **Electron 44.7.0**. Le transport U2F 5.34.0 est inchangé dans toutes ces bases jusqu'au lot ci-dessous. Aucune mise à niveau de Ledger BLE n'a déclenché le nouveau timeout.
+
+Depuis `master`, la branche de nettoyage a ajouté à `ledger-web-ble.ts` : libération du worker USB avant GATT, suivi de la phase de connexion, messages d'erreur Bluetooth plus explicites et **un nouvel essai GATT borné après absence de réponse MTU** (commits du 22/10/2026). Le timeout MTU lui-même, le gestionnaire des notifications et l'option manuelle `Reset Bluetooth session` existaient **déjà** dans `master`. Ne pas confondre le nouveau réessai expérimental avec une régression de versions de dépendances. Il doit être validé avec une véritable Nano X avant fusion.
+
+**Attention avant fusion :** `master` contient d'autres corrections, dont des traitements de Ledger indisponible lors d'une réception XNO, absentes de la branche de nettoyage. Le merge futur devra préserver ces corrections indépendantes et passer les tests de non-régression.
+
+### Retrait de `@ledgerhq/hw-transport-u2f@5.34.0` (lot isolé USB)
+
+Le package U2F historique était encore réellement importé par `src/app/services/ledger.service.ts` : transport navigateur par défaut, détection `isSupported()`, et fallback lorsque ni WebUSB ni WebHID n'étaient disponibles. Sa dépréciation **ne pouvait pas être résolue par le seul nettoyage du lockfile** ; l'avertissement npm n'avait aucun lien fonctionnel avec Bluetooth.
+
+Changement réalisé dans `fix/angular-21-deprecated-dependencies` :
+- Suppression de l'import et du fallback U2F. USB navigateur : **WebUSB en priorité, WebHID sinon** ; si aucun transport moderne n'est disponible, afficher une instruction explicite sans tenter d'ouvrir un transport déprécié. USB Electron : **node-hid inchangé** ; Android : Bluetooth inchangé.
+- Suppression de la préférence/temporisation U2F historique, de la dépendance directe dans `package.json` et de ses entrées orphelines (dont `u2f-api`) du lockfile v2. Aucun paquet BLE, HID ou Electron n'a changé de version.
+- Tests ajoutés : sélection WebUSB/WebHID, refus USB navigateur non compatible, suppression des attentes de fallback U2F. Préserver la couverture des reconnexions USB/Bluetooth.
+- Commits : [51118d0](https://github.com/twister65/Nault/commit/51118d0663f7bf2e0dfee3ee065a51cd5b894c40), [3d8e246](https://github.com/twister65/Nault/commit/3d8e246dbecc1322d6aa3558af0694b583d65313), [5eabb9c](https://github.com/twister65/Nault/commit/5eabb9c47f6d3509ace5458baee4d160e68e2e62), [20c12c8](https://github.com/twister65/Nault/commit/20c12c8089980f458abb3b845625e94f4bd91263).
+- [CI Angular 21 — run 39824462422](https://github.com/twister65/Nault/actions/runs/39824462422) et [inventaire npm — run 39824462372](https://github.com/twister65/Nault/actions/runs/39824462372) : résultats à reporter avant validation. **Attendu** : un avertissement `npm deprecated` en moins, sans nouvelle régression.
+- **À valider sur matériel** avant fusion : Chromebook/Chrome WebUSB, WebHID selon navigateur, Electron USB sur Ubuntu/Windows, Nano X Bluetooth, reconnexion après déconnexion radio. Les anciens navigateurs ne supportant que U2F ne pourront plus utiliser l'USB ; il s'agit d'un abandon de support volontaire.
+
+À plus long terme, les transports LedgerJS eux-mêmes sont dépréciés au profit de [Ledger Device Management Kit (DMK)](https://developers.ledger.com/docs/device-interaction/dmk-ts/integration/migrations/ledgerjs-to-dmk). Une migration DMK doit rester **distincte** de cette suppression ciblée afin de ne pas masquer la régression BLE.
+
+---
+
 ## Linux / Nano X — après réappairage, échec de reconnexion après perte de portée (22 octobre 2026)
 
 **Retour utilisateur (nouvel essai matériel) :** l'appairage a été rétabli via `bluetoothctl`. La première connexion de Nault en Bluetooth réussit : services et caractéristiques GATT trouvés, notifications activées, réponse MTU reçue, configuration Nano et adresse lues. Après éloignement de la Nano X, la connexion tombe normalement. Après rapprochement et clic sur **Reconnect via Bluetooth**, les services et caractéristiques sont à nouveau découverts et `startNotifications()` réussit, mais **aucun `MTU response received` n'arrive** : `Ledger Bluetooth MTU negotiation timed out`. Le journal source est `reconnect-bt-console.log`. Il ne contient pas de nouvelle preuve d'échec d'authentification.
