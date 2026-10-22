@@ -40,8 +40,10 @@ jobs:
           node -e "const fs=require('fs');const manifest=JSON.parse(fs.readFileSync('dist/ngsw.json','utf8'));if(!manifest.hashTable||!manifest.assetGroups?.length)throw Error('Service worker manifest missing required entries');console.log('Service worker manifest generated')"
       - name: Build Electron desktop bundle and compile TypeScript
         run: npm run desktop:build
-      - name: Lint Angular 21 sources
-        run: npm run lint
+      - name: Lint Angular 21 sources with flat config
+        run: |
+          npm run lint
+          npm run lint:flat
       - name: Test Ledger Web Bluetooth and USB regressions
         run: node scripts/test-ledger-bluetooth.js
       - name: Run Nano / RsNano RPC regression tests
