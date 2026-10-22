@@ -1,6 +1,6 @@
 {
   "configVersion": 1,
-  "timestamp": 1792619191512,
+  "timestamp": 1792697361627,
   "index": "/index.html",
   "assetGroups": [
     {
@@ -13,9 +13,9 @@
       "urls": [
         "/cpupow.45a01b67efef7ca2.worker.js",
         "/index.html",
-        "/main.51b325e12f6bc7f7.js",
+        "/main.1cf596690cfff499.js",
         "/manifest.webmanifest",
-        "/polyfills.7143fc2a42d74a21.js",
+        "/polyfills.242f752314a083fd.js",
         "/runtime.7f9f78b5e7b26aa1.js",
         "/styles.a239d14ba4407357.css",
         "/translation0.e220133cf50c9f58.js",
@@ -269,8 +269,8 @@
     "/assets/logo_source/nault-logo.eps": "a2147e36015ef5497c846a0b74dfb2a4828fd2cd",
     "/assets/logo_source/nault-logo.svg": "d9682092a80a1e825c646a1e7cebd8e4e9aead49",
     "/cpupow.45a01b67efef7ca2.worker.js": "543bab35d40f84d39d27caf7850ec67f8bfdaffc",
-    "/index.html": "b25100f0e4566c777399bae371f9e46e5b03ba35",
-    "/main.51b325e12f6bc7f7.js": "f60811c8b8f67dd52766ed20ec49969320dadbe4",
+    "/index.html": "4dc10c97d1e4cc8ff97cb10c75a5a646086498e2",
+    "/main.1cf596690cfff499.js": "7f16fa5c2a53b75d8c55eba3f5bae2bf4b87149e",
     "/manifest.webmanifest": "fb9ce0116a92808e43c4203fa61fdcb255708437",
     "/montserrat-v15-latin-300.169464b41fd5a6ed.woff2": "cf6855b4b8fd9b7fc4d7adecd97080a70ad75c23",
     "/montserrat-v15-latin-300.1fb23400394501d6.eot": "79ffc50c09de54d30478eb89c6984bbcb41ba5f9",
@@ -305,7 +305,7 @@
     "/open-sans-v20-latin-regular.7fa232ca6b4174dc.woff2": "f821770af8dcac25fd51b691be779fb56dde7783",
     "/open-sans-v20-latin-regular.9afa6b0f58199011.woff": "023d6720d92a54a3bb0ab219818d2e6e6aad24a7",
     "/open-sans-v20-latin-regular.e12beb98cfee8b95.ttf": "3b0b17c64586286b6f5e894b398086fbd9dd8ecf",
-    "/polyfills.7143fc2a42d74a21.js": "533dbdefa76c50c522a17f9463130562260266c5",
+    "/polyfills.242f752314a083fd.js": "105d136dee7e0662cdfe76e76f3743dd71c73935",
     "/qr-code.b97e9eeb5e6f1567.svg": "a694020661b8f41d2b6a4eb4ffb98243a0cb9ab9",
     "/roboto-mono-v13-latin-regular.5ebb8c5b1b99813a.woff": "3f1bdd2cb69992c6cbf901c013c80302f4f6d54e",
     "/roboto-mono-v13-latin-regular.72a36365d70383c3.woff2": "6bdf57408a458ab19e554ed1cec1f73107dae3ce",
