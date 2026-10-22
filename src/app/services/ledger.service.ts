@@ -70,6 +70,8 @@ export class LedgerService {
   queryingDesktopLedger = false;
   private bluetoothConnecting = false;
   private bluetoothGeneration = 0;
+  // Human-readable pairing advice for the Configure Wallet flow (not a raw native error).
+  bluetoothErrorMessage = '';
 
   get usesDesktopUsb() {
     return this.isDesktop && this.transportMode !== 'Bluetooth';
@@ -448,6 +450,7 @@ export class LedgerService {
 
   private async loadWebBluetooth(hideNotifications: boolean, forceReconnect = false) {
     if (this.bluetoothConnecting) return false;
+    this.bluetoothErrorMessage = '';
     // Explicit user reconnect always discards the old session, even if Chromium
     // still reports GATT connected after a dropped radio link.
     if (forceReconnect && this.ledger.transport) {
@@ -519,6 +522,7 @@ export class LedgerService {
       ]);
       if (generation !== this.bluetoothGeneration) return false;
       console.info('[Ledger BLE] reconnect successful');
+      this.bluetoothErrorMessage = '';
       this.appSettings.setAppSetting('ledgerReconnect', 'bluetooth');
       this.ledger.status = LedgerStatus.READY;
       this.ledgerStatus$.next({ status: this.ledger.status, statusText: 'Nano Ledger application connected via Bluetooth' });
@@ -535,11 +539,19 @@ export class LedgerService {
       const detail = String(error && (error.message || error) || '');
       const adapterUnavailable = error && error.name === 'TransportOpenUserCancelled' &&
         /bluetooth adapter not available|adapter not available|bluetooth unavailable|bluetooth is disabled/i.test(detail);
+      const pairingAdvice = 'Ledger Nano X Bluetooth authentication failed. Your device may not be paired correctly. ' +
+        'Re-pair it in your computer Bluetooth settings (Linux: bluetoothctl), then click Reconnect.';
+      const authenticationFailed = error && error.name === 'LedgerBluetoothAuthenticationError' ||
+        /pin or key missing|authentication failed/i.test(detail);
+      const possiblePairing = error && error.name === 'DisconnectedDevice' &&
+        /pairing may be missing or invalid/i.test(detail);
+      if (authenticationFailed) this.bluetoothErrorMessage = pairingAdvice;
+      else if (possiblePairing) this.bluetoothErrorMessage = detail;
       const message = adapterUnavailable
         ? 'Bluetooth unavailable. Check Bluetooth on your computer and Ledger, or choose Reconnect via USB.'
         : error && error.name === 'TransportOpenUserCancelled'
           ? 'Bluetooth selection cancelled'
-          : `Bluetooth connection failed: ${detail}`;
+          : this.bluetoothErrorMessage || `Bluetooth connection failed: ${detail}`;
       this.ledgerStatus$.next({ status: this.ledger.status, statusText: message });
       if (!hideNotifications) this.notifications.sendWarning(message);
       return false;
