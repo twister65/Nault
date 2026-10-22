@@ -6,6 +6,27 @@
 **Commit validé :** [b016183b91e0](https://github.com/twister65/Nault/commit/b016183b91e0bd336e86064ab1bdd77464812274)  
 **Statut :** diagnostic et plan de correction ; **les remplacements proposés ne sont pas encore appliqués**.
 
+## Lot 5 — mise à jour isolée de `electron-settings` (22 octobre 2026)
+
+**Branche :** `fix/angular-21-deprecated-dependencies`, framework Angular **21 inchangé**. `master` et `upgrade/angular-22` non modifiées.
+
+- **Package de production :** `electron-settings@4.0.2` → `4.0.4` dans `package.json` et `package-lock.json` (série 4.x ; maintien de l'API existante `setSync/getSync`). Dépendances vérifiées dans les lockfiles publics de deux projets tiers (Appium Inspector et Upscayl) : `lodash@^4.17.21`, `mkdirp@^1.0.4`, `write-file-atomic@^3.0.3`. Intégrité SHA512 du tarball vérifiée dans les deux références. `lodash` est déjà verrouillé en `4.17.21` dans Nault.
+- Suppression de quatre dépendances transitives orphelines `lodash.get@4.4.2`, `lodash.has@4.5.2`, `lodash.set@4.3.2`, `lodash.unset@4.5.2` : leurs seuls parents, dans le lockfile avant correction, étaient `electron-settings@4.0.2`. Conserver `mkdirp@1.0.4` imbriqué et `write-file-atomic`.
+- **Aucun changement** d'Electron, Angular, WebUSB, WebHID, Bluetooth ou moteur RPC. Aucun correctif automatique `npm audit fix --force`.
+- Commits : [af4d335](https://github.com/twister65/Nault/commit/af4d33522bf10ba0b4c223fec93d2e2ba095f3bb) (manifest) et [39a315e](https://github.com/twister65/Nault/commit/39a315e8d7d71d4803d458c333f8968992c1d3fa) (lockfile).
+- **Validation CI :** [Angular 21, run 39832187419](https://github.com/twister65/Nault/actions/runs/39832187419), [inventaire/audit, run 39832187366](https://github.com/twister65/Nault/actions/runs/39832187366) ; **état à confirmer** au terme des jobs. Les échecs intermédiaires du commit manifest seul (`af4d335`) sont attendus tant que le lockfile n'est pas synchronisé et ne doivent pas être assimilés au résultat du commit final.
+- **Critères** : `npm ci`, builds Web et Electron, suites Angular/RPC/Ledger automatisées, CodeQL, lint et absence d'augmentation significative des vulnérabilités npm. Le décompte `npm deprecated` et celui des vulnérabilités sont suivis séparément.
+
+### Suspension des essais matériels Bluetooth
+
+Résultat utilisateur : réappairage avec `bluetoothctl` **réussit la première connexion** ; après éloignement/réapprochement, la deuxième reconnexion Bluetooth **échoue toujours malgré les commits expérimentaux** [e6b5293](https://github.com/twister65/Nault/commit/e6b5293c7401c29ff823d5c6e7f5b6285f05481c) et [8b6082e](https://github.com/twister65/Nault/commit/8b6082ed5abb04c33f64beec6e83cd54fc43562b). L'action manuelle **« Clear session » rétablit la connexion**. **Essais matériels suspendus à la demande de l'utilisateur** ; ne pas affirmer que la reconnexion automatique est corrigée. Une révision ultérieure du comportement BLE doit rester distincte des lots de dépendances, et les critères de fusion doivent tenir compte de cet incident ouvert.
+
+### Séquencement validé
+
+Finir le nettoyage compatible Angular 21 sur cette branche, puis revue/validation et fusion dans `master` en conservant les correctifs reçus depuis. Seulement ensuite poursuivre la migration Angular 22 sur la branche **existante** `upgrade/angular-22`, sans en réécrire l'historique.
+
+---
+
 ## Comparaison du Bluetooth stable et suppression U2F — 22 octobre 2026
 
 ### Ce qui a réellement changé
