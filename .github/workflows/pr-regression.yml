@@ -80,7 +80,7 @@ jobs:
         run: node scripts/test-ledger-bluetooth.js
 
       - name: Run focused Nano / RsNano RPC tests
-        run: npm test -- --main=src/test-rpc.ts --watch=false --browsers=ChromeHeadlessCI --progress=false
+        run: npm test -- --include=src/app/services/api.service.spec.ts --include=src/app/services/wallet.service.spec.ts --include=src/app/services/websocket.service.spec.ts --include=src/app/services/rpc-transport.service.spec.ts --include=src/app/services/endpoint-policy.service.spec.ts --watch=false --browsers=ChromeHeadlessCI --progress=false
 
       - name: Run all Angular tests
         run: npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false

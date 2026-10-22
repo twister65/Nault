@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
-const { BehaviorSubject } = require('rxjs');
+const { BehaviorSubject, Subject } = require('rxjs');
 let now = 0, id = 0;
 const timers = new Map();
 const schedule = (fn, ms) => { timers.set(++id, { at: now + ms, fn }); return id; };
@@ -28,7 +28,7 @@ function load(file, name) {
     compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, experimentalDecorators: true }
   }).outputText, {
     exports, require: n => n === '@angular/core' ? { Injectable: () => x => x, Component: () => x => x }
-      : n === 'rxjs' ? { BehaviorSubject }
+      : n === 'rxjs' ? { BehaviorSubject, Subject }
       : n.endsWith('/endpoint-policy') ? { secureEndpoint: u => u } : {},
     setTimeout: schedule, clearTimeout: x => timers.delete(x), WebSocket: FakeSocket,
     console: { log() {}, info() {}, warn: m => warnings.push(m) }
@@ -41,11 +41,14 @@ const Reps = load('src/app/services/representative.service.ts', 'RepresentativeS
 async function main() {
   const settings = { settings: { serverWS: 'wss://example.org' } };
   let service = new WS(settings);
+  let connectedCount = 0;
+  service.connected$.subscribe(() => connectedCount++);
   service.subscribeAccounts(['account']); service.connect();
   const stale = sockets[0]; stale.onopen();
   const staleMessage = stale.onmessage;
   tick(15000); assert.equal(stale.closed, true); assert.equal(service.socket.connected, false);
   tick(5000); sockets[1].onopen();
+  assert.equal(connectedCount, 2, 'Both initial open and successful recovery must notify wallets');
   assert.equal(sockets[1].sent[0].options.accounts[0], 'account');
   sockets[1].onmessage({ data: '{"ack":"pong"}' });
   staleMessage({ data: '{"topic":"confirmation","message":"stale"}' });
