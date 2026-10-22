@@ -10,7 +10,8 @@ import { Buffer } from 'buffer';
 export default class LedgerWebBle extends TransportBLE {
   private disposeSession: () => void = () => {};
 
-  static async open(device: Device | string, openTimeout = 30000): Promise<LedgerWebBle> {
+  static async open(device: Device | string, openTimeout = 30000,
+                    mtuTimeoutMs = 12000, retryMtu = true): Promise<LedgerWebBle> {
     if (typeof device === 'string') throw new Error('Select a Ledger Bluetooth device first');
     const frames = new Subject<Buffer>();
     let transport: LedgerWebBle;
@@ -153,7 +154,7 @@ export default class LedgerWebBle extends TransportBLE {
         await Promise.race([
           transport.inferMTU(),
           new Promise<never>((_, reject) => {
-            mtuTimer = setTimeout(() => reject(new Error('Ledger Bluetooth MTU negotiation timed out; reconnect the device')), 12000);
+            mtuTimer = setTimeout(() => reject(new Error('Ledger Bluetooth MTU negotiation timed out; reconnect the device')), mtuTimeoutMs);
           })
         ]);
       } finally {
@@ -171,8 +172,22 @@ export default class LedgerWebBle extends TransportBLE {
       return await Promise.race([connect(), disconnected]);
     } catch (error) {
       console.error('[Ledger BLE GATT] session opening failed', { phase: openingPhase }, error);
+      // The first reconnect after a radio outage can successfully enable
+      // notifications but fail to deliver the MTU control reply. Recreate
+      // GATT/characteristic subscriptions exactly once, *before* any Nano
+      // APDU or signature command. Do not silently retry transactions.
+      const mtuReplyMissing = retryMtu &&
+        openingPhase === 'Ledger MTU negotiation' &&
+        /Ledger Bluetooth MTU negotiation timed out/.test(String(error && (error.message || error)));
       dispose();
       if (device.gatt.connected) device.gatt.disconnect();
+      if (mtuReplyMissing) {
+        console.warn('[Ledger BLE GATT] retrying one fresh GATT session after missing MTU reply');
+        // Give BlueZ and Chromium time to retire the previous notification
+        // context before discovering new service/characteristic objects.
+        await new Promise(resolve => setTimeout(resolve, 400));
+        return LedgerWebBle.open(device, openTimeout, mtuTimeoutMs, false);
+      }
       throw error;
     } finally {
       clearTimeout(timer);
