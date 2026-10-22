@@ -6,6 +6,21 @@
 **Commit validé :** [b016183b91e0](https://github.com/twister65/Nault/commit/b016183b91e0bd336e86064ab1bdd77464812274)  
 **Statut :** diagnostic et plan de correction ; **les remplacements proposés ne sont pas encore appliqués**.
 
+## Lot 7 — polyfill url et traçage des dépendances transitives (22 octobre 2026)
+
+**Inventaire après ESLint 10 (run [39836383702](https://github.com/twister65/Nault/actions/runs/39836383702)) :** les avertissements `deprecated` passent **de 15 à 12** ; `npm audit` passe de **57 à 49 alertes** (35 élevées, 11 modérées, 3 faibles, 0 critique), avec **6 paquets directs** signalés contre 8. La CI Angular 21 complète du commit `73272cd` est **verte** ([run 39837094273](https://github.com/twister65/Nault/actions/runs/39837094273)) : Web/PWA, Electron/TypeScript, lint flat config, tests automatisés USB/BLE/RPC et **101 tests Angular**. `desktop-app/tsconfig.json` définit explicitement `types: ["node"]` pour ne pas importer automatiquement des déclarations ambient tierces incompatibles, sans désactiver le type-checking.
+
+**Traçabilité établie par `npm explain` ([inventaire GitHub Actions](https://github.com/twister65/Nault/actions/runs/39837729256)) :**
+- `@npmcli/move-file`, `are-we-there-yet`, `gauge`, `npmlog`, `glob@8` : `electron-builder@25.1.8 → app-builder-lib → @electron/rebuild@3.6.1 → node-gyp@9.4.1` et composants associés.
+- `request`, `har-validator`, `uuid@3`, `debug@3` : `protractor@7 → webdriver-manager / browserstack / saucelabs`. Migrer Protractor requiert un runner E2E de remplacement avec tests fonctionnels.
+- `glob@7` : notamment `@electron/asar` via Electron Builder, ainsi que l'ancienne chaîne de couverture Karma.
+- `uuid@8` : `webpack-dev-server → sockjs`, amené par Angular 21 build-angular.
+- `querystring@0.2.0` : uniquement `url@0.11.0` direct.
+
+**Correction ciblée :** `url@^0.11.0 → ^0.11.4` sans changer l'API d'appel ni la chaîne Ledger/Bluetooth ; le `url@0.11.4` publié utilise `qs` et `punycode`, plus `querystring`. Le lockfile v2 a été régénéré et contrôlé automatiquement ([run 39838226628](https://github.com/twister65/Nault/actions/runs/39838226628)), avec confirmation de l'absence de `querystring`. Nouvelle CI et nouveau rapport de dépréciations à vérifier sur la tête finale de branche.
+
+**Décision :** ne pas forcer de majors de `node-gyp`, `glob`, `uuid` ni de la pile Protractor par des overrides globaux. Examiner les migrations d'Electron Builder, E2E et les bibliothèques Angular par lots dédiés, en conservant la couverture et les builds Linux/Windows. Le Bluetooth matériel est suspendu jusqu'à Angular 22.
+
 ## Lot 6 — ESLint 10 et configuration flat (22 octobre 2026, validation en cours)
 
 - Objectif : remplacer **ESLint 8.57.1 (fin de support)** directement par **ESLint 10.13.0**, compatible avec les peer dependencies de `@angular-eslint@21.4.0`. La ligne ESLint 9 étant également en fin de support, elle n'est pas utilisée comme palier.
