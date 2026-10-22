@@ -103,7 +103,9 @@ async function main() {
 
   await check('USB reconnect ignores the intentional disconnect event until native HID is ready', async () => {
     const callbacks = {};
+    const handles = {};
     let opens = 0;
+    let closes = 0;
     class FakeNano {
       async getAddress() { return { address: 'nano_mock' }; }
     }
@@ -111,11 +113,14 @@ async function main() {
     const { initialize, LedgerService: NativeLedgerService } = load(compiled, {
       './ledger-hid-worker-transport': { async open() {
         opens++;
-        return { async close() {} };
+        return { async close() { closes++; } };
       } },
       'hw-app-nano': FakeNano,
       rxjs: require('rxjs'),
-      electron: { ipcMain: { on(channel, fn) { callbacks[channel] = fn; } } }
+      electron: { ipcMain: {
+        on(channel, fn) { callbacks[channel] = fn; },
+        handle(channel, fn) { handles[channel] = fn; }
+      } }
     });
     // Avoid a background poller when exercising just the IPC handshake.
     NativeLedgerService.prototype.pollLedgerStatus = () => {};
@@ -129,6 +134,37 @@ async function main() {
     for (let i = 0; i < 5; i++) await flush();
     assert.equal(opens, 1);
     assert.deepEqual(messages.filter(m => m.event === 'ledger-status').map(m => m.data.status), ['ready']);
+    await assert.rejects(handles['ledger-release-usb']({ sender: event.sender, trusted: false }),
+      /Untrusted Ledger IPC sender/);
+    assert.equal(closes, 0, 'untrusted frames must not touch the HID handle');
+    await handles['ledger-release-usb']({ sender: event.sender, trusted: true });
+    assert.equal(closes, 1, 'USB HID must finish closing before acknowledgement');
+  });
+
+  await check('BLE switch cancels a USB worker that is still opening', async () => {
+    let finishOpen;
+    let closes = 0;
+    const pendingOpen = new Promise(resolve => { finishOpen = resolve; });
+    const { LedgerService: NativeLedgerService } = load(
+      fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8'), {
+        './ledger-hid-worker-transport': { open: () => pendingOpen },
+        'hw-app-nano': class {},
+        rxjs: require('rxjs'), electron: {}
+      }
+    );
+    const service = new NativeLedgerService();
+    const opening = service.loadTransport(false);
+    const rejected = assert.rejects(opening, /cancelled by Bluetooth switch/);
+    const releasing = service.releaseUsbForBluetooth();
+    let releaseCompleted = false;
+    releasing.then(() => { releaseCompleted = true; });
+    await flush();
+    assert.equal(releaseCompleted, false, 'release must wait for a pending native USB open');
+    finishOpen({ async close() { closes++; } });
+    await rejected;
+    await releasing;
+    assert.equal(closes, 1);
+    assert.equal(service.ledger.transport, null);
   });
 
   const controlCode = ts.transpileModule(fs.readFileSync(path.join(root, 'src/app/services/ledger-ble-control.ts'), 'utf8'), {
@@ -200,6 +236,46 @@ async function main() {
     };
     return { device, notifications, receive, stops: () => stops };
   }
+  await check('BLE GATT waits for authenticated native USB release after device choice', async () => {
+    let finishRelease;
+    let releaseFinished = false;
+    let requests = 0;
+    const pendingRelease = new Promise(resolve => { finishRelease = resolve; });
+    const BridgeBLE = load(sessionCode, {
+      '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
+      '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+    }, {
+      window: { naultDesktop: { releaseLedgerUsb() {
+        requests++;
+        return pendingRelease;
+      } } }
+    }).default;
+    const h = gattHarness();
+    const originalConnect = h.device.gatt.connect.bind(h.device.gatt);
+    h.device.gatt.connect = async () => {
+      assert.equal(releaseFinished, true, 'GATT must never open before native HID has closed');
+      return originalConnect();
+    };
+    const opening = BridgeBLE.open(h.device, 1000);
+    await flush();
+    assert.equal(requests, 1);
+    assert.equal(h.device.gatt.connected, false);
+    releaseFinished = true;
+    finishRelease(true);
+    const transport = await opening;
+    assert.equal(h.device.gatt.connected, true);
+    await transport.close();
+  });
+  await check('failed USB release prevents GATT discovery', async () => {
+    const BridgeBLE = load(sessionCode, {
+      '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
+      '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+    }, { window: { naultDesktop: { releaseLedgerUsb: async () => false } } }).default;
+    const h = gattHarness();
+    await assert.rejects(BridgeBLE.open(h.device, 1000), /USB transport could not be released/);
+    assert.equal(h.device.gatt.connected, false);
+    assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
+  });
   await check('GATT loss rejects an in-flight exchange and reconnects on the same device without stale listeners', async () => {
     const h = gattHarness();
     for (let i = 0; i < 3; i++) {
