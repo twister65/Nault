@@ -160,7 +160,13 @@ async function main() {
     releasing.then(() => { releaseCompleted = true; });
     await flush();
     assert.equal(releaseCompleted, false, 'release must wait for a pending native USB open');
-    finishOpen({ async close() { closes++; } });
+    let finishClose;
+    const closing = new Promise(resolve => { finishClose = resolve; });
+    finishOpen({ async close() { closes++; await closing; } });
+    await flush();
+    assert.equal(closes, 1);
+    assert.equal(releaseCompleted, false, 'USB release must wait for worker close, not just open');
+    finishClose();
     await rejected;
     await releasing;
     assert.equal(closes, 1);
