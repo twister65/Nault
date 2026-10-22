@@ -43,6 +43,8 @@ describe('WebSocket bounded connections', () => {
     tick(250);
   }));
   it('detects a silent socket without waiting for its close event and restores subscriptions', fakeAsync(() => {
+    const onConnected = jasmine.createSpy('onConnected');
+    service.connected$.subscribe(onConnected);
     service.subscribeAccounts(['nano_test']);
     service.connect();
     const old = sockets[0];
@@ -54,6 +56,7 @@ describe('WebSocket bounded connections', () => {
     tick(5000);
     const fresh = sockets[1];
     fresh.onopen({});
+    expect(onConnected).toHaveBeenCalledTimes(2); // Initial open and recovery.
     expect(fresh.send).toHaveBeenCalledWith(JSON.stringify({
       action: 'subscribe', topic: 'confirmation', options: { accounts: ['nano_test'] }
     }));

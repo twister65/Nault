@@ -7,6 +7,10 @@
         </div>
         <div class="status-labels">
           <div class="label primary uk-text-warning">Ledger disconnected</div>
+          @if (ledgerService.transportMode === 'Bluetooth' && ledgerStatus.statusText &&
+               (ledgerStatus.statusText.includes('pairing') || ledgerStatus.statusText.includes('authentication'))) {
+            <div class="label secondary uk-text-warning">{{ ledgerStatus.statusText }}</div>
+          }
           @if (ledgerService.isDesktop && ledgerService.transportMode === 'Bluetooth') {
             <div class="label secondary">
               <a (click)="reconnectUsb()">Reconnect via USB</a> or

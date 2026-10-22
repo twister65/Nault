@@ -1,6 +1,5 @@
 import { Injectable } from '@angular/core';
 import Nano from 'hw-app-nano';
-import TransportU2F from '@ledgerhq/hw-transport-u2f';
 import TransportUSB from '@ledgerhq/hw-transport-webusb';
 import TransportHID from '@ledgerhq/hw-transport-webhid';
 import TransportBLE from './ledger-web-ble';
@@ -25,6 +24,14 @@ export const LedgerStatus = {
   LOCKED: 'locked',
   READY: 'ready',
 };
+
+// Not a rejected transaction: the device cannot currently sign a receive block.
+export class LedgerNotReadyError extends Error {
+  constructor() {
+    super('Ledger is not ready. Unlock your Ledger, open the Nano app, then click Reconnect.');
+    this.name = 'LedgerNotReadyError';
+  }
+}
 
 
 export interface LedgerData {
@@ -54,7 +61,6 @@ export class LedgerService {
 
   waitTimeout = 30000;
   pollInterval = 5000;
-  u2fPollInterval = 30000;
 
   pollingLedger = false;
 
@@ -70,19 +76,63 @@ export class LedgerService {
   queryingDesktopLedger = false;
   private bluetoothConnecting = false;
   private bluetoothGeneration = 0;
+  private pendingReconnectNotified = false;
+  // Human-readable pairing advice for the Configure Wallet flow (not a raw native error).
+  bluetoothErrorMessage = '';
+
+  // Incoming funds remain pending on the network until the Ledger can sign.
+  // Show a single persistent instruction instead of a toast per WebSocket block.
+  notifyPendingReconnect(): void {
+    if (this.pendingReconnectNotified) return;
+    this.pendingReconnectNotified = true;
+    this.notifications.sendWarning(
+      'Incoming XNO is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.',
+      { identifier: 'ledger-pending-reconnect', length: 0 }
+    );
+  }
+
+  clearPendingReconnect(): void {
+    if (!this.pendingReconnectNotified) return;
+    this.pendingReconnectNotified = false;
+    this.notifications.removeNotification('ledger-pending-reconnect');
+  }
+
+  // These errors indicate that the Nano app is unavailable, not a denied payment.
+  isUnavailableError(err: any): boolean {
+    if (this.ledger.status !== LedgerStatus.READY || err instanceof LedgerNotReadyError) return true;
+    const message = String((err && err.message) || err || '');
+    return /0x6e01|Cannot read properties of null \(reading '(?:cacheBlock|signBlock)'\)/i.test(message);
+  }
+
+  handleUnavailableReceive(): void {
+    if (this.ledger.status === LedgerStatus.READY) {
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      this.ledgerStatus$.next({
+        status: LedgerStatus.NOT_CONNECTED,
+        statusText: 'Ledger is not ready. Unlock it, open the Nano app and reconnect.'
+      });
+    }
+    this.notifyPendingReconnect();
+  }
+
+  private async requireReadyForSigning(): Promise<void> {
+    if (this.ledger.status !== LedgerStatus.READY) {
+      await this.loadLedger(true);
+    }
+    if (this.ledger.status !== LedgerStatus.READY) throw new LedgerNotReadyError();
+  }
 
   get usesDesktopUsb() {
     return this.isDesktop && this.transportMode !== 'Bluetooth';
   }
 
-  supportsU2F = false;
   supportsWebHID = false;
   supportsWebUSB = false;
   supportsBluetooth = false;
   supportsUSB = false;
 
-  transportMode: 'U2F' | 'USB' | 'HID' | 'Bluetooth' = 'U2F';
-  DynamicTransport: typeof TransportUSB | typeof TransportHID | typeof TransportBLE = TransportU2F;
+  transportMode: 'USB' | 'HID' | 'Bluetooth' = 'USB';
+  DynamicTransport: typeof TransportUSB | typeof TransportHID | typeof TransportBLE = TransportUSB;
 
   ledgerStatus$: Subject<{ status: string, statusText: string }> = new Subject();
   desktopMessage$ = new Subject();
@@ -150,12 +200,11 @@ export class LedgerService {
    */
   async checkBrowserSupport() {
     await Promise.all([
-      TransportU2F.isSupported().then(supported => this.supportsU2F = supported),
       TransportHID.isSupported().then(supported => this.supportsWebHID = supported),
       TransportUSB.isSupported().then(supported => this.supportsWebUSB = supported),
       TransportBLE.isSupported().then(supported => this.supportsBluetooth = supported),
     ]);
-    this.supportsUSB = !this.isAndroidWeb && (this.supportsU2F || this.supportsWebHID || this.supportsWebUSB);
+    this.supportsUSB = !this.isAndroidWeb && (this.supportsWebHID || this.supportsWebUSB);
   }
 
   /**
@@ -171,9 +220,10 @@ export class LedgerService {
       this.transportMode = 'HID';
       this.DynamicTransport = TransportHID;
     } else {
-      // Legacy browsers
-      this.transportMode = 'U2F';
-      this.DynamicTransport = TransportU2F;
+      // No supported browser USB transport (U2F has been retired).
+      // The UI disables USB; loadLedger() must not open the fallback.
+      this.transportMode = 'USB';
+      this.DynamicTransport = TransportUSB;
     }
   }
 
@@ -328,6 +378,15 @@ export class LedgerService {
     if (this.transportMode === 'Bluetooth') return this.loadWebBluetooth(hideNotifications, forceBluetoothReconnect);
     return new Promise(async (resolve, reject) => {
 
+      // Desktop uses native HID, not the browser transports.
+      if (!this.isDesktop && !this.supportsWebUSB && !this.supportsWebHID) {
+        this.ledger.status = LedgerStatus.NOT_CONNECTED;
+        const message = 'USB Ledger connection requires WebUSB or WebHID. Use a supported browser or connect via Bluetooth.';
+        this.ledgerStatus$.next({ status: this.ledger.status, statusText: message });
+        if (!hideNotifications) this.notifications.sendWarning(message);
+        return resolve(false);
+      }
+
       // Desktop is handled completely differently.  Send a message for status instead of setting anything up
       if (this.isDesktop) {
         if (!this.desktop.send('ledger', { event: 'get-ledger-status', data: { bluetooth: this.transportMode === 'Bluetooth' } })) {
@@ -438,7 +497,11 @@ export class LedgerService {
     }).catch(err => {
       console.log(`error when loading ledger `, err);
       if (!hideNotifications) {
-        this.notifications.sendWarning(`Error loading Ledger device: ${typeof err === 'string' ? err : err.message}`, { length: 6000 });
+        if (this.isUnavailableError(err)) {
+          this.notifications.sendWarning('Ledger unavailable. Unlock your Ledger, open the Nano app, then click Reconnect.', { identifier: 'ledger-connection-help', length: 10000 });
+        } else {
+          this.notifications.sendWarning(`Error loading Ledger device: ${typeof err === 'string' ? err : err.message}`, { length: 6000 });
+        }
       }
 
       return null;
@@ -448,6 +511,7 @@ export class LedgerService {
 
   private async loadWebBluetooth(hideNotifications: boolean, forceReconnect = false) {
     if (this.bluetoothConnecting) return false;
+    this.bluetoothErrorMessage = '';
     // Explicit user reconnect always discards the old session, even if Chromium
     // still reports GATT connected after a dropped radio link.
     if (forceReconnect && this.ledger.transport) {
@@ -519,6 +583,7 @@ export class LedgerService {
       ]);
       if (generation !== this.bluetoothGeneration) return false;
       console.info('[Ledger BLE] reconnect successful');
+      this.bluetoothErrorMessage = '';
       this.appSettings.setAppSetting('ledgerReconnect', 'bluetooth');
       this.ledger.status = LedgerStatus.READY;
       this.ledgerStatus$.next({ status: this.ledger.status, statusText: 'Nano Ledger application connected via Bluetooth' });
@@ -535,11 +600,19 @@ export class LedgerService {
       const detail = String(error && (error.message || error) || '');
       const adapterUnavailable = error && error.name === 'TransportOpenUserCancelled' &&
         /bluetooth adapter not available|adapter not available|bluetooth unavailable|bluetooth is disabled/i.test(detail);
+      const pairingAdvice = 'Ledger Nano X Bluetooth authentication failed. Your device may not be paired correctly. ' +
+        'Re-pair it in your computer Bluetooth settings (Linux: bluetoothctl), then click Reconnect.';
+      const authenticationFailed = error && error.name === 'LedgerBluetoothAuthenticationError' ||
+        /pin or key missing|authentication failed/i.test(detail);
+      const possiblePairing = error && error.name === 'DisconnectedDevice' &&
+        /pairing may be missing or invalid/i.test(detail);
+      if (authenticationFailed) this.bluetoothErrorMessage = pairingAdvice;
+      else if (possiblePairing) this.bluetoothErrorMessage = detail;
       const message = adapterUnavailable
         ? 'Bluetooth unavailable. Check Bluetooth on your computer and Ledger, or choose Reconnect via USB.'
         : error && error.name === 'TransportOpenUserCancelled'
           ? 'Bluetooth selection cancelled'
-          : `Bluetooth connection failed: ${detail}`;
+          : this.bluetoothErrorMessage || `Bluetooth connection failed: ${detail}`;
       this.ledgerStatus$.next({ status: this.ledger.status, statusText: message });
       if (!hideNotifications) this.notifications.sendWarning(message);
       return false;
@@ -551,9 +624,7 @@ export class LedgerService {
   }
 
   async updateCache(accountIndex, blockHash) {
-    if (this.ledger.status !== LedgerStatus.READY) {
-      await this.loadLedger(); // Make sure ledger is ready
-    }
+    await this.requireReadyForSigning();
     const blockResponse = await this.api.blocksInfo([blockHash]);
     const blockData = blockResponse.blocks[blockHash];
     if (!blockData) throw new Error(`Unable to load block data`);
@@ -574,9 +645,7 @@ export class LedgerService {
   }
 
   async updateCacheOffline(accountIndex, blockData) {
-    if (this.ledger.status !== LedgerStatus.READY) {
-      await this.loadLedger(); // Make sure ledger is ready
-    }
+    await this.requireReadyForSigning();
 
     const cacheData = {
       representative: blockData.representative,
@@ -593,9 +662,7 @@ export class LedgerService {
   }
 
   async signBlock(accountIndex: number, blockData: any) {
-    if (this.ledger.status !== LedgerStatus.READY) {
-      await this.loadLedger(); // Make sure ledger is ready
-    }
+    await this.requireReadyForSigning();
     if (this.usesDesktopUsb) {
       return await this.signBlockDesktop(accountIndex, blockData);
     } else {
@@ -631,7 +698,7 @@ export class LedgerService {
       await this.checkLedgerStatus();
       if (generation !== this.bluetoothGeneration) return;
       this.pollLedgerStatus();
-    }, this.transportMode === 'U2F' ? this.u2fPollInterval : this.pollInterval);
+    }, this.pollInterval);
   }
 
   async checkLedgerStatus() {

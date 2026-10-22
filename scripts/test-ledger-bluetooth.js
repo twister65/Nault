@@ -103,7 +103,9 @@ async function main() {
 
   await check('USB reconnect ignores the intentional disconnect event until native HID is ready', async () => {
     const callbacks = {};
+    const handles = {};
     let opens = 0;
+    let closes = 0;
     class FakeNano {
       async getAddress() { return { address: 'nano_mock' }; }
     }
@@ -111,17 +113,20 @@ async function main() {
     const { initialize, LedgerService: NativeLedgerService } = load(compiled, {
       './ledger-hid-worker-transport': { async open() {
         opens++;
-        return { async close() {} };
+        return { async close() { closes++; } };
       } },
       'hw-app-nano': FakeNano,
       rxjs: require('rxjs'),
-      electron: { ipcMain: { on(channel, fn) { callbacks[channel] = fn; } } }
+      electron: { ipcMain: {
+        on(channel, fn) { callbacks[channel] = fn; },
+        handle(channel, fn) { handles[channel] = fn; }
+      } }
     });
     // Avoid a background poller when exercising just the IPC handshake.
     NativeLedgerService.prototype.pollLedgerStatus = () => {};
-    initialize(() => true);
+    initialize(event => event.trusted === true);
     const messages = [];
-    const event = { sender: { send(_channel, msg) { messages.push(msg); } } };
+    const event = { trusted: true, sender: { send(_channel, msg) { messages.push(msg); } } };
     callbacks.ledger(event, { event: 'disconnect' });
     assert.deepEqual(messages.filter(m => m.event === 'ledger-status'), [],
       'an intentional transport switch must not report a failed USB status');
@@ -129,6 +134,43 @@ async function main() {
     for (let i = 0; i < 5; i++) await flush();
     assert.equal(opens, 1);
     assert.deepEqual(messages.filter(m => m.event === 'ledger-status').map(m => m.data.status), ['ready']);
+    await assert.rejects(handles['ledger-release-usb']({ sender: event.sender, trusted: false }),
+      /Untrusted Ledger IPC sender/);
+    assert.equal(closes, 0, 'untrusted frames must not touch the HID handle');
+    await handles['ledger-release-usb']({ sender: event.sender, trusted: true });
+    assert.equal(closes, 1, 'USB HID must finish closing before acknowledgement');
+  });
+
+  await check('BLE switch cancels a USB worker that is still opening', async () => {
+    let finishOpen;
+    let closes = 0;
+    const pendingOpen = new Promise(resolve => { finishOpen = resolve; });
+    const { LedgerService: NativeLedgerService } = load(
+      fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8'), {
+        './ledger-hid-worker-transport': { open: () => pendingOpen },
+        'hw-app-nano': class {},
+        rxjs: require('rxjs'), electron: {}
+      }
+    );
+    const service = new NativeLedgerService();
+    const opening = service.loadTransport(false);
+    const rejected = assert.rejects(opening, /cancelled by Bluetooth switch/);
+    const releasing = service.releaseUsbForBluetooth();
+    let releaseCompleted = false;
+    releasing.then(() => { releaseCompleted = true; });
+    await flush();
+    assert.equal(releaseCompleted, false, 'release must wait for a pending native USB open');
+    let finishClose;
+    const closing = new Promise(resolve => { finishClose = resolve; });
+    finishOpen({ async close() { closes++; await closing; } });
+    await flush();
+    assert.equal(closes, 1);
+    assert.equal(releaseCompleted, false, 'USB release must wait for worker close, not just open');
+    finishClose();
+    await rejected;
+    await releasing;
+    assert.equal(closes, 1);
+    assert.equal(service.ledger.transport, null);
   });
 
   const controlCode = ts.transpileModule(fs.readFileSync(path.join(root, 'src/app/services/ledger-ble-control.ts'), 'utf8'), {
@@ -164,7 +206,7 @@ async function main() {
     '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
     '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
   }).default;
-  function gattHarness() {
+  function gattHarness(shouldReplyToMtu = () => true) {
     const device = new EventEmitter();
     device.id = 'same-ledger';
     device.addEventListener = device.on.bind(device);
@@ -189,7 +231,7 @@ async function main() {
     const uuid = devices.getBluetoothServiceUuids()[0];
     const info = devices.getInfosForServiceUuid(uuid);
     const writer = { writeValue: async frame => {
-      if (frame[0] === 8) receive('080000990199');
+      if (frame[0] === 8 && shouldReplyToMtu()) receive('080000990199');
     } };
     const service = { uuid, getCharacteristic: async id => id === info.notifyUuid ? notifications : writer };
     device.gatt = {
@@ -200,6 +242,134 @@ async function main() {
     };
     return { device, notifications, receive, stops: () => stops };
   }
+  await check('BLE GATT waits for authenticated native USB release after device choice', async () => {
+    let finishRelease;
+    let releaseFinished = false;
+    let requests = 0;
+    const pendingRelease = new Promise(resolve => { finishRelease = resolve; });
+    const BridgeBLE = load(sessionCode, {
+      '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
+      '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+    }, {
+      window: { naultDesktop: { releaseLedgerUsb() {
+        requests++;
+        return pendingRelease;
+      } } }
+    }).default;
+    const h = gattHarness();
+    const originalConnect = h.device.gatt.connect.bind(h.device.gatt);
+    h.device.gatt.connect = async () => {
+      assert.equal(releaseFinished, true, 'GATT must never open before native HID has closed');
+      return originalConnect();
+    };
+    const opening = BridgeBLE.open(h.device, 1000);
+    await flush();
+    assert.equal(requests, 1);
+    assert.equal(h.device.gatt.connected, false);
+    releaseFinished = true;
+    finishRelease(true);
+    const transport = await opening;
+    assert.equal(h.device.gatt.connected, true);
+    await transport.close();
+  });
+  await check('failed USB release prevents GATT discovery', async () => {
+    const BridgeBLE = load(sessionCode, {
+      '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
+      '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+    }, { window: { naultDesktop: { releaseLedgerUsb: async () => false } } }).default;
+    const h = gattHarness();
+    await assert.rejects(BridgeBLE.open(h.device, 1000), /USB transport could not be released/);
+    assert.equal(h.device.gatt.connected, false);
+    assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
+  });
+  await check('GATT service-discovery rejection exposes the native error without APDUs', async () => {
+    const messages = [];
+    const DiagnosticBLE = load(sessionCode, {
+      '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
+      '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+    }, { console: {
+      info(message, detail) { messages.push({ level: 'info', message, detail }); },
+      warn(message, detail) { messages.push({ level: 'warn', message, detail }); },
+      error(message, detail) { messages.push({ level: 'error', message, detail }); }
+    } }).default;
+    const h = gattHarness();
+    h.device.gatt.getPrimaryServices = async () => {
+      const error = new Error('Services could not be resolved');
+      error.name = 'NetworkError';
+      throw error;
+    };
+    await assert.rejects(DiagnosticBLE.open(h.device, 1000), /Services could not be resolved/);
+    const rejected = messages.find(m => m.message === '[Ledger BLE GATT] service discovery rejected');
+    assert(rejected);
+    assert.equal(rejected.detail.name, 'NetworkError');
+    assert.equal(rejected.detail.connected, true);
+    assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
+    assert.equal(h.device.gatt.connected, false);
+    assert(messages.every(m => !String(m.message).includes('APDU')));
+  });
+  await check('native GATT authentication error requests re-pairing', async () => {
+    const h = gattHarness();
+    h.device.gatt.getPrimaryServices = async () => {
+      const error = Error('Authentication failed.');
+      error.name = 'NetworkError';
+      throw error;
+    };
+    await assert.rejects(SessionBLE.open(h.device, 1000), error =>
+      error.name === 'LedgerBluetoothAuthenticationError' &&
+      /authentication failed/i.test(error.message) &&
+      /bluetoothctl/i.test(error.message)
+    );
+    assert.equal(h.device.gatt.connected, false);
+    assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
+  });
+  await check('GATT loss reports service discovery as the failing phase', async () => {
+    const messages = [];
+    const DiagnosticBLE = load(sessionCode, {
+      '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
+      '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+    }, { console: {
+      info(message, detail) { messages.push({ message, detail }); },
+      warn(message, detail) { messages.push({ message, detail }); },
+      error(message, detail) { messages.push({ message, detail }); }
+    } }).default;
+    const h = gattHarness();
+    h.device.gatt.getPrimaryServices = async () => {
+      h.device.gatt.disconnect();
+      return [];
+    };
+    await assert.rejects(DiagnosticBLE.open(h.device, 1000), /disconnected/i);
+    const disposed = messages.find(m => m.message === '[Ledger BLE GATT] session disposed');
+    assert.equal(disposed.detail.phase, 'GATT service discovery');
+    assert.equal(disposed.detail.connected, false);
+  });
+  await check('MTU timeout recreates GATT once and then receives a new MTU reply', async () => {
+    let attempts = 0;
+    let connections = 0;
+    const h = gattHarness(() => ++attempts > 1);
+    const originalConnect = h.device.gatt.connect.bind(h.device.gatt);
+    h.device.gatt.connect = async () => { connections++; return originalConnect(); };
+    const transport = await SessionBLE.open(h.device, 1000, 30);
+    assert.equal(attempts, 2, 'one missing MTU response should cause exactly one new handshake');
+    assert.equal(connections, 2, 'fresh Bluetooth GATT connection is required for recovery');
+    assert.equal(transport.mtuSize, 153);
+    assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 1);
+    await transport.close();
+    assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
+    assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
+  });
+  await check('MTU recovery gives up after one retry without entering an APDU exchange', async () => {
+    let attempts = 0;
+    let connections = 0;
+    const h = gattHarness(() => { attempts++; return false; });
+    const originalConnect = h.device.gatt.connect.bind(h.device.gatt);
+    h.device.gatt.connect = async () => { connections++; return originalConnect(); };
+    await assert.rejects(SessionBLE.open(h.device, 1000, 30), /MTU negotiation timed out/);
+    assert.equal(attempts, 2, 'do not loop indefinitely on missing MTU replies');
+    assert.equal(connections, 2);
+    assert.equal(h.device.gatt.connected, false);
+    assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
+    assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
+  });
   await check('GATT loss rejects an in-flight exchange and reconnects on the same device without stale listeners', async () => {
     const h = gattHarness();
     for (let i = 0; i < 3; i++) {
@@ -207,7 +377,8 @@ async function main() {
       assert.equal(transport.mtuSize, 153);
       assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 1);
       const pending = transport.exchange(Buffer.from('0102', 'hex'));
-      const rejected = assert.rejects(pending, e => e.name === 'DisconnectedDevice');
+      const rejected = assert.rejects(pending, e => e.name === 'DisconnectedDevice' &&
+        !/pairing|authentication/i.test(e.message));
       h.device.gatt.disconnect();
       await rejected;
       assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
@@ -238,10 +409,33 @@ async function main() {
     assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
     assert.equal(h.device.gatt.connected, false);
   });
+  await check('GATT loss during service discovery fails closed and permits explicit reconnect', async () => {
+    const h = gattHarness();
+    const discover = h.device.gatt.getPrimaryServices.bind(h.device.gatt);
+    h.device.gatt.getPrimaryServices = async () => {
+      h.device.gatt.disconnect();
+      return discover();
+    };
+    await assert.rejects(SessionBLE.open(h.device, 1000), error =>
+      error.name === 'DisconnectedDevice' && /Reconnect/.test(error.message) &&
+      /pairing may be missing or invalid/i.test(error.message) &&
+      /bluetoothctl/i.test(error.message)
+    );
+    assert.equal(h.device.gatt.connected, false);
+    assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
+    assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
+    h.device.gatt.getPrimaryServices = discover;
+    const fresh = await SessionBLE.open(h.device, 1000);
+    await fresh.close();
+    assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
+    assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
+  });
   await check('disconnect during notification setup rejects opening promptly', async () => {
     const h = gattHarness();
     h.notifications.startNotifications = async () => { h.device.gatt.disconnect(); };
-    await assert.rejects(SessionBLE.open(h.device, 1000), /disconnected|closed/);
+    await assert.rejects(SessionBLE.open(h.device, 1000), error =>
+      error.name === 'DisconnectedDevice' && /Reconnect/i.test(error.message)
+    );
     assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
   });
   const calls = [];
@@ -265,7 +459,7 @@ async function main() {
     './ledger-web-ble': { default: BLE },
     './ledger-ble-control': control,
     '@angular/core': { Injectable: () => value => value }, 'hw-app-nano': { default: Nano },
-    '@ledgerhq/hw-transport-u2f': { default: BLE }, '@ledgerhq/hw-transport-webusb': { default: BLE },
+    '@ledgerhq/hw-transport-webusb': { default: BLE },
     '@ledgerhq/hw-transport-webhid': { default: BLE }, '@ledgerhq/hw-transport-web-ble': { default: BLE },
     rxjs: require('rxjs'), '../../environments/environment': { environment: { desktop: true } }
   }, { navigator });
@@ -275,6 +469,36 @@ async function main() {
     { sendWarning() {} }, { getAppSetting(key) { return preferences[key]; }, setAppSetting(key, value) { preferences[key] = value; } });
   service.pollLedgerStatus = () => {};
   await flush();
+  await check('browser USB selects only WebUSB or WebHID, never legacy U2F', async () => {
+    const browser = Object.create(LedgerService.prototype);
+    browser.supportsWebUSB = true;
+    browser.supportsWebHID = true;
+    browser.detectUsbTransport();
+    assert.equal(browser.transportMode, 'USB');
+    browser.supportsWebUSB = false;
+    browser.detectUsbTransport();
+    assert.equal(browser.transportMode, 'HID');
+    browser.supportsWebHID = false;
+    browser.detectUsbTransport();
+    assert.equal(browser.transportMode, 'USB');
+    assert.equal(Object.prototype.hasOwnProperty.call(browser, 'supportsU2F'), false);
+  });
+  await check('unsupported browser refuses Ledger USB instead of attempting retired U2F', async () => {
+    const statuses = [];
+    const notices = [];
+    const browser = Object.create(LedgerService.prototype);
+    browser.isDesktop = false;
+    browser.isAndroidWeb = false;
+    browser.transportMode = 'USB';
+    browser.supportsWebUSB = false;
+    browser.supportsWebHID = false;
+    browser.ledger = { status: 'not-connected', nano: null, transport: null };
+    browser.ledgerStatus$ = { next(v) { statuses.push(v); } };
+    browser.notifications = { sendWarning(msg) { notices.push(msg); } };
+    assert.equal(await browser.loadLedger(false), false);
+    assert.match(statuses[0].statusText, /WebUSB or WebHID/);
+    assert.match(notices[0], /WebUSB or WebHID/);
+  });
   await check('explicit Bluetooth choice persists even if Windows pairing fails', async () => {
     BLE.fail = true;
     service.enableBluetoothMode(true);
@@ -282,6 +506,32 @@ async function main() {
     assert.equal(await service.loadLedger(), false);
     assert.equal(service.transportMode, 'Bluetooth');
     assert.equal(preferences.ledgerReconnect, 'bluetooth');
+    BLE.fail = false;
+  });
+  await check('confirmed BLE authentication failure shows actionable pairing advice', async () => {
+    const auth = new Error('Authentication failed');
+    auth.name = 'LedgerBluetoothAuthenticationError';
+    BLE.fail = auth;
+    assert.equal(await service.loadLedger(), false);
+    assert.match(service.bluetoothErrorMessage, /authentication failed/i);
+    assert.match(service.bluetoothErrorMessage, /bluetoothctl/i);
+    BLE.fail = false;
+  });
+  await check('early GATT disconnect mentions possible pairing without asserting it', async () => {
+    const disconnected = new Error('Ledger Nano X Bluetooth pairing may be missing or invalid (authentication may have failed). Re-pair your Ledger in your computer Bluetooth settings (Linux: bluetoothctl), then click Reconnect.');
+    disconnected.name = 'DisconnectedDevice';
+    BLE.fail = disconnected;
+    assert.equal(await service.loadLedger(), false);
+    assert.match(service.bluetoothErrorMessage, /pairing may be missing or invalid/i);
+    assert.doesNotMatch(service.bluetoothErrorMessage, /is not paired/i);
+    BLE.fail = false;
+  });
+  await check('generic radio disconnection does not claim authentication failure', async () => {
+    const disconnected = new Error('Ledger Bluetooth disconnected. Click Reconnect.');
+    disconnected.name = 'DisconnectedDevice';
+    BLE.fail = disconnected;
+    assert.equal(await service.loadLedger(), false);
+    assert.equal(service.bluetoothErrorMessage, '');
     BLE.fail = false;
   });
   await check('desktop Bluetooth connects through renderer, not native IPC', async () => {
@@ -398,7 +648,7 @@ async function main() {
       isDesktop: true, supportsBluetooth: true, transportMode: 'Bluetooth',
       enableBluetoothMode(enabled) {
         operations.push(['mode', enabled]);
-        this.transportMode = enabled ? 'Bluetooth' : 'U2F';
+        this.transportMode = enabled ? 'Bluetooth' : 'USB';
       },
       async loadLedger(hide, forceBle) { operations.push(['load', hide, forceBle]); return true; }
     };
@@ -408,7 +658,7 @@ async function main() {
     const widget = new WalletWidgetComponent({ wallet: {} }, notifications, ledger, {}, {});
     widget.ledgerStatus = { status: 'ready', statusText: '' };
     await widget.reconnectUsb();
-    assert.equal(ledger.transportMode, 'U2F');
+    assert.equal(ledger.transportMode, 'USB');
     assert.deepEqual(operations, [['mode', false], ['load', false, false]]);
     operations.length = 0;
     await widget.reloadLedger();
