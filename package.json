@@ -28,7 +28,7 @@
   },
   "private": true,
   "dependencies": {
-    "@angular-devkit/core": "^22.2.3",
+    "@angular-devkit/core": "^22.2.4",
     "@angular/common": "^22.2.3",
     "@angular/compiler": "^22.2.3",
     "@angular/core": "^22.2.3",
@@ -37,6 +37,7 @@
     "@angular/platform-browser": "^22.2.3",
     "@angular/router": "^22.2.3",
     "@angular/service-worker": "^22.2.3",
+    "@jsverse/transloco": "^8.4.0",
     "@ledgerhq/devices": "7.0.2",
     "@ledgerhq/hw-transport": "^6.27.1",
     "@ledgerhq/hw-transport-node-hid": "^6.27.1",
@@ -46,6 +47,7 @@
     "@ledgerhq/hw-transport-webusb": "^6.27.1",
     "@ledgerhq/logs": "^6.10.0",
     "@ng-bootstrap/ng-bootstrap": "^21.0.0",
+    "@popperjs/core": "^2.11.8",
     "@types/crypto-js": "^3.1.38",
     "@types/w3c-web-hid": "^1.0.2",
     "@types/w3c-web-usb": "^1.0.5",
@@ -74,18 +76,16 @@
     "tweetnacl": "^1.0.0",
     "url": "^0.11.4",
     "usb": "^2.0.3",
-    "zone.js": "^0.16.3",
-    "@jsverse/transloco": "^8.4.0",
-    "@popperjs/core": "^2.11.8"
+    "zone.js": "^0.16.3"
   },
   "devDependencies": {
-    "@angular-devkit/build-angular": "^22.2.3",
+    "@angular-devkit/build-angular": "^22.2.4",
     "@angular-eslint/builder": "^22.6.0",
     "@angular-eslint/eslint-plugin": "^22.6.0",
     "@angular-eslint/eslint-plugin-template": "^22.6.0",
     "@angular-eslint/schematics": "^22.6.0",
     "@angular-eslint/template-parser": "^22.6.0",
-    "@angular/cli": "^22.2.3",
+    "@angular/cli": "^22.2.4",
     "@angular/compiler-cli": "^22.2.3",
     "@angular/language-service": "^22.2.3",
     "@types/bip39": "^2.4.0",
@@ -99,7 +99,8 @@
     "@typescript-eslint/parser": "8.72.0",
     "electron": "44.7.0",
     "electron-builder": "^25.1.8",
-    "eslint": "10.13.0",
+    "eslint": "^9.39.5",
+    "istanbul-lib-instrument": "^6.0.3",
     "jasmine-core": "~3.6.0",
     "jasmine-spec-reporter": "~5.0.0",
     "karma": "~6.3.9",
@@ -112,9 +113,8 @@
     "ts-node": "~3.2.0",
     "typescript": "~6.0.2",
     "uikit": "^3.9.4",
-    "webpack": "5.111.0",
-    "worker-loader": "^3.0.8",
-    "istanbul-lib-instrument": "^6.0.3"
+    "webpack": "5.112.0",
+    "worker-loader": "^3.0.8"
   },
   "build": {
     "appId": "cc.nault",
