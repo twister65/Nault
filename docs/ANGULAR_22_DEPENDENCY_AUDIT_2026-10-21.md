@@ -6,6 +6,42 @@
 **Commit validé :** [b016183b91e0](https://github.com/twister65/Nault/commit/b016183b91e0bd336e86064ab1bdd77464812274)  
 **Statut :** diagnostic et plan de correction ; **les remplacements proposés ne sont pas encore appliqués**.
 
+## Point d'étape du 22 octobre 2026 — Lot 3 VALIDÉ
+
+**Ordre des branches demandé :** continuer exclusivement les mises à jour de dépendances dans `fix/angular-21-deprecated-dependencies` ; après validation et fusion de cette branche, réintégrer les corrections dans **`upgrade/angular-22`** pour poursuivre Angular 22. Cette dernière branche **existe déjà**, contient `@angular/core@^22.2.3` et `typescript@~6.0.2`, et a divergé : **préserver ses commits**, étudier les conflits et ne pas la recréer/écraser. Aucun changement appliqué à `master` ou `upgrade/angular-22` dans ce lot.
+
+### Lot 3 — retirer `@angular/animations` et `rxjs-compat`
+
+- `package.json` et `package-lock.json` : suppression de `@angular/animations@21.2.25` et `rxjs-compat@6.6.0`. Les recherches automatisées sous `src`, `desktop-app/src`, `scripts` et `e2e` ne trouvent **aucune référence** à ces deux packages. Dans le lockfile, `@angular/animations` n'était requis directement que par la racine ; `@angular/platform-browser` le mentionne en *peerDependency facultative*. `rxjs-compat` n'avait pas d'autre parent.
+- Commits : [59d64ad](https://github.com/twister65/Nault/commit/59d64adba6b52c42886bed3d422f480467b37a81) (`package.json`), [0391045](https://github.com/twister65/Nault/commit/0391045260066f9436d4a14e73416e9919af6ff5) (`package-lock.json`).
+- L'inventaire `npm ci` confirme **16 noms de paquets dépréciés** : **19 (initial) → 17 (après lots 1–2) → 16 (après lot 3)**, disparition de `@angular/animations` sans apparition d'autre avertissement. Références aux modules legacy surveillés : **0**.
+- **CI complète validée** au commit [298ae54](https://github.com/twister65/Nault/commit/298ae548861367eb97f4c3bcffe806e519142d46) : [validation Angular 21 — run 39732056771](https://github.com/twister65/Nault/actions/runs/39732056771) **success** : `npm ci`, build Web/PWA + manifeste, build Electron + TypeScript, lint, **98/98 tests Angular**, **31/31 tests RPC**, **29 tests Ledger BLE**. [Inventaire npm/audit — run 39732056909](https://github.com/twister65/Nault/actions/runs/39732056909), [lint — 39732056916](https://github.com/twister65/Nault/actions/runs/39732056916), [CodeQL — 39732056922](https://github.com/twister65/Nault/actions/runs/39732056922), [Docker Hub — 39732056933](https://github.com/twister65/Nault/actions/runs/39732056933) : **success**.
+- Validation matérielle encore requise : Linux / Windows / Android, Ledger Nano S Plus USB, Nano X Bluetooth, réception/envoi et reconnexion. **Aucune fusion** à ce stade.
+
+### Inventaire de sécurité distinct du nombre de dépréciations
+
+Le workflow d'inventaire archive maintenant `npm-audit-results.json`, un résumé des sévérités, et les dépendances **directes** concernées. Ce rapport est **diagnostique, non bloquant** ; il ne remplace pas les contrôles CodeQL et le merge gate existants.
+
+**Instantané npm audit du 22/10/2026 (run 39732056909)** : **60 paquets signalés** (0 critique, 44 élevés, 13 modérés, 3 faibles), décompte incluant les dépendances de développement. Sans audit du lockfile initial effectué dans les mêmes conditions, **ne pas prétendre à une réduction de 19 à 16 vulnérabilités** : ces chiffres sont des avertissements *deprecated*, pas des CVE.
+
+Les **9 dépendances directes vulnérables** signalées par npm sont :
+- `@angular-devkit/build-angular`, `@angular/cli` (élevé) : bloquer toute *rétrogradation* suggérée par `npm audit fix` et traiter avec la migration Angular 22.
+- `@typescript-eslint/eslint-plugin`, `@typescript-eslint/parser` (élevé) : priorité aux mises à jour **compatibles Angular 21 + TypeScript 5.9** ; `fixAvailable: true` à vérifier dans le lockfile modifié.
+- `electron-builder`, `electron-updater` (élevé) : changements de version majeurs proposés, à isoler dans une PR spécifique avec builds Linux/Windows et signature/update.
+- `electron-settings` (élevé) : correctif indiqué comme disponible, à étudier en priorité en limitant le changement de version.
+- `karma`, `protractor` (élevé) : dette des outils de test ; migration E2E/runner dédiée, sans retrait aveugle des cibles ni perte de couverture.
+
+**Prudence :** l'outil `npm audit fix` peut proposer des **versions anciennes et inadaptées** (ex. Angular CLI 21.0.1 ou build-angular 0.1002.1, Karma 4, Protractor 3). Ne jamais exécuter `npm audit fix --force` ni accepter ces suggestions sans vérification des contraintes. Une alerte en dépendance de développement ne démontre pas, à elle seule, une exposition de l'application utilisateur.
+
+### Prochain travail ciblé
+
+1. Étudier `electron-settings` et `@typescript-eslint/*` (correctifs annoncés disponibles) avec `npm explain`, notes de version, résolution lockfile et tests ; ne pas modifier le moteur Ledger/RPC dans le même lot.
+2. Préparer ESLint 9 (ou autre ligne maintenue compatible) et la migration *flat config* ; l'ESLint 8 actuel explique `@humanwhocodes/config-array/object-schema` dépréciés. Les dépendances peer des modules `@angular-eslint@21.4.0` acceptent ESLint 9, mais il faut adapter la config et recalculer le lockfile avant validation.
+3. Réévaluer `request`, `glob`, `debug` et `node-gyp` par leurs parents, sans `overrides` risqués sur les modules natifs.
+4. Après validation de la branche de nettoyage : revue/PR de fusion, puis intégration dans `upgrade/angular-22` existante en conservant les travaux Angular 22 déjà présents.
+
+---
+
 ## Journal de migration — mise à jour du 22 octobre 2026
 
 ### Lot 1 — Plateforme Angular sans bootstrap dynamique
