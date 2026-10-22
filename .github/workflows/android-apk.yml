@@ -1,0 +1,75 @@
+name: Android APK (Chrome TWA test)
+
+on:
+  workflow_dispatch:
+    inputs:
+      pwa_url:
+        description: 'HTTPS address of YOUR deployed Nault build (no query or fragment)'
+        required: true
+        type: string
+  push:
+    branches: [feature/android-apk-twa]
+    paths:
+      - android/**
+      - .github/workflows/android-apk.yml
+      - docs/android-apk.md
+  pull_request:
+    paths:
+      - android/**
+      - .github/workflows/android-apk.yml
+      - docs/android-apk.md
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    # The default URL on branch/PR runs is a toolchain SMOKE test, not the fork.
+    # Manual runs and repository variable override it for real Nault testing.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      NAULT_ANDROID_URL: ${{ inputs.pwa_url || vars.NAULT_ANDROID_TEST_URL || 'https://nault.cc/' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Validate target and identify the tested site
+        env:
+          CONFIGURED_URL: ${{ inputs.pwa_url || vars.NAULT_ANDROID_TEST_URL || '' }}
+        run: |
+          python3 scripts/validate-android-url.py "$NAULT_ANDROID_URL"
+          if [ -z "$CONFIGURED_URL" ]; then
+            echo "::warning::Using upstream https://nault.cc/ for CI smoke test only; this APK does NOT test the fork."
+          fi
+          echo "### Android APK test" >> "$GITHUB_STEP_SUMMARY"
+          echo "Target website: \`$NAULT_ANDROID_URL\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Git commit: \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Note: Android wrapper (Chrome TWA), not an embedded Angular build." >> "$GITHUB_STEP_SUMMARY"
+      - name: Assemble debug APK
+        run: gradle -p android :app:assembleDebug --no-daemon -PnaultUrl="$NAULT_ANDROID_URL"
+      - name: Verify artifact and checksum
+        run: |
+          test -s android/app/build/outputs/apk/debug/app-debug.apk
+          sha256sum android/app/build/outputs/apk/debug/app-debug.apk | tee android-apk-sha256.txt
+          cat android-apk-sha256.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nault-android-twa-debug-${{ github.run_number }}
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android-apk-sha256.txt
+          if-no-files-found: error
+          retention-days: 14

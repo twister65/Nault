@@ -1,0 +1,53 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Deliberately do not bundle wallet keys or an arbitrary debug URL in source control.
+// An Android debug APK is an HTTPS PWA launcher, not an offline copy of Angular dist/.
+def targetUrl = providers.gradleProperty('naultUrl')
+    .orElse(providers.environmentVariable('NAULT_ANDROID_URL'))
+    .getOrElse('')
+def parsedUrl
+try {
+    parsedUrl = new java.net.URI(targetUrl)
+} catch (Exception ignored) {
+    throw new GradleException('naultUrl must be a valid absolute HTTPS URL')
+}
+if (parsedUrl.scheme != 'https' || !parsedUrl.host ||
+    parsedUrl.rawUserInfo != null || parsedUrl.rawQuery != null ||
+    parsedUrl.rawFragment != null || (parsedUrl.port != -1 && parsedUrl.port != 443)) {
+    throw new GradleException('naultUrl must be an HTTPS address without credentials, query, fragment or non-standard port')
+}
+
+android {
+    namespace 'cc.nault.android.testing'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'cc.nault.android.testing'
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName '1.18.3-test'
+        manifestPlaceholders = [naultTestUrl: targetUrl]
+    }
+
+    buildTypes {
+        debug {
+            // Standard Android debug signing only; never use for production releases.
+            debuggable true
+        }
+        release {
+            // No release signing is configured for this test-only wrapper.
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.4'
+}
