@@ -8,6 +8,7 @@ interface NodeModule {
 interface NaultDesktopBridge {
   on(channel: string, listener: (...args: any[]) => void): boolean;
   send(channel: string, ...args: any[]): boolean;
+  releaseLedgerUsb(): Promise<boolean>;
 }
 
 interface Window {
