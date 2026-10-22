@@ -6,6 +6,13 @@
 **Commit validé :** [b016183b91e0](https://github.com/twister65/Nault/commit/b016183b91e0bd336e86064ab1bdd77464812274)  
 **Statut :** diagnostic et plan de correction ; **les remplacements proposés ne sont pas encore appliqués**.
 
+## Synchronisation de master — 22 octobre 2026
+
+- Commit d'intégration sur la branche de nettoyage : [59abee10](https://github.com/twister65/Nault/commit/59abee10c3bb955028cb48fcdbedb07af7756286). **Ce commit fusionne `master` vers `fix/angular-21-deprecated-dependencies`, et non l'inverse** : la branche `master` et `upgrade/angular-22` demeurent inchangées.
+- Résolution explicite des trois fichiers ayant évolué des deux côtés. `wallet.service.ts` et `wallet.service.spec.ts` de `master` contiennent déjà les correctifs de coalescence présents dans la branche plus les nouveaux contrôles de réception Ledger indisponible : leurs versions `master` sont conservées. `ledger.service.ts` fusionne les changements disjoints et les deux champs insérés au même emplacement, préservant l'instruction de reconnexion pour les fonds reçus ainsi que les messages d'état Bluetooth, tout en retirant U2F.
+- Diff GitHub maintenant sans retard vis-à-vis de `master` : PR [#24](https://github.com/twister65/Nault/pull/24) sans conflit Git automatique mais **en brouillon, sans fusion**. Tests automatisés et CodeQL à relancer sur la tête combinée avant toute intégration.
+- Les essais matériels Nano X, WebHID et USB restent reportés à la campagne Angular 22. L'incident de deuxième reconnexion Bluetooth demeure ouvert, contourné par `Clear session` ; aucune réussite matérielle n'est revendiquée.
+
 ## Lot 7 — polyfill url et traçage des dépendances transitives (22 octobre 2026)
 
 **Inventaire après ESLint 10 (run [39836383702](https://github.com/twister65/Nault/actions/runs/39836383702)) :** les avertissements `deprecated` passent **de 15 à 12** ; `npm audit` passe de **57 à 49 alertes** (35 élevées, 11 modérées, 3 faibles, 0 critique), avec **6 paquets directs** signalés contre 8. La CI Angular 21 complète du commit `73272cd` est **verte** ([run 39837094273](https://github.com/twister65/Nault/actions/runs/39837094273)) : Web/PWA, Electron/TypeScript, lint flat config, tests automatisés USB/BLE/RPC et **101 tests Angular**. `desktop-app/tsconfig.json` définit explicitement `types: ["node"]` pour ne pas importer automatiquement des déclarations ambient tierces incompatibles, sans désactiver le type-checking.
