@@ -40,7 +40,16 @@ export default class LedgerWebBle extends TransportBLE {
         // subsequently reconnected server.
       }
       if (transport) transport.notYetDisconnected = false;
-      const error = new Error('Ledger Bluetooth disconnected. Click Reconnect.');
+      // A GATT drop during service setup can indicate an invalid pairing.
+      // Web Bluetooth does not expose the HCI authentication reason, so give
+      // actionable advice without asserting that the device is unpaired.
+      const mayBePairing = openingPhase === 'GATT service discovery' ||
+        openingPhase === 'GATT characteristic discovery' ||
+        openingPhase === 'GATT notification subscription';
+      const error = new Error(mayBePairing
+        ? 'Ledger Nano X Bluetooth pairing may be missing or invalid (authentication may have failed). ' +
+          'Re-pair your Ledger in your computer Bluetooth settings (Linux: bluetoothctl), then click Reconnect.'
+        : 'Ledger Bluetooth disconnected. Click Reconnect.');
       error.name = 'DisconnectedDevice';
       frames.error(error);
       rejectDisconnected(error);
@@ -91,6 +100,14 @@ export default class LedgerWebBle extends TransportBLE {
           message: reason && typeof reason.message === 'string' ? reason.message : String(error),
           connected: device.gatt.connected
         });
+        // A native auth failure is conclusive; a generic disconnect is not.
+        const nativeReason = error && typeof error === 'object' ? error as {message?: string} : null;
+        if (/authentication failed|pin or key missing|insufficient authentication/i.test(String(nativeReason && nativeReason.message || ''))) {
+          const auth = new Error('Ledger Nano X Bluetooth authentication failed. Your device may not be paired correctly. ' +
+            'Re-pair it in your computer Bluetooth settings (Linux: bluetoothctl), then click Reconnect.');
+          auth.name = 'LedgerBluetoothAuthenticationError';
+          throw auth;
+        }
         throw error;
       }
       checkActive();
