@@ -433,7 +433,9 @@ async function main() {
   await check('disconnect during notification setup rejects opening promptly', async () => {
     const h = gattHarness();
     h.notifications.startNotifications = async () => { h.device.gatt.disconnect(); };
-    await assert.rejects(SessionBLE.open(h.device, 1000), /disconnected|closed/);
+    await assert.rejects(SessionBLE.open(h.device, 1000), error =>
+      error.name === 'DisconnectedDevice' && /Reconnect/i.test(error.message)
+    );
     assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
   });
   const calls = [];
