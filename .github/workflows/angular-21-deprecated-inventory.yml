@@ -59,6 +59,29 @@ jobs:
           for (const dir of roots) walk(dir);
           console.log('TOTAL_MATCHES=' + found);
           NODE
+      - name: Explain parent dependency chains for remaining deprecated packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages=(
+            '@npmcli/move-file@2.0.1'
+            'are-we-there-yet@3.0.1'
+            'debug@3.2.6'
+            'gauge@4.0.4'
+            'glob@7.2.3'
+            'glob@8.1.0'
+            'har-validator@5.1.3'
+            'npmlog@6.0.2'
+            'querystring@0.2.0'
+            'request@2.88.2'
+            'uuid@3.4.0'
+            'uuid@8.3.2'
+          )
+          : > deprecated-parents.txt
+          for package in "${packages[@]}"; do
+            printf '\n### %s\n' "$package" | tee -a deprecated-parents.txt
+            npm explain "$package" 2>&1 | tee -a deprecated-parents.txt || true
+          done
       - name: Snapshot npm security advisories separately from deprecations
         shell: bash
         run: |
@@ -101,6 +124,7 @@ jobs:
           path: |
             npm-deprecations-install.log
             deprecated-packages.txt
+            deprecated-parents.txt
             legacy-import-references.txt
             npm-audit-results.json
             dependency-vulnerability-summary.txt
