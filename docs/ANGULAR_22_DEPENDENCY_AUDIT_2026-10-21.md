@@ -1,10 +1,63 @@
 # Nault — Audit des dépendances dépréciées et préparation Angular 22
 
-**Document de référence — 21 octobre 2026**  
+**Document de référence initial :** 21 octobre 2026 — **mise à jour de suivi : 22 octobre 2026**  
 **Dépôt :** [twister65/Nault](https://github.com/twister65/Nault)  
-**Branche observée :** [fix/angular-21-deprecated-dependencies](https://github.com/twister65/Nault/tree/fix/angular-21-deprecated-dependencies)  
-**Commit validé :** [b016183b91e0](https://github.com/twister65/Nault/commit/b016183b91e0bd336e86064ab1bdd77464812274)  
-**Statut :** diagnostic et plan de correction ; **les remplacements proposés ne sont pas encore appliqués**.
+**Branche de travail actuelle :** [`upgrade/angular-22`](https://github.com/twister65/Nault/tree/upgrade/angular-22)  
+**Instantané du code inspecté :** [`67896f0`](https://github.com/twister65/Nault/commit/67896f0a4fd7335af05321448baab59b578a647d) (avant cette mise à jour documentaire)  
+**Statut actuel :** Angular 21 validé et fusionné ; Angular 22 en cours, compilations Web/Vercel **non validées**. Ne pas déclarer cette migration terminée.
+
+> **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
+
+## État opérationnel actuel — 22 octobre 2026
+
+### 1. Jalons validés et périmètre
+
+- **Angular 21 : terminé et intégré à `master`.** [PR #24](https://github.com/twister65/Nault/pull/24) fusionnée le **22/10/2026 à 19:27 UTC**, commit de merge [`0a94c865`](https://github.com/twister65/Nault/commit/0a94c865659a2add43e7832278f93df247f2130b). Les contrôles Angular 21 ont réussi : compilation Web/PWA, Electron, lint flat config, tests automatisés et CodeQL ; voir notamment [run Angular 21 39839404907](https://github.com/twister65/Nault/actions/runs/39839404907), [lint 39839404948](https://github.com/twister65/Nault/actions/runs/39839404948) et [CodeQL 39839393732](https://github.com/twister65/Nault/actions/runs/39839393732). La section historique qui décrit cette PR comme « Draft — non fusionnée » est **obsolète**.
+- **Angular 22 : branche existante conservée**, sans réécriture d'historique. `master` y a été incorporé par [`9c7f6a3`](https://github.com/twister65/Nault/commit/9c7f6a3fb9c552a00abc0e5a7040cfbcf1fba8af). Le dernier commit consulté est [`67896f0`](https://github.com/twister65/Nault/commit/67896f0a4fd7335af05321448baab59b578a647d), migration Angular 22. **Ne pas fusionner Angular 22 dans `master` avant CI et validation fonctionnelle.**
+- **Versions déclarées dans `package.json` au commit consulté :** `@angular/core@^22.2.3`, `@angular/cli@^22.2.4`, `typescript@~6.0.2`, `@angular-eslint/builder@^22.6.0`, `@ng-bootstrap/ng-bootstrap@^21.0.0`, `@jsverse/transloco@^8.4.0`, `rxjs@^6.5.5`. **Attention : `eslint@^9.39.5` dans le manifeste alors que `eslint.config.cjs` et le workflow de validation attendent ESLint 10.13.0.** La précédente validation d'ESLint 10 concernait Angular 21 ; ne pas la transposer automatiquement à la branche Angular 22.
+- Le lockfile Angular 22 a fait l'objet de régénérations réussies ([runs 39841233014](https://github.com/twister65/Nault/actions/runs/39841233014) et [39841455677](https://github.com/twister65/Nault/actions/runs/39841455677)), **mais la synchronisation et la compatibilité doivent être revérifiées après chaque changement du manifeste**, notamment après le commit `67896f0`. Un workflow de régénération réussi ne démontre pas que l'application compile.
+
+### 2. Blocages observés — ne pas les masquer
+
+| Zone | Faits vérifiés | Action suivante / critère de sortie |
+| --- | --- | --- |
+| **Web/PWA Angular 22** | [Validation 39841611069](https://github.com/twister65/Nault/actions/runs/39841611069) **failure** sur un commit antérieur à `67896f0`, à l'étape `Build production Web wallet and service worker`. | Réexécuter sur la **tête courante**, obtenir un build production et `dist/ngsw.json` valide. |
+| **RxJS et traductions** | Le compilateur indique que `@jsverse/transloco` importe `map`, `retry`, `tap`, `switchMap`, etc., non exportés à la racine par le RxJS 6 installé. | Vérifier les contraintes peer et l'usage applicatif ; envisager RxJS 7 compatible avec Angular 22 et l'ensemble des bibliothèques, avec migration ciblée et tests. **Ne pas détourner le problème avec un alias Webpack sans justification.** |
+| **TypeScript 6 et Angular compiler** | `TS5101` sur `baseUrl` et `downlevelIteration` du `tsconfig.json` ; `NG4003` : `extendedDiagnostics` actif tandis que `strictTemplates` est désactivé ; `TS2564` sur des champs de composants ; `TS2344` dans `ts-custom-error`. | Traiter par catégorie : retirer les options TS devenues inutiles ou documenter temporairement `ignoreDeprecations: "6.0"`, aligner les diagnostics Angular, corriger les initialisations/types et inspecter le parent de `ts-custom-error`. Ne pas désactiver globalement les vérifications pour « passer » la CI. |
+| **ESLint 10 / flat config** | [Lint 39841610854](https://github.com/twister65/Nault/actions/runs/39841610854) **failure** : `Cannot read properties of undefined (reading 'recommended')`. `eslint.config.cjs` accède notamment à `angularTs.configs.recommended.rules`. Manifeste courant : ESLint 9, alors que [`angular-22-validation.yml`](https://github.com/twister65/Nault/blob/upgrade/angular-22/.github/workflows/angular-22-validation.yml) attend ESLint 10.13.0 et `@typescript-eslint/parser@8.72.0`. | Vérifier les exports réels des paquets `@angular-eslint@22`, adapter la flat config aux API publiées, aligner versions ESLint / typescript-eslint / verrou et obtenir `npm run lint` **et** `npm run lint:flat` verts. |
+| **Electron / Android / sécurité** | Les jobs Angular 22 n'ont pas encore prouvé une chaîne de build et de tests complète. CodeQL a réussi sur certains commits ([39841610954](https://github.com/twister65/Nault/actions/runs/39841610954)), alors que le lint, la validation Angular 22 et certains Docker ont échoué. | Ne pas interpréter CodeQL vert comme validation fonctionnelle ; valider Web/PWA, Electron/TypeScript, tests RPC, Ledger simulés, Android/APK et sécurité sur **le même commit final**. |
+
+Les erreurs citées proviennent des jobs GitHub Actions inspectés le 22 octobre 2026 ; si le commit courant les a déjà corrigées, le prouver par un **nouveau run vert** plutôt que reproduire des diagnostics anciens.
+
+### 3. Déploiement Vercel stable et CORS Apache — contrainte utilisateur
+
+**Aucune modification répétée d'Apache n'est souhaitée.** L'instance Apache n'autorise que les origines suivantes pour les tests :
+
+```apache
+SetEnvIf Origin "^https://(nault-wallet-staging-olaverre-1312|nault-tablet-css-test|nault-android-test(-olaverre-1312)?)\\.vercel\\.app$" NAULT_CORS_ORIGIN=$0
+```
+
+- Privilégier l'URL stable **`https://nault-wallet-staging-olaverre-1312.vercel.app`** pour Angular 22. Les autres domaines autorisés sont `https://nault-tablet-css-test.vercel.app`, `https://nault-android-test.vercel.app` et `https://nault-android-test-olaverre-1312.vercel.app`. **Les URL éphémères** de type `nom-projet-<hash>-olaverre-1312.vercel.app` **ne correspondent pas** à cette règle Apache.
+- Projet Vercel de staging existant : `nault-wallet-staging` ; ne pas modifier le projet public de production ni supposer qu'un alias temporaire est autorisé. Respecter l'authentification/protection déjà en place et ne pas exposer les endpoints Nano/RsNano ni les secrets.
+- Déploiement de staging Angular 22 déclenché pour le commit `67896f0` : `dpl_Ay7HaL1cBZy27qXZYkB9pdSXXFfb`, **ERROR**, avec `Command "npm run wallet:build" exited with 1`. **Aucun nouveau build Angular 22 opérationnel à annoncer.** L'alias stable conserve potentiellement le dernier déploiement `READY` : vérifier à quel commit il pointe avant les tests.
+- Corriger d'abord les erreurs de build puis déployer la **version validée sur le domaine stable**, contrôler le commit servi, les routes PWA et les appels RPC/WebSocket/CORS depuis cette origine. Une simple modification du nom de domaine **ne résout pas** une erreur de compilation.
+
+### 4. Consignes explicites pour Work — ordre et garde-fous
+
+1. **Lire ce document**, puis inspecter `package.json`, `package-lock.json`, `eslint.config.cjs`, `angular.json`, les `tsconfig*`, les workflows et **les nouveaux logs CI/Vercel**, avant de coder. Utiliser les données du commit actuel, non les anciens décomptes « 19 deprecated » conservés plus bas à titre historique.
+2. Rendre `npm ci --legacy-peer-deps --no-audit --no-fund` reproductible sous Node compatible Angular 22 ; aligner ESLint 10 / flat config / TypeScript 6 et tester les paquets Angular tiers (`@ng-bootstrap/ng-bootstrap`, `@jsverse/transloco`, `@zxing/ngx-scanner`) un par un. Préserver le builder Webpack tant que le worker PoW n'est pas migré et validé.
+3. Corriger les erreurs Angular/TypeScript/RxJS en commits ciblés. Exiger **build Web/PWA + `ngsw.json`**, build Electron, lint, tests Angular unitaires, RPC Nano/RsNano, régressions USB/BLE simulées et CodeQL **sur la tête finale de `upgrade/angular-22`**. Documenter les échecs restants et les changements de versions réellement testés.
+4. Utiliser un **domaine Vercel déjà autorisé par Apache** pour les tests Web/Android ; éviter les previews éphémères comme origine RPC. Ne pas modifier `SetEnvIf`, ne pas rendre le projet public et ne pas effectuer de déploiement du vrai site de production Nault.
+5. **Pas de nouvel essai matériel Bluetooth pour l'instant.** La seconde reconnexion Nano X après éloignement/réapprochement reste **non corrigée** ; l'action manuelle `Clear session` fonctionne. Garder ce problème documenté et isolé ; reprendre les essais réels USB/WebHID/BLE, Android tablette/smartphone, Linux et Windows **après la migration Angular 22**, conformément à la décision de l'utilisateur.
+6. **Ne pas fusionner Angular 22 dans `master`**, ni modifier les règles Apache, ni modifier la chaîne de signature Ledger pour corriger une erreur de build. Préparer la PR et ses preuves CI pour revue ; conserver l'historique de `upgrade/angular-22`. Les changements sur le moteur RPC, les politiques de sécurité et le Bluetooth restent des lots distincts sauf correctif indispensable et testé.
+
+### 5. Distinction historique / état présent
+
+Les sections suivantes constituent le journal technique des lots Angular 21 et des enquêtes Bluetooth effectuées auparavant. Elles sont **conservées volontairement**, mais leurs formules telles que « aucune fusion effectuée », « migration Angular 22 non encore exécutée », « retrait U2F à étudier » ou les anciens chiffres de vulnérabilités **ne décrivent plus le présent**. En cas de contradiction, **les résultats de CI du dernier commit et les décisions de ce chapitre opérationnel prévalent**. Mettre ce chapitre à jour après chaque correction importante, avec commit, run, statut de build et domaines Vercel testés.
+
+---
+
+## Historique des lots et diagnostics antérieurs (conservé)
 
 ## Synchronisation de master — 22 octobre 2026
 
