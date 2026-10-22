@@ -51,6 +51,14 @@ export default class LedgerWebBle extends TransportBLE {
       if (disposed || !device.gatt.connected) throw new Error('Ledger Bluetooth connection closed');
     };
     const connect = async () => {
+      // The chooser already completed within the user gesture. Release any
+      // native Electron USB/HID worker before initiating GATT; USB shutdown
+      // is asynchronous and a pending worker may survive a transport switch.
+      if (typeof window !== 'undefined' && window.naultDesktop) {
+        const released = await window.naultDesktop.releaseLedgerUsb();
+        if (!released) throw new Error('Ledger USB transport could not be released');
+      }
+      if (disposed) throw new Error('Ledger Bluetooth connection closed');
       console.info('[Ledger BLE GATT] opening connection', { alreadyConnected: device.gatt.connected });
       if (!device.gatt.connected) await device.gatt.connect();
       console.info('[Ledger BLE GATT] connected');
