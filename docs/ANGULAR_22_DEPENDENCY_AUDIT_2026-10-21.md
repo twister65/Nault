@@ -6,6 +6,29 @@
 **Commit validé :** [b016183b91e0](https://github.com/twister65/Nault/commit/b016183b91e0bd336e86064ab1bdd77464812274)  
 **Statut :** diagnostic et plan de correction ; **les remplacements proposés ne sont pas encore appliqués**.
 
+## Essai manuel Linux — Ledger Nano X Bluetooth (22 octobre 2026)
+
+**Statut : incident matériel / BLE À REPRODUIRE — non résolu par la CI.**
+
+L'utilisateur a testé Nault Linux, d'abord sa Ledger Nano X en USB, puis en Bluetooth. Après sélection dans la fenêtre Electron (`[Ledger BLE chooser] selection completed { selected: true }`), le navigateur indique `Bluetooth connection failed: Ledger Bluetooth disconnected. Click Reconnect.`. Le terminal/BlueZ signale `bluetooth_device_bluez.cc:311 Leaking connection to paired device.`.
+
+**Diagnostic à partir du journal `NanoX.log` :** `[Ledger BLE GATT] opening connection {alreadyConnected: false}` → `connected` → `discovering services` → `session disposed {connected: false}` → `session opening failed DisconnectedDevice`. La connexion physique GATT est donc établie mais perdue *pendant la découverte des services*, **avant** découverte des caractéristiques, souscription aux notifications, MTU et premier échange Nano APDU. Les RPC, WebSocket et soldes ne sont pas impliqués. Le message Chromium « Leaking connection » est corrélé à cette coupure, mais **ne démontre pas une fuite de mémoire ni une cause unique**.
+
+**Comportement de Nault :** `ledger-web-ble.ts` reçoit `gattserverdisconnected`, invalide la session et refuse de poursuivre l'échange. Conserver ce comportement fail-closed ; ne pas automatiser de nouvelle sélection, de nouvel appairage ou de tentative APDU après perte de lien.
+
+**Contrôle ajouté :** [test de déconnexion pendant `getPrimaryServices()`](https://github.com/twister65/Nault/commit/12449bfb2ae50f9ea969f1e2dcbce60363333f3f), vérifiant le rejet `DisconnectedDevice`, l'absence de listeners restants et la possibilité d'une nouvelle ouverture explicite. Ce test simule l'évènement ; **il ne valide ni ne répare** le pilote BlueZ, la portée radio ou la véritable Nano X. Résultat CI à reporter pour le commit final.
+
+**Protocole de reproduction conseillé (sans transférer de fonds) :**
+1. Débrancher complètement le câble USB, fermer Nault et toute autre application susceptible de tenir la connexion Nano X, couper la connexion Bluetooth d'un éventuel autre appareil.
+2. Vérifier la charge et la proximité de la Ledger par rapport à l'adaptateur Bluetooth, puis allumer/déverrouiller la Nano X, activer Bluetooth et ouvrir l'application Nano.
+3. Redémarrer Nault et choisir explicitement **Bluetooth → Reconnect**, confirmer la Ledger dans le sélecteur. Tester d'abord une **connexion Bluetooth à froid**, indépendamment de la transition USB → Bluetooth.
+4. Comparer avec une deuxième tentative après connexion USB puis déconnexion USB, en conservant les mêmes conditions physiques. Noter la présence/absence de `GATT connected`, `discovering services`, `notifications started`, `MTU negotiated`, `account address read successfully`.
+5. En cas de nouvel échec : relever **uniquement les événements BlueZ anonymisés** (`sudo journalctl -u bluetooth --since '10 minutes ago' --no-pager`) et l'état du contrôleur (`bluetoothctl show` / `bluetoothctl info <MAC>` avec MAC masquée). Ne pas enregistrer d'APDU, de clé ou de seed. Éviter réinitialisation d'appairage sans besoin démontré.
+
+**Critère de clôture :** une connexion Bluetooth à froid et une transition USB → Bluetooth reproductibles avec lecture d'adresse et reconnexion. Ne pas prétendre que les tests CI matériels sont verts : la CI exécute des simulations. L'incident reste ouvert en attendant un nouveau test Linux.
+
+---
+
 ## Point d'étape du 22 octobre 2026 — Lot 3 VALIDÉ
 
 **Ordre des branches demandé :** continuer exclusivement les mises à jour de dépendances dans `fix/angular-21-deprecated-dependencies` ; après validation et fusion de cette branche, réintégrer les corrections dans **`upgrade/angular-22`** pour poursuivre Angular 22. Cette dernière branche **existe déjà**, contient `@angular/core@^22.2.3` et `typescript@~6.0.2`, et a divergé : **préserver ses commits**, étudier les conflits et ne pas la recréer/écraser. Aucun changement appliqué à `master` ou `upgrade/angular-22` dans ce lot.
