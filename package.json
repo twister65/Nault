@@ -28,7 +28,6 @@
   "private": true,
   "dependencies": {
     "@angular-devkit/core": "^21.2.27",
-    "@angular/animations": "^21.2.25",
     "@angular/common": "^21.2.25",
     "@angular/compiler": "^21.2.25",
     "@angular/core": "^21.2.25",
@@ -71,7 +70,6 @@
     "node-hid": "^2.2.0",
     "qrcode": "^1.4.4",
     "rxjs": "^6.5.5",
-    "rxjs-compat": "^6.5.5",
     "safe-buffer": "^5.2.1",
     "tslib": "^2.0.0",
     "tweetnacl": "^1.0.0",
