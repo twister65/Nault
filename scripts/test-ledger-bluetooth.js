@@ -457,7 +457,7 @@ async function main() {
     './ledger-web-ble': { default: BLE },
     './ledger-ble-control': control,
     '@angular/core': { Injectable: () => value => value }, 'hw-app-nano': { default: Nano },
-    '@ledgerhq/hw-transport-u2f': { default: BLE }, '@ledgerhq/hw-transport-webusb': { default: BLE },
+    '@ledgerhq/hw-transport-webusb': { default: BLE },
     '@ledgerhq/hw-transport-webhid': { default: BLE }, '@ledgerhq/hw-transport-web-ble': { default: BLE },
     rxjs: require('rxjs'), '../../environments/environment': { environment: { desktop: true } }
   }, { navigator });
@@ -467,6 +467,36 @@ async function main() {
     { sendWarning() {} }, { getAppSetting(key) { return preferences[key]; }, setAppSetting(key, value) { preferences[key] = value; } });
   service.pollLedgerStatus = () => {};
   await flush();
+  await check('browser USB selects only WebUSB or WebHID, never legacy U2F', async () => {
+    const browser = Object.create(LedgerService.prototype);
+    browser.supportsWebUSB = true;
+    browser.supportsWebHID = true;
+    browser.detectUsbTransport();
+    assert.equal(browser.transportMode, 'USB');
+    browser.supportsWebUSB = false;
+    browser.detectUsbTransport();
+    assert.equal(browser.transportMode, 'HID');
+    browser.supportsWebHID = false;
+    browser.detectUsbTransport();
+    assert.equal(browser.transportMode, 'USB');
+    assert.equal(Object.prototype.hasOwnProperty.call(browser, 'supportsU2F'), false);
+  });
+  await check('unsupported browser refuses Ledger USB instead of attempting retired U2F', async () => {
+    const statuses = [];
+    const notices = [];
+    const browser = Object.create(LedgerService.prototype);
+    browser.isDesktop = false;
+    browser.isAndroidWeb = false;
+    browser.transportMode = 'USB';
+    browser.supportsWebUSB = false;
+    browser.supportsWebHID = false;
+    browser.ledger = { status: 'not-connected', nano: null, transport: null };
+    browser.ledgerStatus$ = { next(v) { statuses.push(v); } };
+    browser.notifications = { sendWarning(msg) { notices.push(msg); } };
+    assert.equal(await browser.loadLedger(false), false);
+    assert.match(statuses[0].statusText, /WebUSB or WebHID/);
+    assert.match(notices[0], /WebUSB or WebHID/);
+  });
   await check('explicit Bluetooth choice persists even if Windows pairing fails', async () => {
     BLE.fail = true;
     service.enableBluetoothMode(true);
@@ -616,7 +646,7 @@ async function main() {
       isDesktop: true, supportsBluetooth: true, transportMode: 'Bluetooth',
       enableBluetoothMode(enabled) {
         operations.push(['mode', enabled]);
-        this.transportMode = enabled ? 'Bluetooth' : 'U2F';
+        this.transportMode = enabled ? 'Bluetooth' : 'USB';
       },
       async loadLedger(hide, forceBle) { operations.push(['load', hide, forceBle]); return true; }
     };
@@ -626,7 +656,7 @@ async function main() {
     const widget = new WalletWidgetComponent({ wallet: {} }, notifications, ledger, {}, {});
     widget.ledgerStatus = { status: 'ready', statusText: '' };
     await widget.reconnectUsb();
-    assert.equal(ledger.transportMode, 'U2F');
+    assert.equal(ledger.transportMode, 'USB');
     assert.deepEqual(operations, [['mode', false], ['load', false, false]]);
     operations.length = 0;
     await widget.reloadLedger();
