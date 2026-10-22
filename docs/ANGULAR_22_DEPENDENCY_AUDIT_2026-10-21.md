@@ -6,6 +6,35 @@
 **Commit validé :** [b016183b91e0](https://github.com/twister65/Nault/commit/b016183b91e0bd336e86064ab1bdd77464812274)  
 **Statut :** diagnostic et plan de correction ; **les remplacements proposés ne sont pas encore appliqués**.
 
+## Diagnostic HCI décisif — Nano X / appairage BLE, 22 octobre 2026
+
+**Source :** extrait `btmon` fourni après l'échec de la connexion avec la Nano X. Le log transmis contient des adresses matérielles, volontairement **non reproduites** dans ce document.
+
+| Événement HCI | Statut | Interprétation |
+| --- | --- | --- |
+| `LE Enhanced Connection Complete` | `Success (0x00)` | Liaison LE physique établie |
+| `Encryption Change` | `PIN or Key Missing (0x06)` | L'une des extrémités ne dispose pas de la clé de chiffrement attendue ou refuse une ancienne association |
+| `Disconnect` (commande hôte) | `Authentication Failure (0x05)` | L'hôte déclenche l'arrêt après échec d'authentification |
+| `Disconnect Complete` | `Connection Terminated By Local Host (0x16)` | Déconnexion effectuée côté hôte |
+| `MGMT Device Disconnected` | `authentication failure (0x04)` | BlueZ confirme le motif |
+
+**Conclusion révisée :** cause probable et maintenant étayée : **appairage Bluetooth LE / clé de liaison persistée incohérente** entre Ubuntu/BlueZ et la Nano X. Le code `PIN or Key Missing` distingue clairement cette panne d'un problème de découverte de services propre à Nault, d'un bug Angular, du protocole RPC ou d'un simple problème de portée radio. Il ne permet cependant pas de savoir avec certitude quel appareil a perdu sa clé.
+
+**Résolution préconisée, à confirmer matériellement :**
+
+1. Fermer Nault, Ledger Live et tout autre client BLE. Débrancher l'USB de la Nano X.
+2. Avec `bluetoothctl` sur Ubuntu, utiliser `devices Paired` et `info <adresse>` pour identifier **uniquement** l'association Nano X ; exécuter `remove <adresse>`. Ne pas effacer tous les périphériques ni les répertoires système BlueZ.
+3. Sur la Nano X : **Control Center → Settings → Security → Reset pairings**, confirmer, puis éteindre/rallumer la Nano X. **Ne pas utiliser Reset Device** : seul le Bluetooth doit être réinitialisé, jamais la phrase de récupération.
+4. Rallumer le Bluetooth et ouvrir l'application Nano sur la clé ; dans le portefeuille Ledger existant de Nault, déclencher explicitement `Reconnect via Bluetooth`, sélectionner la Nano X et confirmer tout code d'appairage affiché sur les deux appareils. Ne pas lancer en parallèle une association depuis GNOME ou `bluetoothctl pair`.
+5. Vérifier `Encryption Change: Status: Success (0x00)`, puis `Ledger service found`, `MTU negotiated` et lecture de l'adresse Ledger. Aucun transfert requis.
+6. Si l'échec persiste après une nouvelle association : recueillir seulement les nouveaux événements `Pairing Request`, `Pairing Failed`, `Encryption Change` et `Disconnect Complete` de `btmon`, sans publier les adresses MAC.
+
+**Implications pour le code :** ne pas proposer de contournement désactivant le chiffrement Bluetooth, ni supprimer le contrôle d'appairage Electron. Le handshake USB/HID ajouté dans un lot précédent reste utile pour éviter une course mais **ne corrige pas une clé d'appairage manquante**. Ne pas prétendre que la connexion matérielle est réparée tant que l'essai après réappairage n'a pas été validé.
+
+Références : [Ledger — navigation Nano X / Reset pairings](https://support.ledger.com/ru/article/Ledger-Nano-X-Nano-S-Plus-Navigation-Menu-Map), [bluetoothctl — commande remove](https://manpages.debian.org/unstable/bluez/bluetoothctl.1.en.html), [Electron — gestion de l'appairage Web Bluetooth](https://www.electronjs.org/docs/latest/tutorial/devices).
+
+---
+
 ## Incident BLE Linux — deuxième échec après libération USB (22/10/2026, 18 h 42)
 
 **Résultat du test matériel : toujours en échec** malgré le handshake de libération USB validé en CI. L'utilisateur confirme en terminal :
