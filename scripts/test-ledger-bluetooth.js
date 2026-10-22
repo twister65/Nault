@@ -238,6 +238,25 @@ async function main() {
     assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
     assert.equal(h.device.gatt.connected, false);
   });
+  await check('GATT loss during service discovery fails closed and permits explicit reconnect', async () => {
+    const h = gattHarness();
+    const discover = h.device.gatt.getPrimaryServices.bind(h.device.gatt);
+    h.device.gatt.getPrimaryServices = async () => {
+      h.device.gatt.disconnect();
+      return discover();
+    };
+    await assert.rejects(SessionBLE.open(h.device, 1000), error =>
+      error.name === 'DisconnectedDevice' && /Reconnect/.test(error.message)
+    );
+    assert.equal(h.device.gatt.connected, false);
+    assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
+    assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
+    h.device.gatt.getPrimaryServices = discover;
+    const fresh = await SessionBLE.open(h.device, 1000);
+    await fresh.close();
+    assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
+    assert.equal(h.notifications.listenerCount('characteristicvaluechanged'), 0);
+  });
   await check('disconnect during notification setup rejects opening promptly', async () => {
     const h = gattHarness();
     h.notifications.startNotifications = async () => { h.device.gatt.disconnect(); };
