@@ -5,6 +5,12 @@ on:
     paths:
       - package.json
       - eslint.config.cjs
+  pull_request:
+    branches: [master]
+    paths:
+      - package.json
+      - eslint.config.cjs
+      - .github/workflows/eslint10-lockfile-migration.yml
   workflow_dispatch:
 
 permissions:
@@ -12,7 +18,7 @@ permissions:
 
 jobs:
   lockfile:
-    if: github.repository == 'twister65/Nault' && github.ref == 'refs/heads/fix/angular-21-deprecated-dependencies'
+    if: github.repository == 'twister65/Nault' && (github.ref == 'refs/heads/fix/angular-21-deprecated-dependencies' || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'fix/angular-21-deprecated-dependencies' && github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -23,6 +29,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
+          ref: fix/angular-21-deprecated-dependencies
       - uses: actions/setup-node@v4
         with:
           node-version: '22.14.0'
