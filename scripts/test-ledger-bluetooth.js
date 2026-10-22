@@ -282,6 +282,51 @@ async function main() {
     assert.equal(h.device.gatt.connected, false);
     assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
   });
+  await check('GATT service-discovery rejection exposes the native error without APDUs', async () => {
+    const messages = [];
+    const DiagnosticBLE = load(sessionCode, {
+      '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
+      '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+    }, { console: {
+      info(message, detail) { messages.push({ level: 'info', message, detail }); },
+      warn(message, detail) { messages.push({ level: 'warn', message, detail }); },
+      error(message, detail) { messages.push({ level: 'error', message, detail }); }
+    } }).default;
+    const h = gattHarness();
+    h.device.gatt.getPrimaryServices = async () => {
+      const error = new Error('Services could not be resolved');
+      error.name = 'NetworkError';
+      throw error;
+    };
+    await assert.rejects(DiagnosticBLE.open(h.device, 1000), /Services could not be resolved/);
+    const rejected = messages.find(m => m.message === '[Ledger BLE GATT] service discovery rejected');
+    assert(rejected);
+    assert.equal(rejected.detail.name, 'NetworkError');
+    assert.equal(rejected.detail.connected, true);
+    assert.equal(h.device.listenerCount('gattserverdisconnected'), 0);
+    assert.equal(h.device.gatt.connected, false);
+    assert(messages.every(m => !String(m.message).includes('APDU')));
+  });
+  await check('GATT loss reports service discovery as the failing phase', async () => {
+    const messages = [];
+    const DiagnosticBLE = load(sessionCode, {
+      '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
+      '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+    }, { console: {
+      info(message, detail) { messages.push({ message, detail }); },
+      warn(message, detail) { messages.push({ message, detail }); },
+      error(message, detail) { messages.push({ message, detail }); }
+    } }).default;
+    const h = gattHarness();
+    h.device.gatt.getPrimaryServices = async () => {
+      h.device.gatt.disconnect();
+      return [];
+    };
+    await assert.rejects(DiagnosticBLE.open(h.device, 1000), /disconnected/i);
+    const disposed = messages.find(m => m.message === '[Ledger BLE GATT] session disposed');
+    assert.equal(disposed.detail.phase, 'GATT service discovery');
+    assert.equal(disposed.detail.connected, false);
+  });
   await check('GATT loss rejects an in-flight exchange and reconnects on the same device without stale listeners', async () => {
     const h = gattHarness();
     for (let i = 0; i < 3; i++) {
