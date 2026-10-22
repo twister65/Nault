@@ -1,6 +1,6 @@
 import 'core-js/stable';
 
-import { app, BrowserWindow, shell, Menu, screen, dialog, ipcMain, IpcMainEvent } from 'electron';
+import { app, BrowserWindow, shell, Menu, screen, dialog, ipcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as url from 'url';
 import * as path from 'path';
@@ -193,7 +193,7 @@ function isTrustedWalletURL(candidate: string): boolean {
   }
 }
 
-function isTrustedLedgerSender(event: IpcMainEvent): boolean {
+function isTrustedLedgerSender(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
   return !!mainWindow &&
     !mainWindow.isDestroyed() &&
     event.sender === mainWindow.webContents &&
