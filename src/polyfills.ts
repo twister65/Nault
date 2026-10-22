@@ -25,4 +25,4 @@ import 'zone.js';  // Included with Angular CLI.
 /***************************************************************************************************
  * APPLICATION IMPORTS
  */
-import 'babel-polyfill';
+import 'core-js/stable';
