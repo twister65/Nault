@@ -4,6 +4,7 @@ on:
     branches: [upgrade/angular-22]
     paths:
       - .github/workflows/angular-22-lockfile-sync.yml
+      - package.json
   workflow_dispatch:
 permissions:
   contents: write
@@ -38,7 +39,8 @@ jobs:
             assert.equal((lock.packages[''].dependencies?.[name] ?? lock.packages[''].devDependencies?.[name]),want,name+' manifest mismatch');
           }
           assert.equal(lock.packages['node_modules/eslint'].version,'10.13.0');
-          assert.equal(lock.packages['node_modules/@typescript-eslint/parser'].version,'8.56.0');
+          assert.equal(lock.packages['node_modules/@typescript-eslint/parser'].version,'8.72.0');
+          assert.equal(lock.packages['node_modules/@typescript-eslint/eslint-plugin'].version,'8.72.0');
           assert.match(lock.packages['node_modules/@angular/core'].version,/^22\./);
           console.log('Angular 22 dependency lockfile synchronized');
           NODE
