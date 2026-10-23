@@ -360,13 +360,20 @@ export class NanoBlockService {
   }
 
   // for signing block when offline
-  async signOfflineBlock(walletAccount: WalletAccount, block: StateBlock, prevBlock: StateBlock,
-    type: TxType, genWork: boolean, multiplier: number, ledger = false) {
+  // Offline signing accepts a key-only manual signer as well as a full wallet account.
+  async signOfflineBlock(walletAccount: Pick<WalletAccount, 'keyPair'> & Partial<Pick<WalletAccount, 'id' | 'index'>>,
+    block: StateBlock, prevBlock: StateBlock | null,
+    type: TxType, genWork: boolean, multiplier: number, ledger = false): Promise<StateBlock | null> {
     // special treatment if open block
     const openEquiv = type === TxType.open;
     console.log('Signing block of subtype: ' + TxType[type]);
 
     if (ledger) {
+      const accountIndex = walletAccount.index;
+      if (accountIndex === undefined) {
+        this.notifications.sendWarning('The Ledger account index is missing.');
+        return null;
+      }
       let ledgerBlock: {
         previousBlock?: string;
         representative: string;
@@ -401,12 +408,15 @@ export class NanoBlockService {
         this.sendLedgerNotification();
         // On new accounts, we do not need to cache anything
         if (!openEquiv) {
+          if (prevBlock === null) {
+            throw new Error('The previous block is required for Ledger signing.');
+          }
           try {
-            // await this.ledgerService.updateCache(walletAccount.index, block.previous);
-            await this.ledgerService.updateCacheOffline(walletAccount.index, prevBlock);
+            // await this.ledgerService.updateCache(accountIndex, block.previous);
+            await this.ledgerService.updateCacheOffline(accountIndex, prevBlock);
           } catch (err) {console.log(err); }
         }
-        const sig = await this.ledgerService.signBlock(walletAccount.index, ledgerBlock);
+        const sig = await this.ledgerService.signBlock(accountIndex, ledgerBlock);
         this.clearLedgerNotification();
         block.signature = sig.signature;
       } catch (err) {
@@ -420,13 +430,18 @@ export class NanoBlockService {
 
     if (genWork) {
       // For open blocks which don't have a frontier, use the public key of the account
-      const workBlock = openEquiv ? this.util.account.getAccountPublicKey(walletAccount.id) : block.previous;
+      const workBlock = openEquiv ? this.util.account.getAccountPublicKey(walletAccount.id ?? block.account) : block.previous;
       if (!this.workPool.workExists(workBlock)) {
         this.notifications.sendInfo(`Generating Proof of Work...`, { identifier: 'pow', length: 0 });
       }
 
-      block.work = await this.workPool.getWork(workBlock, multiplier);
+      const work = await this.workPool.getWork(workBlock, multiplier);
       this.notifications.removeNotification('pow');
+      if (work === null) {
+        // Failed or cancelled PoW must not produce a ready-to-publish block.
+        return null;
+      }
+      block.work = work;
       this.workPool.removeFromCache(workBlock);
     }
     return block; // return signed block (with or without work)
@@ -501,7 +516,7 @@ export class NanoBlockService {
 
   // Sign a state block, and insert the signature into the block.
   signStateBlock(
-    walletAccount: WalletAccount,
+    walletAccount: Pick<WalletAccount, 'keyPair'>,
     blockData: Pick<StateBlock, 'account' | 'previous' | 'representative' | 'balance' | 'link'> & {signature: string | null}
   ) {
     const hashBytes = this.util.nano.hashStateBlock(blockData);
