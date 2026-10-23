@@ -28,6 +28,9 @@ export interface StateBlock {
 
 export enum TxType {'send', 'receive', 'open', 'change'}
 
+// Accepted by bignumber.js constructors without a namespace-only type import.
+type NumericValue = string | number | BigNumber;
+
 @Injectable()
 export class UtilService {
 
@@ -252,7 +255,7 @@ function decToHex(decValue: string | number | BigNumber, bytes: number | null = 
 }
 
 // BigNumber functions
-function bigAdd(input: BigNumber.Value, value: BigNumber.Value): string {
+function bigAdd(input: NumericValue, value: NumericValue): string {
   const insert = new BigNumber(input);
   const val = new BigNumber(value);
   return insert.plus(val).toString(10);
@@ -270,7 +273,7 @@ function stringToUint5(string: string): Uint8Array {
 
 function isNumeric(val: string | number): boolean {
   // numerics and last character is not a dot and number of dots is 0 or 1
-  const isnum = /^-?\d*\.?\d*$/.test(val) && val !== '';
+  const isnum = /^-?\d*\.?\d*$/.test(String(val)) && val !== '';
   return isnum && String(val).slice(-1) !== '.';
 }
 
@@ -373,22 +376,22 @@ function setPrefix(account: string, prefix = 'xrb'): string {
 const mnano = 1000000000000000000000000000000;
 const knano = 1000000000000000000000000000;
 const nano  = 1000000000000000000000000;
-function mnanoToRaw(value: BigNumber.Value): BigNumber {
+function mnanoToRaw(value: NumericValue): BigNumber {
   return new BigNumber(value).times(mnano);
 }
-function knanoToRaw(value: BigNumber.Value): BigNumber {
+function knanoToRaw(value: NumericValue): BigNumber {
   return new BigNumber(value).times(knano);
 }
-function nanoToRaw(value: BigNumber.Value): BigNumber {
+function nanoToRaw(value: NumericValue): BigNumber {
   return new BigNumber(value).times(nano);
 }
-function rawToMnano(value: BigNumber.Value): BigNumber {
+function rawToMnano(value: NumericValue): BigNumber {
   return new BigNumber(value).div(mnano);
 }
-function rawToKnano(value: BigNumber.Value): BigNumber {
+function rawToKnano(value: NumericValue): BigNumber {
   return new BigNumber(value).div(knano);
 }
-function rawToNano(value: BigNumber.Value): BigNumber {
+function rawToNano(value: NumericValue): BigNumber {
   return new BigNumber(value).div(nano);
 }
 
