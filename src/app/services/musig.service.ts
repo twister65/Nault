@@ -7,6 +7,35 @@ import * as nanocurrency from 'nanocurrency';
 import { environment } from 'environments/environment';
 const base32 = require('nano-base32');
 
+// WebAssembly exports used by the existing musig-nano ABI.
+// Every pointer and length is represented as an i32 in JavaScript.
+interface MusigWasmExports {
+  memory: WebAssembly.Memory;
+  musig_malloc(length: number): number;
+  musig_free(pointer: number): void;
+  musig_free_stage0(stagePointer: number): void;
+  musig_aggregate_public_keys(pubkeyPointers: number, count: number, output: number, aggregatedKey: number): void;
+  musig_stage0(output: number, publicKey: number): number;
+  musig_stage1(stagePointer: number, privateKey: number, pubkeyPointers: number, pubkeyCount: number,
+    flags: number, blockHash: number, hashLength: number, inputPointers: number, inputCount: number,
+    errorOutput: number, optionalOutput: number | null, output: number): number;
+  musig_stage2(stagePointer: number, inputPointers: number, inputCount: number, errorOutput: number, output: number): number;
+  musig_stage3(stagePointer: number, inputPointers: number, inputCount: number, errorOutput: number, output: number): number;
+}
+
+interface AggregateResult {
+  multisig: string;
+  pubkey: Uint8Array;
+}
+
+interface MultiSignResult {
+  outbuf: Uint8Array;
+  stage: number;
+  multisig: string;
+}
+
+type AggregateCallback = (pubkeyPointers: number, count: number) => void;
+
 @Injectable({
   providedIn: 'root'
 })
@@ -15,11 +44,11 @@ export class MusigService {
   private wasmURL = environment.desktop ?
     '../../../resources/app.asar/dist/assets/lib/musig-nano/musig_nano.wasm.b64' : '../../../assets/lib/musig-nano/musig_nano.wasm.b64';
 
-  wasm = null;
+  wasm: MusigWasmExports | null = null;
   wasmErrors = ['No error', 'Internal error', 'Invalid parameter(s)', 'Invalid Participant Input'];
-  musigStagePtr: number = null;
-  musigStageNum: number = null;
-  savedPublicKeys = [];
+  musigStagePtr: number | null | undefined = null;
+  musigStageNum: number | null | undefined = null;
+  savedPublicKeys: string[] = [];
 
   constructor(
     private util: UtilService,
@@ -36,7 +65,7 @@ export class MusigService {
 
       const imports = {
         wasi_snapshot_preview1: {
-          fd_write: (fd, iovs, errno, nwritten) => {
+          fd_write: (fd: number, iovs: number, errno: number, nwritten: number) => {
             console.error('fd_write called: unimplemented');
             return 0;
           },
@@ -52,26 +81,33 @@ export class MusigService {
             console.error('environ_get called: unimplemented');
             return 0;
           },
-          random_get: (ptr, len) => {
-            crypto.getRandomValues(new Uint8Array(this.wasm.memory.buffer, ptr, len));
+          random_get: (ptr: number, len: number) => {
+            crypto.getRandomValues(new Uint8Array(this.requireWasm().memory.buffer, ptr, len));
             return 0;
           }
         },
         wasi_unstable: {
-          random_get: (ptr, len) => {
-            crypto.getRandomValues(new Uint8Array(this.wasm.memory.buffer, ptr, len));
+          random_get: (ptr: number, len: number) => {
+            crypto.getRandomValues(new Uint8Array(this.requireWasm().memory.buffer, ptr, len));
             return 0;
           }
         },
       };
       WebAssembly.instantiate(wasmBytes, imports).then(w => {
-        this.wasm = w.instance.exports;
+        this.wasm = w.instance.exports as unknown as MusigWasmExports;
       }).catch(console.error);
     });
   }
 
+  private requireWasm(): MusigWasmExports {
+    if (this.wasm === null) {
+      throw new Error('Multisig WebAssembly is not loaded');
+    }
+    return this.wasm;
+  }
+
   // Load multisig rust library from local file via http
-  getWASM(): Observable<any> {
+  getWASM(): Observable<string> {
     return this.http.get(this.wasmURL, {headers: new HttpHeaders({
       'Accept': 'text/html, application/xhtml+xml, */*',
       'Content-Type': 'application/x-www-form-urlencoded'
@@ -85,53 +121,59 @@ export class MusigService {
     this.savedPublicKeys = [];
   }
 
-  copyToWasm(bytes, ptr = null) {
+  copyToWasm(bytes: Uint8Array, ptr: number | null = null): number {
+    const wasm = this.requireWasm();
     if (!ptr) {
-      ptr = this.wasm.musig_malloc(bytes.length);
+      ptr = wasm.musig_malloc(bytes.length);
     }
-    const buf = new Uint8Array(this.wasm.memory.buffer, ptr, bytes.length);
+    const buf = new Uint8Array(wasm.memory.buffer, ptr, bytes.length);
     for (let i = 0; i < bytes.length; i++) {
       buf[i] = bytes[i];
     }
     return ptr;
   }
-  copyFromWasm(ptr, length) {
+  copyFromWasm(ptr: number, length: number): Uint8Array {
+    const memory = new Uint8Array(this.requireWasm().memory.buffer);
     const out = new Uint8Array(length);
     for (let i = 0; i < length; i++) {
-      out[i] = this.wasm.memory.buffer[ptr + i];
+      out[i] = memory[ptr + i];
     }
     return out;
   }
 
-  wasmError(errCode) {
+  wasmError(errCode: number): never {
     throw new Error('Multisig error ' + errCode + ': ' + this.wasmErrors[errCode]);
   }
 
-  runAggregate(storedAccounts, runWithPubkeys = null) {
+  runAggregate(storedAccounts: string[], runWithPubkeys: AggregateCallback | null = null): AggregateResult | null {
     try {
       return this.aggregate(storedAccounts, runWithPubkeys);
     } catch (err) {
-      this.notificationService.sendError(err.toString(), {length: 0});
+      this.notificationService.sendError(String(err), {length: 0});
       return null;
     }
   }
 
-  runMultiSign(privateKey, blockHash, inputMultisigData) {
+  runMultiSign(privateKey: string, blockHash: string, inputMultisigData: string[]): MultiSignResult | null {
     try {
       return this.multiSign(privateKey, blockHash, inputMultisigData);
     } catch (err) {
-      this.notificationService.sendError(err.toString(), {length: 0});
+      this.notificationService.sendError(String(err), {length: 0});
       return null;
     }
   }
 
-  aggregate(storedAccounts, runWithPubkeys = null) {
-    let addresses = [];
+  aggregate(storedAccounts: string[] | '', runWithPubkeys: AggregateCallback | null = null): AggregateResult {
+    const wasm = this.requireWasm();
+    let addresses: string[] = [];
     if (runWithPubkeys && this.savedPublicKeys?.length > 1) {
       for (const pubKey of this.savedPublicKeys) {
         addresses.push(nanocurrency.deriveAddress(pubKey, {useNanoPrefix: true}));
       }
     } else {
+      if (!Array.isArray(storedAccounts)) {
+        throw new Error('Must have at least 2 participating addresses!');
+      }
       addresses = storedAccounts;
       if (addresses.length < 2) {
           throw new Error('Must have at least 2 participating addresses!');
@@ -156,27 +198,27 @@ export class MusigService {
         }
         pubkeys.push(pubkey);
       } catch (err_) {
-          console.error(err_.toString());
+          console.error(String(err_));
           throw new Error('Invalid nano address (bad character?)');
       }
     }
-    const pubkeyPtrs = this.wasm.musig_malloc(pubkeys.length * 4);
-    const pubkeyPtrsBuf = new Uint32Array(this.wasm.memory.buffer, pubkeyPtrs, pubkeys.length);
+    const pubkeyPtrs = wasm.musig_malloc(pubkeys.length * 4);
+    const pubkeyPtrsBuf = new Uint32Array(wasm.memory.buffer, pubkeyPtrs, pubkeys.length);
     for (let i = 0; i < pubkeys.length; i++) {
       pubkeyPtrsBuf[i] = this.copyToWasm(pubkeys[i]);
     }
-    const outPtr = this.wasm.musig_malloc(33);
-    const outBuf = new Uint8Array(this.wasm.memory.buffer, outPtr, 33);
+    const outPtr = wasm.musig_malloc(33);
+    const outBuf = new Uint8Array(wasm.memory.buffer, outPtr, 33);
     outBuf[0] = 0;
-    this.wasm.musig_aggregate_public_keys(pubkeyPtrs, pubkeys.length, outPtr, outPtr + 1);
+    wasm.musig_aggregate_public_keys(pubkeyPtrs, pubkeys.length, outPtr, outPtr + 1);
     if (runWithPubkeys) runWithPubkeys(pubkeyPtrs, pubkeys.length);
     for (let i = 0; i < pubkeyPtrsBuf.length; i++) {
-      this.wasm.musig_free(pubkeyPtrsBuf[i]);
+      wasm.musig_free(pubkeyPtrsBuf[i]);
     }
-    this.wasm.musig_free(pubkeyPtrs);
+    wasm.musig_free(pubkeyPtrs);
     const err = outBuf[0];
     if (err !== 0) {
-      this.wasm.musig_free(outPtr);
+      wasm.musig_free(outPtr);
         throw this.wasmError(err);
     }
     const aggPubkey = outBuf.subarray(1).slice();
@@ -190,29 +232,31 @@ export class MusigService {
     }
     const fullAddressFinal = 'nano_' + base32.encode(fullAddress);
     console.log('Multisig Account: ' + fullAddressFinal);
-    this.wasm.musig_free(outPtr);
+    wasm.musig_free(outPtr);
     return {'multisig': fullAddressFinal, 'pubkey': aggPubkey};
   }
 
-  multiSign(privateKey, blockHash, inputMultisigData) {
+  multiSign(privateKey: string, blockHash: string, inputMultisigData: string[]): MultiSignResult {
+    const wasm = this.requireWasm();
     let multisigAccount = '';
     // Stage 0 (init)
-    if (!this.musigStagePtr) {
+    const activeStagePtr = this.musigStagePtr;
+    if (!activeStagePtr) {
       if (!this.util.nano.isValidHash(privateKey)) {
         throw new Error('Invalid private key');
       }
       if (!this.util.nano.isValidHash(blockHash)) {
         throw new Error('Invalid block hash');
       }
-      const outPtr = this.wasm.musig_malloc(65);
-      const outBuf = new Uint8Array(this.wasm.memory.buffer, outPtr, 65);
+      const outPtr = wasm.musig_malloc(65);
+      const outBuf = new Uint8Array(wasm.memory.buffer, outPtr, 65);
       outBuf[0] = 0;
       try {
-        this.musigStagePtr = this.wasm.musig_stage0(outPtr, outPtr + 33);
+        this.musigStagePtr = wasm.musig_stage0(outPtr, outPtr + 33);
         this.musigStageNum = 0;
       } catch (err_) {
         if (this.musigStagePtr) {
-          this.wasm.musig_free_stage0(this.musigStagePtr);
+          wasm.musig_free_stage0(this.musigStagePtr);
         }
         this.musigStagePtr = undefined;
         this.musigStageNum = undefined;
@@ -222,12 +266,12 @@ export class MusigService {
       if (err !== 0) {
         this.musigStagePtr = undefined;
         this.musigStageNum = undefined;
-        this.wasm.musig_free(outPtr);
+        wasm.musig_free(outPtr);
         throw this.wasmError(err);
       }
 
       const finalBuf = outBuf;
-      this.wasm.musig_free(outPtr);
+      wasm.musig_free(outPtr);
       return {'outbuf': finalBuf, 'stage': this.musigStageNum, 'multisig': multisigAccount};
 
       // Further steps
@@ -237,22 +281,22 @@ export class MusigService {
       for (const input of inputMultisigData) {
         protocolInputs.push(input.substring(2, 66).toLowerCase());
       }
-      const protocolInputPtrs = this.wasm.musig_malloc(protocolInputs.length * 4);
-      const protocolInputPtrsBuf = new Uint32Array(this.wasm.memory.buffer, protocolInputPtrs, protocolInputs.length);
+      const protocolInputPtrs = wasm.musig_malloc(protocolInputs.length * 4);
+      const protocolInputPtrsBuf = new Uint32Array(wasm.memory.buffer, protocolInputPtrs, protocolInputs.length);
       for (let i = 0; i < protocolInputs.length; i++) {
           protocolInputPtrsBuf[i] = this.copyToWasm(this.util.hex.toUint8(protocolInputs[i]));
       }
 
-      let privateKeyPtr;
+      let privateKeyPtr: number | undefined;
       if (this.musigStageNum === 0) {
         privateKeyPtr = this.copyToWasm(this.util.hex.toUint8(privateKey));
       }
 
       const outLen = (this.musigStageNum === 2) ? 65 : 33;
-      const outPtr = this.wasm.musig_malloc(outLen);
-      const outBuf = new Uint8Array(this.wasm.memory.buffer, outPtr, outLen);
+      const outPtr = wasm.musig_malloc(outLen);
+      const outBuf = new Uint8Array(wasm.memory.buffer, outPtr, outLen);
       outBuf[0] = 0;
-      let newStagePtr;
+      let newStagePtr: number | undefined;
 
       if (this.musigStageNum === 0) {
         // Extract public keys from the participants
@@ -270,34 +314,40 @@ export class MusigService {
 
         const blockhash = this.util.hex.toUint8(blockHash);
         const blockhashPtr = this.copyToWasm(blockhash);
+        if (privateKeyPtr === undefined) {
+          throw new Error('Multisig private key pointer is missing');
+        }
         const result = this.aggregate('', (pubkeys, pubkeysLen) => {
           const flags = 0; // Set to 1 if private key is a raw/expanded scalar (unusual)
-          newStagePtr = this.wasm.musig_stage1(this.musigStagePtr, privateKeyPtr, pubkeys, pubkeysLen, flags,
+          newStagePtr = wasm.musig_stage1(activeStagePtr, privateKeyPtr, pubkeys, pubkeysLen, flags,
             blockhashPtr, blockhash.length, protocolInputPtrs, protocolInputs.length, outPtr, null, outPtr + 1);
         });
         multisigAccount = result?.multisig;
         this.musigStageNum = 0;
-        this.wasm.musig_free(privateKeyPtr);
-        this.wasm.musig_free(blockhashPtr);
+        wasm.musig_free(privateKeyPtr);
+        wasm.musig_free(blockhashPtr);
 
       } else if (this.musigStageNum === 1) {
-          newStagePtr = this.wasm.musig_stage2(this.musigStagePtr, protocolInputPtrs, protocolInputs.length, outPtr, outPtr + 1);
+          newStagePtr = wasm.musig_stage2(activeStagePtr, protocolInputPtrs, protocolInputs.length, outPtr, outPtr + 1);
       } else if (this.musigStageNum === 2) {
-          newStagePtr = this.wasm.musig_stage3(this.musigStagePtr, protocolInputPtrs, protocolInputs.length, outPtr, outPtr + 1);
+          newStagePtr = wasm.musig_stage3(activeStagePtr, protocolInputPtrs, protocolInputs.length, outPtr, outPtr + 1);
       } else {
-        this.wasm.musig_free(outPtr);
+        wasm.musig_free(outPtr);
           throw new Error('Unexpected musigStageNum ' + this.musigStageNum);
       }
       const err = outBuf[0];
       if (err !== 0) {
-        this.wasm.musig_free(outPtr);
+        wasm.musig_free(outPtr);
           throw this.wasmError(err);
+      }
+      if (newStagePtr === undefined || this.musigStageNum == null) {
+        throw new Error('Multisig stage did not produce a valid state');
       }
       this.musigStagePtr = newStagePtr;
       this.musigStageNum++;
 
       const finalBuf = new Uint8Array(outBuf); // make a copy to avoid pointer being reset by musig_free
-      this.wasm.musig_free(outPtr);
+      wasm.musig_free(outPtr);
       return {'outbuf': finalBuf, 'stage': this.musigStageNum, 'multisig': multisigAccount};
     }
   }
