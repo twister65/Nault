@@ -16,6 +16,9 @@ const INDEX_MAX = 4294967295; // seed index
 const SWEEP_MAX_INDEX = 100; // max index keys to sweep
 const SWEEP_MAX_PENDING = 100; // max pending blocks to process per run
 
+type PendingEntries = Record<string, { amount: string }>;
+type SweepKey = [privateKey: string, derivation: string, index: number];
+
 @Component({
     selector: 'app-sweeper',
     templateUrl: './sweeper.component.html',
@@ -42,12 +45,12 @@ export class SweeperComponent implements OnInit {
   adjustedBalance = '0';
   representative = '';
   privKey = '';
-  previous = '';
+  previous: string | null = '';
   subType = '';
-  blocks = [];
-  keys = [];
+  blocks: PendingEntries = {};
+  keys: string[] = [];
   keyCount = 0;
-  pendingCallback = null;
+  pendingCallback: ((previous: string | null) => void) | null = null;
   totalSwept = '0';
   customAccountSelected = this.accounts.length === 0;
 
@@ -253,7 +256,12 @@ export class SweeperComponent implements OnInit {
   }
 
   // Process final send block
-  async processSend(privKey, previous, sendCallback) {
+  async processSend(privKey: string, previous: string | null, sendCallback: () => void) {
+    if (!previous) {
+      this.notificationService.sendError('Missing previous block hash; sweep transfer stopped.');
+      this.sweeping = false;
+      return;
+    }
     const pubKey = nanocurrency.derivePublicKey(privKey);
     const address = nanocurrency.deriveAddress(pubKey, {useNanoPrefix: true});
 
@@ -261,6 +269,11 @@ export class SweeperComponent implements OnInit {
     if (this.validDestination && nanocurrency.checkAddress(this.destinationAccount)) {
       this.appendLog('Transfer started: ' + address);
       const work = await this.workPool.getWork(previous, 1); // send threshold
+      if (work === null) {
+        this.notificationService.sendWarning('Proof of work was cancelled or failed; sweep transfer stopped.');
+        this.sweeping = false;
+        return;
+      }
       // create the block with the work found
       const block = nanocurrency.createBlock(privKey, {balance: '0', representative: this.representative,
       work: work, link: this.destinationAccount, previous: previous});
@@ -293,7 +306,7 @@ export class SweeperComponent implements OnInit {
   }
 
   // For each pending block
-  async processPending(blocks, keys, keyCount) {
+  async processPending(blocks: PendingEntries, keys: string[], keyCount: number) {
     const key = keys[keyCount];
     this.blocks = blocks;
     this.keys = keys;
@@ -305,12 +318,14 @@ export class SweeperComponent implements OnInit {
       this.appendLog('Started generating PoW...');
 
       // determine input work hash depending if open block or receive block
-      let workInputHash = this.previous;
-      if (this.subType === 'open') {
-        // input hash is the opening address public key
-        workInputHash = this.pubKey;
+      const workInputHash = this.subType === 'open' ? this.pubKey : this.previous;
+      if (!workInputHash) {
+        throw new Error('Missing work input hash');
       }
       const work = await this.workPool.getWork(workInputHash, 1 / 64); // receive threshold
+      if (work === null) {
+        throw new Error('Proof of work was cancelled or failed');
+      }
       // create the block with the work found
       const block = nanocurrency.createBlock(this.privKey, {balance: this.adjustedBalance, representative: this.representative,
       work: work, link: key, previous: this.previous});
@@ -335,14 +350,16 @@ export class SweeperComponent implements OnInit {
           this.processPending(this.blocks, this.keys, this.keyCount);
         } else { // all pending done, now we process the final send block
           this.appendLog('All pending processed!');
-          this.pendingCallback(this.previous);
+          if (this.pendingCallback) {
+            this.pendingCallback(this.previous);
+          }
         }
       } else {
         this.notificationService.sendWarning(`Failed processing block`);
         this.appendLog('Failed processing block: ' + data.error);
       }
     } catch (error) {
-      if (error.message === 'invalid_hash') {
+      if (error instanceof Error && error.message === 'invalid_hash') {
         this.notificationService.sendError(`Block hash must be 64 character hex string`);
       } else {
         this.notificationService.sendError(`An unknown error occurred while generating PoW`);
@@ -354,47 +371,46 @@ export class SweeperComponent implements OnInit {
   }
 
   // Create pending blocks based on current balance and previous block (or start with an open block)
-  async createPendingBlocks(privKey, address, balance, previous, subType, callback, accountCallback) {
+  async createPendingBlocks(privKey: string, address: string, balance: string | number, previous: string | null,
+    subType: string, callback: (previous: string | null) => void, accountCallback: () => void) {
     this.privKey = privKey;
     this.previous = previous;
     this.subType = subType;
     this.pendingCallback = callback;
     // check for pending first
-    let data = null;
+    let data: {blocks?: PendingEntries} | null = null;
+    const pendingLimit = Number(this.maxIncoming);
     if (this.appSettings.settings.minimumReceive) {
       const minAmount = this.util.nano.mnanoToRaw(this.appSettings.settings.minimumReceive).toString(10);
       if (this.appSettings.settings.pendingOption === 'amount') {
-        data = await this.api.pendingLimitSorted(address, this.maxIncoming, minAmount);
+        data = await this.api.pendingLimitSorted(address, pendingLimit, minAmount);
       } else {
-        data = await this.api.pendingLimit(address, this.maxIncoming, minAmount);
+        data = await this.api.pendingLimit(address, pendingLimit, minAmount);
       }
 
     } else {
       if (this.appSettings.settings.pendingOption === 'amount') {
-        data = await this.api.pendingSorted(address, this.maxIncoming);
+        data = await this.api.pendingSorted(address, pendingLimit);
       } else {
-        data = await this.api.pending(address, this.maxIncoming);
+        data = await this.api.pending(address, pendingLimit);
       }
     }
 
     // if there are any pending, process them
-    if (data.blocks) {
-      // sum all raw amounts
+    if (data?.blocks) {
+      // Sum raw amounts, preserving the RPC block hash order.
+      const pendingBlocks = data.blocks;
       let raw = '0';
-      Object.keys(data.blocks).forEach(function(key) {
-        raw = this.util.big.add(raw, data.blocks[key].amount);
-      }.bind(this));
+      Object.keys(pendingBlocks).forEach((key: string) => {
+        raw = this.util.big.add(raw, pendingBlocks[key].amount);
+      });
       const nanoAmount = this.util.nano.rawToMnano(raw);
       const pending = {count: Object.keys(data.blocks).length, raw: raw, XNO: nanoAmount, blocks: data.blocks};
       const row = 'Found ' + pending.count + ' pending containing total ' + pending.XNO + ' XNO';
       this.appendLog(row);
 
       // create receive blocks for all pending
-      const keys = [];
-      // create an array with all keys to be used recurively
-      Object.keys(pending.blocks).forEach(function(key) {
-        keys.push(key);
-      });
+      const keys: string[] = Object.keys(pending.blocks);
 
       this.processPending(pending.blocks, keys, 0);
     } else { // no pending, create final block directly
@@ -409,7 +425,7 @@ export class SweeperComponent implements OnInit {
   }
 
   // Process an account
-  async processAccount(privKey, accountCallback) {
+  async processAccount(privKey: string, accountCallback: () => void) {
     if (privKey.length !== 64) {
       accountCallback();
       return;
@@ -419,9 +435,9 @@ export class SweeperComponent implements OnInit {
     const address = nanocurrency.deriveAddress(this.pubKey, {useNanoPrefix: true});
 
     // get account info required to build the block
-    let balance = 0; // balance will be 0 if open block
+    let balance: number | string = 0; // balance will be 0 if open block
     this.adjustedBalance = balance.toString();
-    let previous = null; // previous is null if we create open block
+    let previous: string | null = null; // previous is null if we create open block
     this.representative = this.settings.settings.defaultRepresentative || this.nanoBlock.getRandomRepresentative();
     let subType = 'open';
 
@@ -443,7 +459,7 @@ export class SweeperComponent implements OnInit {
     }
     if (validResponse) {
       // create and publish all pending
-      this.createPendingBlocks(privKey, address, balance, previous, subType, function(previous_) {
+      this.createPendingBlocks(privKey, address, balance, previous, subType, (previous_: string | null) => {
         // the previous is the last received block and will be used to create the final send block
         if (parseInt(this.adjustedBalance, 10) > 0) {
           this.processSend(privKey, previous_, () => {
@@ -452,7 +468,7 @@ export class SweeperComponent implements OnInit {
         } else {
           accountCallback();
         }
-      }.bind(this), () => {
+      }, () => {
         accountCallback();
       });
     } else {
@@ -462,12 +478,12 @@ export class SweeperComponent implements OnInit {
   }
 
   // Recursively process private keys from index range
-  async processIndexRecursive(privKeys, keyCount) {
+  async processIndexRecursive(privKeys: SweepKey[], keyCount: number) {
     // delay each process to not hit backend rate limiters
     await this.sleep(300);
     const privKey = privKeys[keyCount][0];
     this.appendLog('Checking index ' + privKeys[keyCount][2] + ' using ' + privKeys[keyCount][1]);
-    this.processAccount(privKey, function() {
+    this.processAccount(privKey, () => {
       // continue with the next pending
       keyCount += 1;
       if (keyCount < privKeys.length) {
@@ -479,7 +495,7 @@ export class SweeperComponent implements OnInit {
         this.notificationService.sendInfo('Finished processing all accounts. Ӿ' + this.totalSwept + ' transferred', {length: 0});
         this.sweeping = false;
       }
-    }.bind(this));
+    });
   }
 
   async sweepContinue () {
@@ -509,9 +525,9 @@ export class SweeperComponent implements OnInit {
         if (seed === '') { // seed from input, no mnemonic
           seed = this.sourceWallet;
         }
-        this.processAccount(seed, function() {
+        this.processAccount(seed, () => {
           // done checking if private key, continue interpret as seed
-          const privKeys = [];
+          const privKeys: SweepKey[] = [];
           // start with blake2b derivation (but not if the mnemonic is anything other than 24 words)
           if (keyType !== 'bip39_seed' && seed.length === 64) {
             for (let i = parseInt(this.startIndex, 10); i <= parseInt(this.endIndex, 10); i++) {
@@ -536,7 +552,7 @@ export class SweeperComponent implements OnInit {
             privKeys.push([privKey, 'bip39/44', i]);
           }
           this.processIndexRecursive(privKeys, 0);
-        }.bind(this));
+        });
       }
 
     } else {
