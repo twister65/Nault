@@ -8,6 +8,20 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Incident runtime Android — page blanche après le premier build Angular 22
+
+**Observation de l'utilisateur (23 octobre 2026) :** `AndroidTest-console` après déploiement du commit `ba35cc2` sur `nault-android-test.vercel.app`. La console montre deux occurrences `main.f290bb30901e26e2.js:1 ERROR xt: NG0201` avec un échec d'injection de dépendance Angular dès le bootstrap (`Object.ɵfac`, `Pc.get`). La trace ne donne pas le token d'injection à cause de la minification. Une autre erreur `evmAsk.js:76 Cannot redefine property: ethereum` paraît liée à un script injecté par extension et ne démontre pas la cause de la page blanche.
+
+**Diagnostic prioritaire :** `src/app/transloco/transloco-root.module.ts` contenait toujours une configuration ancienne basée uniquement sur les tokens `TRANSLOCO_CONFIG` et `TRANSLOCO_LOADER`, sans les autres dépendances de `TranslocoService`. Or `AppComponent` injecte `TranslocoService` au démarrage, et le contrat actuel de `@jsverse/transloco@8.4.x` exige d'enregistrer les providers via `provideTransloco({config, loader})`. Ceci est une cause **plausible et concrète** de `NG0201`, non encore confirmée par un test d'ouverture du site après correctif. Référence : https://jsverse.gitbook.io/transloco/getting-started/installation (exemple NgModule).
+
+**Correction publiée :** [`7cfc41a`](https://github.com/twister65/Nault/commit/7cfc41a272912265c7b8ed1e81f4597811d6f588) remplace les deux providers legacy par `provideTransloco` complet ; conserve la langue `en`, le fallback, les paramètres existants et le chargeur de fichiers `assets/i18n`. Ne touche pas aux opérations cryptographiques.
+
+**Déploiement de contrôle :** Vercel `nault-android-test` `dpl_EAxSp3zoM6woehzivSJo77BW5VFt`, commit `7cfc41a`, production test, lancé avec une configuration d'ignorance du build neutralisée pour cet appel. **Initialement en attente `QUEUED`**, donc ne pas annoncer `READY` tant que le statut effectif n'est pas vérifié. Le déploiement précédent `ba35cc2` reste assigné à l'URL principale tant que le nouveau n'est pas prêt.
+
+**À vérifier ensuite :** statut `READY` et alias `nault-android-test.vercel.app` pointant vers `dpl_EAxSp3zoM6woehzivSJo77BW5VFt`. Demander à l'utilisateur l'ouverture en fenêtre privée ou cache mis à jour et console; vérifier disparition de `NG0201` ; si persiste, obtenir la nouvelle trace et produire un build diagnostic avec source maps *sur environnement privé uniquement*, sans exposer secrets ou symboles. Le déploiement `Ready` ne valide pas le runtime, Ledger, BLE/WebHID, RPC, MuSig, Sweeper ni S01. Aucun merge `master`.
+
+---
+
 ## Validation Vercel Angular 22 — 23 octobre 2026 : deux builds Ready
 
 **Résultats vérifiés :** l'utilisateur a transmis les logs complets `Vercel-ba35cc2.log` et `Vercel-1c5a29c.log`. Les deux compilations Vercel du projet `nault-tablet-css-test`, branche `upgrade/angular-22`, ont **réussi**, sans aucune erreur TypeScript :
