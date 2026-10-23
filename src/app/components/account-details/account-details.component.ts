@@ -904,6 +904,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     this.addressBookMatch = (
         this.addressBook.getAccountName(this.toAccountID)
       || this.getAccountLabel(this.toAccountID, null)
+      || ''
     );
 
     // const accountInfo = await this.walletService.walletApi.accountInfo(this.toAccountID);
@@ -924,7 +925,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   }
 
   validateAmount() {
-    if (this.util.account.isValidNanoAmount(this.amount)) {
+    if (this.amount !== null && this.util.account.isValidNanoAmount(String(this.amount))) {
       this.amountStatus = 1;
       return true;
     } else {
@@ -960,14 +961,14 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     }
   }
 
-  showMobileMenuForTransaction(transaction) {
+  showMobileMenuForTransaction(transaction: ReceivableHistoryItem | Record<string, unknown>) {
     this.notifications.removeNotification('success-copied');
 
     this.mobileTransactionData = transaction;
     this.mobileTransactionMenuModal.show();
   }
 
-  onReceiveFundsPress(receivableTransaction) {
+  onReceiveFundsPress(receivableTransaction: ReceivableHistoryItem) {
     if (receivableTransaction.loading || receivableTransaction.received) {
       return;
     }
@@ -975,7 +976,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     this.receiveReceivableBlock(receivableTransaction);
   }
 
-  async receiveReceivableBlock(receivableBlock) {
+  async receiveReceivableBlock(receivableBlock: ReceivableHistoryItem) {
     const sourceBlock = receivableBlock.hash;
 
     if (this.wallet.isLocked()) {

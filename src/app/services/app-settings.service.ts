@@ -6,7 +6,7 @@ export type WalletStore = 'localStorage'|'none';
 export type PoWSource = 'server'|'clientCPU'|'clientWebGL'|'best'|'custom';
 export type LedgerConnectionType = 'usb'|'bluetooth';
 
-interface AppSettings {
+export interface AppSettings {
   language: string;
   displayDenomination: string;
   // displayPrefix: string | null;
