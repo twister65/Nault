@@ -156,3 +156,29 @@ describe('WalletService Ledger receive scheduling', () => {
     expect(service.wallet.pendingBlocks.length).toBe(1);
   });
 });
+
+describe('WalletService successful incoming-block coalescing', () => {
+  it('does not retry a previously successful receivable block', async () => {
+    // The successful-block cache stores hashes, never objects. Repeated
+    // confirmations must not trigger another Ledger or PoW transaction.
+    const service = Object.create(WalletService.prototype) as any;
+    const generateReceive = jasmine.createSpy('generateReceive');
+    service.wallet = {
+      type: 'seed', locked: false,
+      pendingBlocks: [{ account: 'nano_test', hash: 'already-received', amount: '1', source: 'nano_sender' }]
+    };
+    service.appSettings = { settings: { pendingOption: 'automatic' } };
+    service.nanoBlock = { generateReceive };
+    service.successfulBlocks = ['already-received'];
+    service.processingPending = false;
+
+    jasmine.clock().install();
+    try {
+      await service.processPendingBlocks();
+      expect(generateReceive).not.toHaveBeenCalled();
+      expect(service.wallet.pendingBlocks.length).toBe(1);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+});
