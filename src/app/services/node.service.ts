@@ -4,13 +4,13 @@ import {NotificationService} from './notification.service';
 @Injectable()
 export class NodeService {
 
-  node = {
+  node: {status: boolean | null} = {
     status: null, // null - loading, false - offline, true - online
   };
 
   constructor(private notifications: NotificationService) { }
 
-  setOffline(msg = `Unable to connect to the nano node, your balances may be inaccurate!`) {
+  setOffline(msg: string | null = `Unable to connect to the nano node, your balances may be inaccurate!`) {
     if (this.node.status === false) return; // Already offline
     this.node.status = false;
 

@@ -25,7 +25,13 @@ export class ApiService {
       ? legacyAction : null;
   }
 
-  private async request(action, data, skipError, url = '', validateResponse?): Promise<any> {
+  private async request(
+    action: string,
+    data: Record<string, unknown>,
+    skipError: boolean,
+    url = '',
+    validateResponse?: (response: any) => { err: string | null }
+  ): Promise<any> {
     // Snapshot settings: a pending request must not acquire another server's credentials.
     const settings = { ...this.appSettings.settings };
     const firstUrl = url || settings.serverAPI;
@@ -81,9 +87,13 @@ export class ApiService {
             requestAction = legacy;
             continue;
           }
-          const retryable = !error.isValidationFailure &&
-            (error.status === 0 || error.status === 408 || error.status === 429 ||
-             error.status >= 500 || error.name === 'TimeoutError' || error instanceof TypeError);
+          const failure = error && typeof error === 'object'
+            ? error as { isValidationFailure?: boolean; status?: number; name?: string }
+            : {};
+          const retryable = !failure.isValidationFailure &&
+            (failure.status === 0 || failure.status === 408 || failure.status === 429 ||
+             (typeof failure.status === 'number' && failure.status >= 500) ||
+             failure.name === 'TimeoutError' || error instanceof TypeError);
           if (!retryable) {
             this.node.setOffline();
             throw error;
@@ -134,14 +144,14 @@ export class ApiService {
       blockInfo.contents = JSON.stringify(blockInfo.contents);
     }
   }
-  async blocksInfo(blocks): Promise<{blocks: any, error?: string}> {
+  async blocksInfo(blocks: string[]): Promise<{blocks: any, error?: string}> {
     const response = await this.request('blocks_info', { hashes: blocks, pending: true, source: true }, false);
     if (response && response.blocks && typeof response.blocks === 'object') {
       Object.keys(response.blocks).forEach(hash => this.normalizeBlockContents(response.blocks[hash]));
     }
     return response;
   }
-  async blockInfo(hash): Promise<any> {
+  async blockInfo(hash: string): Promise<any> {
     const response = await this.request('block_info', { hash: hash }, false);
     this.normalizeBlockContents(response);
     return response;
@@ -149,8 +159,8 @@ export class ApiService {
   async blockCount(): Promise<{count: number, unchecked: number, cemented: number }> {
     return await this.request('block_count', { include_cemented: 'true'}, false);
   }
-  async workGenerate(hash, difficulty, workServer = ''): Promise<{ work: string }> {
-    const validateResponse = (res) => {
+  async workGenerate(hash: string, difficulty: string, workServer = ''): Promise<{ work: string }> {
+    const validateResponse = (res: {work?: unknown} | null): {err: string | null} => {
       if(!res || res.work == null) {
         return {
           err: `Missing field "work".`,
@@ -182,10 +192,10 @@ export class ApiService {
 
     return await this.request('work_generate', { hash, difficulty }, workServer !== '', workServer, validateResponse);
   }
-  async process(block, subtype: TxType): Promise<{ hash: string, error?: string }> {
+  async process(block: unknown, subtype: TxType): Promise<{ hash: string, error?: string }> {
     return await this.request('process', { json_block: 'true', block, subtype: TxType[subtype] }, false);
   }
-  async accountHistory(account, count = 25, raw = false, offset = 0, reverse = false): Promise<{history: any }> {
+  async accountHistory(account: string, count = 25, raw = false, offset = 0, reverse = false): Promise<{history: any }> {
     // use unlimited count if 0
     if (count === 0) {
       return await this.request('account_history', { account, raw, offset, reverse}, false);
@@ -193,19 +203,19 @@ export class ApiService {
       return await this.request('account_history', { account, count, raw, offset, reverse}, false);
     }
   }
-  async accountInfo(account): Promise<any> {
+  async accountInfo(account: string): Promise<any> {
     return await this.request('account_info', { account, pending: true, representative: true, weight: true }, false);
   }
-  async pending(account, count): Promise<any> {
+  async pending(account: string, count: number): Promise<any> {
     return await this.request('receivable', { account, count, source: true, include_only_confirmed: true }, false);
   }
-  async pendingLimit(account, count, threshold): Promise<any> {
+  async pendingLimit(account: string, count: number, threshold: string): Promise<any> {
     return await this.request('receivable', { account, count, threshold, source: true, include_only_confirmed: true }, false);
   }
-  async pendingSorted(account, count): Promise<any> {
+  async pendingSorted(account: string, count: number): Promise<any> {
     return await this.request('receivable', { account, count, source: true, include_only_confirmed: true, sorting: true }, false);
   }
-  async pendingLimitSorted(account, count, threshold): Promise<any> {
+  async pendingLimitSorted(account: string, count: number, threshold: string): Promise<any> {
     return await this.request('receivable', { account, count, threshold, source: true, include_only_confirmed: true, sorting: true }, false);
   }
   async version(): Promise<{rpc_version: number, store_version: number, protocol_version: number, node_vendor: string, network: string,
