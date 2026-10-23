@@ -73,9 +73,11 @@ export class AppComponent implements OnInit {
   }
 
   @HostListener('document:mousedown', ['$event']) onGlobalClick(event: MouseEvent): void {
+    const target = event.target;
+    if (!(target instanceof Node)) return;
     if (
-            ( this.selectButton.nativeElement.contains(event.target) === false )
-          && ( this.accountsDropdown.nativeElement.contains(event.target) === false )
+            ( this.selectButton.nativeElement.contains(target) === false )
+          && ( this.accountsDropdown.nativeElement.contains(target) === false )
       ) {
         this.showAccountsDropdown = false;
     }
