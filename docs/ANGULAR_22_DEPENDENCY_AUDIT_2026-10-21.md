@@ -8,6 +8,18 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Point de reprise — wallet à 10 diagnostics
+
+**Dernière CI terminée :** [`2ac4e76`, run 39888320190](https://github.com/twister65/Nault/actions/runs/39888320190). Compilation Web **failure**, **694 erreurs TypeScript** contre 1 060 au début (**366 diagnostics supprimés**). Lint et CodeQL **success** ([lint 39888320134](https://github.com/twister65/Nault/actions/runs/39888320134), [CodeQL 39888320153](https://github.com/twister65/Nault/actions/runs/39888320153)). `wallet.service.ts` est passé de **51 à 10** erreurs, mais le build Web n'a pas atteint l'exécution des tests Jasmine ; ne pas présenter le nouveau test anti-doublon comme exécuté.
+
+**Nouveau commit :** [`e84b348`](https://github.com/twister65/Nault/commit/e84b34896441d21ec2d093646bcda5d2f0abefc9), visant les dix erreurs restantes de `wallet.service.ts`. Les chemins non-Ledger de génération d'export refusent maintenant explicitement une graine `null` plutôt que de passer cette valeur au chiffrement, le déverrouillage retourne `false` en absence de graine, et les abonnements `requestWalletUnlock` sont typés `Subscription | undefined`. Aucun changement du chiffrement CryptoJS lui-même, de la signature Ledger ou de l'interprétation RPC.
+
+**CI à vérifier pour ce dernier lot :** [validation Angular 22 39888727352](https://github.com/twister65/Nault/actions/runs/39888727352) : **en cours au point de reprise**, résultat inconnu. Vérifier nombre d'erreurs et éventuelles régressions de typage dans tous les composants, puis finaliser la compilation Web avant de pouvoir exécuter les tests Angular/RPC. Les tests de réception sécurisée et de QR exigent une validation quand la suite sera de nouveau exécutable.
+
+**Contrainte permanente :** aucune fusion `master`, aucun déploiement sur le domaine de staging tant que le build échoue ; pas de test matériel Bluetooth. Les prochains gros fichiers à traiter sont `musig.service.ts` (WASM cryptographique, 76 erreurs ; lot séparé), `account-details` (71), `sign` (69), `sweeper` (62), `configure-app` (54), `receive` (46).
+
+---
+
 ## Suite du 23 octobre — 737 diagnostics et types du wallet
 
 **Nouveau résultat confirmé :** la [CI Angular 22 39887845010](https://github.com/twister65/Nault/actions/runs/39887845010), commit [`ba4f873`](https://github.com/twister65/Nault/commit/ba4f87378032b1f954ee1422f3f1e088722ad283), finit en **failure sur la compilation Web** avec **737 erreurs TypeScript**. Base initiale : 1 060, soit **323 diagnostics résolus**. `AppSettingsService` et `RepresentativeService` sont à **0 diagnostic** sur ce run. Lint/CodeQL réussis sur les commits antérieurs ; ne pas confondre cela avec une validation complète Angular 22.
