@@ -307,6 +307,7 @@ export class ReceiveComponent implements OnInit, OnDestroy {
     this.selectedAccountAddressBookName = (
         this.addressBook.getAccountName(accountID)
       || this.getAccountLabel(accountID, 'Account')
+      || 'Account'
     );
 
     this.changeQRAccount(accountID);
