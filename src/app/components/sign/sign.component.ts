@@ -498,6 +498,10 @@ export class SignComponent implements OnInit {
     // sign the block (if not multisig)
     let block: StateBlock;
     if (this.signTypeSelected !== this.signTypes[3]) {
+      if (!walletAccount) {
+        this.confirmingTransaction = false;
+        return this.notificationService.sendWarning('No signing account is available.');
+      }
       const signedBlock = await this.nanoBlock.signOfflineBlock(walletAccount, currentBlock,
         this.previousBlock, txType, this.shouldGenWork, this.selectedThreshold, isLedger);
       if (signedBlock === null) {
