@@ -7,7 +7,8 @@ export class ModalService {
   showAccount$ = new BehaviorSubject(null);
   constructor() { }
 
-  showAccount(account) {
+  // Legacy modal messages accept different account payload shapes across views.
+  showAccount(account: any): void {
     this.showAccount$.next(account);
   }
 
