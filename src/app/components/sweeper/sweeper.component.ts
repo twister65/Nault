@@ -58,7 +58,7 @@ export class SweeperComponent implements OnInit {
   validMaxIncoming = true;
   selAccountInit = false;
 
-  @ViewChild('outputarea') logArea: ElementRef;
+  @ViewChild('outputarea') logArea?: ElementRef<HTMLElement>;
 
   constructor(
     private walletService: WalletService,
@@ -71,8 +71,9 @@ export class SweeperComponent implements OnInit {
     private nanoBlock: NanoBlockService,
     private util: UtilService,
     private route: Router) {
-      if (this.route.getCurrentNavigation().extras.state && this.route.getCurrentNavigation().extras.state.seed) {
-        this.sourceWallet = this.route.getCurrentNavigation().extras.state.seed;
+      const navigationState = this.route.getCurrentNavigation()?.extras.state;
+      if (typeof navigationState?.seed === 'string') {
+        this.sourceWallet = navigationState.seed;
         this.validSeed = true;
       }
     }
@@ -92,11 +93,11 @@ export class SweeperComponent implements OnInit {
     }
   }
 
-  sleep(ms) {
+  sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  setDestination(account) {
+  setDestination(account: string) {
     if (account !== '0') {
       this.destinationAccount = account;
       this.customAccountSelected = false;
@@ -133,7 +134,7 @@ export class SweeperComponent implements OnInit {
     this.maxIncoming = SWEEP_MAX_PENDING.toString();
   }
 
-  seedChange(seed) {
+  seedChange(seed: string) {
     if (this.checkMasterKey(seed)) {
       this.validSeed = true;
     } else {
@@ -141,7 +142,7 @@ export class SweeperComponent implements OnInit {
     }
   }
 
-  destinationChange(address) {
+  destinationChange(address: string) {
     if (nanocurrency.checkAddress(address)) {
       this.validDestination = true;
     } else {
@@ -149,14 +150,14 @@ export class SweeperComponent implements OnInit {
     }
   }
 
-  startIndexChange(index) {
+  startIndexChange(index: string) {
     let invalid = false;
-    if (this.util.string.isNumeric(index) && index % 1 === 0) {
-      index = parseInt(index, 10);
-      if (!nanocurrency.checkIndex(index)) {
+    if (this.util.string.isNumeric(index) && Number(index) % 1 === 0) {
+      const parsedIndex = parseInt(index, 10);
+      if (!nanocurrency.checkIndex(parsedIndex)) {
         invalid = true;
       }
-      if (index > INDEX_MAX) {
+      if (parsedIndex > INDEX_MAX) {
         invalid = true;
       }
     } else {
@@ -168,21 +169,21 @@ export class SweeperComponent implements OnInit {
     }
     // check end index
     if (this.validEndIndex) {
-      if (parseInt(this.endIndex, 10) > index + SWEEP_MAX_INDEX) {
-        this.endIndex = (index + SWEEP_MAX_INDEX).toString();
+      if (parseInt(this.endIndex, 10) > Number(index) + SWEEP_MAX_INDEX) {
+        this.endIndex = (Number(index) + SWEEP_MAX_INDEX).toString();
       }
     }
     this.validStartIndex = true;
   }
 
-  endIndexChange(index) {
+  endIndexChange(index: string) {
     let invalid = false;
-    if (this.util.string.isNumeric(index) && index % 1 === 0) {
-      index = parseInt(index, 10);
-      if (!nanocurrency.checkIndex(index)) {
+    if (this.util.string.isNumeric(index) && Number(index) % 1 === 0) {
+      const parsedIndex = parseInt(index, 10);
+      if (!nanocurrency.checkIndex(parsedIndex)) {
         invalid = true;
       }
-      if (index > INDEX_MAX) {
+      if (parsedIndex > INDEX_MAX) {
         invalid = true;
       }
     } else {
@@ -194,20 +195,20 @@ export class SweeperComponent implements OnInit {
     }
     // check end index
     if (this.validStartIndex) {
-      if (parseInt(this.startIndex, 10) < index - SWEEP_MAX_INDEX) {
-        this.startIndex = (index - SWEEP_MAX_INDEX).toString();
+      if (parseInt(this.startIndex, 10) < Number(index) - SWEEP_MAX_INDEX) {
+        this.startIndex = (Number(index) - SWEEP_MAX_INDEX).toString();
       }
     }
     this.validEndIndex = true;
   }
 
-  maxIncomingChange(value) {
-    if (!this.util.string.isNumeric(value) || value % 1 !== 0) {
+  maxIncomingChange(value: string) {
+    if (!this.util.string.isNumeric(value) || Number(value) % 1 !== 0) {
       this.validMaxIncoming = false;
       return;
     } else {
-      value = parseInt(value, 10);
-      if (value > SWEEP_MAX_PENDING) {
+      const parsedValue = parseInt(value, 10);
+      if (parsedValue > SWEEP_MAX_PENDING) {
         this.validMaxIncoming = false;
         return;
       }
@@ -217,7 +218,7 @@ export class SweeperComponent implements OnInit {
   }
 
   // Validate type of master key. Seed and private key can't be differentiated
-  checkMasterKey(key) {
+  checkMasterKey(key: string) {
     // validate nano seed or private key
     if (key.length === 64) {
       if (nanocurrency.checkSeed(key)) {
@@ -238,14 +239,17 @@ export class SweeperComponent implements OnInit {
   }
 
   // Append row to log output
-  appendLog(row) {
+  appendLog(row: string) {
     let linebreak = '\n';
     if (this.output === '') {
       linebreak = '';
     }
     this.output = this.output + linebreak + row;
     // scroll to bottom
-    this.logArea.nativeElement.scrollTop = this.logArea.nativeElement.scrollHeight;
+    const logElement = this.logArea?.nativeElement;
+    if (logElement) {
+      logElement.scrollTop = logElement.scrollHeight;
+    }
   }
 
   // Process final send block
@@ -567,7 +571,7 @@ export class SweeperComponent implements OnInit {
     }
 
     // let user confirm account
-    const UIkit = window['UIkit'];
+    const UIkit = (window as unknown as {UIkit: {modal: {confirm(message: string): Promise<unknown>}}}).UIkit;
     try {
       const msg = '<p class="uk-alert uk-alert-danger"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">You are about to empty the source wallet, which will <b>transfer all funds from it to the destination address</b>.</span><br><br><b style="font-size: 18px;">Before continuing, make sure you (or someone) have saved the secret recovery seed and/or mnemonic of the specified destination address</b>.<br><br><span style="font-size: 18px;"><b>YOU WILL NOT BE ABLE TO RECOVER THE FUNDS</b><br>without a backup of the specified destination address.</span></p><br>';
       await UIkit.modal.confirm(msg);
