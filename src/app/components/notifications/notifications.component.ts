@@ -1,5 +1,5 @@
 import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
-import {NotificationService} from '../../services/notification.service';
+import {NotificationService, NotificationType} from '../../services/notification.service';
 
 @Component({
     selector: 'app-notifications',
@@ -12,7 +12,13 @@ export class NotificationsComponent implements OnInit {
 
   notificationLength = 5000;
 
-  notifications: any[] = [];
+  notifications: Array<{
+    type: NotificationType;
+    message: string;
+    cssClass: string;
+    identifier: string | null;
+    length: number;
+  }> = [];
   constructor(private notificationService: NotificationService) { }
 
   ngOnInit() {
@@ -22,7 +28,7 @@ export class NotificationsComponent implements OnInit {
       }
 
       // Check the options
-      const length = notification.options.hasOwnProperty('length') ? notification.options.length : this.notificationLength;
+      const length = notification.options.length ?? this.notificationLength;
       const identifier = notification.options.identifier || null;
 
       // Stop duplicates
@@ -59,14 +65,14 @@ export class NotificationsComponent implements OnInit {
     });
   }
 
-  private removeNotification(notification) {
+  private removeNotification(notification: (typeof this.notifications)[number]): void {
     const existingNotification = this.notifications.findIndex(n => n === notification);
     if (existingNotification !== -1) {
       this.notifications.splice(existingNotification, 1);
     }
   }
 
-  private getCssClass(type) {
+  private getCssClass(type: NotificationType): string {
     switch (type) {
       default:
       case 'info': return 'uk-alert-primary';

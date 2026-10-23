@@ -6,7 +6,7 @@ import {BigNumber} from 'bignumber.js';
 import {AddressBookService} from './address-book.service';
 import * as CryptoJS from 'crypto-js';
 import {WorkPoolService} from './work-pool.service';
-import {WebsocketService} from './websocket.service';
+import {WebsocketService, NanoConfirmation} from './websocket.service';
 import {NanoBlockService} from './nano-block.service';
 import {NotificationService} from './notification.service';
 import {AppSettingsService} from './app-settings.service';
@@ -112,20 +112,20 @@ export class WalletService {
     accounts: [],
     selectedAccountId: null,
     selectedAccount: null,
-    selectedAccount$: new BehaviorSubject(null),
+    selectedAccount$: new BehaviorSubject<WalletAccount | null>(null),
     locked: false,
     locked$: new BehaviorSubject(false),
     unlockModalRequested$: new BehaviorSubject(false),
     password: '',
     pendingBlocks: [],
-    pendingBlocksUpdate$: new BehaviorSubject(null),
+    pendingBlocksUpdate$: new BehaviorSubject<ReceivableBlockUpdate | null>(null),
     newWallet$: new BehaviorSubject(false),
     refresh$: new BehaviorSubject(false),
   };
 
   processingPending = false;
   successfulBlocks = [];
-  trackedHashes = [];
+  trackedHashes: string[] = [];
   // Coalesce confirmations arriving while a previous balance RPC is still running.
   private balanceRefreshQueued = false;
 
@@ -284,7 +284,7 @@ export class WalletService {
     });
   }
 
-  async processStateBlock(transaction) {
+  async processStateBlock(transaction: NanoConfirmation) {
     // If we have a minimum receive,  once we know the account... add the amount to wallet pending? set pending to true
     if (transaction.block.subtype === 'send' && transaction.block.link_as_account) {
       // This is an incoming send block, we want to perform a receive
