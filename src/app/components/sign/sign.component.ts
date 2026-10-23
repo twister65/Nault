@@ -2,7 +2,7 @@ import { Component, OnInit, ViewChild, ElementRef, ChangeDetectionStrategy } fro
 import BigNumber from 'bignumber.js';
 import {AddressBookService, AddressBookEntry} from '../../services/address-book.service';
 import {BehaviorSubject} from 'rxjs';
-import {WalletService} from '../../services/wallet.service';
+import {WalletService, WalletAccount} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {UtilService, StateBlock, TxType} from '../../services/util.service';
 import {WorkPoolService} from '../../services/work-pool.service';
@@ -44,16 +44,16 @@ export class SignComponent implements OnInit {
   rawAmount: BigNumber = new BigNumber(0);
   amountFiat: number|null = null;
   fromAccountID: any = '';
-  fromAccountBalance: BigNumber = null;
+  fromAccountBalance: BigNumber | null = null;
   fromAddressBook = '';
   toAccountID = '';
-  toAccountBalance: BigNumber = null;
+  toAccountBalance: BigNumber | null = null;
   toAddressBook = '';
   repAddressBook = '';
   toAccountStatus = null;
-  currentBlock: StateBlock = null;
-  previousBlock: StateBlock = null;
-  txType: TxType = null;
+  currentBlock: StateBlock | null = null;
+  previousBlock: StateBlock | null = null;
+  txType: TxType | null = null;
   txTypes = TxType; // to access enum in html
   txTypeMessage = '';
   confirmingTransaction = false;
@@ -63,7 +63,7 @@ export class SignComponent implements OnInit {
   signatureAccount = '';
   signatureMessage = '';
   signatureMessageSuccess = '';
-  walletAccount = null;
+  walletAccount: WalletAccount | undefined = undefined;
   nullBlock = '0000000000000000000000000000000000000000000000000000000000000000';
   qrString: string | null = null;
   qrCodeImage: string | null = null;
@@ -74,7 +74,7 @@ export class SignComponent implements OnInit {
   sourceSecret = '';
   sourcePriv = '';
   index = '0';
-  privateKey = null; // the final private key to sign with if using manual entry
+  privateKey: string | null = null; // the final private key to sign with if using manual entry
   privateKeyExpanded = false; // if a private key is provided manually and it's expanded 128 char
   processedHash: string | null = null;
   finalSignature: string | null = null;
@@ -283,7 +283,7 @@ export class SignComponent implements OnInit {
 
     // Extract block hash (used with multisig)
     const block: StateBlock = {account: this.currentBlock.account, link: this.currentBlock.link, previous: this.currentBlock.previous,
-      representative: this.currentBlock.representative, balance: this.currentBlock.balance, signature: null, work: null};
+      representative: this.currentBlock.representative, balance: this.currentBlock.balance, signature: '', work: ''};
     this.blockHash = this.util.hex.fromUint8(this.util.nano.hashStateBlock(block));
 
     this.addressBookService.loadAddressBook();
@@ -344,7 +344,7 @@ export class SignComponent implements OnInit {
 
   verifyBlockHash(currentBlock: StateBlock, previousBlock: StateBlock) {
     const block: StateBlock = {account: previousBlock.account, link: previousBlock.link, previous: previousBlock.previous,
-      representative: previousBlock.representative, balance: previousBlock.balance, signature: null, work: null};
+      representative: previousBlock.representative, balance: previousBlock.balance, signature: '', work: ''};
     const previousHash = this.util.hex.fromUint8(this.util.nano.hashStateBlock(block));
     if (!currentBlock.previous || previousHash !== currentBlock.previous) {
       this.notificationService.sendError(`The hash of the previous block does not match the frontier in the new block!`, {length: 0});
@@ -627,10 +627,10 @@ export class SignComponent implements OnInit {
     this.notificationService.sendSuccess(`Successfully copied to clipboard!`, { identifier: 'success-copied' });
   }
 
-  clean(obj) {
-    for (const propName in obj) {
-      if (obj[propName] === null || obj[propName] === undefined) {
-        delete obj[propName];
+  clean(obj: StateBlock): void {
+    for (const propName of Object.keys(obj) as Array<keyof StateBlock>) {
+      if (obj[propName] == null) {
+        delete (obj as Partial<StateBlock>)[propName];
       }
     }
   }
@@ -943,7 +943,7 @@ export class SignComponent implements OnInit {
 
   // number of participants changes
   participantChange(index: string | number) {
-    if (this.util.string.isNumeric(index) && index >= 2 && index < 1000) {
+    if (this.util.string.isNumeric(index) && Number(index) >= 2 && Number(index) < 1000) {
       this.validParticipants = true;
       this.participants = parseInt(String(index), 10);
       this.setURLParams(this.paramsString + '&participants=' + index);
@@ -1075,7 +1075,7 @@ export class SignComponent implements OnInit {
       this.multisigAccount = result.multisig;
     }
 
-    if (result?.stage === 0) {
+    if (result?.stage === 0 && this.privateKey !== null && this.privateKey !== '') {
       console.log('Started multisig using block hash: ' + this.blockHash);
       // Combine output with public key
       const output = this.activeStep + ':' + this.util.hex.fromUint8(result.outbuf.subarray(33)) +
