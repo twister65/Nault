@@ -8,6 +8,19 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Suivi du 23 octobre — nouvelle CI à 756 diagnostics
+
+**Validation mesurée :** [run Angular 22 39887249708](https://github.com/twister65/Nault/actions/runs/39887249708) sur [`2da219b`](https://github.com/twister65/Nault/commit/2da219baadd0e043613049811384866cbbff5eb3). Le build Web/PWA reste **failure**, avec **756 diagnostics TypeScript**, contre **831** sur `1df6f81` et **1 060** sur la référence initiale `7920bff`. Soit une baisse de **304 diagnostics** par rapport à la référence, sans contournement des options strictes. Le service des représentants affiche **0 erreur**, `UtilService` en affiche **9** (erreurs de notation `BigNumber.Value`, plus une erreur sur `isNumeric`).
+
+**Commits ajoutés après `2da219b` :**
+- [`815a385`](https://github.com/twister65/Nault/commit/815a3853ae6417e84c5fa7d1f8a783e8c9fb3b30) remplace le type purement déclaratif et non reconnu `BigNumber.Value` par l'union `string | number | BigNumber`, et convertit explicitement en chaîne l'argument du test numérique (identique à la coercition JavaScript antérieure). Lint et CodeQL sur ce commit : **success** ([39887661119](https://github.com/twister65/Nault/actions/runs/39887661119), [39887661176](https://github.com/twister65/Nault/actions/runs/39887661176)).
+- [`ba4f873`](https://github.com/twister65/Nault/commit/ba4f87378032b1f954ee1422f3f1e088722ad283) cible `AppSettingsService` : lecture/écriture générique typée des clés, refus des clés inattendues dans une importation partielle, langues Transloco disponibles sous forme chaîne ou objet, et traitement d'une URL de nœud absente. La langue initiale est représentée par la chaîne vide et l'initialisation par `!language` afin de continuer à détecter les anciens paramètres `null` ; cette modification de représentation requiert des tests.
+- La nouvelle CI pour **`ba4f873`** est [39887845010](https://github.com/twister65/Nault/actions/runs/39887845010), **en cours/en attente lors de cette note**. Ne pas attribuer à ce commit la mesure 756 avant d'avoir lu son propre log. Vérifier en particulier les appels aux accesseurs typés de `AppSettingsService` et les imports du carnet d'adresses.
+
+**Travaux encore ouverts :** composants `account-details` (71 diagnostics au dernier run), `sign` (69), `sweeper` (62), `configure-app` (52), `wallet.service` (51), et `musig.service` (76 ; code WASM de signature à isoler). Ne pas affaiblir la sécurité ou le typage ; ne pas toucher à `master`, Apache, domaines Vercel, configuration RPC/IPC ou Bluetooth. Les builds Electron, APK et tests matériels restent non validés.
+
+---
+
 ## Point de reprise du 23 octobre — modèles représentants et utilitaires
 
 **Point de départ vérifié :** `upgrade/angular-22` sur [`797252c`](https://github.com/twister65/Nault/commit/797252c027e91023ca15775a0dd82301e90bdcba), aucune modification de `master`. L'ancienne [CI de validation 39885967252](https://github.com/twister65/Nault/actions/runs/39885967252) pour `1df6f81` termine en **failure lors du build Web**, avec **831 erreurs TypeScript**. Avant le travail du 23 octobre, la référence était **1 060**, soit **229 diagnostics de moins**. Le lint et CodeQL pour `1df6f81` sont **success**.
