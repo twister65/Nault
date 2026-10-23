@@ -15,7 +15,7 @@ export class QrModalService {
    * @param reference Unique reference ID for example a text input
    * @param type String type to match in QR
    */
-  openQR(reference: string, type: QRType) {
+  openQR(reference: string, type: QRType): Promise<string> {
     const response = this.getDeferredPromise();
     const modalRef = this.modalService.open(QrModalComponent, {windowClass: 'scanner-modal'});
     modalRef.componentInstance.reference = reference;
@@ -29,18 +29,17 @@ export class QrModalService {
   }
 
   // Helper for returning a deferred promise that we can resolve when QR is ready
-  private getDeferredPromise() {
-    const defer = {
-      promise: null,
-      resolve: null,
-      reject: null,
-    };
-
-    defer.promise = new Promise((resolve, reject) => {
-      defer.resolve = resolve;
-      defer.reject = reject;
+  private getDeferredPromise(): {
+    promise: Promise<string>;
+    resolve(value: string): void;
+    reject(reason?: unknown): void;
+  } {
+    let resolve!: (value: string) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<string>((resolvePromise, rejectPromise) => {
+      resolve = resolvePromise;
+      reject = rejectPromise;
     });
-
-    return defer;
+    return { promise, resolve, reject };
   }
 }

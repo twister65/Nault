@@ -16,12 +16,12 @@ export class AddressBookService {
 
   addressBook: AddressBookEntry[] = [];
 
-  addressBook$ = new BehaviorSubject([]);
+  addressBook$ = new BehaviorSubject<AddressBookEntry[]>([]);
 
   constructor() { }
 
   loadAddressBook() {
-    let addressBook = [];
+    let addressBook: AddressBookEntry[] = [];
     const addressBookStore = localStorage.getItem(this.storeKey);
     if (addressBookStore) {
       addressBook = JSON.parse(addressBookStore);
@@ -36,7 +36,7 @@ export class AddressBookService {
     const addressBookStore = localStorage.getItem(this.storeKey);
     if (!addressBookStore) return;
 
-    const addressBook = JSON.parse(addressBookStore);
+    const addressBook: AddressBookEntry[] = JSON.parse(addressBookStore);
 
     const newAddressBook = addressBook.map(entry => {
       if (entry.account.indexOf('xrb_') !== -1) {
@@ -50,7 +50,7 @@ export class AddressBookService {
     return true;
   }
 
-  async saveAddress(account, name, trackBalance, trackTransactions) {
+  async saveAddress(account: string, name: string, trackBalance: boolean, trackTransactions: boolean): Promise<void> {
     const existingName = this.addressBook.find(a => a.name.toLowerCase() === name.toLowerCase());
     if (existingName) {
       const accountIndex = this.addressBook.findIndex(a => a.name.toLowerCase() === name.toLowerCase());
@@ -71,7 +71,7 @@ export class AddressBookService {
     this.addressBook$.next(this.addressBook);
   }
 
-  deleteAddress(account) {
+  deleteAddress(account: string): void {
     const existingAccountIndex = this.addressBook.findIndex(a => a.account.toLowerCase() === account.toLowerCase());
     if (existingAccountIndex === -1) return;
 
@@ -90,15 +90,18 @@ export class AddressBookService {
     localStorage.removeItem(this.storeKey);
   }
 
-  setAddressBookOrder(addressList) {
-    this.addressBook = addressList
-      .map(address => ({
+  setAddressBookOrder(addressList: string[]): void {
+    // Preserve only entries still present in the address book. The name is
+    // resolved before constructing the entry so its type cannot be null.
+    this.addressBook = addressList.flatMap(address => {
+      const name = this.getAccountName(address);
+      return name === null ? [] : [{
         account: address,
-        name: this.getAccountName(address),
+        name,
         trackBalance: this.getBalanceTrackingById(address),
         trackTransactions: this.getTransactionTrackingById(address)
-      }))
-      .filter(entry => entry.name !== null);
+      }];
+    });
 
     this.saveAddressBook();
     this.addressBook$.next(this.addressBook);
