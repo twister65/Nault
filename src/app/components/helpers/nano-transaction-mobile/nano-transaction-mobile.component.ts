@@ -11,8 +11,8 @@ export class NanoTransactionMobileComponent implements OnInit, OnChanges {
 
   @Input() transaction: any;
   @Input() isInteractable = true;
-  @Input() isHidden: boolean;
-  @Input() settingIdenticonsStyle: string;
+  @Input() isHidden = false;
+  @Input() settingIdenticonsStyle = '';
 
   isNaN = isNaN;
   isReceivableTransaction = false;

@@ -15,7 +15,7 @@ export class NinjaService {
 
   constructor(private http: HttpClient, private notifications: NotificationService, private util: UtilService) { }
 
-  private async request(action): Promise<any> {
+  private async request(action: string): Promise<any> {
     if (this.ninjaUrl === '') {
       return Promise.resolve(null);
     }
@@ -29,10 +29,10 @@ export class NinjaService {
       });
   }
 
-  private randomizeByScore(replist: any) {
+  private randomizeByScore<T extends {score: string | number}>(replist: T[]): T[] {
 
-    const scores = {};
-    const newlist = [];
+    const scores: Record<string, T[]> = Object.create(null);
+    const newlist: T[] = [];
 
     for (const account of replist) {
       scores[account.score] = scores[account.score] || [];
@@ -40,7 +40,7 @@ export class NinjaService {
     }
 
     for (const score in scores) {
-      if (scores.hasOwnProperty(score)) {
+      if (Object.prototype.hasOwnProperty.call(scores, score)) {
         let accounts = scores[score];
         accounts = this.util.array.shuffle(accounts);
 

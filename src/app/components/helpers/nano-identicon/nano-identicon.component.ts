@@ -53,8 +53,9 @@ export class NanoIdenticonComponent implements OnChanges, AfterViewInit {
 
     const canvasContainerNative = this.canvasContainer.nativeElement;
 
-    while (canvasContainerNative.firstChild) {
-      canvasContainerNative.removeChild(canvasContainerNative.lastChild);
+    let child: ChildNode | null;
+    while ((child = canvasContainerNative.lastChild) !== null) {
+      canvasContainerNative.removeChild(child);
     }
 
     canvasContainerNative.appendChild(canvas);
