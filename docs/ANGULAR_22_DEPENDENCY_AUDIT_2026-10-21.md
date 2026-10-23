@@ -1,14 +1,60 @@
 # Nault — Audit des dépendances dépréciées et préparation Angular 22
 
-**Document de référence initial :** 21 octobre 2026 — **mise à jour de suivi : 22 octobre 2026**  
+**Document de référence initial :** 21 octobre 2026 — **mise à jour de suivi : 23 octobre 2026**
 **Dépôt :** [twister65/Nault](https://github.com/twister65/Nault)  
 **Branche de travail actuelle :** [`upgrade/angular-22`](https://github.com/twister65/Nault/tree/upgrade/angular-22)  
-**Instantané du code inspecté :** [`67896f0`](https://github.com/twister65/Nault/commit/67896f0a4fd7335af05321448baab59b578a647d) (avant cette mise à jour documentaire)  
+**Base de cette reprise :** [`eb9c778`](https://github.com/twister65/Nault/commit/eb9c778cf881f88b04a8af035a9c5e3696c0b2e1). Les corrections ci-dessous sont **locales et non publiées sur GitHub** ; seule cette mise à jour documentaire est publiée. Ne pas attribuer ces résultats au code de la branche distante.
 **Statut actuel :** Angular 21 validé et fusionné ; Angular 22 en cours, compilations Web/Vercel **non validées**. Ne pas déclarer cette migration terminée.
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
-## État opérationnel actuel — 22 octobre 2026
+## Reprise de migration — 23 octobre 2026, second lot Angular 22
+
+**Statut : lot de compatibilité préparé et testé partiellement ; migration toujours NON TERMINÉE.** Ce chapitre remplace les diagnostics opérationnels antérieurs lorsqu'une correction est explicitement indiquée. Aucun passage à `strict: false`, `skipLibCheck`, `@ts-nocheck` ou suppression de tests n'a été ajouté.
+
+### Point de reprise après réinitialisation du quota
+
+- **Commit local de code : `49db239e6d1b32fce236c87e71aa539297d7660a`**, parent `eb9c778cf881f88b04a8af035a9c5e3696c0b2e1`. **Ce SHA n'est pas disponible sur GitHub.**
+- Répertoire de travail actuel : `/workspace/scratch/374eca8cb5ed/Nault`. Si cet environnement existe encore, commencer par `git status`, `git log -3 --oneline` et `git show --stat 49db239`. Ne pas écraser ces corrections lors d'un nouveau checkout.
+- **Publication du code bloquée par la revue automatique**, qui a considéré l'autorisation du dernier message limitée au document. Une confirmation explicite de publication des corrections sur `upgrade/angular-22` est requise. Ne pas contourner ce refus. Le document seul est publié conformément à la demande explicite.
+- Les corrections de code et de verrou concernent 13 fichiers, détaillés ci-dessous. Si le répertoire local a disparu, repartir du dernier SHA distant, reconstruire ces changements et les valider ; ne pas supposer qu'ils ont déjà été intégrés.
+- Après autorisation, récupérer d'abord la branche distante et y incorporer ce commit local sans perdre la présente mise à jour documentaire ; publier uniquement sur `upgrade/angular-22`, puis enregistrer les liens des nouveaux runs. **Aucune CI n'a encore testé ce commit local.**
+- La prochaine tâche technique est le typage strict des modèles/services partagés. Les campagnes matérielles restent suspendues, le problème de seconde reconnexion Nano X reste ouvert, l'origine de staging à conserver est `https://nault-wallet-staging-olaverre-1312.vercel.app`.
+
+### Corrections du présent lot (locales, en attente de publication)
+
+- **ESLint 10.13.0**, `angular-eslint@22.6.0` et son peer `typescript-eslint@8.72.0`, manifeste et lockfile v2 synchronisés. Les plugins Angular 22 ne fournissent plus `configs.recommended` ; la configuration utilise les presets publiés dans `angular-eslint`. Les sélecteurs et dérogations existants sont conservés. La nouvelle préférence OnPush reste désactivée pour préserver `ChangeDetectionStrategy.Eager` issu de la migration Angular ; ce lot ne change pas la stratégie de détection de l'application.
+- **RxJS applicatif 7.8.2** : les imports racine de Transloco fonctionnent désormais. **Exception explicitement isolée :** le transport Ledger BLE installé, `@ledgerhq/hw-transport-web-ble@6.27.5`, exige `rxjs: 6`. L'alias npm exact `rxjs-ledger: npm:rxjs@6.6.7` fournit le Subject et l'opérateur `filter` aux deux adaptateurs BLE uniquement. Aucun alias Webpack, override global, changement de version du transport ni changement des conditions de filtrage des trames. Les tests utilisent également cette frontière RxJS 6. La modernisation du transport Ledger reste un lot séparé.
+- **Scanner QR** : `@zxing/ngx-scanner@22.0.1`, `@zxing/browser@0.2.1`, `@zxing/library@0.23.0`. Contraintes publiées vérifiées : scanner 22.0.1 accepte TypeScript `^6.0.0` ; browser 0.2.1 accepte library `^0.23.0`. Éviter scanner 22.0.0 (peer TS 5.9) et browser 0.2.0 (peer library 0.22). La nouvelle library introduit `ts-custom-error@3.3.1`, qui corrige la déclaration générique incompatible avec TS6.
+- **Configuration TypeScript** : retrait de `downlevelIteration` pour la cible ES2022 et de `baseUrl`, remplacé par des chemins explicites `app/*`, `environments/*` et `stream`. Suppression des diagnostics Angular étendus inapplicables lorsque `strictTemplates` reste désactivé, comme dans la base existante. Electron utilise la résolution Node16/CommonJS avec `rootDir: src` explicite pour conserver `desktop-app/dist/desktop-app.js` ; compilation Electron toujours en échec sur les types stricts.
+- **CSS** : chemins relatifs explicites vers `qr-code.svg` dans account-details, receive et sign, pour conserver la résolution des ressources après retrait de `baseUrl`.
+- **Tests simulés** : mocks d'exports ESM marqués `__esModule` pour TypeScript 6 et ajout de `ChangeDetectionStrategy.Eager` aux mocks Angular. Aucun scénario retiré.
+
+### Résultats locaux et limites
+
+Environnement : Node **24.19.0**, npm **11.9.0**, Angular **22.2.3**, TypeScript **6.0.3** (versions résolues à confirmer par le lockfile).
+
+| Vérification | Résultat |
+| --- | --- |
+| `npm ci --legacy-peer-deps --no-audit --no-fund` | Échec local de construction native `node-hid` : extraction des en-têtes Node, `fchown EINVAL`. La CI Ubuntu avec Node 22.22.3 reste indispensable pour valider l'installation native. |
+| Installation avec `--ignore-scripts` | Réussie pour vérifier le verrou et travailler sur Web/lint ; **ne constitue pas une validation native Electron**. |
+| `npm run lint` et `npm run lint:flat` | Réussis, **0 erreur / 7 avertissements** de directives eslint-disable inutilisées préexistantes. |
+| `node scripts/test-ledger-bluetooth.js` | **43/43 réussis**, sur le JavaScript émis localement par TypeScript. Le compilateur Electron signale encore des erreurs : ce succès isolé ne valide pas la chaîne `desktop:build`, le matériel ni la reconnexion Nano X. |
+| `npm run wallet:build` | Échec : **1 060 diagnostics TypeScript** dans le code applicatif. Les erreurs de résolution RxJS/Transloco, `ts-custom-error`, TS5101/NG4003 et les chemins CSS QR ne sont plus observées. Aucun `dist/ngsw.json` validé. |
+| `npm run desktop:compile` | Échec : types stricts du main process et des services, déclarations tierces et bibliothèque Intl. Ne pas annoncer Electron prêt. |
+| Angular/RPC, APK, plateformes et tests matériels | Non validés sur ce lot ; compilation à rétablir d'abord. |
+| Vercel | Lecture du déploiement existant refusée par l'API : **403**, accès à l'espace `olaverre-1312` non autorisé pour la connexion actuelle. Aucun déploiement ni changement d'alias effectué. |
+
+### Prochain blocage : migration des types stricts
+
+Le TypeScript 6.0.3 installé déclare **`strict` activé par défaut**, alors que Nault n'avait pas activé ce mode explicitement auparavant. Il ne s'agit donc pas uniquement de quelques champs Angular : le build révèle une dette de typage applicative étendue. Ne pas la masquer par un interrupteur global.
+
+Répartition du dernier build local : **353 TS7006** (paramètres implicites), **188 TS2322**, **158 TS2339**, **75 TS2345**, **52 TS2531**, **34 TS18046**, **30 TS7015**, **29 TS2564**, et autres diagnostics. Principales zones : wallet.service (85), musig.service (76), account-details (73), sign (66), pow.service (63), sweeper (58), configure-app (54), receive (49). Ces nombres sont des diagnostics, pas nécessairement autant de corrections indépendantes.
+
+Procéder par modèles partagés et services, puis composants : typer les réponses RPC, états nullables, collections et erreurs externes ; vérifier les invariants des clés et signatures plutôt qu'ajouter des assertions arbitraires. Conserver les contrôles stricts. Relancer ensuite Web/PWA, Electron, Angular/RPC et les 43 tests Ledger sur le même SHA. **Pas de fusion master ni de déploiement de staging tant que le build n'est pas validé.**
+
+## État opérationnel précédent — 22 octobre 2026 (avant ce lot)
+
 
 ### 1. Jalons validés et périmètre
 
