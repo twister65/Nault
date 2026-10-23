@@ -8,6 +8,18 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Dernier résultat confirmé — 684 diagnostics TypeScript
+
+**Mesure après correctif wallet :** [run Angular 22 39888727352](https://github.com/twister65/Nault/actions/runs/39888727352) sur [`e84b348`](https://github.com/twister65/Nault/commit/e84b34896441d21ec2d093646bcda5d2f0abefc9) : **684 erreurs TypeScript**, contre **1 060** initialement (**376 de moins**, environ 35 %). Le build Web/PWA reste en **failure**. **Lint** [39888727303](https://github.com/twister65/Nault/actions/runs/39888727303) et **CodeQL Advanced** [39888727385](https://github.com/twister65/Nault/actions/runs/39888727385) : **success**. `wallet.service.ts`, `util.service.ts`, `app-settings.service.ts` et `representative.service.ts` n'ont **plus aucune erreur** dans ce run. **Les tests Jasmine, RPC et Electron ne sont pas exécutés après le build Web échoué** ; ne pas confondre lint/CodeQL verts avec fonctionnalité validée.
+
+**Correctif supplémentaire :** [`dca0f5b`](https://github.com/twister65/Nault/commit/dca0f5b4b8fbb6951265cfafa0af6776e702313d) : typage de `event.target` comme `Node` uniquement après vérification `instanceof Node` dans `AppComponent.onGlobalClick`, sans modifier la logique normale de fermeture du menu. Ce commit est postérieur au run de 684 erreurs ; **la CI de ce SHA est à confirmer**.
+
+**Reste à traiter (sur `e84b348`) :** 76 diagnostics dans `musig.service.ts` (WASM/multisignature : lot de vérification cryptographique spécifique), 71 dans `account-details`, 69 dans `sign`, 62 dans `sweeper`, 54 dans `configure-app`, 46 dans `receive`, 36 dans `send` et 35 dans `ledger.service.ts`. Prioriser les interfaces/états et les tableaux initiaux `never[]` des composants avant d'envisager toute modification du WASM. Vérifier chaque petit lot par compilation et tests simulés. Préserver le comportement de réception Ledger indisponible et la vérification anti-doublon des blocs entrants.
+
+**Règles de reprise inchangées :** Angular 22 **non terminée**, pas de fusion dans `master`, pas de release ni déploiement Vercel d'une compilation rouge. Origine staging attendue après validation : `https://nault-wallet-staging-olaverre-1312.vercel.app`, sans modifier Apache. Aucun nouvel essai matériel Bluetooth avant la campagne de validation Angular 22 ; la deuxième reconnexion Nano X reste ouverte (`Clear session` comme contournement).
+
+---
+
 ## Point de reprise — wallet à 10 diagnostics
 
 **Dernière CI terminée :** [`2ac4e76`, run 39888320190](https://github.com/twister65/Nault/actions/runs/39888320190). Compilation Web **failure**, **694 erreurs TypeScript** contre 1 060 au début (**366 diagnostics supprimés**). Lint et CodeQL **success** ([lint 39888320134](https://github.com/twister65/Nault/actions/runs/39888320134), [CodeQL 39888320153](https://github.com/twister65/Nault/actions/runs/39888320153)). `wallet.service.ts` est passé de **51 à 10** erreurs, mais le build Web n'a pas atteint l'exécution des tests Jasmine ; ne pas présenter le nouveau test anti-doublon comme exécuté.
