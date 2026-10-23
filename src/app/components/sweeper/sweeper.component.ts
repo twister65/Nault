@@ -544,7 +544,7 @@ export class SweeperComponent implements OnInit {
           }
 
           if (bip39Seed.length !== 128) return this.notificationService.sendError(`Invalid input format! Please check.`);
-          const accounts = wallet.accounts(bip39Seed, this.startIndex, this.endIndex);
+          const accounts = wallet.accounts(bip39Seed, parseInt(this.startIndex, 10), parseInt(this.endIndex, 10));
           let k = 0;
           for (let i = parseInt(this.startIndex, 10); i <= parseInt(this.endIndex, 10); i++) {
             privKey = accounts[k].privateKey;
