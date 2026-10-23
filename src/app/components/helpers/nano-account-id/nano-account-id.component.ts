@@ -9,8 +9,8 @@ import {Component, Input, OnChanges, HostBinding, ChangeDetectionStrategy} from 
 })
 export class NanoAccountIdComponent implements OnChanges {
 
-  @HostBinding('class') classes: string;
-  @Input() accountID: string;
+  @HostBinding('class') classes = '';
+  @Input() accountID = '';
   @Input() middle: 'on'|'off'|'auto'|'break' = 'auto';
 
   firstCharacters = '';

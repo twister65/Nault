@@ -330,7 +330,9 @@ export class SendComponent implements OnInit {
     }
 
     if (this.settings.settings.decentralizedAliasesOption === 'disabled') {
-      const UIkit = window['UIkit'];
+      const UIkit = (window as unknown as {
+        UIkit: {modal: {confirm(message: string, options?: {labels: {cancel: string; ok: string}}): Promise<void>}};
+      }).UIkit;
       try {
         await UIkit.modal.confirm(
           `<p class="uk-alert uk-alert-warning"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span>
@@ -402,7 +404,7 @@ export class SendComponent implements OnInit {
 
           const matchingAccount =
             res.names.find(
-              (account) =>
+              (account: {name: string; address: string}) =>
                 (account.name === aliasName)
             );
 
@@ -603,6 +605,7 @@ export class SendComponent implements OnInit {
     this.fromAddressBook = (
         this.addressBookService.getAccountName(this.fromAccountID)
       || this.getAccountLabel(this.fromAccountID, 'Account')
+      || 'Account'
     );
 
     this.toAddressBook = (

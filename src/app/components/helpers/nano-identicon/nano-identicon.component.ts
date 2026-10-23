@@ -10,16 +10,16 @@ import { createIcon } from '../../../../assets/lib/nanoidenticons.min.js';
 })
 export class NanoIdenticonComponent implements OnChanges, AfterViewInit {
 
-  @Input() accountID: string;
-  @Input() scale: number;
-  @Input() settingIdenticonsStyle: string;
+  @Input() accountID = '';
+  @Input() scale = 1;
+  @Input() settingIdenticonsStyle = '';
 
   renderedIdenticon = '';
   imageLoadErrorOccurred = false;
 
   constructor() { }
 
-  @ViewChild('canvasContainer') canvasContainer: ElementRef;
+  @ViewChild('canvasContainer') canvasContainer?: ElementRef<HTMLElement>;
 
   ngOnChanges() {
     this.renderNanoidenticon();
