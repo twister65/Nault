@@ -96,10 +96,10 @@ export class SignComponent implements OnInit {
   participants = 2;
   validParticipants = true;
   savedParticipants = 0;
-  tabData = [];
+  tabData: string[] = [];
   tabListenerActive = false;
-  tabCount = null;
-  inputMultisigData = [];
+  tabCount: number | null = null;
+  inputMultisigData: string[] = [];
   multisigAccount = '';
   outputMultisigData = '';
   activeStep = 1;
@@ -310,7 +310,7 @@ export class SignComponent implements OnInit {
     setTimeout(() => { this._el.nativeElement.focus(); }, 200);
   }
 
-  removeSelectedData(data) {
+  removeSelectedData(data: string) {
     this.inputMultisigData.splice(this.inputMultisigData.indexOf(data), 1);
     if (this.savedParticipants > 0) {
       this.savedParticipants = this.savedParticipants - 1;
@@ -635,10 +635,10 @@ export class SignComponent implements OnInit {
     }
   }
 
-  seedChange(input) {
+  seedChange(input: string) {
     const keyType = this.checkMasterKey(input);
     this.validSeed = keyType !== null;
-    if (this.validSeed && this.validIndex) {
+    if (keyType !== null && this.validIndex) {
       this.verifyKey(keyType, input, Number(this.index));
     } else {
       this.signatureMessage = '';
@@ -646,7 +646,7 @@ export class SignComponent implements OnInit {
     }
   }
 
-  privkeyChange(input) {
+  privkeyChange(input: string) {
     const privKey = this.convertPrivateKey(input);
     if (privKey !== null) {
       // Match given block account with with private key
@@ -669,14 +669,14 @@ export class SignComponent implements OnInit {
     this.privateKey = '';
   }
 
-  indexChange(index) {
+  indexChange(index: string) {
     this.validIndex = true;
-    if (this.util.string.isNumeric(index) && index % 1 === 0) {
-      index = parseInt(index, 10);
-      if (!this.util.nano.isValidIndex(index)) {
+    if (this.util.string.isNumeric(index) && Number(index) % 1 === 0) {
+      const parsedIndex = parseInt(index, 10);
+      if (!this.util.nano.isValidIndex(parsedIndex)) {
         this.validIndex = false;
       }
-      if (index > INDEX_MAX) {
+      if (parsedIndex > INDEX_MAX) {
         this.validIndex = false;
       }
     } else {
@@ -685,7 +685,9 @@ export class SignComponent implements OnInit {
 
     if (this.validSeed && this.validIndex) {
       const keyType = this.checkMasterKey(this.sourceSecret);
-      this.verifyKey(keyType, this.sourceSecret, Number(this.index));
+      if (keyType !== null) {
+        this.verifyKey(keyType, this.sourceSecret, Number(this.index));
+      }
     } else {
       this.signatureMessage = '';
       this.signatureMessageSuccess = '';
@@ -749,7 +751,7 @@ export class SignComponent implements OnInit {
   }
 
   // Validate type of master key
-  checkMasterKey(key) {
+  checkMasterKey(key: string): string | null {
     // validate nano seed
     if (key.length === 64) {
       if (this.util.nano.isValidSeed(key)) {
@@ -769,7 +771,7 @@ export class SignComponent implements OnInit {
     return null;
   }
 
-  convertPrivateKey(key) {
+  convertPrivateKey(key: string): string | null {
     if (key.length === 128) {
       this.privateKeyExpanded = true;
       // expanded key includes deterministic R value material which we ignore
@@ -809,10 +811,10 @@ export class SignComponent implements OnInit {
   }
 
   // Replace the address bar content
-  setURLParams(params) {
-    if (window.history.pushState) {
+  setURLParams(params: string) {
+    if (typeof window.history.pushState === 'function') {
       try {
-        window.history.replaceState(null, null, '/' + params);
+        window.history.replaceState(null, '', '/' + params);
       } catch (error) {
         // console.log(error)
       }
@@ -823,7 +825,7 @@ export class SignComponent implements OnInit {
    * MULTISIG
    */
 
-  privkeyChangeMulti(input) {
+  privkeyChangeMulti(input: string) {
     const privKey = this.convertPrivateKey(input);
     if (privKey !== null) {
       if (this.util.nano.isValidHash(privKey)) {
@@ -850,7 +852,7 @@ export class SignComponent implements OnInit {
     hermes.on('tab-pong', (data) => {
       console.log('Tab ' + this.tabCount + ' responded');
       if (this.blockHash === data[0]) {
-        this.tabCount++;
+        this.tabCount = (this.tabCount ?? 0) + 1;
         if (this.tabCount === this.participants) {
           hermes.off('tab-pong'); // unsubscribe
           // Start the process
@@ -879,7 +881,7 @@ export class SignComponent implements OnInit {
   tabListener(activate = false) {
     this.tabListenerActive = activate ? true : this.tabListenerActive;
     if (this.tabListenerActive) {
-      const stepData = [];
+      const stepData: string[] = [];
       for (const data of this.tabData) {
         if (data.substring(0, 1) === (this.activeStep - 1).toString()) {
           stepData.push(data);
@@ -940,10 +942,10 @@ export class SignComponent implements OnInit {
   }
 
   // number of participants changes
-  participantChange(index) {
+  participantChange(index: string | number) {
     if (this.util.string.isNumeric(index) && index >= 2 && index < 1000) {
       this.validParticipants = true;
-      this.participants = parseInt(index, 10);
+      this.participants = parseInt(String(index), 10);
       this.setURLParams(this.paramsString + '&participants=' + index);
       this.multisigLink = this.getMultisigLink();
     } else {
@@ -967,7 +969,7 @@ export class SignComponent implements OnInit {
   }
 
   // the field for input data has changed
-  inputAddChange(hashString) {
+  inputAddChange(hashString: string) {
     const hashFull = hashString.substring(2);
     let valid = true;
     if (hashFull.length === 64) {
