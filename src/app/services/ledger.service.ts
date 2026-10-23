@@ -259,7 +259,7 @@ export class LedgerService {
    * @param {any} filterFn
    * @returns {Promise<any>}
    */
-  async getDesktopResponse(eventType, filterFn?) {
+  async getDesktopResponse(eventType: string, filterFn?: (data: {accountIndex: number}) => boolean): Promise<any> {
     return new Promise((resolve, reject) => {
       const sub = this.desktopMessage$
         .subscribe((response: any) => {
@@ -290,7 +290,7 @@ export class LedgerService {
 
 
 
-  async getLedgerAccountDesktop(accountIndex, showOnScreen) {
+  async getLedgerAccountDesktop(accountIndex: number, showOnScreen: boolean) {
     if (this.queryingDesktopLedger) {
       throw new Error(`Already querying desktop device, please wait`);
     }
@@ -309,7 +309,7 @@ export class LedgerService {
     }
   }
 
-  async updateCacheDesktop(accountIndex, cacheData, signature) {
+  async updateCacheDesktop(accountIndex: number, cacheData: unknown, signature: string) {
     if (this.queryingDesktopLedger) {
       throw new Error(`Already querying desktop device, please wait`);
     }
@@ -328,7 +328,7 @@ export class LedgerService {
     }
   }
 
-  async signBlockDesktop(accountIndex, blockData) {
+  async signBlockDesktop(accountIndex: number, blockData: unknown) {
     if (this.queryingDesktopLedger) {
       throw new Error(`Already querying desktop device, please wait`);
     }
@@ -623,7 +623,7 @@ export class LedgerService {
     }
   }
 
-  async updateCache(accountIndex, blockHash) {
+  async updateCache(accountIndex: number, blockHash: string) {
     await this.requireReadyForSigning();
     const blockResponse = await this.api.blocksInfo([blockHash]);
     const blockData = blockResponse.blocks[blockHash];
