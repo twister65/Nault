@@ -4,9 +4,41 @@
 **Dépôt :** [twister65/Nault](https://github.com/twister65/Nault)  
 **Branche de travail actuelle :** [`upgrade/angular-22`](https://github.com/twister65/Nault/tree/upgrade/angular-22)  
 **Base de cette reprise :** [`eb9c778`](https://github.com/twister65/Nault/commit/eb9c778cf881f88b04a8af035a9c5e3696c0b2e1). Les corrections sont maintenant **publiées** dans [`ac374aa`](https://github.com/twister65/Nault/commit/ac374aa6821ab14b7d56be5ca1154b847b3678d3), après autorisation explicite de l’utilisateur le 23 octobre. Les résultats locaux ci-dessous restent distincts des résultats CI.
-**Statut actuel :** Angular 21 validé et fusionné ; Angular 22 **compilable en production Web sur Vercel** (deux déploiements Ready confirmés sur `ba35cc2` et `1c5a29c`, 0 erreur TypeScript). **Migration non terminée** : lint/CI globale, builds Electron/desktop, tests fonctionnels Ledger, MuSig et Sweeper, contrôle de sécurité et dépendances dépréciées encore à valider. Ne pas fusionner sur `master`.
+**Statut actuel :** Angular 21 validé et fusionné ; Angular 22 **compilable en production Web sur Vercel** (0 erreur TypeScript) et **première campagne fonctionnelle ChromeOS terminée** : interface, RPC/WS, Ledger Nano X USB (connexion/reconnexion 4A-4B), confirmation d'adresse et `Advanced Options` OK après correctifs. **Migration non terminée** : Bluetooth réservé au prochain chat, lint/CI globale, builds Electron/desktop, multisig, Sweeper, contrôle de sécurité et dépendances dépréciées encore à valider. Ne pas fusionner sur `master`.
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
+
+## Bilan de validation ChromeOS — session du 23 octobre 2026 (terminée)
+
+**Environnement de test :** Chromium/Chrome sur Chromebook (ChromeOS), dans une fenêtre de navigation privée, DevTools ouverts, site **https://nault-android-test.vercel.app**. Les tests matériels ont été réalisés avec une **Ledger Nano X en USB, Bluetooth désactivé**. Ils ne démontrent pas la compatibilité d'une Nano S Plus USB ni celle du Bluetooth. Le portail de test Vercel utilise le code Angular 22 de la branche `upgrade/angular-22`, commit applicatif [`fdfaee7`](https://github.com/twister65/Nault/commit/fdfaee76e109326e84573120793ac38b1e3d8555) pour les derniers contrôles UI. Le déploiement correspondant [`dpl_8RSkPdAqHwppikpHUw9uPMDEJzzv`](https://vercel.com/olaverre-1312/nault-android-test/8RSkPdAqHwppikpHUw9uPMDEJzzv) est **READY** et l'alias `nault-android-test.vercel.app` a été confirmé.
+
+**Tests réalisés et résultats communiqués par l'utilisateur :**
+
+| Scénario | Résultat | Détails observés |
+|---|---|---|
+| 1. Interface / traductions | **OK** | Navigation et textes de Nault, sans erreur bloquante au lancement |
+| 2. RPC et WebSocket | **OK** | Configuration serveur, connexion réseau et communications RPC/WS vérifiées |
+| 3. Connexion Ledger USB | **OK** | Nano X USB avec Bluetooth désactivé ; connexion et fonctionnement de Nault validés sur ChromeOS |
+| 4A. Verrouillage et reconnexion USB | **OK avec trace à suivre** | Reconnexion réussie après déverrouillage ; durant le verrouillage, log `Check ledger status failed` / `TransportStatusError: UNKNOWN_ERROR (0x5515)`, `statusCode: 21781`. Cette trace n'a pas empêché la reconnexion ; ne pas conclure à une panne permanente ni normaliser ce statut sans étude |
+| 4B. Débranchement et reconnexion physique USB | **OK** | Nano X rebranchée et reconnue, sans nécessité de redémarrer Nault |
+| Fiche de compte → Advanced Options | **OK après correctif** | Panne runtime `onDestroy` puis `factory` reproduite avant correctif. Après `fdfaee7`, plus de TypeError ; panneau visible avec `Confirmed Blocks: 111 / 111` (100 %) et `Enable Remote Signing / Multisig` décoché |
+| Fiche de compte → Confirm address on Ledger | **OK après correctif** | Bouton autrefois absent de la fiche, ajouté par `80dbf06`/`fdfaee7`. Vérification de l'adresse sur la Nano X confirmée par l'utilisateur |
+| Régression bootstrap Transloco | **OK après correctif** | Page blanche `NG0201` éliminée par [`7cfc41a`](https://github.com/twister65/Nault/commit/7cfc41a272912265c7b8ed1e81f4597811d6f588), application ouverte sans erreur Angular de bootstrap |
+
+**Point de forme :** dans `Accounts`, une icône `Confirm address on Ledger` existait déjà pour les portefeuilles Ledger ; elle manquait sur la fiche `Account Details`, qui n'affichait que Copier et QR. Le nouveau bouton de fiche est désormais validé. Le panneau `Advanced Options` *n'envoie aucun bloc sur le réseau* : il affiche les statistiques et un réglage optionnel pour la signature distante. L'utilisateur a laissé cette option décochée ; l'activation et la multisignature ne sont pas encore testées.
+
+**Avertissement non bloquant observé dans la console :** `Permissions policy violation: unload is not allowed in this document`. À traiter éventuellement plus tard, sans le confondre avec les anciennes erreurs Angular.
+
+**Tests restant à faire — reprise dans un NOUVEAU CHAT dédié au Bluetooth** (utilisateur prévoit le 24 octobre 2026, sans automatisation) :
+- Ledger Nano X via **Web Bluetooth** sur ChromeOS, avec un appareil chargé et proche du Chromebook ; test d'association, connexion initiale, lecture du compte et confirmation d'adresse.
+- Déconnexion volontaire et **reconnexions Bluetooth successives**, sans rechargement de la page (notamment seconde reconnexion, erreurs GATT `stopNotifications`/`writeValue`, état `Ledger get status` et action `Clear session` observés lors de précédents essais).
+- Tester le cas clé Ledger verrouillée / application Nano fermée, puis déverrouillage et reprise ; vérifier qu'aucune reconnexion implicite n'est tentée sans geste utilisateur.
+- Distinguer Web Bluetooth de ChromeOS de l'intégration Bluetooth **Electron Linux/Windows** ; ne pas extrapoler les résultats entre plateformes.
+- En cas d'erreur, sauvegarder les logs Console/Network *sans seeds, clés privées, données de signature sensibles ni en-têtes RPC authentifiés*. Demander explicitement la ressource manquante en cas d'accès Vercel limité (403).
+
+**Hors périmètre des validations acquises :** Ledger Nano S Plus, Bluetooth, transferts réels, réception/diffusion de transactions et PoW annulé, génération et signature MuSig, Sweeper, seeds de hot wallet et sécurité S01, builds Electron Linux/Windows, CI complète. `master` **non modifiée / non fusionnée**. La réussite des tests USB ne prouve pas la sécurité de signature cryptographique ni le fonctionnement multisig.
+
+---
 
 ## Régression Account Details — Advanced Options et contrôle d'adresse Ledger (23 octobre 2026)
 
@@ -18,7 +50,7 @@
 - [`80dbf06`](https://github.com/twister65/Nault/commit/80dbf06d95e9464f7146a463e0e87951267c28e6) : dans `account-details.component.ts`, ajoute l'accès à `LedgerService`, un getter `isLedgerWallet` et `showLedgerAddress` utilisant `getLedgerAccount(account.index, true)`, avec contrôle de statut et notifications semblables à l'action existante dans `Accounts`. Aucune modification de la signature ou de LedgerService.
 - [`fdfaee7`](https://github.com/twister65/Nault/commit/fdfaee76e109326e84573120793ac38b1e3d8555) : remplace les deux pipes manquants par `number:'1.0-0'` ; ajoute à l'en-tête de `Account Details` une icône Ledger conditionnelle à `walletAccount && isLedgerWallet`, côté Copier et QR. Cette icône ne doit pas être affichée pour un compte externe.
 
-**Déploiement de contrôle :** projet `nault-android-test`, commit `fdfaee7`, [Vercel](https://vercel.com/olaverre-1312/nault-android-test/8RSkPdAqHwppikpHUw9uPMDEJzzv) id `dpl_8RSkPdAqHwppikpHUw9uPMDEJzzv`. Déclenché avec `commandForIgnoringBuildStep: 'exit 1'` pour cet appel, comme le build réussi précédent. **READY confirmé** ; statut GitHub/Vercel `success` et alias `nault-android-test.vercel.app` vérifié pointant vers ce même déploiement. **Reste à valider le runtime avec l'utilisateur** : ouvrir `Advanced Options` (données de confirmation et case remote signing) et déclencher la confirmation d'adresse sur Nano X depuis `Account Details` après reconnexion.
+**Déploiement de contrôle :** projet `nault-android-test`, commit `fdfaee7`, [Vercel](https://vercel.com/olaverre-1312/nault-android-test/8RSkPdAqHwppikpHUw9uPMDEJzzv) id `dpl_8RSkPdAqHwppikpHUw9uPMDEJzzv`. Déclenché avec `commandForIgnoringBuildStep: 'exit 1'` pour cet appel, comme le build réussi précédent. **READY confirmé** ; statut GitHub/Vercel `success` et alias `nault-android-test.vercel.app` vérifié pointant vers ce même déploiement. **Runtime désormais validé par l'utilisateur sur ChromeOS** : `Advanced Options` s'ouvre sans TypeError ; statistiques affichées et `Confirm address on Ledger` fonctionne avec Nano X USB. Voir le bilan de session ci-dessus.
 
 **Limites :** le succès du build seul ne valide pas encore ce parcours runtime. `0x5515` au verrouillage reste à étudier si des problèmes fonctionnels persistent ; il ne constitue pas à lui seul une panne de reconnexion. Pas de merge `master`, pas de transaction réelle, pas de S01 ni de multisig fonctionnelle dans ce lot.
 
@@ -32,7 +64,7 @@
 
 **Correction publiée :** [`7cfc41a`](https://github.com/twister65/Nault/commit/7cfc41a272912265c7b8ed1e81f4597811d6f588) remplace les deux providers legacy par `provideTransloco` complet ; conserve la langue `en`, le fallback, les paramètres existants et le chargeur de fichiers `assets/i18n`. Ne touche pas aux opérations cryptographiques.
 
-**Déploiement de contrôle :** Vercel `nault-android-test` [`dpl_EAxSp3zoM6woehzivSJo77BW5VFt`](https://vercel.com/olaverre-1312/nault-android-test/EAxSp3zoM6woehzivSJo77BW5VFt), commit `7cfc41a`, production test. **READY confirmé** via Vercel et statuts GitHub `success` pour les deux projets `nault-android-test` et `nault-tablet-css-test`. L'alias officiel `https://nault-android-test.vercel.app` a été vérifié et pointe vers ce déploiement. La construction a été déclenchée en contournant pour cet appel la configuration `Ignored Build Step` qui annulait les premières tentatives. **Le runtime dans le navigateur n'est pas encore validé** : il faut retester la page et vérifier la disparition de `NG0201`.
+**Déploiement de contrôle :** Vercel `nault-android-test` [`dpl_EAxSp3zoM6woehzivSJo77BW5VFt`](https://vercel.com/olaverre-1312/nault-android-test/EAxSp3zoM6woehzivSJo77BW5VFt), commit `7cfc41a`, production test. **READY confirmé** via Vercel et statuts GitHub `success` pour les deux projets `nault-android-test` et `nault-tablet-css-test`. L'alias officiel `https://nault-android-test.vercel.app` a été vérifié et pointe vers ce déploiement. La construction a été déclenchée en contournant pour cet appel la configuration `Ignored Build Step` qui annulait les premières tentatives. **Runtime confirmé par l'utilisateur** : ouverture de Nault sans erreur de bootstrap après correction du provider Transloco. Voir bilan ChromeOS ci-dessus.
 
 **À vérifier ensuite :** demander à l'utilisateur l'ouverture en fenêtre privée ou cache mis à jour et console; vérifier disparition de `NG0201` ; si persiste, obtenir la nouvelle trace et produire un build diagnostic avec source maps *sur environnement privé uniquement*, sans exposer secrets ou symboles. Le déploiement `Ready` ne valide pas le runtime, Ledger, BLE/WebHID, RPC, MuSig, Sweeper ni S01. Aucun merge `master`.
 
