@@ -8,6 +8,18 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## CI confirmée à 319 diagnostics, interfaces Ledger IPC ciblées
+
+**Mesure sur le commit [`82127a0`](https://github.com/twister65/Nault/commit/82127a07b59b3821e50429f857e28178675875d9) :** [run 39942507506](https://github.com/twister65/Nault/actions/runs/39942507506) = **319 erreurs TypeScript** (contre **341** sur `09f8f7b` et **1 060** initialement, soit **741 diagnostics éliminés** au total). **Échec à la compilation Web**, donc ni Electron ni les tests Angular/RPC n'ont été exécutés jusqu'au bout. [Lint 39942507472](https://github.com/twister65/Nault/actions/runs/39942507472) et [CodeQL Advanced 39942507328](https://github.com/twister65/Nault/actions/runs/39942507328) **success** pour ce même SHA. Aucun diagnostic ne subsiste dans `desktop.service.ts`, `rpc-transport.service.ts`, `wallet-widget.component.ts`, `remote-signing.component.ts` ni `remote-sign.service.ts`.
+
+**Nouveau lot, encore à valider :** [`dd9a00c`](https://github.com/twister65/Nault/commit/dd9a00c937127f90c47f918dd9b33654d483339c) : déclarations strictement TypeScript des paramètres des cinq méthodes IPC du service `ledger.service.ts` (`getDesktopResponse`, `getLedgerAccountDesktop`, `updateCacheDesktop`, `signBlockDesktop`, `updateCache`). **Pas de changement de logique, de protocole, de codes APDU, de crypto, de BLE ou de transport.** Contrôler [la validation 39942936876](https://github.com/twister65/Nault/actions/runs/39942936876), [lint 39942936769](https://github.com/twister65/Nault/actions/runs/39942936769) et [CodeQL 39942936789](https://github.com/twister65/Nault/actions/runs/39942936789). Résultat non encore disponible à la rédaction ; ne pas annoncer de nouveaux diagnostics supprimés sans le log.
+
+**Point de sécurité :** le hot wallet / seed phrase / exigence S01 et le comportement cryptographique de multisignature restent **hors périmètre** de cette mise à niveau. Le service Ledger conserve encore ses autres diagnostics TypeScript (déclaration du package externe `hw-app-nano`, variables d'erreur `unknown`, formats applicatifs), qui requièrent des corrections avec analyse des contrats réels et tests simulés. Le moteur `musig.service.ts`, `sweeper`, `sign` et `nano-block` est encore non compilable. Ne pas modifier ces flux par de simples assertions hasardeuses.
+
+**Conditions de validation inchangées :** obtenir d'abord un build Web/PWA et Electron, le lint, CodeQL, les tests RPC/Angular et simulés Ledger sur un même commit, puis les essais matériels à la fin de la migration. Ne pas fusionner `master`, ne pas modifier Apache/CORS ni déployer sur Vercel tant que le build est rouge. Deuxième reconnexion Bluetooth toujours ouverte ; ne pas relancer de test physique maintenant.
+
+---
+
 ## Reprise Angular 22 — typage IPC et interface de signature distante
 
 **Code actuellement poussé** sur `upgrade/angular-22` : [`82127a0`](https://github.com/twister65/Nault/commit/82127a07b59b3821e50429f857e28178675875d9). Le point de mesure confirmé avant ce lot demeure **341 diagnostics TypeScript** sur [`09f8f7b`](https://github.com/twister65/Nault/commit/09f8f7bd80cf04a04613abbc15903b493a8d9996) (run [39911522558](https://github.com/twister65/Nault/actions/runs/39911522558)). **Ne pas attribuer ce chiffre au dernier commit tant que sa CI n'est pas terminée.**
