@@ -8,6 +8,18 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Dernière reprise — ABI Ledger typée et nettoyage des diagnostics BLE
+
+**Mesure CI vérifiée sur [`64785b2`](https://github.com/twister65/Nault/commit/64785b2a31e7158f17048f61cc434fd20d763ae6)** : [run Angular 22 39945144881](https://github.com/twister65/Nault/actions/runs/39945144881) : **286 erreurs TypeScript**, contre **1 060** sur la référence initiale (**774 diagnostics éliminés**, ~73 %). `ledger.service.ts` n'a désormais **plus aucun diagnostic** après l'ajout de sa déclaration `hw-app-nano` fondée sur les contrats Flow de la bibliothèque `roosmaa/hw-app-nano`. **Le build Web reste en échec** ; on ne peut déclarer ni les tests Jasmine/RPC, ni Electron validés. Consulter les statuts lint et CodeQL du run correspondant, et non ceux d'un SHA plus ancien.
+
+**Dernier commit de code [`422eddc`](https://github.com/twister65/Nault/commit/422eddc590f89fd18a7ad08dbee9da2526591f66)** : dans `ledger-web-ble.ts`, seules les déclarations des minuteries, du type du résultat de découverte GATT et la lecture structurelle des messages d'erreur `unknown` changent. La lecture de `message` ne dépend plus de `instanceof Error`, car les erreurs Bluetooth peuvent provenir d'un autre contexte JS. **Aucun changement de politique BLE, d'APDU, de reconnexion, de transaction ou de signature.** Ce fichier présentait 6 erreurs TypeScript avant ce correctif. À vérifier : [build Angular 22 39945449764](https://github.com/twister65/Nault/actions/runs/39945449764), [lint 39945449780](https://github.com/twister65/Nault/actions/runs/39945449780), [CodeQL 39945449834](https://github.com/twister65/Nault/actions/runs/39945449834), **en cours lors de cette rédaction**.
+
+**Bilan 286 avant ce dernier correctif** : `musig.service.ts` 76, `sign.component.ts` 69, `sweeper.component.ts` 62, `nano-block.service.ts` 21, `configure-wallet.component.ts` 19, `multisig.component.ts` 18, `manage-wallet.component.ts` 11, `ledger-web-ble.ts` 6, `import-wallet` 2, `keygenerator` 1 et `modal.service.ts` 1. La grande majorité relève de la gestion des clés et des signatures.
+
+**Décision utilisateur à respecter** : traitement du hot wallet à graine de récupération conformément à **S01 de l'audit de sécurité**, ainsi que le comportement et les tests multisignatures, **dans des chantiers séparés**. Pour Angular 22, typer uniquement à partir de contrats vérifiables, sans changer la gestion des secrets, l'encodage, l'algorithme de signature ni les transactions. Éviter de résoudre des erreurs en ajoutant `any` ou en désactivant `strict`. Ne pas modifier `master`, Apache ou l'alias Vercel, ni engager de test matériel Bluetooth avant la campagne de validation finale.
+
+---
+
 ## Suite du 23 octobre — typage des erreurs Ledger et contrat hw-app-nano
 
 **Référence terminée** : [validation Angular 22 39942936876](https://github.com/twister65/Nault/actions/runs/39942936876) sur [`dd9a00c`](https://github.com/twister65/Nault/commit/dd9a00c937127f90c47f918dd9b33654d483339c) : **305 erreurs TypeScript** (319 précédemment ; 1 060 au départ). La compilation Web reste **en échec**, les tests Angular/RPC/Electron n'ont pas été atteints. [Lint 39942936769](https://github.com/twister65/Nault/actions/runs/39942936769) et [CodeQL 39942936789](https://github.com/twister65/Nault/actions/runs/39942936789) : **success**.
