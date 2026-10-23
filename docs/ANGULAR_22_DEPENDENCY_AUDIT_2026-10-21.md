@@ -8,6 +8,22 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Régression Account Details — Advanced Options et contrôle d'adresse Ledger (23 octobre 2026)
+
+**Retour utilisateur ChromeOS :** tests 1 (interface/traductions), 2 (RPC/WebSocket) et 3 (Ledger Nano X USB avec Bluetooth désactivé) réussis. Test 4A : verrouillage puis reconnexion USB réussis, console `TransportStatusError UNKNOWN_ERROR (0x5515)` lors du verrouillage ; pas encore de décision de modifier cette gestion du statut. En ouvrant `Advanced Options` sur une fiche de compte, erreurs runtime `TypeError: Cannot read properties of undefined (reading 'onDestroy')`, puis `factory`, dans `main.aca0513b3b8dd50e.js` lors de la création de la vue via `*ngIf`. La vérification de l'adresse Ledger était introuvable sur la fiche : celle-ci affichait uniquement Copier et QR.
+
+**Cause isolée :** `src/app/components/account-details/account-details.component.html` utilise deux occurrences du pipe `translocoDecimal` dans la sous-vue `showAdvancedOptions`, mais `@jsverse/transloco-locale` n'est ni présent dans les dépendances, ni importé dans le module. La compilation de production n'a pas détecté le pipe absent, lequel provoque à l'instanciation les échecs `onDestroy` et `factory`. Le pipe Angular `number` est déjà utilisé dans la même zone pour le pourcentage.
+
+**Correctifs publiés uniquement sur `upgrade/angular-22` :**
+- [`80dbf06`](https://github.com/twister65/Nault/commit/80dbf06d95e9464f7146a463e0e87951267c28e6) : dans `account-details.component.ts`, ajoute l'accès à `LedgerService`, un getter `isLedgerWallet` et `showLedgerAddress` utilisant `getLedgerAccount(account.index, true)`, avec contrôle de statut et notifications semblables à l'action existante dans `Accounts`. Aucune modification de la signature ou de LedgerService.
+- [`fdfaee7`](https://github.com/twister65/Nault/commit/fdfaee76e109326e84573120793ac38b1e3d8555) : remplace les deux pipes manquants par `number:'1.0-0'` ; ajoute à l'en-tête de `Account Details` une icône Ledger conditionnelle à `walletAccount && isLedgerWallet`, côté Copier et QR. Cette icône ne doit pas être affichée pour un compte externe.
+
+**Déploiement de contrôle :** projet `nault-android-test`, commit `fdfaee7`, [Vercel](https://vercel.com/olaverre-1312/nault-android-test/8RSkPdAqHwppikpHUw9uPMDEJzzv) id `dpl_8RSkPdAqHwppikpHUw9uPMDEJzzv`. Déclenché avec `commandForIgnoringBuildStep: 'exit 1'` pour cet appel, comme le build réussi précédent. **Vérifier l'état READY et l'alias avant d'annoncer la mise en ligne**, puis demander test de `Advanced Options` (données de confirmation et case remote signing) et confirmation d'adresse sur Nano X après reconnexion.
+
+**Limites :** le succès du build seul ne valide pas encore ce parcours runtime. `0x5515` au verrouillage reste à étudier si des problèmes fonctionnels persistent ; il ne constitue pas à lui seul une panne de reconnexion. Pas de merge `master`, pas de transaction réelle, pas de S01 ni de multisig fonctionnelle dans ce lot.
+
+---
+
 ## Incident runtime Android — page blanche après le premier build Angular 22
 
 **Observation de l'utilisateur (23 octobre 2026) :** `AndroidTest-console` après déploiement du commit `ba35cc2` sur `nault-android-test.vercel.app`. La console montre deux occurrences `main.f290bb30901e26e2.js:1 ERROR xt: NG0201` avec un échec d'injection de dépendance Angular dès le bootstrap (`Object.ɵfac`, `Pc.get`). La trace ne donne pas le token d'injection à cause de la minification. Une autre erreur `evmAsk.js:76 Cannot redefine property: ethereum` paraît liée à un script injecté par extension et ne démontre pas la cause de la page blanche.
