@@ -4,6 +4,7 @@ import {ActivatedRoute, Router} from '@angular/router';
 import * as bip39 from 'bip39';
 import {LedgerService, LedgerStatus} from '../../services/ledger.service';
 import { QrModalService } from '../../services/qr-modal.service';
+import type { QRType } from '../qr-modal/qr-modal.component';
 import {UtilService} from '../../services/util.service';
 import { wallet } from 'nanocurrency-web';
 import { TranslocoService } from '@jsverse/transloco';
@@ -40,12 +41,12 @@ export class ConfigureWalletComponent implements OnInit {
   exampleSeed = '';
   examplePrivateKey = '';
   exampleExpandedPrivateKey = '';
-  exampleMnemonicWords = [];
+  exampleMnemonicWords: string[] = [];
   showMoreImportOptions = false;
 
   newWalletSeed = '';
   newWalletMnemonic = '';
-  newWalletMnemonicLines = [];
+  newWalletMnemonicLines: string[][] = [];
   newPassword = '';
   importSeedModel = '';
   importPrivateKeyModel = '';
@@ -73,13 +74,14 @@ export class ConfigureWalletComponent implements OnInit {
     private ledgerService: LedgerService,
     private util: UtilService,
     private translocoService: TranslocoService) {
-    if (this.route.getCurrentNavigation().extras.state && this.route.getCurrentNavigation().extras.state.seed) {
+    const navigationState = this.route.getCurrentNavigation()?.extras.state;
+    if (navigationState?.seed) {
       this.activePanel = panels.import;
-      this.importSeedModel = this.route.getCurrentNavigation().extras.state.seed;
+      this.importSeedModel = navigationState.seed;
       this.isNewWallet = false;
-    } else if (this.route.getCurrentNavigation().extras.state && this.route.getCurrentNavigation().extras.state.key) {
+    } else if (navigationState?.key) {
       this.activePanel = panels.import;
-      this.importPrivateKeyModel = this.route.getCurrentNavigation().extras.state.key;
+      this.importPrivateKeyModel = navigationState.key;
       this.selectedImportOption = 'privateKey';
       this.isNewWallet = false;
     }
@@ -198,7 +200,7 @@ export class ConfigureWalletComponent implements OnInit {
   async confirmWalletOverwrite() {
     if (!this.isConfigured()) return true;
 
-    const UIkit = window['UIkit'];
+    const UIkit = (window as unknown as { UIkit: { modal: { confirm(message: string): Promise<unknown> } } }).UIkit;
     try {
       const msg = this.walletService.isLedgerWallet()
         ? '<p class="uk-alert uk-alert-info"><br><span class="uk-flex"><span uk-icon="icon: info; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">You are about to configure a new wallet, which will <b>disconnect your Ledger device from Nault</b>.</span><br><br>If you need to use the Ledger wallet, simply import your device again.</p><br>'
@@ -353,7 +355,7 @@ export class ConfigureWalletComponent implements OnInit {
     this.notifications.sendSuccess(`Successfully created new wallet! Do not lose the secret recovery seed/mnemonic!`);
   }
 
-  setPanel(panel) {
+  setPanel(panel: panels) {
     this.activePanel = panel;
     if (panel === panels.landing) {
       this.isNewWallet = true;
@@ -378,13 +380,16 @@ export class ConfigureWalletComponent implements OnInit {
     );
   }
 
-  importFromFile(files) {
-    if (!files.length) return;
+  importFromFile(files: FileList | null) {
+    if (!files?.length) return;
 
     const file = files[0];
     const reader = new FileReader();
     reader.onload = (event) => {
-      const fileData = event.target['result'] as string;
+      const fileData = reader.result;
+      if (typeof fileData !== 'string') {
+        return this.notifications.sendError(`Unable to parse import data, make sure you selected the right file!`);
+      }
       try {
         const importData = JSON.parse(fileData);
         if ((!importData.seed && !importData.privateKey && !importData.expandedKey) ||
@@ -403,7 +408,7 @@ export class ConfigureWalletComponent implements OnInit {
   }
 
   // open qr reader modal
-  openQR(reference, type) {
+  openQR(reference: string, type: QRType) {
     const qrResult = this.qrModalService.openQR(reference, type);
     qrResult.then((data) => {
       switch (data.reference) {
@@ -427,14 +432,14 @@ export class ConfigureWalletComponent implements OnInit {
     );
   }
 
-  accountIndexChange(index) {
+  accountIndexChange(index: string) {
     let invalid = false;
-    if (this.util.string.isNumeric(index) && index % 1 === 0) {
-      index = parseInt(index, 10);
-      if (!this.util.nano.isValidIndex(index)) {
+    if (this.util.string.isNumeric(index) && Number(index) % 1 === 0) {
+      const parsedIndex = parseInt(index, 10);
+      if (!this.util.nano.isValidIndex(parsedIndex)) {
         invalid = true;
       }
-      if (index > INDEX_MAX) {
+      if (parsedIndex > INDEX_MAX) {
         invalid = true;
       }
     } else {
