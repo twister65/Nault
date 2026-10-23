@@ -8,6 +8,16 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Suite — représentants 522 et carnet d'adresses
+
+**Dernière validation terminée :** la [CI Angular 22 39907361352](https://github.com/twister65/Nault/actions/runs/39907361352) sur [`e2f6dca`](https://github.com/twister65/Nault/commit/e2f6dca73d22e1a183d92958d21f71888d9b7e1d) rapporte **522 diagnostics TypeScript** (contre **1 060** initialement, **538 supprimés**). La compilation Web échoue toujours ; le fichier `representatives.component.ts` ne remonte plus d'erreur. Ne pas déduire des succès des tests Angular/RPC : la CI est arrêtée avant eux.
+
+**Dernier commit de code :** [`67d398d`](https://github.com/twister65/Nault/commit/67d398d7b957f14a8899a41e3ba71cf55b2630a7) : `address-book.component.ts` utilise désormais `Record<string, BalanceAccount>` pour le registre indexé par adresse Nano, au lieu du tableau numérique incorrect ; les abonnements RxJS sont typés, le tri DOM est filtré sur les éléments/attributs effectivement présents, les fichiers importés sont validés comme texte, les noms de comptes/arguments QR sont typés et les erreurs `unknown` sont rendues explicitement. L'import/export et les appels RPC restent inchangés. **Validation correspondante : [39907725481](https://github.com/twister65/Nault/actions/runs/39907725481), en cours au moment de cette note**. Relever le nouveau nombre de diagnostics sur ce SHA avant d'entreprendre le lot suivant.
+
+**Poursuite** : traiter d'abord les éventuelles régressions introduites par le nouveau modèle `accounts` du carnet d'adresses, puis les composants `qr-scan` (7 erreurs), `manage-representatives` (8 erreurs) et `transaction-details` (5 erreurs), indépendamment de la signature cryptographique. Ne pas modifier les règles Apache, l'alias de staging Vercel, ni les composants Ledger/BLE. Ne pas fusionner dans `master` sans build Web/PWA, Electron, lint, CodeQL, tests unitaires/RPC et validation finale.
+
+---
+
 ## Avancement du 23 octobre — composants Angular et 555 diagnostics
 
 **Branche :** `upgrade/angular-22`. **Aucun changement dans `master`.** La [validation Angular 22 39907030496](https://github.com/twister65/Nault/actions/runs/39907030496) sur le commit [`ecbb76d`](https://github.com/twister65/Nault/commit/ecbb76d164b796083ef6c1a0e8fc50196cb1e4ca) a confirmé **555 diagnostics TypeScript** (départ : 1 060, soit **505 diagnostics supprimés**). **Web/PWA : failure**, car compilation encore bloquée ; Electron, tests RPC/Angular et tests matériels restent **non validés**. [Lint 39907030468](https://github.com/twister65/Nault/actions/runs/39907030468) et [CodeQL 39907030369](https://github.com/twister65/Nault/actions/runs/39907030369) : **success**. Les composants `account-details.component.ts` et `configure-app.component.ts` n'apparaissent plus dans les diagnostics de ce run.
