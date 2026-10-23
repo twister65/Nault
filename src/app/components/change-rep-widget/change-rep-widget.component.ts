@@ -1,7 +1,7 @@
 import {Component, OnInit, ChangeDetectionStrategy} from '@angular/core';
-import {WalletService} from '../../services/wallet.service';
+import {WalletService, WalletAccount} from '../../services/wallet.service';
 import {NanoBlockService} from '../../services/nano-block.service';
-import {RepresentativeService} from '../../services/representative.service';
+import {RepresentativeService, FullRepresentativeOverview} from '../../services/representative.service';
 import {Router} from '@angular/router';
 
 @Component({
@@ -14,11 +14,11 @@ import {Router} from '@angular/router';
 export class ChangeRepWidgetComponent implements OnInit {
 
   changeableRepresentatives = this.repService.changeableReps;
-  displayedRepresentatives = [];
-  representatives = [];
+  displayedRepresentatives: FullRepresentativeOverview[] = [];
+  representatives: FullRepresentativeOverview[] = [];
   showRepChangeRequired = false;
   showRepHelp = false;
-  selectedAccount = null;
+  selectedAccount: WalletAccount | null = null;
   selectedAccountHasRep = false;
   initialLoadComplete = false;
 
@@ -36,7 +36,7 @@ export class ChangeRepWidgetComponent implements OnInit {
         return;
       }
 
-      this.representatives = reps;
+      this.representatives = reps.filter((rep): rep is FullRepresentativeOverview => rep !== null);
       await this.updateChangeableRepresentatives();
       this.updateDisplayedRepresentatives();
       this.initialLoadComplete = true;
@@ -108,10 +108,10 @@ export class ChangeRepWidgetComponent implements OnInit {
     this.displayedRepresentatives = this.getDisplayedRepresentatives(this.representatives);
   }
 
-  includeRepRequiringChange(displayedReps: any[]) {
+  includeRepRequiringChange(displayedReps: FullRepresentativeOverview[]): FullRepresentativeOverview[] {
     const repRequiringChange =
       this.changeableRepresentatives
-        .sort((a, b) => b.delegatedWeight.minus(a.delegatedWeight))
+        .sort((a, b) => b.delegatedWeight.comparedTo(a.delegatedWeight))
         .filter(
           (changeableRep) => (
               (changeableRep.status.changeRequired === true)
@@ -142,7 +142,7 @@ export class ChangeRepWidgetComponent implements OnInit {
       );
   }
 
-  getDisplayedRepresentatives(representatives: any[]) {
+  getDisplayedRepresentatives(representatives: FullRepresentativeOverview[]): FullRepresentativeOverview[] {
     if (this.representatives.length === 0) {
       return [];
     }
@@ -167,20 +167,20 @@ export class ChangeRepWidgetComponent implements OnInit {
       return this.includeRepRequiringChange(displayedRepsAllAccounts);
     }
 
-    const sortedRepresentatives: any[] = [...representatives];
+    const sortedRepresentatives: FullRepresentativeOverview[] = [...representatives];
 
-    sortedRepresentatives.sort((a, b) => b.delegatedWeight.minus(a.delegatedWeight));
+    sortedRepresentatives.sort((a, b) => b.delegatedWeight.comparedTo(a.delegatedWeight));
 
     const displayedReps = [ Object.assign( {}, sortedRepresentatives[0] ) ];
 
     return this.includeRepRequiringChange(displayedReps);
   }
 
-  sleep(ms) {
+  sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  showRepSelectionForSpecificRep(clickedRep) {
+  showRepSelectionForSpecificRep(clickedRep: FullRepresentativeOverview) {
     this.showRepHelp = false;
     const accountsToChangeRepFor = (
         (

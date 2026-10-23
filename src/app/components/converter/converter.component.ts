@@ -4,6 +4,7 @@ import {AppSettingsService} from '../../services/app-settings.service';
 import * as nanocurrency from 'nanocurrency';
 import {PriceService} from '../../services/price.service';
 import { BigNumber } from 'bignumber.js';
+import {Subscription} from 'rxjs';
 import {NotificationService} from '../../services/notification.service';
 
 @Component({
@@ -20,7 +21,7 @@ export class ConverterComponent implements OnInit, OnDestroy {
   invalidRaw = false;
   invalidFiat = false;
   fiatPrice = '0';
-  priceSub = null;
+  priceSub: Subscription | null = null;
 
   constructor(
     private util: UtilService,
@@ -46,7 +47,7 @@ export class ConverterComponent implements OnInit, OnDestroy {
     }
   }
 
-  unitChange(unit) {
+  unitChange(unit: 'mnano' | 'raw' | 'fiat') {
     switch (unit) {
       case 'mnano':
         if (this.util.account.isValidNanoAmount(this.Mnano)) {
