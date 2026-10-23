@@ -8,6 +8,25 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Reprise sur logs Vercel du 23 octobre 2026 — MuSig sans diagnostic
+
+**Log reçu de l'utilisateur :** `vercel.log`, déploiement Vercel sur `upgrade/angular-22` au commit [`feec2f7`](https://github.com/twister65/Nault/commit/feec2f73c6cfab9b4857aad07a6a1463f89b5534). Le log affiche **132 erreurs TS** et aucune dans `musig.service.ts`. Depuis les **1 060 erreurs** initiales, il en reste 12,45 %, soit **928 diagnostics éliminés (87,55 %)**, pour cette mesure **avant les correctifs listés ci-dessous**. Génération des bundles navigateur réussie mais `npm run wallet:build` finit avec code 1. Deux avertissements CommonJS sont présents (`events`, `hermes-channel`) et plusieurs dépendances npm restent dépréciées (`request`, `uuid@3`, `@angular-devkit/build-angular@22`, etc.) ; ce sont des sujets distincts des erreurs TypeScript.
+
+**Répartition mesurée du log Vercel :** `sweeper.component.ts` **62**, `sign.component.ts` **50**, `multisig.component.ts` **18**, `modal.service.ts` **1**, `nano-block.service.ts` **1**. Aucune erreur MuSig, aucun nouveau diagnostic dans les écrans import, configuration, export ou keygenerator.
+
+**Correctifs de cette reprise publiés uniquement sur `upgrade/angular-22` :**
+- [`907b5e6`](https://github.com/twister65/Nault/commit/907b5e66ba3facbeba5aeabe68b89dd256dc8caf) : `multisig.component.ts` — états nullables, tableau de comptes, `ViewChild` facultatif, types des entrées URL/QR et valeur de présentation de l'agrégation `?? ''`. Ne modifie pas le calcul des clés agrégées.
+- [`47123d5`](https://github.com/twister65/Nault/commit/47123d5201e476d2de0b8b8461ddfdea9e02094b) : `sign.component.ts` — états des onglets et listes de données multisignatures, types des arguments de formulaire et des paramètres URL, garde du type de clé détecté, normalisation de l'index et vérification du compteur d'onglets. Aucun changement intentionnel des étapes MuSig, de l'encodage ou des fonctions de signature.
+- [`bddc6d3`](https://github.com/twister65/Nault/commit/bddc6d34ab5b18e5af3729927ff948787895f8ac) : `sweeper.component.ts` — **uniquement** typage des champs de formulaire, état de navigation, scrolling `ViewChild`, paramètres des contrôles et modal UIkit. Les boucles de transfert, seed phrase, callbacks RPC, dérivation et publication des blocs restent à revoir séparément.
+
+**Validation non confirmée sur ces nouveaux SHA.** Vercel signale encore un échec sur `907b5e6`; les statuts de `47123d5` et `bddc6d3` étaient **pending** à cette vérification. Les journaux détaillés Vercel ne sont pas accessibles par le connecteur, donc le nombre de nouveaux diagnostics ne doit pas être deviné. Relire impérativement un log frais sur le dernier SHA avant d'appliquer de nouveaux correctifs.
+
+**Suite prioritaire :** résoudre les diagnostics résiduels du composant Sign et du Sweeper **en gardant les étapes critiques de transaction isolées**. `signOfflineBlock`, `getWork(): string | null`, `StateBlock.work`, `processPending` et les callbacks capturant `this` nécessitent une revue de sûreté et des tests ciblés, pas des assertions `!` non justifiées. `modal.service.ts` demande d'identifier le contrat des consommateurs avant de choisir son type. Le dernier TS de `nano-block.service.ts` concerne `work` nullable et ne doit pas être camouflé. Multisig fonctionnelle non testée ; **S01 hot wallet** et remédiation de sécurité séparés.
+
+**Limites :** pas de fusion sur `master`, pas de mise en production de Vercel, pas de modification d'Apache, CORS, matériel Ledger ou secrets.
+
+---
+
 ## Priorité MuSig — typage WebAssembly du 23 octobre 2026
 
 **Demande utilisateur :** traiter en priorité `src/app/services/musig.service.ts` suspecté de bloquer les builds Vercel. Le dernier log GitHub Actions détaillé disponible était le [run 39988515156](https://github.com/twister65/Nault/actions/runs/39988515156) sur `b9d5327`, avec **76 erreurs TypeScript dans MuSig sur 241 au total**. Vercel signalait **ERROR** sur le commit documentaire `e3c1978` (déploiement `dpl_7xrQ7D7wsiU3jiLyU3wSLSD7y7Lw`), mais les logs de build Vercel n'ont pas pu être lus (autorisation du scope manquante). Ne pas attribuer automatiquement ces 76 erreurs au journal Vercel.
