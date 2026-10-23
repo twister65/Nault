@@ -167,7 +167,6 @@ export class MusigService {
   }
 
   aggregate(storedAccounts: string[] | '', runWithPubkeys: AggregateCallback | null = null): AggregateResult {
-    const wasm = this.requireWasm();
     let addresses: string[] = [];
     if (runWithPubkeys && this.savedPublicKeys?.length > 1) {
       for (const pubKey of this.savedPublicKeys) {
@@ -205,6 +204,7 @@ export class MusigService {
           throw new Error('Invalid nano address (bad character?)');
       }
     }
+    const wasm = this.requireWasm();
     const pubkeyPtrs = wasm.musig_malloc(pubkeys.length * 4);
     const pubkeyPtrsBuf = new Uint32Array(wasm.memory.buffer, pubkeyPtrs, pubkeys.length);
     for (let i = 0; i < pubkeys.length; i++) {
@@ -240,7 +240,6 @@ export class MusigService {
   }
 
   multiSign(privateKey: string, blockHash: string, inputMultisigData: string[]): MultiSignResult {
-    const wasm = this.requireWasm();
     let multisigAccount = '';
     // Stage 0 (init)
     const activeStagePtr = this.musigStagePtr;
@@ -251,6 +250,7 @@ export class MusigService {
       if (!this.util.nano.isValidHash(blockHash)) {
         throw new Error('Invalid block hash');
       }
+      const wasm = this.requireWasm();
       const outPtr = wasm.musig_malloc(65);
       const outBuf = new Uint8Array(wasm.memory.buffer, outPtr, 65);
       outBuf[0] = 0;
@@ -279,6 +279,7 @@ export class MusigService {
 
       // Further steps
     } else {
+      const wasm = this.requireWasm();
       const protocolInputs = [];
       // only use the first part of the data
       for (const input of inputMultisigData) {
