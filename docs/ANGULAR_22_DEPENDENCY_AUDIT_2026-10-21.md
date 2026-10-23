@@ -8,6 +8,16 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## CI finale du présent lot — 471 diagnostics
+
+**Mesure vérifiée sur le dernier commit de code :** [`48120cd`](https://github.com/twister65/Nault/commit/48120cd48f0ccfe3c70b735f8dda9968b5ad8abc), [run Angular 22 39908158571](https://github.com/twister65/Nault/actions/runs/39908158571) : compilation Web **failure avec 471 diagnostics TypeScript**, contre **1 060** initialement, soit **589 diagnostics éliminés** (environ 56 %). [Lint 39908158502](https://github.com/twister65/Nault/actions/runs/39908158502) et [CodeQL Advanced 39908158458](https://github.com/twister65/Nault/actions/runs/39908158458) **success**. Les composants `manage-representatives`, `qr-scan`, `transaction-details` et `representative.service.ts` ne présentent **aucune erreur TypeScript** sur ce SHA. Aucun test Jasmine, test RPC ou build Electron n'a été validé (ils restent bloqués derrière le build Web).
+
+**Restants principaux au run 39908158571 :** `musig.service.ts` **76** (module cryptographique WASM à isoler), `sign` **69**, `sweeper` **62**, `receive` **46**, `send` **36**, `ledger.service` **35**, `nano-block.service` **21**, `configure-wallet` **19**, `multisig` **18**, `change-rep-widget` **17**, `remote-signing` **13**, `manage-wallet` **11**, `ledger-web-ble` **6**, etc. Ne pas confondre baisse des diagnostics avec validation de sécurité des signatures, du PoW et de la réception.
+
+**Prochain travail :** traiter d'abord les modèles de formulaire / état nullable dans les composants encore défectueux, en commits ciblés ; **ne pas modifier le WASM multisignature ni les algorithmes de signature pour satisfaire seulement le compilateur**. Obtenir ensuite `wallet:build`, `dist/ngsw.json`, `desktop:build`, les tests Angular et RPC, tests Ledger simulés, et CodeQL sur un même commit. Préserver le domaine Vercel CORS autorisé, ne pas fusionner `master` ni demander de tests Bluetooth physiques.
+
+---
+
 ## Point de reprise — 491 diagnostics et composants auxiliaires
 
 La [validation Angular 22 39907725481](https://github.com/twister65/Nault/actions/runs/39907725481) sur [`67d398d`](https://github.com/twister65/Nault/commit/67d398d7b957f14a8899a41e3ba71cf55b2630a7) s'est achevée en **failure lors de la compilation Web**, avec **491 diagnostics TypeScript** (contre **1 060** au début de la migration : **569 erreurs éliminées**, environ **54 %**). Le composant `address-book.component.ts` n'en présente plus. Lint [39907725480](https://github.com/twister65/Nault/actions/runs/39907725480) et CodeQL [39907725499](https://github.com/twister65/Nault/actions/runs/39907725499) sont **success** ; cette réussite n'exécute pas les tests Angular ni Electron bloqués derrière la compilation.
