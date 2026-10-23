@@ -147,14 +147,15 @@ export class ChangeRepWidgetComponent implements OnInit {
       return [];
     }
 
-    if (this.selectedAccount !== null) {
+    const selectedAccountId = this.selectedAccount?.id;
+    if (selectedAccountId !== undefined) {
       const selectedAccountRep =
         this.representatives
           .filter(
             (rep) =>
               rep.accounts.some(
                 (a) =>
-                  (a.id === this.selectedAccount.id)
+                  (a.id === selectedAccountId)
               )
           )[0];
 
@@ -182,12 +183,13 @@ export class ChangeRepWidgetComponent implements OnInit {
 
   showRepSelectionForSpecificRep(clickedRep: FullRepresentativeOverview) {
     this.showRepHelp = false;
+    const selectedAccountId = this.selectedAccount?.id;
     const accountsToChangeRepFor = (
         (
-            (this.selectedAccount !== null)
-          && clickedRep.accounts.some(a => (a.id === this.selectedAccount.id))
+            (selectedAccountId !== undefined)
+          && clickedRep.accounts.some(a => (a.id === selectedAccountId))
         )
-      ? this.selectedAccount.id
+      ? selectedAccountId
       : ( // all accounts that delegate to this rep
         this.representatives
           .filter(
