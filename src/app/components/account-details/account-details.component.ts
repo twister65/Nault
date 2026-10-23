@@ -977,6 +977,11 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   }
 
   async receiveReceivableBlock(receivableBlock: ReceivableHistoryItem) {
+    const walletAccount = this.walletAccount;
+    if (!walletAccount) {
+      this.notifications.sendWarning('Select a wallet account before receiving funds.');
+      return;
+    }
     const sourceBlock = receivableBlock.hash;
 
     if (this.wallet.isLocked()) {
@@ -994,7 +999,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
     try {
       createdReceiveBlockHash =
-        await this.nanoBlock.generateReceive(this.walletAccount, sourceBlock, this.wallet.isLedgerWallet());
+        await this.nanoBlock.generateReceive(walletAccount, sourceBlock, this.wallet.isLedgerWallet());
     } catch (err) {
       this.notifications.sendError('Error receiving transaction: ' + (err instanceof Error ? err.message : String(err)));
       hasShownErrorNotification = true;

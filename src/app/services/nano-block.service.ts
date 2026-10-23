@@ -9,7 +9,10 @@ import {LedgerService, LedgerStatus} from './ledger.service';
 import { WalletAccount } from './wallet.service';
 import {BehaviorSubject} from 'rxjs';
 import { tools as nanocurrencyWebTools } from 'nanocurrency-web';
-const nacl = window['nacl'];
+// The bundled Nano nacl shim exposes the existing detached-signature API.
+const nacl = (window as unknown as {
+  nacl: {sign: {detached(message: Uint8Array, secretKey: Uint8Array, expanded?: boolean): Uint8Array}};
+}).nacl;
 
 type DraftStateBlock =
   Pick<StateBlock, 'account' | 'previous' | 'representative' | 'balance' | 'link'> & {
@@ -272,8 +275,6 @@ export class NanoBlockService {
 
     await this.validateAccount(toAcct, walletAccountPublicKey);
 
-    let workBlock: string | null = null;
-
     const openEquiv = !toAcct || !toAcct.frontier;
 
     const previousBlock = toAcct.frontier || this.zeroHash;
@@ -332,7 +333,7 @@ export class NanoBlockService {
       this.signStateBlock(walletAccount, blockData);
     }
 
-    workBlock = openEquiv ? walletAccountPublicKey : previousBlock;
+    const workBlock = openEquiv ? walletAccountPublicKey : previousBlock;
     if (!this.workPool.workExists(workBlock)) {
       this.notifications.sendInfo(`Generating Proof of Work...`, { identifier: 'pow', length: 0 });
     }
