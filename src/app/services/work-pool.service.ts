@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import {PowService, baseThreshold, workState} from './pow.service';
+import {PowService, PowResult, baseThreshold, workState} from './pow.service';
 import {NotificationService} from './notification.service';
 import {UtilService} from './util.service';
 
@@ -78,11 +78,18 @@ export class WorkPoolService {
 
     this.currentlyProcessingHashes[hash] = true;
 
-    let work;
+    let work: PowResult;
     try {
       work = await this.pow.getPow(hash, multiplier);
-    } catch (workState) {
-      work = workState;
+    } catch (failure) {
+      // The PoW queue rejects with its status object, but other errors must
+      // also be treated as failed work rather than as a generated nonce.
+      if (failure && typeof failure === 'object' &&
+          'state' in failure && (failure.state === workState.error || failure.state === workState.cancelled)) {
+        work = {state: failure.state, work: ''};
+      } else {
+        work = {state: workState.error, work: ''};
+      }
     }
 
     if (!work || work.state === workState.error || work.state === workState.cancelled) {

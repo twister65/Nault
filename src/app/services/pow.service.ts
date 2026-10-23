@@ -7,12 +7,31 @@ import Worker from 'worker-loader!./../../assets/lib/cpupow.js';
 import {UtilService} from './util.service';
 import {BehaviorSubject} from 'rxjs';
 
-const mod = window['Module'];
+// Emscripten exposes the PoW module on Window at runtime.
+const mod = (window as Window & { Module: { cwrap: (name: string, result: string, args: string[]) => (hash: string) => string } }).Module;
 export const baseThreshold = 'fffffff800000000'; // threshold since v21 epoch update
 const hardwareConcurrency = window.navigator.hardwareConcurrency || 2;
 const workerCount = Math.max(hardwareConcurrency - 1, 1);
-let workerList = [];
+let workerList: Array<{ terminate(): void }> = [];
 export enum workState {'success', 'cancelled', 'error'}
+
+export interface PowResult {
+  state: workState | null;
+  work: string;
+}
+
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(reason?: unknown): void;
+}
+
+interface PowQueueItem {
+  hash: string;
+  multiplier: number;
+  work: string | null;
+  promise: Deferred<PowResult>;
+}
 
 @Injectable()
 export class PowService {
@@ -21,14 +40,14 @@ export class PowService {
   webGLTested = false;
 
   powAlertLimit = 60; // alert long pow after X sec
-  PoWPool = [];
+  PoWPool: PowQueueItem[] = [];
   parallelQueue = false;
   processingQueueItem = false;
   currentProcessTime = 0; // start timestamp for PoW
   powAlert$: BehaviorSubject<boolean|false> = new BehaviorSubject(false);
   public shouldContinueQueue = true; // set to false to disable further processing
-  cpuWorkerResolve = null; // global worker promise to allow termination
-  cpuWorkerReject = null; // global worker promise to allow termination
+  cpuWorkerResolve: (() => void) | null = null; // worker cancellation control
+  cpuWorkerReject: ((reason?: unknown) => void) | null = null;
   shouldAbortGpuPow = false; // set to true to abort GPU pow
 
   constructor(
@@ -52,7 +71,7 @@ export class PowService {
    * Get PoW for a hash.  If it's already being processed, return the promise.
    * Otherwise, add it into the queue and return when it is ready
    */
-  async getPow(hash, multiplier) {
+  async getPow(hash: string, multiplier: number): Promise<PowResult> {
     const existingPoW = this.PoWPool.find(p => p.hash === hash);
     if (existingPoW) {
       return existingPoW.promise.promise; // Its okay if its resolved already
@@ -65,7 +84,7 @@ export class PowService {
    * Add a new hash into the queue to perform work on.
    * Returns a promise that is resolved when work is completed
    */
-  addQueueItem(hash, multiplier) {
+  addQueueItem(hash: string, multiplier: number): Promise<PowResult> {
     const existingPoW = this.PoWPool.find(p => p.hash === hash);
     if (existingPoW) {
       return existingPoW.promise.promise;
@@ -74,7 +93,7 @@ export class PowService {
     const queueItem = {
       hash,
       work: null,
-      promise: this.getDeferredPromise(),
+      promise: this.getDeferredPromise<PowResult>(),
       multiplier: multiplier,
     };
 
@@ -151,7 +170,7 @@ export class PowService {
       }
     }
 
-    const work = {state: null, work: ''};
+    const work: PowResult = {state: null, work: ''};
     switch (powSource) {
       default:
       case 'server':
@@ -171,7 +190,7 @@ export class PowService {
           work.work = await this.getHashCPUWorker(queueItem.hash, localMultiplier);
           work.state = workState.success;
         } catch (state) {
-          work.state = state;
+          work.state = state === workState.cancelled ? workState.cancelled : workState.error;
         }
         break;
       case 'clientWebGL':
@@ -179,7 +198,7 @@ export class PowService {
           work.work = await this.getHashWebGL(queueItem.hash, localMultiplier);
           work.state = workState.success;
         } catch (state) {
-          work.state = state;
+          work.state = state === workState.cancelled ? workState.cancelled : workState.error;
         }
         break;
       case 'custom':
@@ -220,7 +239,7 @@ export class PowService {
   /**
    * Actual PoW functions
    */
-  async getHashServer(hash, multiplier, workServer = '') {
+  async getHashServer(hash: string, multiplier: number, workServer = ''): Promise<string | null> {
     const newThreshold = this.util.nano.difficultyFromMultiplier(multiplier, baseThreshold);
     const serverString = workServer === '' ? 'external' : 'custom';
     console.log('Generating work with multiplier ' + multiplier + ' at threshold ' +
@@ -235,7 +254,7 @@ export class PowService {
   /**
    * Generate PoW using CPU without workers (Not used)
    */
-  getHashCPUSync(hash) {
+  getHashCPUSync(hash: string): Promise<string> {
     const response = this.getDeferredPromise();
 
     const PoW = mod.cwrap('launchPoW', 'string', ['string']);
@@ -251,7 +270,7 @@ export class PowService {
   /**
    * Generate PoW using CPU and WebWorkers
    */
-  async getHashCPUWorker(hash, multiplier) {
+  async getHashCPUWorker(hash: string, multiplier: number): Promise<string> {
     this.checkPowProcessLength(); // start alert timer
     // console.log('Generating work using CPU for', hash);
 
@@ -306,7 +325,7 @@ export class PowService {
   /**
    * Generate PoW using WebGL
    */
-  getHashWebGL(hash, multiplier) {
+  getHashWebGL(hash: string, multiplier: number): Promise<string> {
     this.checkPowProcessLength(); // start alert timer
     const newThreshold = this.util.nano.difficultyFromMultiplier(multiplier, baseThreshold);
     console.log('Generating work with multiplier ' + multiplier + ' at threshold ' + newThreshold + ' using WebGL for hash: ', hash);
@@ -315,11 +334,11 @@ export class PowService {
 
     const start = Date.now();
     try {
-      window['NanoWebglPow'](hash, (work, n) => {
+      window['NanoWebglPow'](hash, (work: string, n: number) => {
           console.log(`WebGL Worker: Found work (${work}) for ${hash} after ${(Date.now() - start) / 1000} seconds [${n} iterations]`);
           response.resolve(work);
         },
-        n => {
+        (n: number) => {
           if (this.shouldAbortGpuPow) {
             this.shouldAbortGpuPow = false;
             response.reject(workState.cancelled);
@@ -329,7 +348,7 @@ export class PowService {
         '0x' + newThreshold.substring(0, 8).toUpperCase() // max threshold for webglpow is currently ffffffff00000000
       );
     } catch (error) {
-      if (error.message === 'webgl2_required') {
+      if (error instanceof Error && error.message === 'webgl2_required') {
         this.webGLAvailable = false;
         console.warn('WebGL is required for GPU pow');
       }
@@ -341,19 +360,14 @@ export class PowService {
 
 
   // Helper for returning a deferred promise that we can resolve when work is ready
-  private getDeferredPromise() {
-    const defer = {
-      promise: null,
-      resolve: null,
-      reject: null,
-    };
-
-    defer.promise = new Promise((resolve, reject) => {
-      defer.resolve = resolve;
-      defer.reject = reject;
+  private getDeferredPromise<T = string>(): Deferred<T> {
+    let resolve!: (value: T) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+      resolve = resolvePromise;
+      reject = rejectPromise;
     });
-
-    return defer;
+    return { promise, resolve, reject };
   }
 
   // Check if pow takes longer than limit, then notify user
@@ -370,12 +384,12 @@ export class PowService {
     this.powAlert$.next(false);
   }
 
-  sleep(ms) {
+  sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   // Interupt running pow and empty the queue
-  public cancelAllPow(notify) {
+  public cancelAllPow(notify: boolean) {
     if (this.currentProcessTime !== 0) {
       this.currentProcessTime = 0; // reset timer
       this.powAlert$.next(false); // announce alert to close
@@ -390,7 +404,7 @@ export class PowService {
     return false;
   }
 
-  terminateCpuWorkers(successful) {
+  terminateCpuWorkers(successful: boolean): void {
     for (const workerIndex in workerList) {
       if (Object.prototype.hasOwnProperty.call(workerList, workerIndex)) {
         workerList[workerIndex].terminate();
