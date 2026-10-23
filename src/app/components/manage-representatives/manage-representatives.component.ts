@@ -7,7 +7,7 @@ import {NotificationService} from '../../services/notification.service';
 import {ModalService} from '../../services/modal.service';
 import {ApiService} from '../../services/api.service';
 import {Router} from '@angular/router';
-import {RepresentativeService} from '../../services/representative.service';
+import {RepresentativeService, StoredRepresentative} from '../../services/representative.service';
 import {UtilService} from '../../services/util.service';
 
 @Component({
@@ -36,7 +36,7 @@ export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
   newRepTrusted = false;
   newRepWarn = false;
 
-  onlineReps = [];
+  onlineReps: string[] = [];
 
   constructor(
     private api: ApiService,
@@ -60,7 +60,7 @@ export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
     this.activePanel = 1;
   }
 
-  editEntry(representative) {
+  editEntry(representative: StoredRepresentative) {
     this.newRepAccount = representative.id;
     this.previousRepName = representative.name;
     this.newRepName = representative.name;
@@ -69,7 +69,7 @@ export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
     this.creatingNewEntry = false;
     this.activePanel = 1;
     setTimeout(() => {
-      document.getElementById('new-address-name').focus();
+      document.getElementById('new-address-name')?.focus();
     }, 150);
   }
 
@@ -97,7 +97,7 @@ export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
 
       this.cancelNewRep();
     } catch (err) {
-      this.notificationService.sendError(`Unable to save entry: ${err.message}`);
+      this.notificationService.sendError(`Unable to save entry: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -114,10 +114,11 @@ export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
     this.notificationService.sendSuccess(`Account address copied to clipboard!`, { identifier: 'success-copied' });
   }
 
-  async getOnlineRepresentatives() {
-    const representatives = [];
+  async getOnlineRepresentatives(): Promise<string[]> {
+    const representatives: string[] = [];
     try {
       const reps = await this.api.representativesOnline();
+      if (!reps || reps.error || !reps.representatives) return representatives;
       for (const representative in reps.representatives) {
         if (!reps.representatives.hasOwnProperty(representative)) {
           continue;
@@ -131,12 +132,12 @@ export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
     return representatives;
   }
 
-  async deleteRepresentative(accountID) {
+  async deleteRepresentative(accountID: string) {
     try {
       this.repService.deleteRepresentative(accountID);
       this.notificationService.sendSuccess(`Successfully deleted representative`);
     } catch (err) {
-      this.notificationService.sendError(`Unable to delete representative: ${err.message}`);
+      this.notificationService.sendError(`Unable to delete representative: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

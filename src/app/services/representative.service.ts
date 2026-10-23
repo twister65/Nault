@@ -37,6 +37,7 @@ export interface StoredRepresentative {
  warn?: boolean;
  trusted?: boolean;
  weight?: number;
+ online?: boolean;
 }
 
 
