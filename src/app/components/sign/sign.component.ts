@@ -1,6 +1,6 @@
 import { Component, OnInit, ViewChild, ElementRef, ChangeDetectionStrategy } from '@angular/core';
 import BigNumber from 'bignumber.js';
-import {AddressBookService} from '../../services/address-book.service';
+import {AddressBookService, AddressBookEntry} from '../../services/address-book.service';
 import {BehaviorSubject} from 'rxjs';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
@@ -15,6 +15,7 @@ import * as QRCode from 'qrcode';
 import * as bip39 from 'bip39';
 import * as bip39Wallet from 'nanocurrency-web';
 import { QrModalService } from '../../services/qr-modal.service';
+import type {QRType} from '../qr-modal/qr-modal.component';
 import hermes from 'hermes-channel';
 import * as nanocurrency from 'nanocurrency';
 import { MusigService } from '../../services/musig.service';
@@ -34,12 +35,12 @@ enum navSource {'remote', 'multisig'}
 export class SignComponent implements OnInit {
   paramsString = '';
   activePanel = 'error';
-  shouldSign: boolean = null; // if a block has been scanned for signing (or if it is a block to process)
+  shouldSign: boolean | null = null; // if a block has been scanned for signing (or if it is a block to process)
   accounts = this.walletService.wallet.accounts;
-  addressBookResults$ = new BehaviorSubject([]);
+  addressBookResults$ = new BehaviorSubject<AddressBookEntry[]>([]);
   showAddressBook = false;
   addressBookMatch = '';
-  amount = null;
+  amount: string | null = null;
   rawAmount: BigNumber = new BigNumber(0);
   amountFiat: number|null = null;
   fromAccountID: any = '';
@@ -64,9 +65,9 @@ export class SignComponent implements OnInit {
   signatureMessageSuccess = '';
   walletAccount = null;
   nullBlock = '0000000000000000000000000000000000000000000000000000000000000000';
-  qrString = null;
-  qrCodeImage = null;
-  qrCodeImageBlock = null;
+  qrString: string | null = null;
+  qrCodeImage: string | null = null;
+  qrCodeImageBlock: string | null = null;
   validSeed = false;
   validIndex = true;
   validPrivkey = false;
@@ -75,8 +76,8 @@ export class SignComponent implements OnInit {
   index = '0';
   privateKey = null; // the final private key to sign with if using manual entry
   privateKeyExpanded = false; // if a private key is provided manually and it's expanded 128 char
-  processedHash: string = null;
-  finalSignature: string = null;
+  processedHash: string | null = null;
+  finalSignature: string | null = null;
   // With v21 the 1x is the old 8x and max will be 8x due to the webgl threshold is max ffffffff00000000
   thresholds = [
     { name: '1x', value: 1 },
@@ -110,7 +111,7 @@ export class SignComponent implements OnInit {
   blockHash = '';
   remoteTabInit = false;
   qrModal: any = null;
-  qrCodeImageOutput = null;
+  qrCodeImageOutput: string | null = null;
   showAddBox = false;
   isDesktop = environment.desktop;
   // END MULTISIG
@@ -130,10 +131,10 @@ export class SignComponent implements OnInit {
     private musigService: MusigService,
     public price: PriceService) { }
 
-  @ViewChild('dataAddFocus') _el: ElementRef;
+  @ViewChild('dataAddFocus') _el!: ElementRef<HTMLElement>;
 
   async ngOnInit() {
-    const UIkit = window['UIkit'];
+    const UIkit = (window as unknown as {UIkit: {modal(selector: string): {show(): void; hide(): void}}}).UIkit;
     const qrModal = UIkit.modal('#qr-code-modal');
     this.qrModal = qrModal;
 
@@ -427,9 +428,9 @@ export class SignComponent implements OnInit {
       this.amountFiat = this.util.nano.rawToMnano(this.rawAmount).times(this.price.price.lastPrice).toNumber();
     }
 
-    this.fromAddressBook = this.addressBookService.getAccountName(this.fromAccountID);
-    this.toAddressBook = this.addressBookService.getAccountName(this.toAccountID);
-    this.repAddressBook = this.addressBookService.getAccountName(this.currentBlock.representative);
+    this.fromAddressBook = this.addressBookService.getAccountName(this.fromAccountID) || '';
+    this.toAddressBook = this.addressBookService.getAccountName(this.toAccountID) || '';
+    this.repAddressBook = this.addressBookService.getAccountName(this.currentBlock.representative) || '';
 
     this.activePanel = 'confirm';
     // Start precopmuting the work...
@@ -527,7 +528,7 @@ export class SignComponent implements OnInit {
     this.qrCodeImageBlock = null;
     this.finalSignature = null;
 
-    const UIkit = window['UIkit'];
+    const UIkit = (window as unknown as {UIkit: {modal(selector: string): {show(): void; hide(): void}}}).UIkit;
     const modal = UIkit.modal('#signed-modal');
     modal.show();
 
@@ -781,7 +782,7 @@ export class SignComponent implements OnInit {
   }
 
   // open qr reader modal
-  openQR(reference, type) {
+  openQR(reference: string, type: QRType) {
     const qrResult = this.qrModalService.openQR(reference, type);
     qrResult.then((data) => {
       switch (data.reference) {
