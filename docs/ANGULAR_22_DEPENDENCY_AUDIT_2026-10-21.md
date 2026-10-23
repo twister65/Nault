@@ -8,6 +8,21 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Point de reprise — 491 diagnostics et composants auxiliaires
+
+La [validation Angular 22 39907725481](https://github.com/twister65/Nault/actions/runs/39907725481) sur [`67d398d`](https://github.com/twister65/Nault/commit/67d398d7b957f14a8899a41e3ba71cf55b2630a7) s'est achevée en **failure lors de la compilation Web**, avec **491 diagnostics TypeScript** (contre **1 060** au début de la migration : **569 erreurs éliminées**, environ **54 %**). Le composant `address-book.component.ts` n'en présente plus. Lint [39907725480](https://github.com/twister65/Nault/actions/runs/39907725480) et CodeQL [39907725499](https://github.com/twister65/Nault/actions/runs/39907725499) sont **success** ; cette réussite n'exécute pas les tests Angular ni Electron bloqués derrière la compilation.
+
+Un lot supplémentaire a été poussé sous [`48120cd`](https://github.com/twister65/Nault/commit/48120cd48f0ccfe3c70b735f8dda9968b5ad8abc) :
+- `manage-representatives.component.ts` : liste `onlineReps` typée, modèle `StoredRepresentative.online?: boolean` explicite, gestion d'une réponse RPC sans liste de représentants et des erreurs JavaScript `unknown`.
+- `qr-scan.component.ts` : initialisation explicite des périphériques de capture, indicateurs et résultat QR nullable ; ni les formats de codes-barres ni la logique de deeplink n'ont été modifiés.
+- `transaction-details.component.ts` : abonnement `Subscription | null`, conversions hexadécimales typées, fallback explicite des étiquettes de comptes.
+
+**Validation de ce lot** : [run Angular 22 39908158571](https://github.com/twister65/Nault/actions/runs/39908158571) était **en cours** à la rédaction. Lire les diagnostics précis avant de traiter les lots suivants ; ne pas annoncer leur disparition sans ce run. Les autres blocs dominants dans la mesure 491 sont `musig.service.ts` (76, WASM cryptographique à traiter séparément), `sign` (69), `sweeper` (62), `receive` (46), `send` (36), `ledger.service.ts` (35), `nano-block.service.ts` (21), `configure-wallet` (19), `multisig` (18).
+
+**Contraintes non négociables** : pas de désactivation de `strict`, `skipLibCheck` ni de `@ts-nocheck`. Ne pas fusionner `upgrade/angular-22` dans `master`, ne pas déclencher de déploiement Vercel rouge, ne pas modifier `SetEnvIf Origin` dans Apache. Réutiliser uniquement le domaine `https://nault-wallet-staging-olaverre-1312.vercel.app` après compilation fonctionnelle. Différer les tests matériels USB, WebHID, Bluetooth et Android à la validation finale Angular 22 ; l'anomalie de deuxième reconnexion Nano X reste ouverte.
+
+---
+
 ## Suite — représentants 522 et carnet d'adresses
 
 **Dernière validation terminée :** la [CI Angular 22 39907361352](https://github.com/twister65/Nault/actions/runs/39907361352) sur [`e2f6dca`](https://github.com/twister65/Nault/commit/e2f6dca73d22e1a183d92958d21f71888d9b7e1d) rapporte **522 diagnostics TypeScript** (contre **1 060** initialement, **538 supprimés**). La compilation Web échoue toujours ; le fichier `representatives.component.ts` ne remonte plus d'erreur. Ne pas déduire des succès des tests Angular/RPC : la CI est arrêtée avant eux.
