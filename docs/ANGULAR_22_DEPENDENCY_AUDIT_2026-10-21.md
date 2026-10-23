@@ -4,9 +4,26 @@
 **Dépôt :** [twister65/Nault](https://github.com/twister65/Nault)  
 **Branche de travail actuelle :** [`upgrade/angular-22`](https://github.com/twister65/Nault/tree/upgrade/angular-22)  
 **Base de cette reprise :** [`eb9c778`](https://github.com/twister65/Nault/commit/eb9c778cf881f88b04a8af035a9c5e3696c0b2e1). Les corrections sont maintenant **publiées** dans [`ac374aa`](https://github.com/twister65/Nault/commit/ac374aa6821ab14b7d56be5ca1154b847b3678d3), après autorisation explicite de l’utilisateur le 23 octobre. Les résultats locaux ci-dessous restent distincts des résultats CI.
-**Statut actuel :** Angular 21 validé et fusionné ; Angular 22 en cours, compilations Web/Vercel **non validées**. Ne pas déclarer cette migration terminée.
+**Statut actuel :** Angular 21 validé et fusionné ; Angular 22 **compilable en production Web sur Vercel** (deux déploiements Ready confirmés sur `ba35cc2` et `1c5a29c`, 0 erreur TypeScript). **Migration non terminée** : lint/CI globale, builds Electron/desktop, tests fonctionnels Ledger, MuSig et Sweeper, contrôle de sécurité et dépendances dépréciées encore à valider. Ne pas fusionner sur `master`.
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
+
+## Validation Vercel Angular 22 — 23 octobre 2026 : deux builds Ready
+
+**Résultats vérifiés :** l'utilisateur a transmis les logs complets `Vercel-ba35cc2.log` et `Vercel-1c5a29c.log`. Les deux compilations Vercel du projet `nault-tablet-css-test`, branche `upgrade/angular-22`, ont **réussi**, sans aucune erreur TypeScript :
+
+- [`ba35cc2`](https://github.com/twister65/Nault/commit/ba35cc2cb88853aa5895257be52ed5349ca71354) : [déploiement Vercel](https://vercel.com/olaverre-1312/nault-tablet-css-test/F6mSNzVYeeJrKXj85Vw9fBwVJVdG), statut GitHub **success** ; `Build Completed` et `Deployment completed` dans le log.
+- [`1c5a29c`](https://github.com/twister65/Nault/commit/1c5a29c3509aac6933fff0d02e665f37e39a1f54) : [déploiement Vercel](https://vercel.com/olaverre-1312/nault-tablet-css-test/3AhQvQmTv8Ly9hsDKbRTrQAp9kdL), statut GitHub **success** ; `Build Completed` et `Deployment completed` dans le log. Ce deuxième commit n'apporte qu'une mise à jour de la documentation.
+
+**Empreinte de compilation identique :** `dc1b1d697aeb4584` ; bundle principal `main.f290bb30901e26e2.js` (2,55 MB brut), total initial ~3,09 MB brut / ~620,28 kB estimés transférés. La compilation produit les assets, `index.html` et le service worker. Conclusion vérifiée : **1 060 → 0 erreurs de typage TypeScript** sur le build Web de production ; la migration Angular 22 passe désormais `npm run wallet:build` sur Vercel.
+
+**Avertissements non bloquants conservés :** de nombreuses dépendances npm encore dépréciées (`request@2.88.2`, `uuid@3.4.0`, `glob` anciennes versions, etc.) ; builder Webpack `@angular-devkit/build-angular:browser` déprécié au profit de `@angular/build:application` ; navigateurs cibles dépassant la politique Angular 22 ou ES5 ; avertissements de dépendances CommonJS/AMD `events` (Ledger transport) et `hermes-channel`. Ne pas interpréter les déploiements Ready comme une suppression de ces avertissements.
+
+**Prochaines validations :** contrôler séparément tests unitaires, lint, CodeQL, workflow GitHub Actions, build Electron Ubuntu/Windows, compatibilité PWA/Android/Chromebook et parcours de Ledger USB/WebHID/BLE ; tests spécifiques de non-régression des chemins de signature hors ligne, gestion du PoW annulé, MuSig stages 0–3 et Sweeper. La multisignature réelle et la remédiation S01 du hot wallet sont des chantiers distincts. **Ne pas fusionner vers `master` et ne pas publier en production sans validation et accord de l'utilisateur.**
+
+**Consigne de continuité :** les logs détaillés du projet Vercel n'étaient pas directement accessibles au connecteur (403). Si un prochain déploiement échoue et que l'accès est refusé, demander immédiatement le journal de build à l'utilisateur plutôt que de déduire des erreurs de GitHub Actions d'un autre SHA.
+
+---
 
 ## Reprise du 23 octobre — dernier diagnostic Vercel isolé sur `95a8a19`
 
