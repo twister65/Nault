@@ -5,6 +5,16 @@ import { Device, Characteristic } from '@ledgerhq/hw-transport-web-ble/lib/types
 import { Subject } from 'rxjs-ledger';
 import { Buffer } from 'buffer';
 
+// Some browser Bluetooth errors originate in another realm (preload/BlueZ).
+// Read the message structurally without relying on instanceof Error.
+function bleErrorMessage(error: unknown): string {
+  if (error !== null && typeof error === 'object' && 'message' in error) {
+    const message = error.message;
+    if (message) return String(message);
+  }
+  return String(error);
+}
+
 // Keep Ledger's discovery, framing and exchange implementation, but own the
 // notification lifecycle. Upstream 6.27.5 neither terminates pending exchanges
 // on GATT loss nor removes its notification listener on cleanup.
@@ -22,7 +32,7 @@ export default class LedgerWebBle extends TransportBLE {
     let openingPhase = 'selected';
     let phaseStartedAt = Date.now();
     const setPhase = (phase: string) => { openingPhase = phase; phaseStartedAt = Date.now(); };
-    let timer;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     let rejectDisconnected: (error: Error) => void;
     const disconnected = new Promise<never>((_resolve, reject) => { rejectDisconnected = reject; });
     const dispose = () => {
@@ -113,7 +123,7 @@ export default class LedgerWebBle extends TransportBLE {
         throw error;
       }
       checkActive();
-      const service = services.find(item => getBluetoothServiceUuids().includes(item.uuid));
+      const service = services.find((item: {uuid: string}) => getBluetoothServiceUuids().includes(item.uuid));
       const infos = service && getInfosForServiceUuid(service.uuid);
       if (!infos) throw new Error('Ledger Bluetooth service not found');
       setPhase('GATT characteristic discovery');
@@ -131,7 +141,7 @@ export default class LedgerWebBle extends TransportBLE {
         // Windows may connect to GATT and discover services but fail to
         // authenticate the encrypted notification subscription. This is not
         // an MTU or Ledger Nano application failure.
-        if (error && /authentication failed/i.test(String(error.message || error))) {
+        if (error && /authentication failed/i.test(bleErrorMessage(error))) {
           const pairingError = new Error(
             'Bluetooth authentication failed while enabling notifications. ' +
             'Remove the Ledger from the computer Bluetooth settings, pair it again, ' +
@@ -150,7 +160,7 @@ export default class LedgerWebBle extends TransportBLE {
       console.info('[Ledger BLE GATT] negotiating MTU');
       // A radio reconnect may establish GATT without delivering the MTU reply.
       // Bound this handshake; do not guess the MTU or allow a stuck session.
-      let mtuTimer: ReturnType<typeof setTimeout>;
+      let mtuTimer: ReturnType<typeof setTimeout> | undefined;
       try {
         await Promise.race([
           transport.inferMTU(),
@@ -179,7 +189,7 @@ export default class LedgerWebBle extends TransportBLE {
       // APDU or signature command. Do not silently retry transactions.
       const mtuReplyMissing = retryMtu &&
         openingPhase === 'Ledger MTU negotiation' &&
-        /Ledger Bluetooth MTU negotiation timed out/.test(String(error && (error.message || error)));
+        /Ledger Bluetooth MTU negotiation timed out/.test(bleErrorMessage(error));
       dispose();
       if (device.gatt.connected) device.gatt.disconnect();
       if (mtuReplyMissing) {
