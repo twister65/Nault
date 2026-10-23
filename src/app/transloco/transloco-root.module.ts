@@ -1,10 +1,4 @@
-import {
-  TRANSLOCO_LOADER,
-  TranslocoLoader,
-  TRANSLOCO_CONFIG,
-  translocoConfig,
-  TranslocoModule
-} from '@jsverse/transloco';
+import { TranslocoLoader, TranslocoModule, provideTransloco } from '@jsverse/transloco';
 import { Injectable, NgModule } from '@angular/core';
 import { environment } from '../../environments/environment';
 
@@ -20,9 +14,10 @@ export class TranslocoHttpLoader implements TranslocoLoader {
 @NgModule({
   exports: [ TranslocoModule ],
   providers: [
-    {
-      provide: TRANSLOCO_CONFIG,
-      useValue: translocoConfig({
+    // Transloco 8 needs its complete provider set, not only the config and loader
+    // tokens. AppComponent and AppSettingsService inject TranslocoService at startup.
+    provideTransloco({
+      config: {
         availableLangs: [
           { id: 'en', label: 'English' },
           // { id: 'de', label: 'Deutsch' }
@@ -30,15 +25,13 @@ export class TranslocoHttpLoader implements TranslocoLoader {
         defaultLang: 'en',
         fallbackLang: 'en',
         missingHandler: {
-          // It will use the first language set in the `fallbackLang` property
           useFallbackTranslation: true
         },
-        // Remove this option if your application doesn't support changing language in runtime.
         reRenderOnLangChange: true,
         prodMode: environment.production,
-      })
-    },
-    { provide: TRANSLOCO_LOADER, useClass: TranslocoHttpLoader }
+      },
+      loader: TranslocoHttpLoader
+    })
   ]
 })
 export class TranslocoRootModule {}
