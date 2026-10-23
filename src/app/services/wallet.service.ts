@@ -35,7 +35,7 @@ export interface WalletAccount {
 export interface Block {
   account: string;
   hash: string;
-  amount: string;
+  amount: string | BigNumber;
   source: string;
 }
 
@@ -124,7 +124,7 @@ export class WalletService {
   };
 
   processingPending = false;
-  successfulBlocks = [];
+  successfulBlocks: string[] = [];
   trackedHashes: string[] = [];
   // Coalesce confirmations arriving while a previous balance RPC is still running.
   private balanceRefreshQueued = false;
@@ -324,7 +324,7 @@ export class WalletService {
     });
   }
 
-  getWalletAccount(accountID) {
+  getWalletAccount(accountID: string): WalletAccount | undefined {
     return this.wallet.accounts.find(a => a.id === accountID);
   }
 
@@ -337,7 +337,7 @@ export class WalletService {
     const walletJson = JSON.parse(walletData);
 
     if (walletJson.accounts) {
-      const newAccounts = walletJson.accounts.map(account => {
+      const newAccounts = walletJson.accounts.map((account: { id: string; index: number }) => {
         if (account.id.indexOf('xrb_') !== -1) {
           account.id = account.id.replace('xrb_', 'nano_');
         }
@@ -372,7 +372,7 @@ export class WalletService {
     }
 
     if (walletJson.accounts && walletJson.accounts.length) {
-      walletJson.accounts.forEach(account => this.loadWalletAccount(account.index, account.id));
+      walletJson.accounts.forEach((account: { id: string; index: number }) => this.loadWalletAccount(account.index, account.id));
     }
 
     this.wallet.selectedAccountId = walletJson.selectedAccountId || null;
@@ -520,7 +520,7 @@ export class WalletService {
 
     // Getting accounts...
     for (let batchIdx = 0; batchIdx < batchesCount; batchIdx++) {
-      const batchAccounts = {};
+      const batchAccounts: Record<string, {index: number; publicKey: string}> = {};
       const batchAccountsArray = [];
       for (let i = 0; i < ACCOUNTS_PER_API_REQUEST; i++) {
         const index = batchIdx * ACCOUNTS_PER_API_REQUEST + i;
@@ -614,7 +614,7 @@ export class WalletService {
     this.saveWalletExport();
   }
 
-  async createLedgerAccount(index) {
+  async createLedgerAccount(index: number): Promise<WalletAccount> {
     const account: any = await this.ledgerService.getLedgerAccount(index);
 
     const accountID = account.address;
@@ -640,7 +640,7 @@ export class WalletService {
     return newAccount;
   }
 
-  createKeyedAccount(index, accountBytes, accountKeyPair) {
+  createKeyedAccount(index: number, accountBytes: Uint8Array, accountKeyPair: {publicKey: Uint8Array; secretKey: Uint8Array}): WalletAccount {
     const accountName = this.util.account.getPublicAccountID(accountKeyPair.publicKey);
     const addressBookName = this.addressBook.getAccountName(accountName);
 
@@ -663,7 +663,7 @@ export class WalletService {
     return newAccount;
   }
 
-  async createSeedAccount(index) {
+  async createSeedAccount(index: number): Promise<WalletAccount> {
     const accountBytes = this.util.account.generateAccountSecretKeyBytes(this.wallet.seedBytes, index);
     const accountKeyPair = this.util.account.generateAccountKeyPair(accountBytes);
     return this.createKeyedAccount(index, accountBytes, accountKeyPair);
@@ -856,6 +856,9 @@ export class WalletService {
           }
 
           const walletAccount = this.wallet.accounts.find(a => a.id === block);
+          // Nodes may include addresses outside this wallet; never attach
+          // receivable work to an unknown wallet account.
+          if (!walletAccount) continue;
 
           if (pending.blocks[block]) {
             let accountPending = new BigNumber(0);
@@ -946,7 +949,7 @@ export class WalletService {
     this.informBalanceRefresh();
   }
 
-  async loadWalletAccount(accountIndex, accountID) {
+  async loadWalletAccount(accountIndex: number, accountID: string): Promise<WalletAccount> {
     const index = accountIndex;
     const addressBookName = this.addressBook.getAccountName(accountID);
 
@@ -982,7 +985,7 @@ export class WalletService {
       while (this.wallet.accounts.find(a => a.index === index)) index++;
     }
 
-    let newAccount: WalletAccount|null;
+    let newAccount: WalletAccount;
 
     if (this.isSingleKeyWallet()) {
       throw new Error(`Wallet consists of a single private key.`);
@@ -995,7 +998,8 @@ export class WalletService {
         // this.notifications.sendWarning(`Unable to load account from ledger.  Make sure it is connected`);
         throw err;
       }
-
+    } else {
+      throw new Error('Unsupported wallet type for adding another account.');
     }
 
     this.wallet.accounts.push(newAccount);
@@ -1037,7 +1041,7 @@ export class WalletService {
     console.log('Stopped tracking transactions on ' + address);
   }
 
-  addPendingBlock(accountID, blockHash, amount, source) {
+  addPendingBlock(accountID: string, blockHash: string, amount: string | BigNumber, source: string): boolean {
     if (this.successfulBlocks.indexOf(blockHash) !== -1) return false; // Already successful with this block
 
     const existingHash = this.wallet.pendingBlocks.find(b => b.hash === blockHash);
@@ -1056,7 +1060,7 @@ export class WalletService {
   }
 
   // Remove a pending account from the pending list
-  async removePendingBlock(blockHash) {
+  async removePendingBlock(blockHash: string) {
     const index = this.wallet.pendingBlocks.findIndex(b => b.hash === blockHash);
     this.wallet.pendingBlocks.splice(index, 1);
   }
@@ -1066,10 +1070,10 @@ export class WalletService {
     this.wallet.pendingBlocks.splice(0, this.wallet.pendingBlocks.length);
   }
 
-  sortByAmount(a, b) {
+  sortByAmount(a: Block, b: Block): number {
     const x = new BigNumber(a.amount);
     const y = new BigNumber(b.amount);
-    return y.comparedTo(x);
+    return y.comparedTo(x) ?? 0;
   }
 
   async processPendingBlocks() {
@@ -1088,7 +1092,7 @@ export class WalletService {
     this.processingPending = true;
 
     const nextBlock = this.wallet.pendingBlocks[0];
-    if (this.successfulBlocks.find(b => b.hash === nextBlock.hash)) {
+    if (this.successfulBlocks.includes(nextBlock.hash)) {
       return setTimeout(() => this.processPendingBlocks(), 1500); // Block has already been processed
     }
     const walletAccount = this.getWalletAccount(nextBlock.account);
