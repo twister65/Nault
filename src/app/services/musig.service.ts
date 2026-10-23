@@ -154,8 +154,11 @@ export class MusigService {
     }
   }
 
-  runMultiSign(privateKey: string, blockHash: string, inputMultisigData: string[]): MultiSignResult | null {
+  runMultiSign(privateKey: string | null, blockHash: string, inputMultisigData: string[]): MultiSignResult | null {
     try {
+      if (privateKey === null) {
+        throw new Error('Invalid private key');
+      }
       return this.multiSign(privateKey, blockHash, inputMultisigData);
     } catch (err) {
       this.notificationService.sendError(String(err), {length: 0});
