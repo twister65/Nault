@@ -8,6 +8,20 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Reprise du 23 octobre — dernier diagnostic Vercel isolé sur `95a8a19`
+
+**Log fourni par l'utilisateur :** `vercel-95a8a19.log`. Déploiement Vercel `nault-tablet-css-test`, branche `upgrade/angular-22`, commit [`95a8a19`](https://github.com/twister65/Nault/commit/95a8a198e4127cbcda44459ad9b5a02b0e51c9fe). **1 erreur TypeScript** (`TS2345` dans `src/app/components/sweeper/sweeper.component.ts:547`, argument `string` au lieu de `number` dans `wallet.accounts`). La ligne finale `BUILD_UTILS_SPAWN_1` est la conséquence, pas une seconde erreur TypeScript. Les bundles navigateur étaient générés, mais le processus `wallet:build` a échoué. Les avertissements distincts restants concernent les modules CommonJS (`events`, `hermes-channel`), l'outillage Angular Webpack déprécié, des dépendances npm obsolètes et les navigateurs non pris en charge.
+
+**Progrès mesuré :** de **1 060 diagnostics initialement à 1 seul** sur `95a8a19` ; **1 059 diagnostics éliminés (~99,91 %)**. Cela ne garantit pas l'absence d'erreurs sur le commit suivant.
+
+**Correctif publié sur `upgrade/angular-22` :** [`ba35cc2`](https://github.com/twister65/Nault/commit/ba35cc2cb88853aa5895257be52ed5349ca71354) — conversion décimale de `this.startIndex` et `this.endIndex` via `parseInt(..., 10)` avant l'appel à `wallet.accounts` dans `sweeper.component.ts`. Les boucles de dérivation déjà présentes emploient le même `parseInt`, aucune modification des algorithmes de dérivation ni des transferts.
+
+**Validation requise :** attendre le résultat effectif du build Vercel de `ba35cc2` ou d'un commit contenant la correction (si son statut est inaccessible, demander immédiatement le journal à l'utilisateur). Ne déclarer Angular 22 « compilable sur Vercel » qu'après succès explicite. Vérifier aussi `npm run wallet:build`, `npm run wallet:build-desktop` / `npm run desktop:compile`, lint, tests, CodeQL, et les workflows PWA/Android/Chromebook/Ubuntu/Windows nécessaires. Attention : les chemins de signature Ledger/multisig/Sweeper et le PoW ont été adaptés en amont pour accepter des états nullables ; une compilation réussie **ne prouve pas** la validité fonctionnelle ni la sécurité des opérations financières. Les tests de multisignature réels, ainsi que le chantier de sécurité S01/hot wallet, restent séparés. Ne pas fusionner dans `master` sans validations et accord.
+
+**Communication :** lorsque les logs Vercel ne sont pas accessibles par connecteur (403 du scope `olaverre-1312`), demander sans tarder un fichier journal à l'utilisateur, sans multiplier les tentatives inutiles.
+
+---
+
 ## Reprise du 23 octobre — log Vercel `bddc6d3` : 78 diagnostics TypeScript
 
 **Log exact de l'utilisateur** : fichier `Vercel-bddc6d3.log`, build Vercel `nault-tablet-css-test`, branche `upgrade/angular-22`, commit [`bddc6d3`](https://github.com/twister65/Nault/commit/bddc6d34ab5b18e5af3729927ff948787895f8ac). **78 diagnostics TypeScript** sur 4 fichiers, **et une 79ᵉ ligne `BUILD_UTILS_SPAWN_1`**, qui n'est que la conséquence du build `npm run wallet:build` sorti avec code 1. Ne pas annoncer « 79 diagnostics TS ». Les bundles navigateur étaient générés, mais la compilation finale n'a pas réussi. Répartition : **46 Sweeper, 30 Sign, 1 ModalService, 1 NanoBlockService** ; aucun diagnostic MuSig ou MultisigComponent. Cela représente **982 erreurs éliminées sur 1 060 initialement (~92,6 %)** sur ce commit mesuré. Les warnings npm sur les dépendances dépréciées, CommonJS, le builder Webpack et les navigateurs non supportés sont distincts de ces 78 erreurs bloquantes.
