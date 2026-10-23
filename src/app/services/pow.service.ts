@@ -8,7 +8,9 @@ import {UtilService} from './util.service';
 import {BehaviorSubject} from 'rxjs';
 
 // Emscripten exposes the PoW module on Window at runtime.
-const mod = (window as Window & { Module: { cwrap: (name: string, result: string, args: string[]) => (hash: string) => string } }).Module;
+const mod = (window as unknown as {
+  Module: { cwrap: (name: string, result: string, args: string[]) => (hash: string) => string };
+}).Module;
 export const baseThreshold = 'fffffff800000000'; // threshold since v21 epoch update
 const hardwareConcurrency = window.navigator.hardwareConcurrency || 2;
 const workerCount = Math.max(hardwareConcurrency - 1, 1);
@@ -305,7 +307,7 @@ export class PowService {
           workerCount: workerCount,
           workThreshold: newThreshold,
         });
-        worker.onmessage = (workerwork) => {
+        worker.onmessage = (workerwork: MessageEvent<string>) => {
           console.log(`CPU Worker: Found work (${workerwork.data}) for ${hash} after ${(Date.now() - start) / 1000} seconds [${workerCount} Workers]`);
           response.resolve(workerwork.data);
           this.terminateCpuWorkers(true);
@@ -334,7 +336,15 @@ export class PowService {
 
     const start = Date.now();
     try {
-      window['NanoWebglPow'](hash, (work: string, n: number) => {
+      const webglPow = (window as unknown as {
+        NanoWebglPow: (
+          hash: string,
+          onWork: (work: string, iterations: number) => void,
+          onProgress: (iterations: number) => boolean | undefined,
+          threshold: string
+        ) => void;
+      }).NanoWebglPow;
+      webglPow(hash, (work: string, n: number) => {
           console.log(`WebGL Worker: Found work (${work}) for ${hash} after ${(Date.now() - start) / 1000} seconds [${n} iterations]`);
           response.resolve(work);
         },

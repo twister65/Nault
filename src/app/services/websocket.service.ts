@@ -178,7 +178,7 @@ export class WebsocketService {
   }
 
   subscribeAccounts(accountIDs: string[]) {
-    const event = {
+    const event: SubscriptionCommand = {
       action: 'subscribe',
       topic: 'confirmation',
       options: {
@@ -202,7 +202,7 @@ export class WebsocketService {
   }
 
   unsubscribeAccounts(accountIDs: string[]) {
-    const event = {
+    const event: SubscriptionCommand = {
       action: 'unsubscribe',
       topic: 'confirmation',
       options: {
