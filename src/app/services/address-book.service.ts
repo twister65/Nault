@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import {BehaviorSubject} from 'rxjs';
 
 
-interface AddressBookEntry {
+export interface AddressBookEntry {
   account: string;
   name: string;
   trackBalance: boolean;
