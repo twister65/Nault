@@ -8,6 +8,21 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+### Suite des corrections du 23 octobre — événements et QR
+
+Trois commits supplémentaires sur `upgrade/angular-22` après le point `c3284eb` :
+
+- [`6d6fd01`](https://github.com/twister65/Nault/commit/6d6fd01fb666a755a43352f57fb8657f9bc86635) : alignement du type littéral des commandes WebSocket et description TypeScript explicite des points d'entrée Emscripten/WebGL du service PoW. Aucun nouvel algorithme de calcul n'a été ajouté.
+- [`203ba5e`](https://github.com/twister65/Nault/commit/203ba5ecade8b1a5b534090e8ddf4d3a9f324481) : typage des événements navigateur/deeplinks, des deux `ViewChild`, du dictionnaire de paramètres d'URL et de la sélection nullable de compte dans `AppComponent`.
+- [`1df6f81`](https://github.com/twister65/Nault/commit/1df6f81be35053e01ea188fb3af5159b55984167) : correction importante du contrat du scanner QR. La promesse du service retourne `{reference: string, content: string}`, conforme à `QrModalComponent.activeModal.close`, et **non** `string`. Initialisation explicite de ses champs de formulaire et d'appareil photo.
+
+**Mesure obtenue** : [CI Angular 22, run 39885403454](https://github.com/twister65/Nault/actions/runs/39885403454) sur **`c3284eb`** : 878 erreurs TypeScript contre **1 060** sur la référence `7920bff`, soit **182 diagnostics éliminés**. Le build Web échoue encore, et le build Electron ainsi que les tests ultérieurs du workflow ne sont donc pas atteints. Ce résultat n'inclut **pas** les corrections `6d6fd01`, `203ba5e`, `1df6f81`.
+
+**CI de la tête `1df6f81`** : [validation 39885967252](https://github.com/twister65/Nault/actions/runs/39885967252) et [lint 39885967270](https://github.com/twister65/Nault/actions/runs/39885967270), **en attente/en cours lors de ce point de reprise**. Consulter leurs conclusions avant de calculer la prochaine différence. Ne pas relancer des commits par anticipation tant que la CI valide une tête donnée ; une nouvelle mise à jour peut annuler les jobs précédents via la règle de concurrence.
+
+**Priorité pour la suite :** le typage des modèles complexes restants : `musig.service.ts` (module WASM de multisignature : précautions cryptographiques et validation spécifique), `wallet.service.ts`, `util.service.ts`, puis `account-details`, `sign`, `sweeper` et les autres composants. Ne pas maquiller les diagnostics par des assertions arbitraires ; traiter les types d'API et de collections à leur source. Garder **tous les contrôles stricts**, le problème BLE ouvert et les tests matériels reportés à la fin d'Angular 22.
+
+
 ## Reprise ciblée — 23 octobre 2026, typage des services partagés
 
 **Point d'arrêt pour reprise dans Chat ou Work :** tête de code [`c3284eb`](https://github.com/twister65/Nault/commit/c3284eb04c11840f40dd1e5fb5b33d506383d513), branche **`upgrade/angular-22`**. Quatre commits de corrections de types ont été publiés depuis le lot `ac374aa`, sans modifier `master`, Apache, Vercel, les transports Ledger/BLE ni les règles de signature. Aucune correction de niveau `strict: false`, `skipLibCheck` ou `@ts-nocheck` n'a été introduite.
