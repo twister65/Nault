@@ -8,6 +8,22 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Reprise Angular 22 — typage IPC et interface de signature distante
+
+**Code actuellement poussé** sur `upgrade/angular-22` : [`82127a0`](https://github.com/twister65/Nault/commit/82127a07b59b3821e50429f857e28178675875d9). Le point de mesure confirmé avant ce lot demeure **341 diagnostics TypeScript** sur [`09f8f7b`](https://github.com/twister65/Nault/commit/09f8f7bd80cf04a04613abbc15903b493a8d9996) (run [39911522558](https://github.com/twister65/Nault/actions/runs/39911522558)). **Ne pas attribuer ce chiffre au dernier commit tant que sa CI n'est pas terminée.**
+
+**Commits de cette reprise :**
+- [`db1ec1c`](https://github.com/twister65/Nault/commit/db1ec1c61fbf193a928230af2390b598d3287a44) : signature d'écouteur et d'arguments du pont IPC Electron dérivée de `NaultDesktopBridge`, lecture des en-têtes RPC sans transmettre `null` à `Headers.set`, et déclaration du `ViewChild` du champ de déverrouillage. La politique `secureEndpoint`, l'interdiction des redirections et la transmission des en-têtes ne changent pas.
+- [`82127a0`](https://github.com/twister65/Nault/commit/82127a07b59b3821e50429f857e28178675875d9) : annotations de type `URL`, états de formulaire et listes d'adresses dans l'interface de signature distante. Les contrats de navigation et de validation de bloc sont inchangés. **La signature cryptographique, le WASM de multisignature et les clés n'ont pas été modifiés.**
+
+**Contrôles à lire pour reprise** : [validation Angular 22 du dernier SHA, run 39942507506](https://github.com/twister65/Nault/actions/runs/39942507506), [lint 39942507472](https://github.com/twister65/Nault/actions/runs/39942507472), [CodeQL 39942507328](https://github.com/twister65/Nault/actions/runs/39942507328). **En attente/en cours lors de la rédaction**. Vérifier le compteur et d'éventuels diagnostics chez les consommateurs du pont IPC après leur conclusion. Les workflows concurrents peuvent annuler les runs du commit précédent.
+
+**Décision de sécurité rappelée** : l'utilisateur réserve explicitement le **traitement de S01 sur le hot wallet par seed phrase** et les **tests/refontes multisignatures** à une phase distincte. Pour Angular 22, ne faire que du typage sans modification des algorithmes ou des secrets ; ne pas tenter de rendre le build vert par `strict: false`, `skipLibCheck` ou des types `any` non justifiés. Les modules de signature `sign`, `sweeper`, `nano-block`, `ledger` et le WASM exigent des corrections isolées et des tests simulés, avant une campagne matérielle ultérieure.
+
+**État de livraison :** build Web/PWA toujours non validé, pas de tests Angular/RPC/Electron concluants, aucune fusion dans `master`, aucun déploiement Vercel ni modification Apache/CORS. Le dysfonctionnement de deuxième reconnexion Bluetooth reste ouvert ; pas de test matériel supplémentaire demandé.
+
+---
+
 ## Nouvelle mesure validée — 341 diagnostics TypeScript
 
 **Branche `upgrade/angular-22`, dernier commit de code [`09f8f7b`](https://github.com/twister65/Nault/commit/09f8f7bd80cf04a04613abbc15903b493a8d9996).** La [validation GitHub Actions 39911522558](https://github.com/twister65/Nault/actions/runs/39911522558) s'est achevée en **failure du build Web**, avec **341 erreurs TypeScript** contre **1 060** initialement : **719 diagnostics éliminés (environ 67,8 %)**. [Lint 39911522492](https://github.com/twister65/Nault/actions/runs/39911522492) et [CodeQL Advanced 39911522485](https://github.com/twister65/Nault/actions/runs/39911522485) sont **success sur ce même SHA**. Aucun build Electron/PWA intégral ni test Jasmine/RPC/matériel ne peut encore être déclaré validé. Les fichiers `nano-identicon`, `ninja.service`, `nano-transaction-mobile`, `currency-symbol.pipe` et `accounts.component.ts` ne génèrent plus d'erreurs.
