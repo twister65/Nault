@@ -282,6 +282,7 @@ export class SignComponent implements OnInit {
     }
 
     // Extract block hash (used with multisig)
+    if (!this.currentBlock) return;
     const block: StateBlock = {account: this.currentBlock.account, link: this.currentBlock.link, previous: this.currentBlock.previous,
       representative: this.currentBlock.representative, balance: this.currentBlock.balance, signature: '', work: ''};
     this.blockHash = this.util.hex.fromUint8(this.util.nano.hashStateBlock(block));
@@ -404,6 +405,7 @@ export class SignComponent implements OnInit {
   }
 
   changeThreshold() {
+    if (!this.currentBlock) return;
     // multiplier has changed, clear the cache and recalculate
     if (this.selectedThreshold !== this.selectedThresholdOld) {
       const workBlock = this.txType === TxType.open ? this.util.account.getAccountPublicKey(this.toAccountID) : this.currentBlock.previous;
@@ -414,6 +416,7 @@ export class SignComponent implements OnInit {
   }
 
   prepareWork() {
+    if (!this.currentBlock) return;
     // The block has been verified
     if (this.toAccountID) {
       console.log('Precomputing work...');
@@ -423,6 +426,7 @@ export class SignComponent implements OnInit {
   }
 
   async prepareTransaction() {
+    if (!this.currentBlock) return;
     // Determine fiat value of the amount (if not offline mode)
     if (this.settings.settings.serverAPI) {
       this.amountFiat = this.util.nano.rawToMnano(this.rawAmount).times(this.price.price.lastPrice).toNumber();
@@ -451,7 +455,12 @@ export class SignComponent implements OnInit {
 
   // Create signature for the block
   async confirmTransaction(signature = '') {
-    let walletAccount = this.walletAccount;
+    const currentBlock = this.currentBlock;
+    const txType = this.txType;
+    if (!currentBlock || txType === null) {
+      return this.notificationService.sendWarning('No valid block is available for signing.');
+    }
+    let walletAccount: (Pick<WalletAccount, 'keyPair'> & Partial<Pick<WalletAccount, 'id' | 'index'>>) | undefined = this.walletAccount;
     let isLedger = this.walletService.isLedgerWallet();
 
     // using internal wallet
@@ -474,17 +483,28 @@ export class SignComponent implements OnInit {
       }
     if (this.signTypeSelected === this.signTypes[1] || this.signTypeSelected === this.signTypes[2]) {
       isLedger = false;
-      // create dummy wallet that only contains needed elements for signature
+      // Create a key-only signer only after validating the manual private key.
+      if (!this.privateKey) {
+        return this.notificationService.sendWarning('Could not find a valid private key to sign with.');
+      }
       walletAccount = {keyPair: {secretKey: this.util.hex.toUint8(this.privateKey), expanded: this.privateKeyExpanded}};
     }
 
+    if (this.signTypeSelected !== this.signTypes[3] && !walletAccount) {
+      return this.notificationService.sendWarning('No signing account is available.');
+    }
     this.confirmingTransaction = true;
 
     // sign the block (if not multisig)
     let block: StateBlock;
     if (this.signTypeSelected !== this.signTypes[3]) {
-      block = await this.nanoBlock.signOfflineBlock(walletAccount, this.currentBlock,
-        this.previousBlock, this.txType, this.shouldGenWork, this.selectedThreshold, isLedger);
+      const signedBlock = await this.nanoBlock.signOfflineBlock(walletAccount, currentBlock,
+        this.previousBlock, txType, this.shouldGenWork, this.selectedThreshold, isLedger);
+      if (signedBlock === null) {
+        this.confirmingTransaction = false;
+        return this.notificationService.sendWarning('Signing failed or proof of work was cancelled.');
+      }
+      block = signedBlock;
       console.log('Signature: ' + block.signature || 'Error');
       console.log('Work: ' + block.work || 'Not applied');
 
@@ -494,7 +514,7 @@ export class SignComponent implements OnInit {
       }
     } else {
       // Multisig signature
-      block = this.currentBlock;
+      block = currentBlock;
 
       // Check if aggregated multisig account matches the account we want to sign
       if (block.account !== this.multisigAccount) {
@@ -515,7 +535,7 @@ export class SignComponent implements OnInit {
         }
 
         const tempWork = await this.workPool.getWork(workBlock, this.selectedThreshold);
-        if (tempWork.length === 16 ) {
+        if (tempWork !== null && tempWork.length === 16 ) {
           block.work = tempWork;
         }
         this.notificationService.removeNotification('pow');
@@ -535,7 +555,7 @@ export class SignComponent implements OnInit {
     this.finalSignature = block.signature;
     // remove work param if empty
     if (block.work === '') {
-      delete block['work'];
+      delete (block as Partial<StateBlock>).work;
     }
 
     try {
@@ -564,51 +584,63 @@ export class SignComponent implements OnInit {
 
   // Send signed block to the network
   async confirmBlock() {
+    const currentBlock = this.currentBlock;
+    const txType = this.txType;
+    if (!currentBlock || txType === null || (txType !== TxType.open && !this.previousBlock)) {
+      return this.notificationService.sendWarning('The block or previous block is missing.');
+    }
     this.confirmingTransaction = true;
-    const workBlock = this.txType === TxType.open ? this.util.account.getAccountPublicKey(this.toAccountID) : this.currentBlock.previous;
+    const workBlock = txType === TxType.open ? this.util.account.getAccountPublicKey(this.toAccountID) : currentBlock.previous;
     if (this.shouldGenWork) {
       // For open blocks which don't have a frontier, use the public key of the account
       if (!this.workPool.workExists(workBlock)) {
         this.notificationService.sendInfo(`Generating Proof of Work...`, { identifier: 'pow', length: 0 });
       }
 
-      if (this.txType === TxType.receive || this.txType === TxType.open) {
-        this.currentBlock.work = await this.workPool.getWork(workBlock, 1 / 64);
-      } else {
-        this.currentBlock.work = await this.workPool.getWork(workBlock, 1);
-      }
+      const work = await this.workPool.getWork(workBlock,
+        (txType === TxType.receive || txType === TxType.open) ? 1 / 64 : 1);
       this.notificationService.removeNotification('pow');
+      if (work === null) {
+        this.confirmingTransaction = false;
+        return this.notificationService.sendWarning('Proof of work failed or was cancelled. The block was not processed.');
+      }
+      currentBlock.work = work;
 
       this.workPool.removeFromCache(workBlock);
     }
 
     // Validate that frontier is still the same and the previous balance is correct
-    if (this.txType !== TxType.open) {
+    if (txType !== TxType.open) {
+      const previousBlock = this.previousBlock;
+      if (!previousBlock) {
+        this.confirmingTransaction = false;
+        return this.notificationService.sendWarning('The previous block is missing.');
+      }
       const accountInfo = await this.api.accountInfo(this.signatureAccount);
-      if ('frontier' in accountInfo && accountInfo.frontier !== this.currentBlock.previous) {
+      if ('frontier' in accountInfo && accountInfo.frontier !== currentBlock.previous) {
         this.confirmingTransaction = false;
         return this.notificationService.sendError('The block can\'t be processed because the account frontier has changed!', {length: 0});
       }
-      if ('balance' in accountInfo && accountInfo.balance !== this.previousBlock.balance) {
+      if ('balance' in accountInfo && accountInfo.balance !== previousBlock.balance) {
         this.confirmingTransaction = false;
         return this.notificationService.sendError('The block can\'t be processed because the current account balance does not match the previous block!', {length: 0});
       }
     }
 
-    if (this.currentBlock.signature === '') {
+    if (currentBlock.signature === '') {
       this.confirmingTransaction = false;
       return this.notificationService.sendError('The block can\'t be processed because the signature is missing!', {length: 0});
     }
 
-    if (this.currentBlock.work === '') {
+    if (currentBlock.work === '') {
       this.confirmingTransaction = false;
       return this.notificationService.sendError('The block can\'t be processed because work is missing!', {length: 0});
     }
 
     // Process block
-    const blockData: any = this.currentBlock;
+    const blockData = currentBlock as StateBlock & { type?: 'state' };
     blockData.type = 'state';
-    const processResponse = await this.api.process(blockData, this.txType);
+    const processResponse = await this.api.process(blockData, txType);
     if (processResponse && processResponse.hash) {
       // Add new hash into the work pool but does not make much sense for this case
       // this.workPool.addWorkToCache(processResponse.hash);
