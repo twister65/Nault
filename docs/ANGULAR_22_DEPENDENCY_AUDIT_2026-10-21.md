@@ -8,6 +8,24 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Reprise du 23 octobre — quatre lots de typage publiés, CI à vérifier
+
+**Dernière mesure confirmée avant ces corrections :** [241 diagnostics TypeScript sur `b9d5327`](https://github.com/twister65/Nault/actions/runs/39988515156), contre 1 060 initialement. Le build Web **échoue** ; lint et CodeQL étaient **success** sur cette référence. Cette mesure **n'est pas** celle des commits publiés ci-dessous.
+
+**Nouveaux commits sur `upgrade/angular-22` :**
+- [`f82997f`](https://github.com/twister65/Nault/commit/f82997fb37fcd131471dd287896bf6c1ceeaee3a) : `keygenerator.component.ts`, le tableau de lignes mnémoniques porte le type `string[][]`, sans modifier la génération.
+- [`ffd6d97`](https://github.com/twister65/Nault/commit/ffd6d97cabb0e42cddef0a95055eeb72c86121ca) : `import-wallet.component.ts`, type explicite du message d'erreur et garde du type de portefeuille importé avant le déchiffrement. Aucun algorithme de déchiffrement modifié.
+- [`46eb987`](https://github.com/twister65/Nault/commit/46eb98757a859f06940ceb358a790185ccb552cb) : `manage-wallet.component.ts`, signatures et cellules CSV typées, traitement des valeurs manquantes, conversion numérique explicite des champs count/offset et des timestamps. Vérifier que l'export CSV/JSON fonctionne avant fusion.
+- [`f8ac90e`](https://github.com/twister65/Nault/commit/f8ac90eeb90dd500888f5d45f9e80ebc8eeea8ba) : `configure-wallet.component.ts`, accès facultatif à l'état de navigation, données mnémoniques typées, QR et modal UIkit typés, `FileList` nullable, vérification du résultat `FileReader` et conversion explicite de l'index. Les chemins de gestion de graine restent inchangés.
+
+**Point de vigilance :** les quatre commits de code portent `[skip ci]` afin de constituer un lot de corrections. **Aucune validation de compilation du nouveau lot ne doit être prétendue** avant un nouveau run. Ce commit documentaire sans `[skip ci]` vise à déclencher la CI ordinaire de branche. Après son exécution, vérifier d'abord le run Angular 22 correspondant au SHA exact, puis les runs lint et CodeQL. Ne pas confondre nombre attendu et nombre mesuré : les fichiers corrigés représentaient 33 diagnostics potentiels sur la dernière mesure, sans garantie qu'aucun nouveau diagnostic n'apparaisse.
+
+**Reprise suivante :** examiner les éventuelles nouvelles erreurs de compilation introduites par les types CSV, QR, `FileReader` ou l'import, puis éliminer les diagnostics d'interface restants. Les gros lots sont `musig.service.ts` (76), `sweeper.component.ts` (62), `sign.component.ts` (50) et `multisig.component.ts` (18) à la mesure précédente. Pour `musig`, `sign` et `sweeper`, n'effectuer que du typage vérifiable avec tests simulés ; ne pas masquer les nullables `PoW` ni toucher au protocole multisignature par opportunisme.
+
+**Décisions fermes :** pas de fusion `master`, pas de déploiement Vercel rouge, pas de modification Apache/CORS, pas de tests matériels Ledger demandés. La conformité de sécurité **S01 du hot wallet** et le chantier de validation/refonte multisignature restent des travaux distincts. Conserver l'historique des mesures ci-dessous pour les reprises après réinitialisation de quota.
+
+---
+
 ## CI du lot Sign — 241 diagnostics vérifiés
 
 **Dernière validation de code :** [commit `b9d5327`](https://github.com/twister65/Nault/commit/b9d5327b6e55920fc26d6dd3f8870152e698844e), [run Angular 22 39988515156](https://github.com/twister65/Nault/actions/runs/39988515156). **241 erreurs TypeScript**, contre 260 au lot précédent et **1 060** au départ (**819 diagnostics éliminés**, soit 77,3 %). Le **build Web échoue encore**, donc la compilation Electron, les tests Angular/RPC et les essais matériels ne peuvent être considérés comme validés. La page `sign.component.ts` passe de **69 à 50 diagnostics** ; les modifications portent sur ses champs d'affichage, paramètres QR et déclarations TypeScript, **pas** sur le calcul des signatures. Le reste se répartit ainsi sur ce SHA : `musig.service.ts` 76, `sweeper.component.ts` 62, `sign.component.ts` 50, `configure-wallet.component.ts` 19, `multisig.component.ts` 18, `manage-wallet.component.ts` 11, `import-wallet.component.ts` 2, `keygenerator.component.ts` 1, `modal.service.ts` 1 et `nano-block.service.ts` 1.
