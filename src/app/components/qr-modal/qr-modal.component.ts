@@ -18,10 +18,10 @@ export type QRType = 'account' | 'hash' | 'mnemonic' | 'generic';
 export class QrModalComponent implements OnInit {
 
   @Input() title = 'QR Scanner';
-  @Input() reference: string;
-  @Input() type: QRType;
-  availableDevices: MediaDeviceInfo[];
-  currentDevice: MediaDeviceInfo = null;
+  @Input() reference!: string;
+  @Input() type!: QRType;
+  availableDevices: MediaDeviceInfo[] = [];
+  currentDevice: MediaDeviceInfo | null = null;
   nano_scheme = /^(xrb|nano|nanorep|nanoseed|nanokey):.+$/g;
 
   formatsEnabled: BarcodeFormat[] = [
@@ -31,8 +31,8 @@ export class QrModalComponent implements OnInit {
     BarcodeFormat.QR_CODE,
   ];
 
-  hasDevices: boolean;
-  hasPermission: boolean;
+  hasDevices = false;
+  hasPermission = false;
 
   torchEnabled = false;
   torchAvailable$ = new BehaviorSubject<boolean>(false);
@@ -53,7 +53,7 @@ export class QrModalComponent implements OnInit {
   }
 
   onCodeResult(resultString: string) {
-    let type: QRType = null;
+    let type: QRType | null = null;
     let content = '';
     // account
     if (this.util.account.isValidAccount(resultString)) {
