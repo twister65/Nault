@@ -8,6 +8,17 @@ import * as QRCode from 'qrcode';
 import * as bip from 'bip39';
 import {formatDate} from '@angular/common';
 
+type CsvCell = string | number | null | undefined;
+type CsvRow = Record<string, CsvCell>;
+interface HistoryExportEntry {
+  account: string;
+  type: string;
+  amount: string;
+  hash: string;
+  height: string | number;
+  local_timestamp: string | number;
+}
+
 @Component({
     selector: 'app-manage-wallet',
     templateUrl: './manage-wallet.component.html',
@@ -119,8 +130,8 @@ export class ManageWalletComponent implements OnInit {
     }
   }
 
-  triggerFileDownload(fileName, exportData, type) {
-    let blob;
+  triggerFileDownload(fileName: string, exportData: object, type: 'json' | 'csv') {
+    let blob: Blob;
     // first line, include columns for spreadsheet
     let csvFile = 'account,type,amount,hash,height,time\n';
 
@@ -130,11 +141,11 @@ export class ManageWalletComponent implements OnInit {
         break;
       case 'csv':
         // comma-separated attributes for each row
-        const processRow = function (row) {
+        const processRow = function (row: CsvRow) {
           let finalVal = '';
           let j = 0;
           for (const [key, value] of Object.entries(row)) {
-            const innerValue = value === null ? '' : value.toString();
+            const innerValue = value == null ? '' : value.toString();
             let result = innerValue.replace(/"/g, '""');
             if (result.search(/("|,| |\n)/g) >= 0) {
               result = '"' + result + '"';
@@ -147,8 +158,10 @@ export class ManageWalletComponent implements OnInit {
           }
           return finalVal + '\n';
         };
-        for (let i = 0; i < exportData.length; i++) {
-          csvFile += processRow(exportData[i]);
+        if (Array.isArray(exportData)) {
+          for (const row of exportData as CsvRow[]) {
+            csvFile += processRow(row);
+          }
         }
         blob = new Blob([csvFile], { type: 'text/csv;charset=utf-8;' });
         break;
@@ -196,8 +209,8 @@ export class ManageWalletComponent implements OnInit {
     this.notifications.sendSuccess(`Wallet export downloaded!`);
   }
 
-  csvCountChange(count) {
-    if (this.util.string.isNumeric(count) && count % 1 === 0 || count === '') {
+  csvCountChange(count: string) {
+    if (this.util.string.isNumeric(count) && Number(count) % 1 === 0 || count === '') {
       // only allow beyond limit if using a custom server
       if (this.settings.settings.serverName !== 'custom' &&
       (parseInt(count, 10) > this.transactionHistoryLimit || count === '' || count === '0')) {
@@ -217,8 +230,8 @@ export class ManageWalletComponent implements OnInit {
     }
   }
 
-  csvOffsetChange(offset) {
-    if (this.util.string.isNumeric(offset) && offset % 1 === 0 || offset === '') {
+  csvOffsetChange(offset: string) {
+    if (this.util.string.isNumeric(offset) && Number(offset) % 1 === 0 || offset === '') {
       if (parseInt(offset, 10) < 0) {
         this.invalidCsvOffset = true;
       } else {
@@ -257,11 +270,11 @@ export class ManageWalletComponent implements OnInit {
     this.exportingCsv = false; // reset it here in case the file download fails (don't want spinning button forever)
 
     // contruct the export data
-    const csvData = [];
+    const csvData: CsvRow[] = [];
     if (history && history.history && history.history.length > 0) {
-      history.history.forEach(a => {
+      history.history.forEach((a: HistoryExportEntry) => {
         csvData.push({'account': a.account, 'type': a.type, 'amount': this.util.nano.rawToMnano(a.amount).toString(10),
-        'hash': a.hash, 'height': a.height, 'time': formatDate(a.local_timestamp * 1000, 'y-MM-d HH:mm:ss', 'en-US')});
+        'hash': a.hash, 'height': a.height, 'time': formatDate(Number(a.local_timestamp) * 1000, 'y-MM-d HH:mm:ss', 'en-US')});
       });
     }
 
