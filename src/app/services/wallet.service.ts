@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import {BehaviorSubject} from 'rxjs';
+import {BehaviorSubject, Subscription} from 'rxjs';
 import {UtilService} from './util.service';
 import {ApiService} from './api.service';
 import {BigNumber} from 'bignumber.js';
@@ -420,11 +420,13 @@ export class WalletService {
     const exportData: any = {
       indexes: this.wallet.accounts.map(a => a.index),
     };
+    // Ledger exports have no seed; never encrypt a nullable secret.
     let secret = '';
-    if (this.wallet.locked) {
-      secret = this.wallet.seed;
-    } else {
-      secret = CryptoJS.AES.encrypt(this.wallet.seed, this.wallet.password).toString();
+    if (this.wallet.type !== 'ledger') {
+      if (this.wallet.seed === null) throw new Error('Wallet seed unavailable for export');
+      secret = this.wallet.locked
+        ? this.wallet.seed
+        : CryptoJS.AES.encrypt(this.wallet.seed, this.wallet.password).toString();
     }
 
     if (this.wallet.type === 'seed') {
@@ -468,6 +470,7 @@ export class WalletService {
     return true;
   }
   unlockWallet(password: string) {
+    if (this.wallet.seed === null) return false;
     try {
       const decryptedBytes = CryptoJS.AES.decrypt(this.wallet.seed, password);
       const decryptedSeed = decryptedBytes.toString(CryptoJS.enc.Utf8);
@@ -1162,6 +1165,7 @@ export class WalletService {
 
     if (this.wallet.type === 'ledger') {
     } else {
+      if (this.wallet.seed === null) throw new Error('Wallet seed unavailable for storage');
       // Forcefully encrypt the seed so an unlocked wallet is never saved
       if (!this.wallet.locked) {
         const encryptedSeed = CryptoJS.AES.encrypt(this.wallet.seed, this.wallet.password || '');
@@ -1207,10 +1211,10 @@ export class WalletService {
   requestWalletUnlock() {
     this.wallet.unlockModalRequested$.next(true);
 
-    return new Promise(
+    return new Promise<boolean>(
       (resolve, reject) => {
-        let subscriptionForUnlock;
-        let subscriptionForCancel;
+        let subscriptionForUnlock: Subscription | undefined;
+        let subscriptionForCancel: Subscription | undefined;
 
         const removeSubscriptions = () => {
           if (subscriptionForUnlock != null) {
