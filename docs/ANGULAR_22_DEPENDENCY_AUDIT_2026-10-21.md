@@ -8,6 +8,22 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Point de reprise du 23 octobre — modèles représentants et utilitaires
+
+**Point de départ vérifié :** `upgrade/angular-22` sur [`797252c`](https://github.com/twister65/Nault/commit/797252c027e91023ca15775a0dd82301e90bdcba), aucune modification de `master`. L'ancienne [CI de validation 39885967252](https://github.com/twister65/Nault/actions/runs/39885967252) pour `1df6f81` termine en **failure lors du build Web**, avec **831 erreurs TypeScript**. Avant le travail du 23 octobre, la référence était **1 060**, soit **229 diagnostics de moins**. Le lint et CodeQL pour `1df6f81` sont **success**.
+
+**Deux corrections ciblées supplémentaires :**
+- [`bf2e8f5`](https://github.com/twister65/Nault/commit/bf2e8f5a33ef75ec29eb866ac2f32acd8657f1a8) : `RepresentativeService` utilise des tableaux/subjects typés (représentants stockés, détails, changement recommandé), un état initial `[null]` conservé pour l'attente, et un poids de vote total nullable. `ApiService.representativesOnline` déclare le dictionnaire de réponses et son éventuel champ `error`. Les règles de préférence/confiance des représentants sont inchangées.
+- [`2da219b`](https://github.com/twister65/Nault/commit/2da219baadd0e043613049811384866cbbff5eb3) : annotations des conversions hexadécimal/uint4/uint5/uint8, montants Nano, génération des clés, contrôle d'adresse, difficulté PoW et utilitaires de tableaux. La bibliothèque `nacl` externe reçoit une interface de type explicite. Les paramètres optionnels de `blake2b` passent de `null` à `undefined` pour correspondre au typage publié, sans changer la clé de hachage effective. **Ceci ne prouve pas une validation cryptographique : les tests restent nécessaires.**
+
+**CI et limites :** [Lint de `bf2e8f5` 39887072859](https://github.com/twister65/Nault/actions/runs/39887072859) et [CodeQL 39887072776](https://github.com/twister65/Nault/actions/runs/39887072776) : **success**. La CI Web sur le commit `2da219b` est [39887249708](https://github.com/twister65/Nault/actions/runs/39887249708), **en attente lors de cette note** ; ne pas lui attribuer un succès. Comparer les diagnostics de **ce** run à 831 après sa conclusion et corriger d'éventuelles incompatibilités de signature induites par les types plus précis.
+
+**Ordre conseillé :** réparer d'abord les régressions potentielles de typage dans `RepresentativeService`/`UtilService` révélées par la CI, puis typer `wallet.service.ts` et les composants consommateurs. **Isoler `musig.service.ts`** : l'interface WASM et ses pointeurs/mémoires exigent vérification particulière ; ne pas corriger par des assertions arbitraires et ne pas toucher au protocole/signatures sans preuve de non-régression. Réexécuter les tests Web/PWA, Electron, RPC, Nano et Ledger simulés sur le même SHA après obtention d'une compilation fonctionnelle.
+
+**Contraintes :** conserver les options strictes de TypeScript 6, ne pas fusionner dans `master`, ne pas réécrire l'historique, ne pas modifier Apache/whitelist CORS ni déployer l'Angular 22 cassé. Aucun nouveau test matériel Bluetooth avant validation finale d'Angular 22 ; reconnexion Nano X toujours ouverte (contournement `Clear session`).
+
+---
+
 ### Suite des corrections du 23 octobre — événements et QR
 
 Trois commits supplémentaires sur `upgrade/angular-22` après le point `c3284eb` :
