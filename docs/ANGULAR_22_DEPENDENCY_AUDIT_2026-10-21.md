@@ -8,6 +8,23 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Reprise ciblée — 23 octobre 2026, typage des services partagés
+
+**Point d'arrêt pour reprise dans Chat ou Work :** tête de code [`c3284eb`](https://github.com/twister65/Nault/commit/c3284eb04c11840f40dd1e5fb5b33d506383d513), branche **`upgrade/angular-22`**. Quatre commits de corrections de types ont été publiés depuis le lot `ac374aa`, sans modifier `master`, Apache, Vercel, les transports Ledger/BLE ni les règles de signature. Aucune correction de niveau `strict: false`, `skipLibCheck` ou `@ts-nocheck` n'a été introduite.
+
+- [`922c3e5`](https://github.com/twister65/Nault/commit/922c3e547fd71343e1fbe9edc886322943a87e00) : interfaces typées pour confirmations Nano via WebSocket, commandes d'abonnement, compteurs et timers, flux RxJS du wallet, cache de work, notifications et composant d'affichage. L'annotation du message WebSocket ne remplace **pas** une validation structurelle des données JSON reçues ; la validation RPC reste inchangée.
+- [`7ef12ef`](https://github.com/twister65/Nault/commit/7ef12efaf7fb1feb9e78f506d90e578b5b2c1183) : état `NodeService.node.status: boolean | null`, message de mise hors ligne nullable et paramètres RPC typés ; gestion explicite des erreurs `unknown` pour classifier les erreurs réseau.
+- [`4777ad1`](https://github.com/twister65/Nault/commit/4777ad1f8a00c16ef8f84b2ad8f3433970a020b6) : types de file PoW, états et résultats différés des workers ; suppression des tableaux `never[]` dans ce service. En cas d'exception non conforme, la file remonte un échec PoW plutôt qu'une valeur indéterminée.
+- [`c3284eb`](https://github.com/twister65/Nault/commit/c3284eb04c11840f40dd1e5fb5b33d506383d513) : modèles du carnet d'adresses, noms non null dans le réordonnancement, résultat asynchrone du lecteur QR et chaînes des deeplinks.
+
+**Contrôles à la rédaction :** le lint et CodeQL sont **success** sur le commit `4777ad1` ([lint 39885213960](https://github.com/twister65/Nault/actions/runs/39885213960), [CodeQL 39885213943](https://github.com/twister65/Nault/actions/runs/39885213943)). Le run `Validate Angular 22 migration` pour le commit final `c3284eb`, [39885403454](https://github.com/twister65/Nault/actions/runs/39885403454), était encore **en cours** : **NE PAS** attribuer une validation Web/PWA/Electron à ces corrections avant lecture du résultat. Les runs plus anciens ont pu être annulés par la concurrence CI lors de nouveaux commits.
+
+**Prochaine action impérative :** lire le log du run 39885403454 sur le bon SHA, recompter les diagnostics TypeScript restants, et commencer par la cause commune suivante plutôt que multiplier les assertions de type. Valider les changements des API RPC, les formats des messages WebSocket, les données de notification et les calculs PoW avec les tests ciblés existants. Vérifier ensuite `npm ci`, `wallet:build`, `desktop:build`, lint, tests Angular/RPC, tests simulés Ledger et CodeQL sur **un même commit**. Les quelques anciens tests d'intégration peuvent dépendre de données non entièrement formées : adapter les fixtures sans affaiblir les interfaces métier.
+
+**Contraintes inchangées :** Angular 22 n'est toujours **pas terminée**, ne pas fusionner `master` ni publier une release. Garder le domaine de staging CORS autorisé `https://nault-wallet-staging-olaverre-1312.vercel.app`. Aucun test matériel Bluetooth avant la campagne Angular 22 ; le problème de deuxième reconnexion Nano X reste ouvert, et `Clear session` est le contournement confirmé. Ne pas régénérer arbitrairement le verrou npm ni pousser d'`npm audit fix --force`.
+
+---
+
 ## Reprise de migration — 23 octobre 2026, second lot Angular 22
 
 **Statut : lot de compatibilité publié et testé partiellement ; migration toujours NON TERMINÉE.** Ce chapitre remplace les diagnostics opérationnels antérieurs lorsqu'une correction est explicitement indiquée. Aucun passage à `strict: false`, `skipLibCheck`, `@ts-nocheck` ou suppression de tests n'a été ajouté.
