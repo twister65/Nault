@@ -11,6 +11,19 @@ import {BehaviorSubject} from 'rxjs';
 import { tools as nanocurrencyWebTools } from 'nanocurrency-web';
 const nacl = window['nacl'];
 
+type DraftStateBlock =
+  Pick<StateBlock, 'account' | 'previous' | 'representative' | 'balance' | 'link'> & {
+    type: 'state';
+    signature: string | null;
+    work: string | null;
+  };
+
+interface NanoAccountInfo {
+  frontier?: string;
+  balance?: string;
+  representative?: string;
+}
+
 @Injectable()
 export class NanoBlockService {
   representativeAccounts = [
@@ -42,7 +55,7 @@ export class NanoBlockService {
     private ledgerService: LedgerService,
     public settings: AppSettingsService) { }
 
-  async generateChange(walletAccount, representativeAccount, ledger = false) {
+  async generateChange(walletAccount: WalletAccount, representativeAccount: string, ledger = false) {
     const toAcct = await this.api.accountInfo(walletAccount.id);
     if (!toAcct) throw new Error(`Account must have an open block first`);
 
@@ -53,7 +66,7 @@ export class NanoBlockService {
     const balance = new BigNumber(toAcct.balance);
     const balanceDecimal = balance.toString(10);
     const link = this.zeroHash;
-    const blockData = {
+    const blockData: DraftStateBlock = {
       type: 'state',
       account: walletAccount.id,
       previous: toAcct.frontier,
@@ -191,7 +204,7 @@ export class NanoBlockService {
   //
   // }
 
-  async generateSend(walletAccount, toAccountID, rawAmount, ledger = false) {
+  async generateSend(walletAccount: WalletAccount, toAccountID: string, rawAmount: string | number | BigNumber, ledger = false) {
     const fromAccount = await this.api.accountInfo(walletAccount.id);
     if (!fromAccount) throw new Error(`Unable to get account information for ${walletAccount.id}`);
 
@@ -203,7 +216,7 @@ export class NanoBlockService {
     const remainingDecimal = remaining.toString(10);
 
     const representative = fromAccount.representative || (this.settings.settings.defaultRepresentative || this.getRandomRepresentative());
-    const blockData = {
+    const blockData: DraftStateBlock = {
       type: 'state',
       account: walletAccount.id,
       previous: fromAccount.frontier,
@@ -253,13 +266,13 @@ export class NanoBlockService {
     return processResponse.hash;
   }
 
-  async generateReceive(walletAccount, sourceBlock, ledger = false) {
+  async generateReceive(walletAccount: WalletAccount, sourceBlock: string, ledger = false) {
     const toAcct = await this.api.accountInfo(walletAccount.id);
     const walletAccountPublicKey = this.util.account.getAccountPublicKey(walletAccount.id);
 
     await this.validateAccount(toAcct, walletAccountPublicKey);
 
-    let workBlock = null;
+    let workBlock: string | null = null;
 
     const openEquiv = !toAcct || !toAcct.frontier;
 
@@ -272,7 +285,7 @@ export class NanoBlockService {
     const newBalanceDecimal = newBalance.toString(10);
     let newBalancePadded = newBalance.toString(16);
     while (newBalancePadded.length < 32) newBalancePadded = '0' + newBalancePadded; // Left pad with 0's
-    const blockData = {
+    const blockData: DraftStateBlock = {
       type: 'state',
       account: walletAccount.id,
       previous: previousBlock,
@@ -289,7 +302,7 @@ export class NanoBlockService {
         this.ledgerService.notifyPendingReconnect();
         return null;
       }
-      const ledgerBlock: any = {
+      const ledgerBlock: {representative: string; balance: string; sourceBlock: string; previousBlock?: string} = {
         representative: representative,
         balance: newBalanceDecimal,
         sourceBlock: sourceBlock,
@@ -311,7 +324,7 @@ export class NanoBlockService {
         if (this.ledgerService.isUnavailableError(err)) {
           this.ledgerService.handleUnavailableReceive();
         } else {
-          this.notifications.sendWarning(err.message || `Transaction denied on Ledger device`);
+          this.sendLedgerDeniedNotification(err);
         }
         return null;
       }
@@ -353,7 +366,13 @@ export class NanoBlockService {
     console.log('Signing block of subtype: ' + TxType[type]);
 
     if (ledger) {
-      let ledgerBlock = null;
+      let ledgerBlock: {
+        previousBlock?: string;
+        representative: string;
+        balance: string;
+        recipient?: string;
+        sourceBlock?: string;
+      } | null = null;
       if (type === TxType.send) {
         ledgerBlock = {
           previousBlock: block.previous,
@@ -412,7 +431,7 @@ export class NanoBlockService {
     return block; // return signed block (with or without work)
   }
 
-  async validateAccount(accountInfoUntrusted, accountPublicKey) {
+  async validateAccount(accountInfoUntrusted: NanoAccountInfo | null, accountPublicKey: string) {
     if (!accountInfoUntrusted) return;
 
     if (!accountInfoUntrusted.frontier || accountInfoUntrusted.frontier === this.zeroHash) {
@@ -480,15 +499,21 @@ export class NanoBlockService {
   }
 
   // Sign a state block, and insert the signature into the block.
-  signStateBlock(walletAccount, blockData) {
+  signStateBlock(
+    walletAccount: WalletAccount,
+    blockData: Pick<StateBlock, 'account' | 'previous' | 'representative' | 'balance' | 'link'> & {signature: string | null}
+  ) {
     const hashBytes = this.util.nano.hashStateBlock(blockData);
     const privKey = walletAccount.keyPair.secretKey;
     const signed = nacl.sign.detached(hashBytes, privKey, walletAccount.keyPair.expanded);
     blockData.signature = this.util.hex.fromUint8(signed);
   }
 
-  sendLedgerDeniedNotification(err = null) {
-    this.notifications.sendWarning(err && err.message || `Transaction denied on Ledger device`);
+  sendLedgerDeniedNotification(err: unknown = null) {
+    const message = err !== null && typeof err === 'object' && 'message' in err
+      ? err.message
+      : null;
+    this.notifications.sendWarning(message ? String(message) : 'Transaction denied on Ledger device');
   }
   sendLedgerNotification() {
     this.notifications.sendInfo(`Waiting for confirmation on Ledger Device...`, { identifier: 'ledger-sign', length: 0 });

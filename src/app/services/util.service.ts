@@ -422,7 +422,9 @@ function validateWork(blockHash: string, threshold: string, work: string) {
   return nanocurrency.validateWork({blockHash: blockHash, threshold: threshold, work: work});
 }
 
-function hashStateBlock(block: StateBlock) {
+// Only these five fields participate in the Nano state-block hash.
+// Signature, work and subtype metadata never enter this digest.
+function hashStateBlock(block: Pick<StateBlock, 'account' | 'previous' | 'representative' | 'balance' | 'link'>) {
   const balance = new BigNumber(block.balance);
   if (balance.isNegative() || balance.isNaN()) {
     throw new Error(`Negative or NaN balance`);
