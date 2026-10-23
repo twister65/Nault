@@ -8,6 +8,20 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Suite du 23 octobre — 737 diagnostics et types du wallet
+
+**Nouveau résultat confirmé :** la [CI Angular 22 39887845010](https://github.com/twister65/Nault/actions/runs/39887845010), commit [`ba4f873`](https://github.com/twister65/Nault/commit/ba4f87378032b1f954ee1422f3f1e088722ad283), finit en **failure sur la compilation Web** avec **737 erreurs TypeScript**. Base initiale : 1 060, soit **323 diagnostics résolus**. `AppSettingsService` et `RepresentativeService` sont à **0 diagnostic** sur ce run. Lint/CodeQL réussis sur les commits antérieurs ; ne pas confondre cela avec une validation complète Angular 22.
+
+**Deux commits de suite :**
+- [`72ae6d9`](https://github.com/twister65/Nault/commit/72ae6d97c822dfb035a601ca785391949e170188) : types du portefeuille (comptes, blocs en attente, indices, montants `string | BigNumber`), garde pour ne pas assimiler des comptes inconnus aux comptes de l'utilisateur si un RPC renvoie des données supplémentaires, et alignement du cache des blocs traités, composé de **hashs `string[]`**. La branche de vérification des doublons utilise maintenant `includes(nextBlock.hash)` au lieu de rechercher une propriété `hash` inexistante sur une chaîne. L'ancienne vérification était sans effet ; cette correction doit être testée avant fusion car elle influence les répétitions de réception.
+- [`2ac4e76`](https://github.com/twister65/Nault/commit/2ac4e76082e8696f9cf2bf1d50cc8d0729c18019) : test Jasmine de non-régression vérifiant qu'un bloc déjà marqué comme reçu n'entraîne pas de nouvel appel à `generateReceive`. Ce test n'exige pas de clé Ledger réelle.
+
+**CI du dernier commit :** [validation 39888320190](https://github.com/twister65/Nault/actions/runs/39888320190) lancée, **résultat en attente** au moment de cette documentation. Le test Jasmine ne peut être exécuté via la chaîne Angular tant que le build Web est bloqué par les erreurs strictes ; vérifier son comportement dès que le compilateur progresse. Examiner aussi si le nouveau type `Block.amount` déclenche des diagnostics supplémentaires chez ses consommateurs.
+
+**Priorité après résultat CI :** traiter les erreurs supplémentaires éventuellement introduites dans le modèle `WalletService`, puis continuer les typages du portefeuille et des composants `account-details`/`configure-app`. Le service de multisignature WASM reste hors de ce lot pour éviter une modification cryptographique non validée. Ne pas fusionner vers `master`, ne pas déployer sur le staging Vercel tant que le build est rouge et ne pas demander d'essais matériels Bluetooth.
+
+---
+
 ## Suivi du 23 octobre — nouvelle CI à 756 diagnostics
 
 **Validation mesurée :** [run Angular 22 39887249708](https://github.com/twister65/Nault/actions/runs/39887249708) sur [`2da219b`](https://github.com/twister65/Nault/commit/2da219baadd0e043613049811384866cbbff5eb3). Le build Web/PWA reste **failure**, avec **756 diagnostics TypeScript**, contre **831** sur `1df6f81` et **1 060** sur la référence initiale `7920bff`. Soit une baisse de **304 diagnostics** par rapport à la référence, sans contournement des options strictes. Le service des représentants affiche **0 erreur**, `UtilService` en affiche **9** (erreurs de notation `BigNumber.Value`, plus une erreur sur `isNumeric`).
