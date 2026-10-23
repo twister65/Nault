@@ -8,6 +8,20 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Priorité MuSig — typage WebAssembly du 23 octobre 2026
+
+**Demande utilisateur :** traiter en priorité `src/app/services/musig.service.ts` suspecté de bloquer les builds Vercel. Le dernier log GitHub Actions détaillé disponible était le [run 39988515156](https://github.com/twister65/Nault/actions/runs/39988515156) sur `b9d5327`, avec **76 erreurs TypeScript dans MuSig sur 241 au total**. Vercel signalait **ERROR** sur le commit documentaire `e3c1978` (déploiement `dpl_7xrQ7D7wsiU3jiLyU3wSLSD7y7Lw`), mais les logs de build Vercel n'ont pas pu être lus (autorisation du scope manquante). Ne pas attribuer automatiquement ces 76 erreurs au journal Vercel.
+
+**Corrections publiées sur `upgrade/angular-22` :**
+- [`a7c52c3`](https://github.com/twister65/Nault/commit/a7c52c3290590a66c4f320baeb8199bb07c13c9f) : interface TypeScript des exports du WASM MuSig basée sur les points d'appel existants ; types numériques des paramètres WASI, chargement explicite et garde du WASM ; types `Uint8Array` pour la mémoire, pointeurs numériques, callback d'agrégation, résultats d'agrégation et signatures d'étapes ; tableaux de clés publiques et paramètres typés ; conversions d'erreurs capturées en texte. La lecture des octets `copyFromWasm` utilise une vue `Uint8Array` explicite pour accéder au buffer. Aucun algorithme de dérivation de clé, de génération de signature ou d'ordre des étapes MuSig intentionnellement modifié.
+- [`79c4181`](https://github.com/twister65/Nault/commit/79c4181770af022eaa4abc51bb45d5da26488102) : prise en charge contrôlée de `privateKey: string | null` dans l'API publique `runMultiSign`, afin de refléter l'appel de la page Sign qui utilise un état initial nullable. L'absence de clé est rejetée avant l'appel interne au moteur.
+
+**Ce qui reste à valider :** ces commits sont **publiés, mais leur build n'est pas confirmé**. Lire la CI GitHub Actions et Vercel du SHA actuel avant d'annoncer un nouveau nombre de diagnostics. Vérifier particulièrement l'absence de nouvelles erreurs dans `sign.component.ts` et les définitions WASM. Les signatures de fonctions reposent sur les appels du JavaScript existant ; comparer avec le véritable module compilé (`build-or-validate_musig_wasm.sh`) et ajouter des tests simulés avant de valider la cryptographie. Il faut aussi tester séparément l'agrégation d'adresses et les étapes 0–3, l'annulation, les erreurs, les libérations de mémoire et le résultat signé. Ne pas annoncer la multisignature fonctionnelle sans ces tests.
+
+**Interdictions maintenues :** aucun merge vers `master`, aucun changement de `S01` / hot wallet, aucune modification du transport Ledger/APDU, ni des paramètres Apache/CORS. La branche reste une migration de typage Angular 22 jusqu'à la validation complète Web/PWA, Electron, lint, CodeQL et tests.
+
+---
+
 ## Reprise du 23 octobre — quatre lots de typage publiés, CI à vérifier
 
 **Dernière mesure confirmée avant ces corrections :** [241 diagnostics TypeScript sur `b9d5327`](https://github.com/twister65/Nault/actions/runs/39988515156), contre 1 060 initialement. Le build Web **échoue** ; lint et CodeQL étaient **success** sur cette référence. Cette mesure **n'est pas** celle des commits publiés ci-dessous.
