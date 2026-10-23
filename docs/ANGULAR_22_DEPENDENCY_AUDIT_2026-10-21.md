@@ -8,6 +8,18 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## CI du lot Sign — 241 diagnostics vérifiés
+
+**Dernière validation de code :** [commit `b9d5327`](https://github.com/twister65/Nault/commit/b9d5327b6e55920fc26d6dd3f8870152e698844e), [run Angular 22 39988515156](https://github.com/twister65/Nault/actions/runs/39988515156). **241 erreurs TypeScript**, contre 260 au lot précédent et **1 060** au départ (**819 diagnostics éliminés**, soit 77,3 %). Le **build Web échoue encore**, donc la compilation Electron, les tests Angular/RPC et les essais matériels ne peuvent être considérés comme validés. La page `sign.component.ts` passe de **69 à 50 diagnostics** ; les modifications portent sur ses champs d'affichage, paramètres QR et déclarations TypeScript, **pas** sur le calcul des signatures. Le reste se répartit ainsi sur ce SHA : `musig.service.ts` 76, `sweeper.component.ts` 62, `sign.component.ts` 50, `configure-wallet.component.ts` 19, `multisig.component.ts` 18, `manage-wallet.component.ts` 11, `import-wallet.component.ts` 2, `keygenerator.component.ts` 1, `modal.service.ts` 1 et `nano-block.service.ts` 1.
+
+**Contrôles de ce SHA :** [CodeQL 39988515035](https://github.com/twister65/Nault/actions/runs/39988515035) **success** ; [lint 39988514823](https://github.com/twister65/Nault/actions/runs/39988514823) **encore en cours** lors de l'enregistrement. Lire sa conclusion avant d'annoncer que le lot entier est validé. **Point de reprise exact :** tête de code `b9d5327`, puis commit documentaire du présent bloc.
+
+**Suites recommandées :** garder les corrections de l'interface Sign séparées des fonctions `confirmTransaction`, `signOfflineBlock`, `runMultiSign` et du WASM. Le champ nullable `currentBlock`, les comptes potentiellement absents et les résultats de PoW `string | null` exigent de vrais gardes et des tests adaptés, non des assertions `!`. Les modules `sweeper` et `configure-wallet` manipulent aussi des graines et des clés : ne pas profiter du typage pour implémenter implicitement **S01**. Le chantier multisig (et ses tests) restera distinct et doit être validé avant toute fusion finale.
+
+**État :** aucune fusion `master`, aucun déploiement Vercel, aucune modification Apache/CORS ou tests physiques Ledger/BLE. `upgrade/angular-22` continue uniquement comme branche de travail.
+
+---
+
 ## Reprise du 23 octobre — 260 diagnostics, états de présentation de Sign
 
 **Mesure CI certaine :** [validation Angular 22 39946339298](https://github.com/twister65/Nault/actions/runs/39946339298) pour le commit [`188e15d`](https://github.com/twister65/Nault/commit/188e15da5ed5c42c5b63697a0c7e6c9df8c2165d) : **260 erreurs TypeScript**, contre 265 sur `37be906` et 1 060 à l'origine (800 diagnostics éliminés). Le build Web/PWA est toujours **failure** et les tests qui en dépendent, ainsi qu'Electron, ne sont pas validés. [Lint 39946339312](https://github.com/twister65/Nault/actions/runs/39946339312) et [CodeQL Advanced 39946339378](https://github.com/twister65/Nault/actions/runs/39946339378) : **success**. Aucune erreur ne reste dans le service Ledger, tandis que `nano-block.service.ts` conserve **une** erreur de type concernant `work: string | null` ; **ne pas résoudre celle-ci par `!` ou en inventant du PoW**, sa sémantique doit être contrôlée avec les transactions.
