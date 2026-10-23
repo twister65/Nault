@@ -15,7 +15,7 @@ export class KeygeneratorComponent implements OnInit {
   mnemonic = '';
   privateKey = '';
   account = '';
-  newWalletMnemonicLines = [];
+  newWalletMnemonicLines: string[][] = [];
 
   constructor(
     private util: UtilService,
