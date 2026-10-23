@@ -1,4 +1,5 @@
-import { filter } from 'rxjs/operators';
+// Match the RxJS 6 ABI required by the pinned Ledger BLE transport.
+import { filter } from 'rxjs-ledger/operators';
 import TransportBLE from '@ledgerhq/hw-transport-web-ble';
 
 // Ledger BLE uses 0x08 for MTU replies and 0x05 for APDU data.

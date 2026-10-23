@@ -1,7 +1,8 @@
 import TransportBLE from '@ledgerhq/hw-transport-web-ble';
 import { getBluetoothServiceUuids, getInfosForServiceUuid } from '@ledgerhq/devices';
 import { Device, Characteristic } from '@ledgerhq/hw-transport-web-ble/lib/types';
-import { Subject } from 'rxjs';
+// The pinned Ledger BLE constructor expects an RxJS 6 Observable.
+import { Subject } from 'rxjs-ledger';
 import { Buffer } from 'buffer';
 
 // Keep Ledger's discovery, framing and exchange implementation, but own the
