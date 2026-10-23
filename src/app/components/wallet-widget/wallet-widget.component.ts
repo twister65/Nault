@@ -34,7 +34,7 @@ export class WalletWidgetComponent implements OnInit {
     public settings: AppSettingsService,
     private powService: PowService) { }
 
-  @ViewChild('passwordInput') passwordInput: ElementRef;
+  @ViewChild('passwordInput') passwordInput!: ElementRef<HTMLInputElement>;
 
   ngOnInit() {
     const UIkit = (window as any).UIkit;
