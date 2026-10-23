@@ -5,6 +5,7 @@ import {AddressBookService, AddressBookEntry} from '../../services/address-book.
 import {ApiService} from '../../services/api.service';
 import {NotificationService} from '../../services/notification.service';
 import {WalletService, WalletAccount, ReceivableBlockUpdate} from '../../services/wallet.service';
+import {LedgerService, LedgerStatus} from '../../services/ledger.service';
 import {NanoBlockService} from '../../services/nano-block.service';
 import {AppSettingsService} from '../../services/app-settings.service';
 import {PriceService} from '../../services/price.service';
@@ -136,6 +137,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     private repService: RepresentativeService,
     private notifications: NotificationService,
     private wallet: WalletService,
+    private ledger: LedgerService,
     private util: UtilService,
     public settings: AppSettingsService,
     private nanoBlock: NanoBlockService,
@@ -837,6 +839,32 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   copied() {
     this.notifications.removeNotification('success-copied');
     this.notifications.sendSuccess(`Successfully copied to clipboard!`, { identifier: 'success-copied' });
+  }
+
+  get isLedgerWallet(): boolean {
+    return this.wallet.isLedgerWallet();
+  }
+
+  // Also expose the hardware address confirmation from Account Details.
+  async showLedgerAddress(account: WalletAccount): Promise<void> {
+    if (this.ledger.ledger.status !== LedgerStatus.READY) {
+      this.notifications.sendWarning(this.translocoService.translate('accounts.ledger-device-must-be-ready'));
+      return;
+    }
+
+    this.notifications.sendInfo(
+      this.translocoService.translate('accounts.confirming-account-address-on-ledger-device'),
+      { identifier: 'ledger-account', length: 0 }
+    );
+    try {
+      // showOnScreen=true asks the Ledger to display the address for verification.
+      await this.ledger.getLedgerAccount(account.index, true);
+      this.notifications.sendSuccess(this.translocoService.translate('accounts.account-address-confirmed-on-ledger'));
+    } catch (error) {
+      this.notifications.sendError(this.translocoService.translate('accounts.account-address-denied-if-it-is-wrong-do-not-use-the-wallet'));
+    } finally {
+      this.notifications.removeNotification('ledger-account');
+    }
   }
 
   // Remote signing methods
