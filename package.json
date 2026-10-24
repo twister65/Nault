@@ -24,6 +24,7 @@
     "desktop:dev": "npm run desktop:compile && electron desktop-app/dist/desktop-app.js",
     "desktop:local": "electron-builder -p never -c.npmRebuild=false",
     "test:ledger-bluetooth": "npm run desktop:compile && node scripts/test-ledger-bluetooth.js",
+    "test:i18n": "node scripts/check-i18n.cjs",
     "lint:flat": "eslint \"src/**/*.{ts,html}\""
   },
   "private": true,
