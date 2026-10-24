@@ -7,7 +7,13 @@ export class TranslocoHttpLoader implements TranslocoLoader {
   constructor() {}
 
   getTranslation(lang: string) {
-    return import(/* webpackChunkName: "translation" */ `../../assets/i18n/${lang}.json`).then(res => res.default);
+    // Static imports ensure Angular's esbuild application builder creates a
+    // separate lazy-loaded chunk for every supported language.
+    switch (lang) {
+      case 'fr': return import('../../assets/i18n/fr.json').then(res => res.default);
+      case 'es': return import('../../assets/i18n/es.json').then(res => res.default);
+      default: return import('../../assets/i18n/en.json').then(res => res.default);
+    }
   }
 }
 
@@ -20,7 +26,8 @@ export class TranslocoHttpLoader implements TranslocoLoader {
       config: {
         availableLangs: [
           { id: 'en', label: 'English' },
-          // { id: 'de', label: 'Deutsch' }
+          { id: 'fr', label: 'Français' },
+          { id: 'es', label: 'Español' }
         ],
         defaultLang: 'en',
         fallbackLang: 'en',
