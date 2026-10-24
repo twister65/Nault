@@ -83,8 +83,8 @@
                 @if (settings.settings.displayCurrency) {
                   <div style="margin-top: 10px;">
                     <div class="uk-width-1-1 uk-inline">
-                      <a class="uk-form-icon uk-link-reset uk-link-muted fiat-currency-ticker" uk-tooltip title="Last Price: {{ price.price.lastPrice | fiat: settings.settings.displayCurrency }} / XNO">{{ settings.settings.displayCurrency | currencySymbol }}</a>
-                      <input [(ngModel)]="amountFiat" [ngClass]="{ 'uk-form-danger': !validFiat }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" (input)="fiatAmountChange()" style="padding-left: 52px !important;" class="uk-input" id="form-horizontal-text-fiat" type="number" step="any" placeholder="Amount of {{ settings.settings.displayCurrency }}">
+                      <a class="uk-form-icon uk-link-reset uk-link-muted fiat-currency-ticker" uk-tooltip title="{{ 'ui-receive-extra.last-price' | transloco }}: {{ price.price.lastPrice | fiat: settings.settings.displayCurrency }} / XNO">{{ settings.settings.displayCurrency | currencySymbol }}</a>
+                      <input [(ngModel)]="amountFiat" [ngClass]="{ 'uk-form-danger': !validFiat }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" (input)="fiatAmountChange()" style="padding-left: 52px !important;" class="uk-input" id="form-horizontal-text-fiat" type="number" step="any" [placeholder]="'ui-receive-extra.amount-of-currency' | transloco:{ currency: settings.settings.displayCurrency }">
                     </div>
                   </div>
                 }
@@ -192,8 +192,8 @@
             <div class="rounded-area">
               <div style="text-align: center;">{{
                 (pendingAccountModel === '0')
-                ? 'No new incoming transactions'
-                : 'No new incoming transactions for selected account'
+                ? ('ui-receive-extra.none' | transloco)
+                : ('ui-receive-extra.none-account' | transloco)
               }}</div>
             </div>
           }
@@ -222,7 +222,7 @@
                 <td class="account-column uk-visible-toggle uk-text-truncate">
                   <div uk-grid class="uk-flex-nowrap">
                     <div class="uk-width-auto uk-text-truncate" style="max-width: calc(100% - 35px);">
-                      <a [routerLink]="'/account/' + pending.account" class="account-container uk-text-truncate" title="View Account Details" uk-tooltip>
+                      <a [routerLink]="'/account/' + pending.account" class="account-container uk-text-truncate" [title]="'ui-receive-extra.view-account' | transloco" uk-tooltip>
                         <div class="identicon-name-row uk-text-truncate">
                           @if ((settings.settings.identiconsStyle !== 'none')) {
                             <app-nano-identicon scale="6" [accountID]="pending.account" [settingIdenticonsStyle]="settings.settings.identiconsStyle" class="nano-identicon"></app-nano-identicon>
@@ -238,18 +238,18 @@
                     </div>
                     <div class="nano-address-actions uk-width-auto uk-flex uk-flex-bottom">
                       <ul class="uk-iconnav">
-                        <li><a ngxClipboard [cbContent]="pending.account" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Account Address" uk-tooltip></a></li>
+                        <li><a ngxClipboard [cbContent]="pending.account" (cbOnSuccess)="copied()" uk-icon="icon: copy" [title]="'ui-send.copy-address' | transloco" uk-tooltip></a></li>
                       </ul>
                     </div>
                   </div>
-                  <a [routerLink]="'/transaction/' + pending.hash" class="uk-link-text uk-text-small uk-text-muted uk-text-truncate block-hash block-hash-monospace" title="View Block Details" uk-tooltip>{{ pending.hash }}</a>
+                  <a [routerLink]="'/transaction/' + pending.hash" class="uk-link-text uk-text-small uk-text-muted uk-text-truncate block-hash block-hash-monospace" [title]="'ui-receive-extra.view-block' | transloco" uk-tooltip>{{ pending.hash }}</a>
                   @if ((pendingAccountModel === '0')) {
                     <div class="arrow-down">
                       <div class="icon" uk-icon="icon: chevron-down; ratio: 1.2;"></div>
                     </div>
                     <div uk-grid class="uk-flex-nowrap">
                       <div class="uk-width-auto uk-text-truncate" style="max-width: calc(100% - 35px);">
-                        <a [routerLink]="'/account/' + pending.destination" class="account-container uk-text-truncate" title="View Account Details" uk-tooltip>
+                        <a [routerLink]="'/account/' + pending.destination" class="account-container uk-text-truncate" [title]="'ui-receive-extra.view-account' | transloco" uk-tooltip>
                           <div class="identicon-name-row uk-text-truncate">
                             @if ((settings.settings.identiconsStyle !== 'none')) {
                               <app-nano-identicon scale="6" [accountID]="pending.destination" [settingIdenticonsStyle]="settings.settings.identiconsStyle" class="nano-identicon"></app-nano-identicon>
@@ -265,7 +265,7 @@
                       </div>
                       <div class="nano-address-actions uk-width-auto uk-flex uk-flex-bottom">
                         <ul class="uk-iconnav">
-                          <li><a ngxClipboard [cbContent]="pending.destination" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Account Address" uk-tooltip></a></li>
+                          <li><a ngxClipboard [cbContent]="pending.destination" (cbOnSuccess)="copied()" uk-icon="icon: copy" [title]="'ui-send.copy-address' | transloco" uk-tooltip></a></li>
                         </ul>
                       </div>
                     </div>
@@ -274,14 +274,14 @@
                 <ng-template #transactionActions>
                   <div class="button-container">
                     @if (!pending.loading) {
-                      <button class="uk-button uk-button-primary uk-text-center uk-width-auto" type="button" (click)="receiveReceivableBlock(pending)">RECEIVE</button>
+                      <button class="uk-button uk-button-primary uk-text-center uk-width-auto" type="button" (click)="receiveReceivableBlock(pending)">{{ 'ui-receive-extra.receive-button' | transloco }}</button>
                     }
                     @if (pending.loading) {
                       <button class="uk-button uk-button-secondary uk-disabled uk-button-small nlt-icon-button nlt-icon-button-inline"><span class="spinner" uk-spinner="ratio: 0.5;"></span> {{ 'ui-receive.receiving' | transloco }}</button>
                     }
                   </div>
                 </ng-template>
-                <td class="amount-column uk-text-middle uk-text-muted" [title]="('Incoming Transaction') + ( (pending.amountRaw && (pending.amountRaw > 0) ) ? ( ', +' + ( pending.amountRaw.toString(10) ) + ' raw' ) : '' )">
+                <td class="amount-column uk-text-middle uk-text-muted" [title]="('ui-receive-extra.incoming' | transloco) + ( (pending.amountRaw && (pending.amountRaw > 0) ) ? ( ', +' + ( pending.amountRaw.toString(10) ) + ' raw' ) : '' )">
                   <span class="uk-text-small">{{ 'ui-receive.ready-to-receive' | transloco }}</span><br>
                   <span class="amount-integer">{{ pending.amount | rai: 'mnano,true' | amountsplit: 0 }}</span>
                   <span class="amount-fractional">{{ pending.amount | rai: 'mnano,true' | amountsplit: 1 }}</span>
@@ -299,8 +299,8 @@
               <tr>
                 <td colspan="4" style="text-align: center;">{{
                   (pendingAccountModel === '0')
-                  ? 'No new incoming transactions'
-                  : 'No new incoming transactions for selected account'
+                  ? ('ui-receive-extra.none' | transloco)
+                  : ('ui-receive-extra.none-account' | transloco)
                 }}</td>
               </tr>
             }
@@ -315,11 +315,11 @@
             <table class="uk-table uk-table-striped uk-table-small">
               <thead>
                 <tr class="uk-alert uk-alert-primary missing-accounts-hint">
-                  <td colspan="4" style="text-align: center;"><span uk-icon="icon: info"></span> Minimum Receive is set to @if (( util.nano.mnanoToRaw(this.settings.settings.minimumReceive).toFixed().length > 24 )) {
+                  <td colspan="4" style="text-align: center;"><span uk-icon="icon: info"></span> {{ 'ui-receive-extra.min-prefix' | transloco }} @if (( util.nano.mnanoToRaw(this.settings.settings.minimumReceive).toFixed().length > 24 )) {
                   <a class="hint-action" routerLink="/configure-app" routerLinkActive="active">{{ util.nano.mnanoToRaw(this.settings.settings.minimumReceive).toFixed() | rai: 'mnano,true' | amountsplit: 0 }}{{ util.nano.mnanoToRaw(this.settings.settings.minimumReceive).toFixed() | rai: 'mnano,true' | amountsplit: 1 }} XNO</a>
                 } @else {
                   <a class="hint-action" routerLink="/configure-app" routerLinkActive="active">{{ util.nano.mnanoToRaw(this.settings.settings.minimumReceive).toFixed() }} raw</a>
-                }, transactions below this amount will be hidden.</td>
+                }{{ 'ui-receive-extra.min-suffix' | transloco }}</td>
               </tr>
             </thead>
           </table>
@@ -407,7 +407,7 @@
         @if ((inMerchantModePaymentComplete === false) && (inMerchantModeQR === false) && (pendingAccountModel === '0')) {
           <div class="uk-width-1-1 uk-card uk-card-default uk-margin-bottom">
             <div class="uk-card-body">
-              <p class="uk-text-large">Select the <span class="uk-text-primary">destination account</span></p>
+              <p class="uk-text-large">{{ 'ui-receive-extra.select-the' | transloco }} <span class="uk-text-primary">{{ 'ui-receive-extra.destination-account' | transloco }}</span></p>
               <select id="form-horizontal-select" class="uk-select" [(ngModel)]="pendingAccountModel" (change)="onSelectedAccountChange(pendingAccountModel)">
                 <option [value]="0">–</option>
                 @for (account of accounts; track account) {
@@ -438,7 +438,7 @@
             style="margin-top: 60px;"
             >
             <div class="uk-card-body">
-              <p class="uk-text-large">Enter the <span class="uk-text-primary">requested amount</span></p>
+              <p class="uk-text-large">{{ 'ui-receive-extra.enter-the' | transloco }} <span class="uk-text-primary">{{ 'ui-receive-extra.requested-amount-lower' | transloco }}</span></p>
               <div class="form-amount">
                 <div class="uk-width-1-1 uk-inline">
                   <label class="uk-form-icon uk-link-reset uk-link-muted xno-symbol" for="form-horizontal-amount"></label>
@@ -448,8 +448,8 @@
                   <div style="margin-top: 10px;">
                     <p class="text-half-muted" style="margin: 0 0 14px 0;">or</p>
                     <div class="uk-width-1-1 uk-inline">
-                      <a class="uk-form-icon uk-link-reset uk-link-muted fiat-currency-ticker" uk-tooltip title="Last Price: {{ price.price.lastPrice | fiat: settings.settings.displayCurrency }} / XNO">{{ settings.settings.displayCurrency | currencySymbol }}</a>
-                      <input [(ngModel)]="amountFiat" [ngClass]="{ 'uk-form-danger': !validFiat }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" (input)="fiatAmountChange()" style="padding-left: 52px !important;" class="uk-input" id="form-horizontal-text-fiat" type="number" step="any" placeholder="Amount of {{ settings.settings.displayCurrency }}">
+                      <a class="uk-form-icon uk-link-reset uk-link-muted fiat-currency-ticker" uk-tooltip title="{{ 'ui-receive-extra.last-price' | transloco }}: {{ price.price.lastPrice | fiat: settings.settings.displayCurrency }} / XNO">{{ settings.settings.displayCurrency | currencySymbol }}</a>
+                      <input [(ngModel)]="amountFiat" [ngClass]="{ 'uk-form-danger': !validFiat }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" (input)="fiatAmountChange()" style="padding-left: 52px !important;" class="uk-input" id="form-horizontal-text-fiat" type="number" step="any" [placeholder]="'ui-receive-extra.amount-of-currency' | transloco:{ currency: settings.settings.displayCurrency }">
                     </div>
                   </div>
                 }
@@ -466,7 +466,7 @@
           </div>
         }
         @if ((inMerchantModeQR === true)) {
-          <p class="uk-text-large uk-margin-remove-bottom">Send</p>
+          <p class="uk-text-large uk-margin-remove-bottom">{{ 'general.send' | transloco }}</p>
           @if ((amountNano === '')) {
             <p class="uk-text-large uk-text-primary uk-margin-remove-top">
               <span class="merchant-mode-currency-name">XNO</span>
@@ -516,14 +516,14 @@
                   <p
                     class="uk-text-large text-half-muted uk-margin-remove-bottom"
                     >
-                    Received <span class="uk-text-success">more</span> than requested
+                    {{ 'ui-receive-extra.received-more' | transloco }} <span class="uk-text-success">{{ 'ui-receive-extra.more-than' | transloco }}</span> {{ 'ui-receive-extra.than-requested' | transloco }}
                   </p>
                 }
                 @if ((amountNano !== '') && prompt.lessThanRequested) {
                   <p
                     class="uk-text-large text-half-muted uk-margin-remove-bottom"
                     >
-                    Received <span class="uk-text-warning">less</span> than requested
+                    {{ 'ui-receive-extra.received-more' | transloco }} <span class="uk-text-warning">{{ 'ui-receive-extra.less-than' | transloco }}</span> {{ 'ui-receive-extra.than-requested' | transloco }}
                   </p>
                 }
                 <p
@@ -607,7 +607,7 @@
           </div>
         }
         @if ((inMerchantModePaymentComplete === true)) {
-          <p class="uk-text-large uk-margin-remove-bottom uk-text-success">Received</p>
+          <p class="uk-text-large uk-margin-remove-bottom uk-text-success">{{ 'general.blockactions.received' | transloco }}</p>
           <p class="uk-text-large uk-text-success uk-margin-remove-top">
             <span
               class="merchant-mode-amount-integer"
