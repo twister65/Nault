@@ -1,0 +1,160 @@
+name: Validate and publish Angular 22 esbuild migration experiment
+on:
+  push:
+    branches: [experiment/angular22-esbuild-final]
+    paths: [.github/workflows/angular22-esbuild-final.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build-prototype:
+    if: github.repository == 'twister65/Nault'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/angular22-esbuild-final
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - name: Install baseline
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+          npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Apply esbuild and worker conversion
+        run: |
+          npm install --save-dev --legacy-peer-deps --no-audit --no-fund @angular/build@22.2.4
+          npm install --save --legacy-peer-deps --no-audit --no-fund buffer
+          npm install --save --legacy-peer-deps --no-audit --no-fund stream-browserify
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          manifest=Path('package.json')
+          root=json.loads(manifest.read_text())
+          root['browser']={'stream':'stream-browserify'}
+          manifest.write_text(json.dumps(root,indent=2)+'\n')
+          p=Path('angular.json')
+          workspace=json.loads(p.read_text())
+          arch=workspace['projects']['nault']['architect']
+          build=arch['build']
+          build['builder']='@angular/build:application'
+          options=build['options']
+          options['outputPath']={'base':'dist','browser':''}
+          options['browser']=options.pop('main')
+          options['polyfills']=[options['polyfills']] if isinstance(options['polyfills'],str) else options['polyfills']
+          for obsolete in ('vendorChunk','buildOptimizer'):
+              options.pop(obsolete,None)
+          for c in build.get('configurations',{}).values():
+              for obsolete in ('vendorChunk','buildOptimizer'):
+                  c.pop(obsolete,None)
+              if 'ngswConfigPath' in c:
+                  c['serviceWorker']=c.pop('ngswConfigPath')
+          arch['serve']['builder']='@angular/build:dev-server'
+          arch['extract-i18n']['builder']='@angular/build:extract-i18n'
+          p.write_text(json.dumps(workspace,indent=2)+'\n')
+          p=Path('src/app/services/pow.service.ts')
+          src=p.read_text()
+          old="import Worker from 'worker-loader!./../../assets/lib/cpupow.js';"
+          assert src.count(old)==1
+          src=src.replace(old,"// Native browser worker; esbuild bundles the worker from a stable module-relative URL.\nconst createPowWorker = () => new Worker(new URL('../../assets/lib/cpupow.js', import.meta.url));")
+          assert src.count('new (Worker as any)()')==1
+          src=src.replace('new (Worker as any)()', 'createPowWorker()')
+          p.write_text(src)
+          p=Path('src/polyfills.ts')
+          src=p.read_text()
+          old="(window as any).Buffer = (window as any).Buffer || require('buffer').Buffer;"
+          assert src.count(old)==1
+          src=src.replace(old,"(window as any).Buffer = (window as any).Buffer || Buffer;")
+          src="import { Buffer } from 'buffer';\n"+src
+          p.write_text(src)
+          PY
+      - name: Diagnose esbuild Web and PWA output
+        run: |
+          npm run wallet:build
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const sw = JSON.parse(fs.readFileSync('dist/ngsw.json', 'utf8'));
+          if(!sw.assetGroups?.length || !fs.existsSync('dist/index.html'))throw Error('PWA or index output missing');
+          console.log('esbuild output and PWA manifest successful');
+          NODE
+      - name: Diagnose Electron desktop renderer
+        run: npm run desktop:build
+      - name: Remove deprecated Webpack builder and move Karma to Angular 22 unit-test
+        run: |
+          npm uninstall --save-dev --legacy-peer-deps --no-audit --no-fund \
+            @angular-devkit/build-angular webpack worker-loader
+          npm install --save-dev --legacy-peer-deps --no-audit --no-fund less
+          npm install --save-dev --legacy-peer-deps --no-audit --no-fund karma-coverage
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          p=Path('angular.json')
+          a=json.loads(p.read_text())
+          architect=a['projects']['nault']['architect']
+          assert architect['build']['builder']=='@angular/build:application'
+          architect['build']['configurations']['testing']={
+            'polyfills':['src/polyfills.ts','zone.js/testing'],
+            'optimization':False, 'sourceMap':True
+          }
+          architect['test']={
+            'builder':'@angular/build:unit-test',
+            'options':{
+              'runner':'karma',
+              'runnerConfig':'karma.conf.js',
+              'buildTarget':'nault:build:testing',
+              'tsConfig':'src/tsconfig.spec.json'
+            }
+          }
+          p.write_text(json.dumps(a,indent=2)+'\n')
+          p=Path('karma.conf.js')
+          s=p.read_text()
+          s=s.replace("frameworks: ['jasmine', '@angular-devkit/build-angular']", "frameworks: ['jasmine']")
+          s=s.replace("      require('@angular-devkit/build-angular/plugins/karma')\n", "")
+          s=s.replace("      require('karma-coverage-istanbul-reporter'),\n", "      require('karma-coverage-istanbul-reporter')\n")
+          p.write_text(s)
+          PY
+      - name: Validate webpack-free production Web PWA and desktop
+        run: |
+          npm ci --legacy-peer-deps --no-audit --no-fund 2>&1 | tee /tmp/modern-npm.log
+          if grep -E 'npm warn deprecated (@ngtools/webpack|@angular-devkit/build-angular)' /tmp/modern-npm.log; then exit 1; fi
+          npm run wallet:build
+          node -e "const fs=require('fs');const sw=require('./dist/ngsw.json');if(!sw.assetGroups?.length || !fs.existsSync('dist/index.html'))throw Error('Missing PWA')"
+          npm run desktop:build
+      - name: Confirm old packages absent, and run unit and RPC suites
+        run: |
+          node - <<'NODE'
+          const lock = require('./package-lock.json');
+          const forbidden = ['protractor','request','har-validator','@angular-devkit/build-angular','@ngtools/webpack','worker-loader'];
+          const existing = forbidden.filter(name => Object.keys(lock.packages || {}).some(path => path === 'node_modules/'+name || path.endsWith('/node_modules/'+name)));
+          if(existing.length) throw Error('Legacy dependencies remain: '+existing.join(', '));
+          console.log('Deprecated Protractor, request and Angular Webpack builder chains removed');
+          NODE
+          npm run lint
+          npm run lint:flat
+          node scripts/test-ledger-bluetooth.js
+          CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          export CHROME_BIN
+          npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false
+          npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false             --include=src/app/services/api.service.spec.ts             --include=src/app/services/wallet.service.spec.ts             --include=src/app/services/websocket.service.spec.ts             --include=src/app/services/rpc-transport.service.spec.ts             --include=src/app/services/endpoint-policy.service.spec.ts
+      - name: Launch Nault in Chrome with Playwright
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          export CHROME_BIN
+          npm run e2e
+      - name: Publish validated migration to experiment branch only
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json angular.json karma.conf.js src/polyfills.ts src/app/services/pow.service.ts
+          git diff --cached --check
+          if git diff --cached --quiet; then echo 'Already integrated'; exit 0; fi
+          git commit -m 'build(deps): validated esbuild and Karma modernization'
+          git push origin HEAD:refs/heads/experiment/angular22-esbuild-final
