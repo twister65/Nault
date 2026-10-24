@@ -8,6 +8,14 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+### Correctif CI Electron du 24 octobre — reprise 2
+
+La validation [#40068217213](https://github.com/twister65/Nault/actions/runs/40068217213) a franchi les étapes de préparation et de compilation Web, puis a échoué sur deux erreurs restantes dans `desktop-app/src/desktop-app.ts` :
+- TS2769 ligne 103 : surcharge `BrowserWindow.on` incompatible avec un type d'événement `string` élargi par `['resize', 'move'].forEach(...)`. Remplacé par `win.on('resize', saveState)` et `win.on('move', saveState)`.
+- TS2588 ligne 284 : réaffectation de `currentWindow` déclaré `const`. Le gestionnaire `closed` réinitialise désormais correctement `mainWindow = null`.
+
+**Correctif publié :** [`8ba20a6`](https://github.com/twister65/Nault/commit/8ba20a615f0e399a6ab7c97303c8bbb1600fc443), uniquement sur `upgrade/angular-22`. **Nouvelle CI :** [#40068764256](https://github.com/twister65/Nault/actions/runs/40068764256) ; vérifier son résultat avant de déclarer les tests automatiques validés. Le nettoyage des dépendances dépréciées reste distinct et ouvert.
+
 ## Reprise CI du 24 octobre 2026 — correctif Electron / dépendances
 
 **Branche :** `upgrade/angular-22`; **commit publié :** [`aca84c0`](https://github.com/twister65/Nault/commit/aca84c07a836a114cb03731d5956296cc73a1a77). **Ne pas fusionner dans `master`.**
