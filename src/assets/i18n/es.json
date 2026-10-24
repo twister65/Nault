@@ -295,5 +295,122 @@
       "set-wallet-password": "Establecer contraseña de la cartera",
       "while-the-application-is-locked-the-secret-recovery-phrase-will-be-encrypted": "Mientras la aplicación esté bloqueada, la frase secreta de recuperación estará cifrada, lo que impedirá enviar o recibir fondos y administrar cuentas."
     }
+  },
+  "general": {
+    "account": "Cuenta",
+    "accounts": "Cuentas",
+    "actions": "Acciones",
+    "address": "Dirección",
+    "address-book": "Libreta de direcciones",
+    "amount": "Importe",
+    "app-settings": "Ajustes de la aplicación",
+    "avoid": "Evitar",
+    "balance": "Saldo",
+    "block": "Bloque",
+    "block-count": "Número de bloques",
+    "blockactions": {
+      "ready-to-receive": "Listo para recibir",
+      "received": "Recibido",
+      "rep-change": "Cambio de representante",
+      "sent": "Enviado",
+      "unknown-action": "Acción desconocida"
+    },
+    "cancel": "Cancelar",
+    "copy": "Copiar",
+    "copy-to-clipboard": "Copiar al portapapeles",
+    "date": "Fecha",
+    "edit": "Editar",
+    "loading": "Cargando...",
+    "name": "Nombre",
+    "network": "Red",
+    "new": "Nuevo",
+    "no": "No",
+    "node-version": "Versión del nodo",
+    "peers-stake-required": "Peso de voto requerido",
+    "peers-stake-total": "Peso de voto total",
+    "receive": "Recibir",
+    "reload": "Actualizar",
+    "representative": "Representante",
+    "representatives": "Representantes",
+    "save": "Guardar",
+    "scan-qr-code": "Escanear código QR",
+    "send": "Enviar",
+    "server": "Servidor",
+    "settings": "Ajustes",
+    "show-more": "Mostrar más",
+    "show-qr-code": "Mostrar código QR",
+    "successfully-copied-to-clipboard": "¡Copiado al portapapeles!",
+    "uncemented-blocks": "Bloques sin cementar",
+    "unknown": "Desconocido",
+    "view-details": "Ver detalles",
+    "view-on-network-explorer": "Ver en el explorador de la red",
+    "yes": "Sí"
+  },
+  "representative-search": {
+    "representative-list-results": "Resultados de la lista de representantes"
+  },
+  "reset-wallet": {
+    "before-continuing-make-sure-you-have-saved-the-nano-seed": "Antes de continuar, asegúrate de haber guardado la semilla y/o frase mnemónica secreta de recuperación de tu cartera actual.",
+    "you-will-not-be-able-to-recover-the-funds-without-a-backup": "NO PODRÁS RECUPERAR TUS FONDOS sin una copia de seguridad de tu cartera actual."
+  },
+  "welcome": {
+    "a-secure-open-source-wallet-for-nano": "Una cartera de código abierto segura para Nano",
+    "advanced-security-features": {
+      "1": "Compatibilidad con carteras físicas Ledger Nano S / Nano X",
+      "2": "Posibilidad de crear direcciones multifirma, en las que se necesitan varias claves privadas para acceder y transferir fondos",
+      "3": "Posibilidad de firmar transacciones a distancia para operar con seguridad sin que tus claves secretas salgan nunca de tu dispositivo sin conexión",
+      "nault-includes": "Nault incluye varias opciones de seguridad avanzada:",
+      "title": "Funciones de seguridad avanzadas"
+    },
+    "any-device-anywhere": {
+      "1": "Nault es una aplicación web que puede utilizarse en la mayoría de ordenadores y dispositivos móviles.",
+      "2": {
+        "1": "También puedes usar la aplicación de escritorio para Windows, Linux o Mac. Puedes descargarla",
+        "3": ".",
+        "2-link-github-releases": "desde la página de versiones de GitHub"
+      },
+      "3": {
+        "1": "Todo el código es abierto y está",
+        "3": ".",
+        "2-link-github": "disponible en GitHub"
+      },
+      "title": "Cualquier dispositivo, en cualquier lugar"
+    },
+    "any-node-always-available": {
+      "1": {
+        "1": "Aunque el dominio oficial",
+        "3": "dejara de estar disponible, podrías seguir utilizando",
+        "5": "o",
+        "7": ".",
+        "2-link-nault": "nault.cc",
+        "4-link-github-releases": "la aplicación de escritorio",
+        "6-link-github-web-app": "alojar tú mismo la aplicación web"
+      },
+      "2": {
+        "1": "En Nault no hay una única fuente de información. Todos los datos proceden del servidor configurado en los ajustes de la aplicación. Así no existe un único punto de fallo: puedes elegir cualquier",
+        "3": "como servidor.",
+        "2-link-nano-node": "nodo Nano"
+      },
+      "title": "Cualquier nodo, siempre disponible"
+    },
+    "configure-wallet": "Configurar cartera",
+    "learn-more": "Más información",
+    "secure-the-nano-network": {
+      "1": {
+        "1": "Nano utiliza el",
+        "3": ", que permite a los usuarios controlar cuánto poder de voto tienen los representantes de la red.",
+        "2-link-orv": "consenso ORV"
+      },
+      "2": "Nault comprobará automáticamente el estado de tus representantes y ofrecerá recomendaciones para garantizar la seguridad y la resistencia a la censura de todos los participantes de la red.",
+      "title": "Proteger la red Nano"
+    },
+    "view-my-accounts": "Ver mis cuentas",
+    "welcome-back-it-looks-like-your-wallet-is-already-configured": "¡Bienvenido de nuevo! Parece que tu cartera ya está configurada.",
+    "your-keys-your-coins": {
+      "1": "Eres el único responsable de la seguridad de tus fondos.",
+      "2": "Las claves secretas que utilizas en Nault se guardan temporalmente en tu dispositivo y se cifran con la contraseña que eliges.",
+      "3": "Nunca se envían datos sensibles por Internet.",
+      "title": "Tus claves, tus monedas"
+    }
   }
 }
