@@ -25,7 +25,7 @@
           (cbOnSuccess)="copiedPaymentUri()"
           >
           <span class="nlt-icon" uk-icon="icon: copy;"></span>
-          {{ recentlyCopiedPaymentUri ? 'Copied!' : 'Copy payment link' }}
+          {{ recentlyCopiedPaymentUri ? ('ui-receive-extra.copied' | transloco) : ('ui-receive-extra.copy-payment-link' | transloco) }}
         </button>
       }
     </ng-template>
@@ -44,7 +44,7 @@
           (cbOnSuccess)="copiedAccountAddress()"
           >
           <span class="nlt-icon" uk-icon="icon: copy;"></span>
-          {{ recentlyCopiedAccountAddress ? 'Copied!' : 'Copy address' }}
+          {{ recentlyCopiedAccountAddress ? ('ui-receive-extra.copied' | transloco) : ('ui-receive-extra.copy-address-short' | transloco) }}
         </button>
       }
     </ng-template>
