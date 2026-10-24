@@ -146,10 +146,7 @@
     },
     "linux": {
       "target": "AppImage",
-      "icon": "desktop-app/assets/linux",
-      "desktop": {
-        "GenericName": "Nano Wallet"
-      }
+      "icon": "desktop-app/assets/linux"
     },
     "protocols": {
       "name": "nano",
