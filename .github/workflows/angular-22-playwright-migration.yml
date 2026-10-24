@@ -1,0 +1,134 @@
+name: Replace deprecated Protractor with Playwright (validated)
+on:
+  push:
+    branches: [upgrade/angular-22]
+    paths: [.github/workflows/angular-22-playwright-migration.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  validate-and-migrate:
+    if: github.repository == 'twister65/Nault'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      NPM_CONFIG_LEGACY_PEER_DEPS: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: upgrade/angular-22
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - name: Install prerequisites and restore validated dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+          npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Replace Protractor and obsolete test
+        run: |
+          npm uninstall --save-dev --legacy-peer-deps --no-audit --no-fund protractor @types/jasminewd2 jasmine-spec-reporter
+          npm install --save-dev --legacy-peer-deps --no-audit --no-fund @playwright/test
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('package.json')
+          obj = json.loads(path.read_text())
+          obj['scripts']['e2e'] = 'playwright test'
+          path.write_text(json.dumps(obj, indent=2) + '\n')
+          path = Path('angular.json')
+          obj = json.loads(path.read_text())
+          obj['projects'].pop('nault-e2e', None)
+          path.write_text(json.dumps(obj, indent=2) + '\n')
+          PY
+          rm -f e2e/app.e2e-spec.ts e2e/app.po.ts e2e/tsconfig.e2e.json protractor.conf.js
+          cat > playwright.config.ts <<'TS'
+          import { defineConfig } from '@playwright/test';
+          export default defineConfig({
+            testDir: './e2e',
+            timeout: 30_000,
+            expect: { timeout: 20_000 },
+            use: {
+              baseURL: 'http://127.0.0.1:4200',
+              browserName: 'chromium',
+              launchOptions: {
+                executablePath: process.env.CHROME_BIN || undefined,
+                args: ['--no-sandbox', '--disable-dev-shm-usage']
+              }
+            },
+            webServer: {
+              command: 'npm run wallet:dev -- --host 127.0.0.1 --port 4200',
+              url: 'http://127.0.0.1:4200/',
+              reuseExistingServer: !process.env.CI,
+              timeout: 180_000
+            }
+          });
+          TS
+          cat > e2e/wallet-launch.spec.ts <<'TS'
+          import { test, expect } from '@playwright/test';
+          test('Nault boots into its actual wallet shell, not its loading placeholder', async ({ page }) => {
+            await page.goto('/');
+            await expect(page.locator('app-root .app-grid')).toBeVisible();
+            await expect(page.locator('app-root')).not.toContainText('Loading Nault...');
+            await expect(page).toHaveTitle('Nault');
+          });
+          TS
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/angular-22-validation.yml')
+          text = path.read_text()
+          anchor = '      - name: Run full Angular unit test suite\n'
+          assert text.count(anchor) == 1
+          additional = '''      - name: Run Playwright browser smoke test
+            shell: bash
+            run: |
+              CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+              export CHROME_BIN
+              npm run e2e
+          '''.replace('            shell:', '        shell:').replace('            run:', '        run:').replace('              CHROME_BIN', '          CHROME_BIN').replace('              export', '          export').replace('              npm', '          npm')
+          text = text.replace(anchor, additional + anchor)
+          path.write_text(text)
+          PY
+      - name: Verify removed packages and reproducible installation
+        run: |
+          npm ci --legacy-peer-deps --no-audit --no-fund
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const lock = require('./package-lock.json');
+          for(const name of ['protractor','request','har-validator','uuid']) {
+            const bad = Object.entries(lock.packages || {}).filter(([p,v]) => 
+              (p === 'node_modules/' + name || p.endsWith('/node_modules/' + name))
+              && (name !== 'uuid' || /^3\./.test(v.version))
+            );
+            assert.equal(bad.length,0, name + ' remains in lockfile');
+          }
+          console.log('Obsolete Protractor/request/har-validator/uuid@3 chain removed');
+          NODE
+      - name: Verify Web / PWA / Electron, lint, Ledger and 109 tests
+        run: |
+          npm run wallet:build
+          node -e "const sw=require('./dist/ngsw.json');if(!sw.assetGroups?.length)throw Error('PWA manifest missing')"
+          npm run desktop:build
+          npm run lint
+          npm run lint:flat
+          node scripts/test-ledger-bluetooth.js
+          CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          export CHROME_BIN
+          npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false
+      - name: Verify modern E2E in Chrome
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          export CHROME_BIN
+          npm run e2e
+      - name: Publish only after every check passes
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A package.json package-lock.json angular.json .github/workflows/angular-22-validation.yml e2e protractor.conf.js playwright.config.ts
+          git commit -m 'build(deps): replace obsolete Protractor with tested Playwright E2E'
+          git push origin HEAD:upgrade/angular-22
