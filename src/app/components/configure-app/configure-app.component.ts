@@ -117,12 +117,12 @@ export class ConfigureAppComponent implements OnInit {
   selectedIdenticonOption = this.identiconOptions[0].value;
 
   inactivityOptions = [
-    { name: 'configure-app.identicon-options.never', value: 0 },
-    { name: 'configure-app.identicon-options.1-minute', value: 1 },
+    { name: 'configure-app.identicon-options.never', params: {}, value: 0 },
+    { name: 'configure-app.identicon-options.1-minute', params: {}, value: 1 },
     { name: 'configure-app.identicon-options.x-minutes', params: { minutes: 5 }, value: 5 },
     { name:  'configure-app.identicon-options.x-minutes', params: { minutes: 15 }, value: 15 },
     { name:  'configure-app.identicon-options.x-minutes', params: { minutes: 30 }, value: 30 },
-    { name: 'configure-app.identicon-options.1-hour', value: 60 },
+    { name: 'configure-app.identicon-options.1-hour', params: {}, value: 60 },
     { name: 'configure-app.identicon-options.x-hours', params: { hours: 6 }, value: 360 },
   ];
   selectedInactivityMinutes = this.inactivityOptions[4].value;
