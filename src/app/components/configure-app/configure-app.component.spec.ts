@@ -57,7 +57,7 @@ describe('ConfigureAppComponent server settings', () => {
     expect(websocket.forceReconnect).not.toHaveBeenCalled();
   });
   it('reconnects immediately even while the balance refresh is pending', async () => {
-    let resolve: () => void;
+    let resolve!: () => void;
     wallet.reloadBalances.and.returnValue(new Promise<void>(r => resolve = r));
     const saving = component.updateServerSettings();
     expect(websocket.forceReconnect).toHaveBeenCalledTimes(1);

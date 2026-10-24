@@ -61,8 +61,17 @@ describe('WebSocket bounded connections', () => {
       action: 'subscribe', topic: 'confirmation', options: { accounts: ['nano_test'] }
     }));
     fresh.onmessage({ data: JSON.stringify({ ack: 'pong' }) });
-    fresh.onmessage({ data: JSON.stringify({ topic: 'confirmation', message: { hash: 'new' } }) });
-    expect(service.newTransactions$.value).toEqual({ hash: 'new' });
+    const confirmation = {
+      account: 'nano_test',
+      amount: '1',
+      hash: 'new',
+      block: {
+        type: 'state', subtype: 'receive', account: 'nano_test',
+        link_as_account: 'nano_source', representative: 'nano_rep'
+      }
+    };
+    fresh.onmessage({ data: JSON.stringify({ topic: 'confirmation', message: confirmation }) });
+    expect(service.newTransactions$.value).toEqual(confirmation);
     tick(15000);
     expect(service.socket.connected).toBe(true);
     settings.settings.serverWS = null;
