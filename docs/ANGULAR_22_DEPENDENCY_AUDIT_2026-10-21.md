@@ -8,6 +8,18 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+### Validation fonctionnelle du PoW CPU — 24 octobre 2026 (ChromeOS, Vercel)
+
+**Résultat : VALIDÉ (CPU) ; GPU WebGL : À TESTER.** L'utilisateur a réalisé sur Chromebook deux calculs PoW locaux avec le déploiement `https://nault-android-test.vercel.app` (commit applicatif `43ad84d`, branche `upgrade/angular-22`). Analyse des fichiers utilisateur `pow-console.log` et `pow-network.har` dans la conversation du 24 octobre ; ces captures, potentiellement sensibles, ne sont pas ajoutées au dépôt.
+
+- **Worker natif esbuild** : `worker-I6PCXLVI.js` chargé avec **HTTP 200**, confirmant le chargement du Web Worker issu du remplacement de `worker-loader`.
+- **Calculs observés** : deux exécutions `clientCPU`, multiplicateur **1×**, seuil `fffffff800000000`, **7 workers** ; temps **9,75 s** et **18,45 s**. La console montre `CPU Worker: Found work` puis `Work found` ; la réutilisation ultérieure de ces preuves par `Using cached work` est confirmée.
+- **Validation cryptographique indépendante** : les deux nonces et les deux hashes figurant dans les logs satisfont le seuil de difficulté selon BLAKE2b-8 appliqué au nonce inversé suivi du hash (interprétation little-endian).
+- **Réseau** : le HAR contient une réponse `process` réussie comportant un hash. Aucun `work_generate` RPC lors de ces calculs : PoW local confirmé. Les 14 entrées HAR de worker au statut réseau `0` sont **compatibles avec l'arrêt des autres workers à la résolution**, sans erreur correspondante dans la console ; cette hypothèse n'est pas une preuve de leur cause. Une erreur `400` concernant l'ancien nœud BerryPay est visible au démarrage de la console, sans incidence constatée sur les calculs CPU via le serveur ensuite sélectionné.
+- **Prochain test** : choisir `Client-side GPU (WebGL)`, multiplicateur **1×**, vider **uniquement** le cache PoW, puis provoquer un nouveau calcul sans transaction importante. Vérifier le log `WebGL Worker: Found work`, l'exactitude du nonce et l'absence de `work_generate` RPC. Ensuite seulement : validation PWA, Ledger Bluetooth, packages Electron Linux/Windows.
+
+Aucune modification applicative ni fusion vers `master` associée à ce constat.
+
 ### Décision définitive pour Angular 22 — conserver Karma/Jasmine (24 octobre 2026)
 
 **Correction importante du suivi :** La migration du builder Angular Webpack vers `@angular/build:application` (esbuild/Vite) **n'a pas** remplacé le moteur de tests. Au dernier commit validé `43ad84d` (modifications applicatives validées au SHA `583ca06f`), `angular.json` contient bien `@angular/build:unit-test`, mais avec l'option **`runner: "karma"`**, `runnerConfig: "karma.conf.js"`. `package.json` contient `karma`, `jasmine-core`, `@types/jasmine` et les plugins Karma. Les **109/109 tests unitaires** annoncés dans ce document sont des tests **Karma/Jasmine**, et ne constituent pas une validation de Vitest.
