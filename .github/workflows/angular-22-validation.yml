@@ -71,6 +71,12 @@ jobs:
             --include=src/app/services/websocket.service.spec.ts \
             --include=src/app/services/rpc-transport.service.spec.ts \
             --include=src/app/services/endpoint-policy.service.spec.ts
+      - name: Run Playwright end-to-end wallet launch smoke test
+        shell: bash
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          export CHROME_BIN
+          npm run e2e
       - name: Run full Angular unit test suite
         shell: bash
         run: |
