@@ -94,6 +94,7 @@ jobs:
           npm uninstall --save-dev --legacy-peer-deps --no-audit --no-fund \
             @angular-devkit/build-angular webpack worker-loader
           npm install --save-dev --legacy-peer-deps --no-audit --no-fund less
+          npm install --save-dev --legacy-peer-deps --no-audit --no-fund karma-coverage
           python3 - <<'PY'
           from pathlib import Path
           import json
