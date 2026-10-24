@@ -29,9 +29,14 @@ jobs:
         run: |
           npm install --save-dev --legacy-peer-deps --no-audit --no-fund @angular/build@22.2.4
           npm install --save --legacy-peer-deps --no-audit --no-fund buffer
+          npm install --save --legacy-peer-deps --no-audit --no-fund stream-browserify
           python3 - <<'PY'
           from pathlib import Path
           import json
+          manifest=Path('package.json')
+          root=json.loads(manifest.read_text())
+          root['browser']={'stream':'stream-browserify'}
+          manifest.write_text(json.dumps(root,indent=2)+'\n')
           p=Path('angular.json')
           workspace=json.loads(p.read_text())
           arch=workspace['projects']['nault']['architect']
