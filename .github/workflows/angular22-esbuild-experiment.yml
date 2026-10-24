@@ -1,0 +1,85 @@
+name: Experiment migrate Angular 22 builder to esbuild (no integration)
+on:
+  push:
+    branches: [experiment/angular22-esbuild]
+    paths: [.github/workflows/angular22-esbuild-experiment.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-prototype:
+    if: github.repository == 'twister65/Nault'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - name: Install baseline
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+          npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Apply esbuild conversion without pushing
+        run: |
+          npm install --save-dev --legacy-peer-deps --no-audit --no-fund @angular/build@22.2.4
+          npm install --save --legacy-peer-deps --no-audit --no-fund buffer
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          p=Path('angular.json')
+          workspace=json.loads(p.read_text())
+          arch=workspace['projects']['nault']['architect']
+          build=arch['build']
+          build['builder']='@angular/build:application'
+          options=build['options']
+          options['outputPath']={'base':'dist','browser':''}
+          options['browser']=options.pop('main')
+          options['polyfills']=[options['polyfills']] if isinstance(options['polyfills'],str) else options['polyfills']
+          for obsolete in ('vendorChunk','buildOptimizer'):
+              options.pop(obsolete,None)
+          for c in build.get('configurations',{}).values():
+              for obsolete in ('vendorChunk','buildOptimizer'):
+                  c.pop(obsolete,None)
+              if 'ngswConfigPath' in c:
+                  c['serviceWorker']=c.pop('ngswConfigPath')
+          arch['serve']['builder']='@angular/build:dev-server'
+          arch['extract-i18n']['builder']='@angular/build:extract-i18n'
+          p.write_text(json.dumps(workspace,indent=2)+'\n')
+          p=Path('src/app/services/pow.service.ts')
+          src=p.read_text()
+          old="import Worker from 'worker-loader!./../../assets/lib/cpupow.js';"
+          assert src.count(old)==1
+          src=src.replace(old,"// Native browser worker; esbuild bundles the worker from a stable module-relative URL.\nconst createPowWorker = () => new Worker(new URL('../../assets/lib/cpupow.js', import.meta.url));")
+          assert src.count('new (Worker as any)()')==1
+          src=src.replace('new (Worker as any)()', 'createPowWorker()')
+          p.write_text(src)
+          p=Path('src/polyfills.ts')
+          src=p.read_text()
+          old="(window as any).Buffer = (window as any).Buffer || require('buffer').Buffer;"
+          assert src.count(old)==1
+          src=src.replace(old,"(window as any).Buffer = (window as any).Buffer || Buffer;")
+          src="import { Buffer } from 'buffer';\n"+src
+          p.write_text(src)
+          PY
+      - name: Diagnose esbuild Web and PWA output
+        run: |
+          npm run wallet:build
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const sw = JSON.parse(fs.readFileSync('dist/ngsw.json', 'utf8'));
+          if(!sw.assetGroups?.length || !fs.existsSync('dist/index.html'))throw Error('PWA or index output missing');
+          console.log('esbuild output and PWA manifest successful');
+          NODE
+      - name: Diagnose Electron desktop renderer
+        run: npm run desktop:build
+      - name: Diagnose current 109 Jasmine tests (old Karma, during transition)
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          export CHROME_BIN
+          npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false
