@@ -201,7 +201,7 @@
                                     <span class="uk-text-success" style="margin-left: 4px;"><span uk-icon="icon: star;"></span></span>
                                   }
                                   @if (rep.warn) {
-                                    <span class="uk-text-warning" style="margin-left: 4px;"><span uk-icon="icon: warning;"></span> Avoid</span>
+                                    <span class="uk-text-warning" style="margin-left: 4px;"><span uk-icon="icon: warning;"></span> {{ 'general.avoid' | transloco }}</span>
                                   }
                                 </a>
                               </li>
@@ -272,7 +272,7 @@
               <button class="uk-button uk-button-primary uk-width-1-1@s uk-width-auto@m uk-float-right" type="button" (click)="changeRepresentatives()">{{ 'ui-representatives.update' | transloco }}</button>
             }
             @if (changingRepresentatives) {
-              <button class="uk-button uk-button-secondary uk-width-1-1 uk-disabled nlt-icon-button" type="button"><span class="spinner" uk-spinner="ratio: 0.5;"></span> Updating Representatives</button>
+              <button class="uk-button uk-button-secondary uk-width-1-1 uk-disabled nlt-icon-button" type="button"><span class="spinner" uk-spinner="ratio: 0.5;"></span> {{ 'ui-representatives.updating' | transloco }}</button>
             }
           </div>
         </div>
