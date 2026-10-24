@@ -20,6 +20,16 @@
 
 Aucune modification applicative ni fusion vers `master` associée à ce constat.
 
+### Validation fonctionnelle PWA — 24 octobre 2026 (ChromeOS)
+
+**Résultat : validations principales RÉUSSIES.** L'utilisateur confirme installation en application ChromeOS, lancement de la PWA sans Wi-Fi et retour à la normale à la reconnexion. Diagnostics `ngsw/state` : Angular service worker 22.2.3, état `NORMAL`, deux manifestes actifs (`24acda4b…` et `780ae799…`), un client par version et file des tâches vide. Captures utilisateur : `pwa-console(1).log` et `pwa-network(1).har` (non archivées dans GitHub).
+
+- Pendant la coupure Wi-Fi : plusieurs HTTP 504 dans la console (RPC `/proxy`, navigation `/configure-app`, polices Open Sans/Montserrat/Roboto Mono, et SVG), ainsi que connexions WebSocket échouées ; comportement compatible avec l'absence de réseau et/ou des ressources non présentes dans le cache du service worker. **Attention :** vérifier visuellement plus tard le rendu hors ligne de ces polices/icônes : le démarrage réussi ne prouve pas que toutes les ressources sont préchargées.
+- Au retour du réseau : la console montre `WebSocket connected. Restoring account subscriptions` puis `pong`. Le HAR contient une connexion `/ws` **101 Switching Protocols**, quatre POST RPC `/proxy` **HTTP 200**, et deux préflights OPTIONS 204 ; la reconnexion est prouvée. Le HAR, pris surtout à la reconnexion, **ne comporte pas les 504**, observés dans la console.
+- Le journal `ngsw/state` comporte `Driver.fetch(.../accounts): Failed to fetch` mais `Driver state: NORMAL` ; à surveiller uniquement si cela persiste une fois en ligne.
+- **Reste à tester** : mise à jour PWA entre deux déploiements (nécessite un véritable changement de manifeste), et éventuellement premier chargement hors ligne de ressources iconographiques non précédemment visitées. Aucun nettoyage du stockage de portefeuille demandé.
+- **Suite prioritaire** : Ledger Nano X Web Bluetooth sur Chromebook ; première et deuxième reconnexions sans rechargement, clé verrouillée ou application Nano fermée, signature de faible montant à l'accord de l'utilisateur, journaux nettoyés de tout secret.
+
 ### Décision définitive pour Angular 22 — conserver Karma/Jasmine (24 octobre 2026)
 
 **Correction importante du suivi :** La migration du builder Angular Webpack vers `@angular/build:application` (esbuild/Vite) **n'a pas** remplacé le moteur de tests. Au dernier commit validé `43ad84d` (modifications applicatives validées au SHA `583ca06f`), `angular.json` contient bien `@angular/build:unit-test`, mais avec l'option **`runner: "karma"`**, `runnerConfig: "karma.conf.js"`. `package.json` contient `karma`, `jasmine-core`, `@types/jasmine` et les plugins Karma. Les **109/109 tests unitaires** annoncés dans ce document sont des tests **Karma/Jasmine**, et ne constituent pas une validation de Vitest.
