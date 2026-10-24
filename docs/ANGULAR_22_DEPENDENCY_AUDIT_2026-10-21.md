@@ -8,6 +8,12 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+### Pull request Angular 22 en brouillon — 24 octobre 2026
+
+**PR créée :** [#25 — build: migrate Nault to Angular 22 (pre-merge validation)](https://github.com/twister65/Nault/pull/25), base `master`, head `upgrade/angular-22`, **Draft**, non fusionnée. Elle documente le test d'envoi Ledger confirmé par l'utilisateur et les réserves Windows, Sweeper, hot wallet S-01 et multisig. GitHub signalait `mergeable=true` (pas de conflit de fusion détecté), mais `mergeable_state=blocked` (gate requis non conclu) au moment de la première consultation.
+
+**Déclenchement des checks :** le dernier commit documentaire `80ff05e` portait `[skip ci]` et les vérifications PR ne sont pas apparues immédiatement après l'ouverture. Ce commit de suivi volontairement **sans marqueur de saut CI** provoque une nouvelle évaluation par le système CI GitHub. Attendre le **Merge gate pour la PR #25**, puis examiner séparément `Nault regression checks`, `CodeQL Advanced / Published CodeQL results` et `Critical dependency audit` au SHA de merge candidat. Le statut Vercel sur le projet `tablet` est distinct du check `Merge gate` et n'autorise aucune publication ni modification de ce projet. **Ne pas fusionner sans autorisation explicite de l'utilisateur.**
+
 ### Dernière validation matérielle — envoi XNO Ledger (24 octobre 2026)
 
 **VALIDÉ PAR L'UTILISATEUR.** Le 24 octobre 2026, à l'issue de la revue pré-fusion, l'utilisateur confirme explicitement : **« test d'envoi validé par mes soins »** pour le scénario d'envoi de XNO signé par Ledger sur Angular 22. Le matériel et l'interface utilisés pour cette ultime confirmation, le montant réellement envoyé, le hash, les journaux RPC et les confirmations réseau ne sont **pas fournis** dans ce message : ne pas inventer ces valeurs ni assimiler cette validation rapportée à un test automatisé d'un autre parcours.
