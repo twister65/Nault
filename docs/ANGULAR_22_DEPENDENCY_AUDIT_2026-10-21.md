@@ -20,6 +20,13 @@
 
 Aucune modification applicative ni fusion vers `master` associée à ce constat.
 
+### CI Angular 22 — correction du mock de notifications Ledger (24 octobre 2026)
+
+- **Échec reproduit dans GitHub Actions :** [run #40100117474, job #120890359952](https://github.com/twister65/Nault/actions/runs/40100117474/job/120890359952), sur SHA applicatif `84e72f4`. Installation npm, build Web/PWA, build Electron et lint **réussis**. La phase `Run automated Ledger USB/BLE transport regression checks` a échoué au test `desktop Bluetooth connects through renderer, not native IPC` : `TypeError: this.notifications.removeNotification is not a function`, puis `AssertionError: false == true`. Les suites RPC, Playwright et Karma/Jasmine ont été **ignorées en cascade**, et ne sont pas considérées validées par ce run.
+- **Cause :** le code réel `ledger.service.ts` supprime désormais `ledger-connection-help` après succès de la reconnexion BLE ; `NotificationService` implémente bien `removeNotification`, mais le service de notification simulé dans `scripts/test-ledger-bluetooth.js` n'implémentait que `sendWarning`. Ce défaut concernait **la fixture de test**, pas une absence de méthode dans l'application.
+- **Correctif poussé :** [`f48d682`](https://github.com/twister65/Nault/commit/f48d682cb71d95d66a813faa46f2cc0159c671f6) complète le mock par `removeNotification(identifier)` et ajoute une assertion confirmant qu'une reconnexion réussie nettoie l'ancienne notification.
+- **Nouvelle CI lancée automatiquement :** [Validate Angular 22 migration #40100966775](https://github.com/twister65/Nault/actions/runs/40100966775) au SHA `f48d682`. **État lors de la rédaction : en cours, non encore validé**. Attendre les étapes RPC/Playwright/Karma et la conclusion finale au même SHA. Le déploiement Vercel `nault-android-test.vercel.app` reste à vérifier après validation, et ne doit pas être confondu avec `tablet`. **Ne pas fusionner dans `master`.**
+
 ### État Ledger verrouillé ou application Nano fermée — test et correctif (24 octobre 2026)
 
 **Régression utilisateur reproduite sur ChromeOS / déploiement Vercel au commit applicatif `43ad84d`. Correctif de code publié sur `upgrade/angular-22`, MAIS NON ENCORE VALIDÉ PAR CI NI DÉPLOYÉ AU MOMENT DE CETTE NOTE.**
