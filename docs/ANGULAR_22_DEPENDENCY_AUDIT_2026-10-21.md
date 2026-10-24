@@ -8,6 +8,14 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+### Reprise 3 — compilation des tests RPC et Angular sous TypeScript 6 (24 octobre 2026)
+
+- La [CI #40068764256](https://github.com/twister65/Nault/actions/runs/40068764256/job/120797469898) valide l'installation, les versions Angular/TS/ESLint, le build Web avec PWA, le build Electron, le lint (7 avertissements, aucune erreur) et les vérifications automatisées Ledger USB/BLE.
+- Blocage à l'étape `Run focused Nano and RsNano RPC tests` : échec **de compilation des fichiers de test TypeScript**, avant exécution des tests. Dans cette compilation Karma, d'autres specs hors des cinq `--include` provoquent aussi des erreurs.
+- Diagnostics TS2454 dans `configure-app.component.spec.ts`, TS18048 dans `app-settings.service.spec.ts` et `rpc-transport.service.spec.ts`, TS18049 sur `options.signal`, TS18046 sur `catch(error)` et TS2345 dans `websocket.service.spec.ts` (fixture de confirmation partielle).
+- Correctif **uniquement dans quatre fichiers `.spec.ts`** publié par [`33c1292`](https://github.com/twister65/Nault/commit/33c12920163aa61bc187dc535eb5f337c8ea6c91). Initialisation/affectation explicite du résolveur ; vérification explicite que les entrées existent ; assertions RPC inchangées sur la politique fetch (`redirect:error`, `credentials:omit`, `referrerPolicy:no-referrer`, Authorization explicite, AbortSignal), et vérification de la réponse d'erreur de proxy ; objet `NanoConfirmation` complet dans le test WebSocket.
+- **CI en vérification :** [#40069385013](https://github.com/twister65/Nault/actions/runs/40069385013), commit `33c1292`. Avant de reprendre les tests manuels, confirmer **toutes** les étapes, dont les tests RPC exécutés réellement et la suite entière Angular, sur ce SHA. Les tests matériels de signature, le nettoyage des dépendances deprecated et la migration Webpack restent non résolus. Aucun merge `master`.
+
 ### Correctif CI Electron du 24 octobre — reprise 2
 
 La validation [#40068217213](https://github.com/twister65/Nault/actions/runs/40068217213) a franchi les étapes de préparation et de compilation Web, puis a échoué sur deux erreurs restantes dans `desktop-app/src/desktop-app.ts` :
