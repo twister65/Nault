@@ -25,7 +25,7 @@ jobs:
           npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund 2>&1 | tee /tmp/installation.log
           node - <<'NODE'
           const lock = require('./package-lock.json');
-          const names = ['uuid','request','har-validator','glob','@npmcli/move-file','npmlog','are-we-there-yet','gauge','debug','@ngtools/webpack','@angular-devkit/build-angular'];
+          const names = ['boolean','uuid','request','har-validator','glob','@npmcli/move-file','npmlog','are-we-there-yet','gauge','debug','@ngtools/webpack','@angular-devkit/build-angular'];
           const ps = lock.packages || {};
           for (const name of names) {
             const versions = Object.entries(ps).filter(([p]) => p === 'node_modules/' + name || p.endsWith('/node_modules/' + name))
@@ -35,10 +35,12 @@ jobs:
             console.log('DEPRECATION GRAPH '+JSON.stringify({name,versions,parents}));
           }
           NODE
-          for pkg in uuid request har-validator glob @npmcli/move-file npmlog are-we-there-yet gauge debug @ngtools/webpack @angular-devkit/build-angular; do
+          for pkg in boolean uuid request har-validator glob @npmcli/move-file npmlog are-we-there-yet gauge debug @ngtools/webpack @angular-devkit/build-angular; do
             echo "===== npm explain ${pkg} ====="
             npm explain "${pkg}" 2>&1 | head -90 || true
           done
+          echo '----- Remaining npm deprecation warnings -----'
+          grep 'npm warn deprecated' /tmp/installation.log || true
       - name: Check maintained parent versions (read-only)
         run: |
           for pkg in electron-updater electron-builder qrcode protractor karma karma-coverage-istanbul-reporter node-hid @ledgerhq/hw-transport-node-hid-noevents @angular/build; do
