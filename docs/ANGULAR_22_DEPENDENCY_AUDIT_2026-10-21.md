@@ -20,6 +20,16 @@
 
 Aucune modification applicative ni fusion vers `master` associée à ce constat.
 
+### État Ledger verrouillé ou application Nano fermée — test et correctif (24 octobre 2026)
+
+**Régression utilisateur reproduite sur ChromeOS / déploiement Vercel au commit applicatif `43ad84d`. Correctif de code publié sur `upgrade/angular-22`, MAIS NON ENCORE VALIDÉ PAR CI NI DÉPLOYÉ AU MOMENT DE CETTE NOTE.**
+
+- **Résultats matériels :** (2) quitter l'application Nano provoque une déconnexion détectée par Nault mais aucun message explicatif ; (3) reconnecter la Ledger verrouillée montre le toast `Bluetooth connection failed: Ledger device: UNKNOWN_ERROR (0x5515)` (capture `Screenshot 2026-10-24 15.47.18.png`) ; (4) déverrouiller et rouvrir l'application Nano permet une reconnexion réussie.
+- **Trace `console.log` :** connexion initiale réussie puis `Check ledger status failed` avec `TransportStatusError`, `statusCode=28161` (`0x6e01`) après la fermeture de l'application Nano. Deux reconnexions aboutissent à GATT/notifications/MTU puis échouent lors de `reading Nano app configuration` lorsque la Ledger n'est pas prête ; la tentative suivante lit la configuration et l'adresse puis aboutit à `reconnect successful`. Le code `0x5515` est visible dans la capture, mais les objets d'erreurs des reconnects dans la console sont repliés sous `fw` et n'en montrent pas directement le code.
+- **Interprétation :** `0x6e01` correspond à l'application requise non ouverte (voir https://support.ledger.com/fr/article/5282886278557-zd) ; `0x5515` correspond à l'appareil verrouillé. Ce ne sont pas des erreurs de couplage BLE : GATT et MTU sont déjà négociés.
+- **Code publié** : `17b69ec` reconnaît strictement les deux codes dans `ledger.service.ts`, remplace les erreurs brutes par les instructions de déverrouillage/ouverture de Nano, affiche une notification de statut à la détection par polling, met `LedgerStatus.LOCKED` pour `0x5515`, et supprime l'ancienne notification après reconnexion ; `e3d2f05` ajoute des tests Jasmine pour les deux erreurs, refus de signature et changement d'état lors du polling ; `84e72f4` rend le conseil « application Nano absente » visible dans le panneau latéral. Les traitements des signatures et transactions ne sont pas modifiés.
+- **Validation toujours nécessaire :** lancer compilation et tests Karma/Jasmine puis vérifier la CI complète au SHA de code, ensuite déployer **uniquement sur `nault-android-test`** (attention à ne pas viser le projet `tablet`). Confirmer le nouveau SHA Vercel avant toute répétition du test matériel (Ledger verrouillée ; app Nano fermée ; rétablissement sans reload). Le déploiement inspecté à la rédaction pointait **encore sur `43ad84d`**, donc un test immédiat sur l'URL existante ne validerait pas le correctif. Aucun merge dans `master`.
+
 ### Validation fonctionnelle Ledger Bluetooth — 24 octobre 2026 (ChromeOS)
 
 **Connexion BLE initiale et deux reconnexions consécutives : VALIDÉES.** L'utilisateur confirme le fonctionnement sur Chromebook avec `https://nault-android-test.vercel.app` (Angular 22, code applicatif déployé au SHA `43ad84d`).
