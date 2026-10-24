@@ -100,7 +100,8 @@ function windowStateKeeper() {
 
   function track(win: BrowserWindow): void {
     trackedWindow = win;
-    ['resize', 'move'].forEach(event => win.on(event, saveState));
+    win.on('resize', saveState);
+    win.on('move', saveState);
   }
   setBounds();
   return { ...windowState, track };
@@ -281,7 +282,7 @@ function createWindow () {
 
   // Emitted when the window is closed.
   currentWindow.on('closed', function () {
-    currentWindow = null;
+    mainWindow = null;
   });
 
   // The legacy 'new-window' event was removed in Electron 22.
