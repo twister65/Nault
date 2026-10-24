@@ -607,7 +607,10 @@
     "than-requested": "than requested",
     "last-price": "Last Price",
     "view-account": "View Account Details",
-    "view-block": "View Block Details"
+    "view-block": "View Block Details",
+    "copied": "Copied!",
+    "copy-payment-link": "Copy payment link",
+    "copy-address-short": "Copy address"
   },
   "ui-shell-extra": {
     "total-balance": "Total Balance",
