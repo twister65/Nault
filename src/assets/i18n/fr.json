@@ -131,5 +131,169 @@
     "we-found-no-issues-with-uptime-or-weight": "Aucun problème de disponibilité ou de répartition du poids de vote n'a été détecté pour votre représentant actuel.",
     "you-can-change-representative-at-any-time": "Vous pouvez changer de représentant à tout moment en cliquant sur son nom ci-dessus.",
     "you-have-marked-this-representative-as-trusted": "Vous avez marqué ce représentant comme fiable : son statut restera « Bon », même si sa disponibilité ou son poids de vote posent de sérieux problèmes."
+  },
+  "configure-app": {
+    "advanced-options": "Options avancées",
+    "allow-external-requests": "Autoriser les requêtes externes",
+    "api-server": "Serveur API",
+    "app-display-settings-successfully-updated": "Paramètres d'affichage mis à jour !",
+    "app-wallet-settings-successfully-updated": "Paramètres du portefeuille mis à jour !",
+    "are-you-sure": "Êtes-vous sûr ?",
+    "authorization": "Autorisation",
+    "change-if-your-wallet-should-be-locked-automatically-after": "Choisissez après combien de temps d'inactivité votre portefeuille doit se verrouiller automatiquement.",
+    "change-the-currency-pair-used-when-showing-fiat-values": "Choisissez la devise utilisée pour afficher les montants en monnaie fiduciaire. Sélectionnez Aucun pour masquer ces montants.",
+    "change-where-your-wallet-is-stored-if-you-select-none-your": "Choisissez où enregistrer votre portefeuille. Si vous sélectionnez Aucun, il sera réinitialisé à chaque rechargement.",
+    "change-which-server-is-used-to-communicate-with-the-nano": "Choisissez le serveur utilisé pour communiquer avec le réseau Nano.",
+    "clear-all-data": {
+      "1": "Vous allez supprimer toutes les données enregistrées dans Nault, notamment celles de votre portefeuille actuel, les carnets d'adresses et de représentants et toutes les données en cache. Tous les paramètres seront rétablis à leurs valeurs par défaut.",
+      "successfully-deleted-locally-stored-data-and-reset-the": "Les données locales ont été supprimées et les paramètres réinitialisés !"
+    },
+    "clear-work-cache": "Vider le cache PoW",
+    "click-to-refresh": "Cliquer pour actualiser",
+    "component": {
+      "wallet-storage": "Stockage du portefeuille"
+    },
+    "configure-nault": "Configurer Nault",
+    "cpu-worker-support-not-available-set-pow-to-best": "Les Web Workers CPU ne sont pas pris en charge. Choisissez le meilleur PoW disponible.",
+    "currencies": {
+      "none": "Aucun"
+    },
+    "custom-api-server-has-an-invalid-address": "L'adresse du serveur API personnalisé est invalide.",
+    "custom-update-server-has-an-invalid-address": "L'adresse du serveur de mise à jour personnalisé est invalide.",
+    "decentralized-aliases": "Alias décentralisés",
+    "decentralized-aliases-options": {
+      "disabled": "Désactivé",
+      "enabled": "Activé — autoriser les requêtes externes aux domaines des alias"
+    },
+    "decentralized-aliases-require-external-requests": "Les alias décentralisés nécessitent des requêtes vers des domaines externes. Si vous recherchez l'adresse de @madeline@example.com, le domaine example.com peut enregistrer votre adresse IP.",
+    "default-representative": "Représentant par défaut",
+    "default-representative-is-not-a-valid-account": "Le représentant par défaut ne correspond pas à un compte valide",
+    "delete-all-data": "Supprimer TOUTES les données",
+    "delete-wallet-data": "Supprimer les données du portefeuille",
+    "display-settings": "Paramètres d'affichage",
+    "fiat-currency": "Devise fiduciaire",
+    "for-example-using-basic-auth": "Par exemple, avec l'authentification basique : Basic xyz",
+    "identicon-options": {
+      "1-hour": "1 heure",
+      "1-minute": "1 minute",
+      "nanoidenticons-by-keerifox": "Nanoidenticons (par keerifox)",
+      "natricon-by-appditto": "Natricon (par Appditto)",
+      "never": "Jamais",
+      "none": "Aucun",
+      "x-hours": "{{ hours }} heures",
+      "x-minutes": "{{ minutes }} minutes"
+    },
+    "identicons": "Identicônes",
+    "if-automatically-receiving-incoming-transactions-with-the": "Les transactions entrantes peuvent être reçues automatiquement, par montant décroissant ou par ancienneté. Le mode manuel vous permet de choisir les transactions à recevoir depuis l'écran Réception.",
+    "language": "Langue",
+    "leave-blank-to-accept-transactions-of-any-amount": "Laisser vide pour accepter tous les montants",
+    "leave-blank-to-use-a-recommended-one": "Laisser vide pour utiliser une recommandation",
+    "lock-after-inactivity": "Verrouillage après inactivité",
+    "min-receive-amount": "Montant minimal de réception",
+    "minimum-nano-amount-to-receive-transactions-below-this": "Montant minimal en XNO à recevoir. Les transactions inférieures à ce seuil seront ignorées pour la réception et dans la liste des transactions. Laissez vide ou indiquez 0 pour tout accepter.",
+    "multiplier-options": {
+      "default-1x-or-1-64x": "Par défaut (1× ou 1/64×)"
+    },
+    "night-mode": "Mode nuit",
+    "night-mode-options": {
+      "disabled": "Désactivé",
+      "enabled": "Activé"
+    },
+    "node-stats": "Statistiques du nœud",
+    "note-since-this-server-only-notifies-about-new-transactions": "Remarque : ce serveur signale uniquement les nouvelles transactions ; la plupart des fonctions du portefeuille marchent sans lui.",
+    "optional-increased-work-for-transaction-priority-during": "Augmente facultativement la difficulté PoW pour donner la priorité aux transactions lors d'une saturation du réseau. Remplace les difficultés par défaut des ENVOIS (1×) et des RÉCEPTIONS (1/64×).",
+    "pending-options": {
+      "automatic-largest-amount-first": "Automatique — montant le plus élevé d'abord",
+      "automatic-oldest-transaction-first": "Automatique — transaction la plus ancienne d'abord",
+      "manual": "Manuel"
+    },
+    "pow-multiplier": "Multiplicateur PoW",
+    "pow-options": {
+      "best-option-available": "Meilleure option disponible",
+      "client-side-cpu-slowest": "Local — CPU (le plus lent)",
+      "client-side-gpu-webgl": "Local — GPU/WebGL",
+      "external-custom-server": "Externe — serveur personnalisé",
+      "external-selected-server": "Externe — serveur sélectionné"
+    },
+    "pow-source": "Source PoW",
+    "random-server": "Serveur aléatoire",
+    "receive-method": "Mode de réception",
+    "save-settings-to-update": "Enregistrer les paramètres pour actualiser",
+    "server-configuration": "Configuration du serveur",
+    "server-settings": "Paramètres du serveur",
+    "server-settings-successfully-updated": "Paramètres du serveur mis à jour !",
+    "storage-options": {
+      "browser-local-storage": "Stockage local du navigateur",
+      "none": "Aucun"
+    },
+    "successfully-cleared-the-work-cache": "Cache PoW vidé avec succès !",
+    "successfully-deleted-all-wallet-data": "Toutes les données du portefeuille ont été supprimées !",
+    "successfully-updated": "Mise à jour effectuée !",
+    "switched-back-to-browser-local-storage-for-the-wallet-data": "Retour au « stockage local du navigateur » pour les données du portefeuille. Utilisez à nouveau le bouton pour enregistrer les autres paramètres.",
+    "this-has-to-be-a-valid-authorization-header": "Il doit s'agir d'un en-tête Authorization valide.",
+    "this-has-to-be-a-valid-rpc": {
+      "1": "Il doit s'agir d'un",
+      "3": "ou d'une API compatible.",
+      "2-link-rpc": "point d'accès RPC Nano"
+    },
+    "this-has-to-be-a-valid-websocket": {
+      "1": "Il doit s'agir d'un",
+      "3": "ou d'une API WebSocket compatible.",
+      "2-link-websocket": "WebSocket du nœud Nano"
+    },
+    "this-has-to-be-a-valid-work": {
+      "1": "Il doit s'agir d'un",
+      "3": "point d'accès ou d'une API compatible. Si votre serveur localhost ne fonctionne pas, essayez l'application de bureau.",
+      "2-link-work": "serveur de calcul PoW Nano"
+    },
+    "this-representative-will-be-used-for-any-new-account": "Ce représentant sera utilisé pour tout nouveau compte",
+    "this-server-is-used-for-rpc-communication-with-the-nano-node": "Ce serveur assure la communication RPC avec le nœud Nano",
+    "this-server-is-used-to-notify-the-wallet-in-real-time-when": "Ce serveur informe le portefeuille en temps réel de l'arrivée de nouvelles transactions",
+    "this-will-delete-all-data-related-to-your-wallet-your-seed-a": "Toutes les données du portefeuille seront supprimées (phrase de récupération et comptes)",
+    "this-will-delete-all-locally-cached-proof-of-work-values": "Toutes les preuves de travail (PoW) mises en cache localement seront supprimées",
+    "this-will-delete-all-stored-data-and-reset-app-settings-incl": "TOUTES les données enregistrées seront supprimées et les paramètres réinitialisés, y compris le portefeuille, le carnet d'adresses et davantage",
+    "update-display-settings": "Mettre à jour l'affichage",
+    "update-server-settings": "Mettre à jour les serveurs",
+    "update-wallet-settings": "Mettre à jour le portefeuille",
+    "use-if-the-api-requires-authentication": "À utiliser si l'API nécessite une authentification",
+    "wallet-settings": "Paramètres du portefeuille",
+    "webgl-support-not-available-set-pow-to-best": "WebGL n'est pas pris en charge. Choisissez le meilleur PoW disponible.",
+    "websocket-server": "Serveur WebSocket",
+    "work-server": "Serveur PoW",
+    "you-are-about-to-delete-all-locally-cached-proof-of-work": "Vous allez supprimer toutes les preuves de travail (PoW) en cache local.",
+    "you-are-about-to-delete-all-locally-stored-data-about-your": "Vous allez supprimer toutes les données enregistrées localement pour le portefeuille actuel.",
+    "you-are-about-to-disable-storage-of-all-wallet-data-which": "Vous allez désactiver l'enregistrement des données du portefeuille : aucun portefeuille ne sera configuré à la prochaine ouverture de Nault."
+  },
+  "configure-wallet": {
+    "new-wallet": {
+      "copy-secret-recovery-mnemonic": "Copier la phrase mnémonique de récupération",
+      "copy-secret-recovery-seed": "Copier la seed de récupération",
+      "create-wallet": "Créer un portefeuille",
+      "i-have-securely-stored-recovery-phrases": "J'ai sauvegardé la seed et/ou la phrase mnémonique secrètes de récupération",
+      "please-take-some-time-to-write-down-recovery-phrases": "Prenez le temps de sauvegarder la seed et/ou la phrase mnémonique secrètes afin de pouvoir retrouver ce portefeuille plus tard.",
+      "recovery-phrases-alert": {
+        "1": {
+          "1": "Notez votre seed et/ou votre phrase mnémonique, ou conservez-les dans un lieu sûr, et ",
+          "3": "!",
+          "2-strong": "ne les communiquez jamais à personne"
+        },
+        "2": "Il s'agit de la clé maîtresse de tous vos comptes et du seul moyen de récupérer vos fonds en cas d'urgence."
+      },
+      "recovery-phrases-for-new-wallet": "Informations de récupération du nouveau portefeuille",
+      "secret-recovery-mnemonic": "Phrase mnémonique secrète de récupération",
+      "secret-recovery-seed": "Seed secrète de récupération",
+      "successfully-copied-secret-recovery-mnemonic": "Phrase mnémonique secrète copiée dans le presse-papiers !",
+      "successfully-copied-secret-recovery-seed": "Seed secrète copiée dans le presse-papiers !"
+    },
+    "set-wallet-password": {
+      "choose-a-wallet-password-that-will-be-used-to-unlock-this-application": "Choisissez le mot de passe qui servira à déverrouiller l'application.",
+      "errors": {
+        "password-must-be-at-least-x-characters-long": "Le mot de passe doit contenir au moins {{ minCharacters }} caractères",
+        "passwords-do-not-match": "Les mots de passe ne correspondent pas !"
+      },
+      "for-the-safety-of-your-funds-use-a-secure-password": "Pour protéger vos fonds, utilisez un mot de passe robuste.",
+      "set-wallet-password": "Définir le mot de passe du portefeuille",
+      "while-the-application-is-locked-the-secret-recovery-phrase-will-be-encrypted": "Lorsque l'application est verrouillée, la phrase secrète de récupération est chiffrée : il est impossible d'envoyer ou de recevoir des fonds et de gérer les comptes."
+    }
   }
 }
