@@ -114,7 +114,7 @@
                         ? wallet.selectedAccount.addressBookName
                         : (('general.account' | transloco) + ' #' + wallet.selectedAccount.index)
                       )
-                      : 'Total Balance'
+                      : ('ui-shell.total-balance' | transloco)
                     }}</a>
                     <div #selectButton [class]="[ 'select-button', showAccountsDropdown ? 'open' : 'closed' ]" (click)="toggleAccountsDropdown()">
                       <div class="circle"></div>
