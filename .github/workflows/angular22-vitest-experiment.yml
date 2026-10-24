@@ -1,0 +1,98 @@
+name: Experiment Angular 22 Karma to Vitest migration
+on:
+  push:
+    branches: [experiment/angular22-vitest]
+    paths: [.github/workflows/angular22-vitest-experiment.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  migrate-and-validate:
+    if: github.repository == 'twister65/Nault'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      NPM_CONFIG_LEGACY_PEER_DEPS: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/angular22-vitest
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - name: Install native prerequisites and baseline
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+          npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Configure Vitest using official Angular 22 migration instructions
+        run: |
+          npm install --save-dev --legacy-peer-deps --no-audit --no-fund vitest jsdom
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('angular.json')
+          project=json.loads(p.read_text())
+          architect=project['projects']['nault']['architect']
+          options=architect['test']['options']
+          assert architect['test']['builder']=='@angular/build:unit-test'
+          assert options['runner']=='karma'
+          options['runner']='vitest'
+          options.pop('runnerConfig',None)
+          # Keep the same test compilation target used for Karma.
+          testing=architect['build']['configurations']['testing']
+          poly=testing['polyfills']
+          assert 'zone.js/testing' in poly
+          if 'zone.js/plugins/vitest-patch' not in poly:
+              poly.append('zone.js/plugins/vitest-patch')
+          p.write_text(json.dumps(project,indent=2)+'\n')
+          p=Path('src/tsconfig.spec.json')
+          conf=json.loads(p.read_text())
+          conf['compilerOptions']['types']=['vitest/globals','node']
+          p.write_text(json.dumps(conf,indent=2)+'\n')
+          PY
+          ./node_modules/.bin/ng generate @schematics/angular:refactor-jasmine-vitest --project=nault --add-imports --interactive=false --verbose
+          echo "Remaining Jasmine API references:"
+          rg -n "jasmine\.|spyOn\(|\\.and\.returnValue|\\.and\.callFake" src --glob "*.spec.ts" || true
+      - name: Test all migrated unit tests in Vitest DOM emulator
+        run: |
+          npm test -- --watch=false --progress=false
+      - name: Remove unused Karma and Jasmine packages after test parity
+        run: |
+          npm uninstall --save-dev --legacy-peer-deps --no-audit --no-fund \
+            karma karma-cli karma-chrome-launcher karma-coverage karma-coverage-istanbul-reporter \
+            karma-jasmine karma-jasmine-html-reporter jasmine-core @types/jasmine
+          rm -f karma.conf.js src/test.ts
+          npm ci --legacy-peer-deps --no-audit --no-fund
+          npm test -- --watch=false --progress=false
+      - name: Verify full application and browser regression checks
+        run: |
+          npm run wallet:build
+          node -e "const s=require('./dist/ngsw.json');if(!s.assetGroups?.length)throw Error('Missing PWA')"
+          npm run desktop:build
+          npm run lint
+          npm run lint:flat
+          node scripts/test-ledger-bluetooth.js
+          npm test -- --watch=false --progress=false \
+            --include=src/app/services/api.service.spec.ts \
+            --include=src/app/services/wallet.service.spec.ts \
+            --include=src/app/services/websocket.service.spec.ts \
+            --include=src/app/services/rpc-transport.service.spec.ts \
+            --include=src/app/services/endpoint-policy.service.spec.ts
+          CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          export CHROME_BIN
+          npm run e2e
+      - name: Publish migration to experimental branch only after green checks
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A package.json package-lock.json angular.json src/tsconfig.spec.json src/app karma.conf.js src/test.ts
+          git diff --cached --check
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'test(angular22): migrate Karma Jasmine suite to Vitest'
+          git push origin HEAD:refs/heads/experiment/angular22-vitest
