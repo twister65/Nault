@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {UtilService} from '../../services/util.service';
 import * as bip39 from 'bip39';
 import {NotificationService} from '../../services/notification.service';
@@ -7,6 +7,7 @@ import {NotificationService} from '../../services/notification.service';
     selector: 'app-keygenerator',
     templateUrl: './keygenerator.component.html',
     styleUrls: ['./keygenerator.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class KeygeneratorComponent implements OnInit {
@@ -14,7 +15,7 @@ export class KeygeneratorComponent implements OnInit {
   mnemonic = '';
   privateKey = '';
   account = '';
-  newWalletMnemonicLines = [];
+  newWalletMnemonicLines: string[][] = [];
 
   constructor(
     private util: UtilService,

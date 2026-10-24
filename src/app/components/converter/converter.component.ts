@@ -1,15 +1,17 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import {UtilService} from '../../services/util.service';
 import {AppSettingsService} from '../../services/app-settings.service';
 import * as nanocurrency from 'nanocurrency';
 import {PriceService} from '../../services/price.service';
 import { BigNumber } from 'bignumber.js';
+import {Subscription} from 'rxjs';
 import {NotificationService} from '../../services/notification.service';
 
 @Component({
     selector: 'app-converter',
     templateUrl: './converter.component.html',
     styleUrls: ['./converter.component.less'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class ConverterComponent implements OnInit, OnDestroy {
@@ -19,7 +21,7 @@ export class ConverterComponent implements OnInit, OnDestroy {
   invalidRaw = false;
   invalidFiat = false;
   fiatPrice = '0';
-  priceSub = null;
+  priceSub: Subscription | null = null;
 
   constructor(
     private util: UtilService,
@@ -45,7 +47,7 @@ export class ConverterComponent implements OnInit, OnDestroy {
     }
   }
 
-  unitChange(unit) {
+  unitChange(unit: 'mnano' | 'raw' | 'fiat') {
     switch (unit) {
       case 'mnano':
         if (this.util.account.isValidNanoAmount(this.Mnano)) {

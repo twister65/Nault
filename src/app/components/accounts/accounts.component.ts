@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {Subject, timer} from 'rxjs';
 import {debounce} from 'rxjs/operators';
 import {Router} from '@angular/router';
@@ -11,12 +11,14 @@ import {
   RepresentativeService,
   WalletService
 } from '../../services';
-import { TranslocoService } from '@ngneat/transloco';
+import { TranslocoService } from '@jsverse/transloco';
+import type {WalletAccount} from '../../services/wallet.service';
 
 @Component({
     selector: 'app-accounts',
     templateUrl: './accounts.component.html',
     styleUrls: ['./accounts.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class AccountsComponent implements OnInit {
@@ -82,7 +84,7 @@ export class AccountsComponent implements OnInit {
       this.newAccountIndex = null;
       this.accountsChanged$.next(newAccount.id);
     } catch (err) {
-      this.notificationService.sendError(this.translocoService.translate('accounts.unable-to-add-new-account', { error: err.message }));
+      this.notificationService.sendError(this.translocoService.translate('accounts.unable-to-add-new-account', { error: err instanceof Error ? err.message : String(err) }));
     }
   }
 
@@ -100,7 +102,7 @@ export class AccountsComponent implements OnInit {
     // this.notificationService.sendSuccess(`Successfully sorted accounts by index!`);
   }
 
-  navigateToAccount(account) {
+  navigateToAccount(account: WalletAccount) {
     const isSmallViewport = (window.innerWidth < 940);
 
     if (isSmallViewport === true) {
@@ -118,7 +120,7 @@ export class AccountsComponent implements OnInit {
     this.notificationService.sendSuccess(this.translocoService.translate('general.successfully-copied-to-clipboard'), { identifier: 'success-copied' });
   }
 
-  async deleteAccount(account) {
+  async deleteAccount(account: WalletAccount) {
     if (this.walletService.isLocked()) {
       const wasUnlocked = await this.walletService.requestWalletUnlock();
 
@@ -134,11 +136,11 @@ export class AccountsComponent implements OnInit {
       );
       this.accountsChanged$.next(account.id);
     } catch (err) {
-      this.notificationService.sendError(this.translocoService.translate('accounts.unable-to-delete-account', { error: err.message }));
+      this.notificationService.sendError(this.translocoService.translate('accounts.unable-to-delete-account', { error: err instanceof Error ? err.message : String(err) }));
     }
   }
 
-  async showLedgerAddress(account) {
+  async showLedgerAddress(account: WalletAccount) {
     if (this.ledger.ledger.status !== LedgerStatus.READY) {
       return this.notificationService.sendWarning(this.translocoService.translate('accounts.ledger-device-must-be-ready'));
     }

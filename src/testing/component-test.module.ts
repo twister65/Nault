@@ -5,11 +5,11 @@ import { EMPTY } from 'rxjs';
 import { AppModule } from '../app/app.module';
 import { LedgerService } from '../app/services/ledger.service';
 import { MusigService } from '../app/services/musig.service';
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
 
 // Use the application's actual declarations and DI graph. No permissive schemas
 // or mocked components: invalid templates and missing providers still fail.
-@NgModule({ exports: [AppModule, HttpClientTestingModule, RouterTestingModule], imports: [AppModule, RouterTestingModule], providers: [provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting()] })
+@NgModule({ exports: [AppModule, HttpClientTestingModule, RouterTestingModule], imports: [AppModule, RouterTestingModule], providers: [provideHttpClient(withXhr(), withInterceptorsFromDi()), provideHttpClientTesting()] })
 export class ComponentTestModule {}
 
 // Constructor smoke tests must not probe hardware or fetch/instantiate WASM.

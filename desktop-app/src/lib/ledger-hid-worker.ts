@@ -5,10 +5,10 @@ import TransportNodeHidNoEvents from '@ledgerhq/hw-transport-node-hid-noevents';
 // node-hid 2.1.1 asynchronous read callback fails under Electron 44.
 // Bounded synchronous reads are safe here because they cannot block the
 // Electron main process. Never log HID packets, APDUs, keys, or addresses.
-const port = parentPort;
-if (!port) {
-  throw new Error('Ledger HID worker requires a parent port');
-}
+const port = (() => {
+  if (!parentPort) throw new Error('Ledger HID worker requires a parent port');
+  return parentPort;
+})();
 
 type WorkerRequest =
   | { type: 'exchange'; id: number; apdu: number[] }

@@ -11,7 +11,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   check:
-    if: github.repository == 'twister65/Nault'
+    # This is the Angular 21 migration matrix; do not run it against Angular 22 PRs.
+    if: github.repository == 'twister65/Nault' && (github.event_name != 'pull_request' || github.head_ref == 'upgrade/angular-21' || github.head_ref == 'fix/angular-21-deprecated-dependencies')
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     env:

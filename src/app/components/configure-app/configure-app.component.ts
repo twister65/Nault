@@ -1,26 +1,28 @@
 import { secureEndpoint } from '../../services/endpoint-policy';
-import { Component, OnInit, Renderer2 } from '@angular/core';
+import { Component, OnInit, Renderer2, ChangeDetectionStrategy } from '@angular/core';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
-import {AppSettingsService} from '../../services/app-settings.service';
+import {AppSettingsService, AppSettings, PoWSource} from '../../services/app-settings.service';
 import {PriceService} from '../../services/price.service';
 import {PowService} from '../../services/pow.service';
 import {WorkPoolService} from '../../services/work-pool.service';
 import {AddressBookService} from '../../services/address-book.service';
+import type {QRType} from '../qr-modal/qr-modal.component';
 import {ApiService} from '../../services/api.service';
 import {WebsocketService} from '../../services/websocket.service';
 import {NodeService} from '../../services/node.service';
 import {UtilService} from '../../services/util.service';
 import {BehaviorSubject} from 'rxjs';
-import {RepresentativeService} from '../../services/representative.service';
+import {RepresentativeService, StoredRepresentative} from '../../services/representative.service';
 import {NinjaService} from '../../services/ninja.service';
 import {QrModalService} from '../../services/qr-modal.service';
-import { TranslocoService } from '@ngneat/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 
 @Component({
     selector: 'app-configure-app',
     templateUrl: './configure-app.component.html',
     styleUrls: ['./configure-app.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 
@@ -55,14 +57,16 @@ export class ConfigureAppComponent implements OnInit {
   ];
   selectedDenomination = this.denominations[0].value;
 
+  // Keep translation keys until the template renders. Transloco loads its language
+  // asynchronously; translating here would permanently capture raw keys before load.
   storageOptions = [
-    { name: this.translocoService.translate('configure-app.storage-options.browser-local-storage'), value: 'localStorage' },
-    { name: this.translocoService.translate('configure-app.storage-options.none'), value: 'none' },
+    { name: 'configure-app.storage-options.browser-local-storage', value: 'localStorage' },
+    { name: 'configure-app.storage-options.none', value: 'none' },
   ];
   selectedStorage = this.storageOptions[0].value;
 
   currencies = [
-    { name: this.translocoService.translate('configure-app.currencies.none'), value: '' },
+    { name: 'configure-app.currencies.none', value: '' },
     { name: 'USD - US Dollar', value: 'USD' },
     { name: 'BTC - Bitcoin', value: 'BTC' },
     { name: 'AUD - Australian Dollar', value: 'AUD' },
@@ -100,40 +104,40 @@ export class ConfigureAppComponent implements OnInit {
   selectedCurrency = this.currencies[0].value;
 
   nightModeOptions = [
-    { name: this.translocoService.translate('configure-app.night-mode-options.enabled'), value: 'enabled' },
-    { name: this.translocoService.translate('configure-app.night-mode-options.disabled'), value: 'disabled' },
+    { name: 'configure-app.night-mode-options.enabled', value: 'enabled' },
+    { name: 'configure-app.night-mode-options.disabled', value: 'disabled' },
   ];
   selectedNightModeOption = this.nightModeOptions[0].value;
 
   identiconOptions = [
-    { name: this.translocoService.translate('configure-app.identicon-options.none'), value: 'none' },
-    { name: this.translocoService.translate('configure-app.identicon-options.nanoidenticons-by-keerifox'), value: 'nanoidenticons' },
-    { name: this.translocoService.translate('configure-app.identicon-options.natricon-by-appditto'), value: 'natricon' },
+    { name: 'configure-app.identicon-options.none', value: 'none' },
+    { name: 'configure-app.identicon-options.nanoidenticons-by-keerifox', value: 'nanoidenticons' },
+    { name: 'configure-app.identicon-options.natricon-by-appditto', value: 'natricon' },
   ];
   selectedIdenticonOption = this.identiconOptions[0].value;
 
   inactivityOptions = [
-    { name: this.translocoService.translate('configure-app.identicon-options.never'), value: 0 },
-    { name: this.translocoService.translate('configure-app.identicon-options.1-minute'), value: 1 },
-    { name: this.translocoService.translate('configure-app.identicon-options.x-minutes', { minutes: 5 }), value: 5 },
-    { name:  this.translocoService.translate('configure-app.identicon-options.x-minutes', { minutes: 15 }), value: 15 },
-    { name:  this.translocoService.translate('configure-app.identicon-options.x-minutes', { minutes: 30 }), value: 30 },
-    { name: this.translocoService.translate('configure-app.identicon-options.1-hour'), value: 60 },
-    { name: this.translocoService.translate('configure-app.identicon-options.x-hours', { hours: 6 }), value: 360 },
+    { name: 'configure-app.identicon-options.never', params: {}, value: 0 },
+    { name: 'configure-app.identicon-options.1-minute', params: {}, value: 1 },
+    { name: 'configure-app.identicon-options.x-minutes', params: { minutes: 5 }, value: 5 },
+    { name:  'configure-app.identicon-options.x-minutes', params: { minutes: 15 }, value: 15 },
+    { name:  'configure-app.identicon-options.x-minutes', params: { minutes: 30 }, value: 30 },
+    { name: 'configure-app.identicon-options.1-hour', params: {}, value: 60 },
+    { name: 'configure-app.identicon-options.x-hours', params: { hours: 6 }, value: 360 },
   ];
   selectedInactivityMinutes = this.inactivityOptions[4].value;
 
-  powOptions = [
-    { name: this.translocoService.translate('configure-app.pow-options.best-option-available'), value: 'best' },
-    { name: this.translocoService.translate('configure-app.pow-options.client-side-gpu-webgl'), value: 'clientWebGL' },
-    { name: this.translocoService.translate('configure-app.pow-options.client-side-cpu-slowest'), value: 'clientCPU' },
-    { name: this.translocoService.translate('configure-app.pow-options.external-selected-server'), value: 'server' },
-    { name: this.translocoService.translate('configure-app.pow-options.external-custom-server'), value: 'custom' },
+  powOptions: Array<{name: string; value: PoWSource}> = [
+    { name: 'configure-app.pow-options.best-option-available', value: 'best' },
+    { name: 'configure-app.pow-options.client-side-gpu-webgl', value: 'clientWebGL' },
+    { name: 'configure-app.pow-options.client-side-cpu-slowest', value: 'clientCPU' },
+    { name: 'configure-app.pow-options.external-selected-server', value: 'server' },
+    { name: 'configure-app.pow-options.external-custom-server', value: 'custom' },
   ];
   selectedPoWOption = this.powOptions[0].value;
 
   multiplierOptions = [
-    { name: this.translocoService.translate('configure-app.multiplier-options.default-1x-or-1-64x'), value: 1 },
+    { name: 'configure-app.multiplier-options.default-1x-or-1-64x', value: 1 },
     { name: '2x', value: 2 },
     { name: '4x', value: 4 },
     { name: '8x', value: 8 },
@@ -144,15 +148,15 @@ export class ConfigureAppComponent implements OnInit {
   selectedMultiplierOption: number = this.multiplierOptions[0].value;
 
   pendingOptions = [
-    { name: this.translocoService.translate('configure-app.pending-options.automatic-largest-amount-first'), value: 'amount' },
-    { name: this.translocoService.translate('configure-app.pending-options.automatic-oldest-transaction-first'), value: 'date' },
-    { name: this.translocoService.translate('configure-app.pending-options.manual'), value: 'manual' },
+    { name: 'configure-app.pending-options.automatic-largest-amount-first', value: 'amount' },
+    { name: 'configure-app.pending-options.automatic-oldest-transaction-first', value: 'date' },
+    { name: 'configure-app.pending-options.manual', value: 'manual' },
   ];
   selectedPendingOption = this.pendingOptions[0].value;
 
   decentralizedAliasesOptions = [
-    { name: this.translocoService.translate('configure-app.decentralized-aliases-options.disabled'), value: 'disabled' },
-    { name: this.translocoService.translate('configure-app.decentralized-aliases-options.enabled'), value: 'enabled' },
+    { name: 'configure-app.decentralized-aliases-options.disabled', value: 'disabled' },
+    { name: 'configure-app.decentralized-aliases-options.enabled', value: 'enabled' },
   ];
   selectedDecentralizedAliasesOption = this.decentralizedAliasesOptions[0].value;
 
@@ -162,34 +166,34 @@ export class ConfigureAppComponent implements OnInit {
   // ];
   // selectedPrefix = this.prefixOptions[0].value;
 
-  serverOptions = [];
-  selectedServer = null;
+  serverOptions: AppSettingsService['serverOptions'] = [];
+  selectedServer: string | null = null;
 
-  defaultRepresentative = null;
-  representativeResults$ = new BehaviorSubject([]);
+  defaultRepresentative: string | null = null;
+  representativeResults$ = new BehaviorSubject<StoredRepresentative[]>([]);
   showRepresentatives = false;
   representativeListMatch = '';
-  repStatus = null;
-  representativeList = [];
+  repStatus: number | null = null;
+  representativeList: StoredRepresentative[] = [];
 
-  serverAPI = null;
-  serverAPIUpdated = null;
-  serverWS = null;
-  serverAuth = null;
-  minimumReceive = null;
+  serverAPI: string | null = null;
+  serverAPIUpdated: string | null = null;
+  serverWS: string | null = null;
+  serverAuth: string | null = null;
+  minimumReceive: string | null = null;
 
   private statsRequest = 0;
-  nodeStatsServer = null;
-  nodeBlockCount = null;
-  nodeUnchecked = null;
-  nodeCemented = null;
-  nodeUncemented = null;
-  peersStakeReq = null;
-  peersStakeTotal = null;
-  nodeVendor = null;
-  nodeNetwork = null;
+  nodeStatsServer: string | null = null;
+  nodeBlockCount: string | null = null;
+  nodeUnchecked: string | null = null;
+  nodeCemented: string | null = null;
+  nodeUncemented: string | null = null;
+  peersStakeReq: string | null = null;
+  peersStakeTotal: string | null = null;
+  nodeVendor: string | null = null;
+  nodeNetwork: string | null = null;
   statsRefreshEnabled = true;
-  shouldRandom = null;
+  shouldRandom: string | null = null;
 
   customWorkServer = '';
 
@@ -267,8 +271,8 @@ export class ConfigureAppComponent implements OnInit {
         const version = await this.api.version();
         if (!current()) return;
         this.nodeStatsServer = endpoint;
-        this.nodeVendor = version?.node_vendor;
-        this.nodeNetwork = version?.network;
+        this.nodeVendor = version?.node_vendor ?? null;
+        this.nodeNetwork = version?.network ?? null;
       } catch { console.warn('Failed to get node stats: version'); }
     } finally {
       if (request === this.statsRequest) {
@@ -282,20 +286,20 @@ export class ConfigureAppComponent implements OnInit {
     const settings = this.appSettings.settings;
 
     const matchingLanguage = this.languages.find(language => language.id === settings.language);
-    this.selectedLanguage = matchingLanguage.id || this.languages[0].id;
+    this.selectedLanguage = matchingLanguage?.id || this.languages[0].id;
 
     const matchingCurrency = this.currencies.find(d => d.value === settings.displayCurrency);
-    this.selectedCurrency = matchingCurrency.value || this.currencies[0].value;
+    this.selectedCurrency = matchingCurrency?.value || this.currencies[0].value;
 
     const nightModeOptionString = (settings.lightModeEnabled === true) ? 'disabled' : 'enabled';
     const matchingNightModeOption = this.nightModeOptions.find(d => d.value === nightModeOptionString);
-    this.selectedNightModeOption = matchingNightModeOption.value || this.nightModeOptions[0].value;
+    this.selectedNightModeOption = matchingNightModeOption?.value || this.nightModeOptions[0].value;
 
     const matchingIdenticonOptions = this.identiconOptions.find(d => d.value === settings.identiconsStyle);
-    this.selectedIdenticonOption = matchingIdenticonOptions.value || this.identiconOptions[0].value;
+    this.selectedIdenticonOption = matchingIdenticonOptions?.value || this.identiconOptions[0].value;
 
     const matchingStorage = this.storageOptions.find(d => d.value === settings.walletStore);
-    this.selectedStorage = matchingStorage.value || this.storageOptions[0].value;
+    this.selectedStorage = matchingStorage?.value || this.storageOptions[0].value;
 
     const matchingInactivityMinutes = this.inactivityOptions.find(d => d.value === settings.lockInactivityMinutes);
     this.selectedInactivityMinutes = matchingInactivityMinutes ? matchingInactivityMinutes.value : this.inactivityOptions[4].value;
@@ -383,7 +387,7 @@ export class ConfigureAppComponent implements OnInit {
 
     // ask for user confirmation before clearing the wallet cache
     if (resaveWallet && newStorage === this.storageOptions[1].value) {
-      const UIkit = window['UIkit'];
+      const UIkit = (window as unknown as {UIkit: {modal: {confirm(message: string): Promise<void>}}}).UIkit;
       try {
         await UIkit.modal.confirm(
           `<p class="uk-alert uk-alert-danger"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span>
@@ -403,8 +407,8 @@ export class ConfigureAppComponent implements OnInit {
     let newPoW = this.selectedPoWOption;
     const newMultiplier = this.selectedMultiplierOption;
     const pendingOption = this.selectedPendingOption;
-    let minReceive = null;
-    if (this.util.account.isValidNanoAmount(this.minimumReceive)) {
+    let minReceive: string | null = null;
+    if (this.minimumReceive !== null && this.util.account.isValidNanoAmount(this.minimumReceive)) {
       minReceive = this.minimumReceive;
     }
 
@@ -464,7 +468,7 @@ export class ConfigureAppComponent implements OnInit {
       }
     }
 
-    const newSettings = {
+    const newSettings: Partial<AppSettings> = {
       walletStore: newStorage,
       lockInactivityMinutes: Number(this.selectedInactivityMinutes),
       powSource: newPoW,
@@ -488,8 +492,8 @@ export class ConfigureAppComponent implements OnInit {
   }
 
   async updateServerSettings() {
-    const newSettings = {
-      serverName: this.selectedServer,
+    const newSettings: Partial<AppSettings> = {
+      serverName: this.selectedServer ?? 'random',
       serverAPI: null,
       serverWS: null,
       serverAuth: null,
@@ -546,7 +550,7 @@ export class ConfigureAppComponent implements OnInit {
     this.representativeResults$.next(matches);
   }
 
-  selectRepresentative(rep) {
+  selectRepresentative(rep: string) {
     this.showRepresentatives = false;
     this.defaultRepresentative = rep;
     this.searchRepresentatives();
@@ -575,7 +579,7 @@ export class ConfigureAppComponent implements OnInit {
   }
 
   // When changing the Server Config option, prefill values
-  serverConfigChange(newServer) {
+  serverConfigChange(newServer: string) {
     const custom = this.serverOptions.find(c => c.value === newServer);
     if (custom) {
       this.serverAPI = custom.api;
@@ -614,7 +618,7 @@ export class ConfigureAppComponent implements OnInit {
   }
 
   async clearWorkCache() {
-    const UIkit = window['UIkit'];
+    const UIkit = (window as unknown as {UIkit: {modal: {confirm(message: string): Promise<void>}}}).UIkit;
     try {
       await UIkit.modal.confirm('<p style="text-align: center;">' + this.translocoService.translate('configure-app.you-are-about-to-delete-all-locally-cached-proof-of-work') + '<br><br><b>' + this.translocoService.translate('configure-app.are-you-sure') + '</b></p>');
       this.workPool.clearCache();
@@ -624,7 +628,7 @@ export class ConfigureAppComponent implements OnInit {
   }
 
   async clearWalletData() {
-    const UIkit = window['UIkit'];
+    const UIkit = (window as unknown as {UIkit: {modal: {confirm(message: string): Promise<void>}}}).UIkit;
     try {
       await UIkit.modal.confirm('<p class="uk-alert uk-alert-danger"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">' + this.translocoService.translate('configure-app.you-are-about-to-delete-all-locally-stored-data-about-your') + '</span><br><br><b style="font-size: 18px;">' + this.translocoService.translate('reset-wallet.before-continuing-make-sure-you-have-saved-the-nano-seed') + '</b><br><br><span style="font-size: 18px;"><b>' + this.translocoService.translate('reset-wallet.you-will-not-be-able-to-recover-the-funds-without-a-backup') + '</b></span></p><br>');
       this.walletService.resetWallet();
@@ -635,7 +639,7 @@ export class ConfigureAppComponent implements OnInit {
   }
 
   async clearAllData() {
-    const UIkit = window['UIkit'];
+    const UIkit = (window as unknown as {UIkit: {modal: {confirm(message: string): Promise<void>}}}).UIkit;
     try {
       await UIkit.modal.confirm('<p class="uk-alert uk-alert-danger"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">' + this.translocoService.translate('configure-app.clear-all-data.1') + '</span><br><br><b style="font-size: 18px;">' + this.translocoService.translate('reset-wallet.before-continuing-make-sure-you-have-saved-the-nano-seed') + '</b><br><br><span style="font-size: 18px;"><b>' + this.translocoService.translate('reset-wallet.you-will-not-be-able-to-recover-the-funds-without-a-backup') + '</b></span></p><br>');
       this.walletService.resetWallet();
@@ -657,7 +661,7 @@ export class ConfigureAppComponent implements OnInit {
   }
 
   // open qr reader modal
-  openQR(reference, type) {
+  openQR(reference: string, type: QRType) {
     const qrResult = this.qrModalService.openQR(reference, type);
     qrResult.then((data) => {
       switch (data.reference) {

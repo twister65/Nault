@@ -1,12 +1,12 @@
 import { Injectable } from '@angular/core';
 import * as url from 'url';
-import { TranslocoService, getBrowserCultureLang, getBrowserLang } from '@ngneat/transloco';
+import { TranslocoService, getBrowserCultureLang, getBrowserLang } from '@jsverse/transloco';
 
 export type WalletStore = 'localStorage'|'none';
 export type PoWSource = 'server'|'clientCPU'|'clientWebGL'|'best'|'custom';
 export type LedgerConnectionType = 'usb'|'bluetooth';
 
-interface AppSettings {
+export interface AppSettings {
   language: string;
   displayDenomination: string;
   // displayPrefix: string | null;
@@ -36,7 +36,7 @@ export class AppSettingsService {
   storeKey = `nanovault-appsettings`;
 
   settings: AppSettings = {
-    language: null,
+    language: '',
     displayDenomination: 'mnano',
     // displayPrefix: 'xrb',
     walletStore: 'localStorage',
@@ -159,13 +159,17 @@ export class AppSettingsService {
     }
     this.settings = Object.assign(this.settings, settings);
 
-    if (this.settings.language === null) {
+    if (!this.settings.language) {
       const browserCultureLang = getBrowserCultureLang();
       const browserLang = getBrowserLang();
 
-      if (this.translate.getAvailableLangs().some(lang => lang['id'] === browserCultureLang)) {
+      const availableLanguages = this.translate.getAvailableLangs();
+      const available = (language: string) => availableLanguages.some(
+        item => typeof item === 'string' ? item === language : item.id === language
+      );
+      if (browserCultureLang && available(browserCultureLang)) {
         this.settings.language = browserCultureLang;
-      } else if (this.translate.getAvailableLangs().some(lang => lang['id'] === browserCultureLang)) {
+      } else if (browserLang && available(browserLang)) {
         this.settings.language = browserLang;
       } else {
         this.settings.language = this.translate.getDefaultLang();
@@ -221,19 +225,25 @@ export class AppSettingsService {
     localStorage.setItem(this.storeKey, JSON.stringify(this.settings));
   }
 
-  getAppSetting(key) {
+  getAppSetting<K extends keyof AppSettings>(key: K): AppSettings[K] | null {
     return this.settings[key] || null;
   }
 
-  setAppSetting(key, value) {
+  setAppSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): void {
     this.settings[key] = value;
     this.saveAppSettings();
   }
 
-  setAppSettings(settingsObject) {
-    for (const key in settingsObject) {
-      if (!settingsObject.hasOwnProperty(key)) continue;
-      this.settings[key] = settingsObject[key];
+  private assignSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): void {
+    this.settings[key] = value;
+  }
+
+  setAppSettings(settingsObject: Partial<AppSettings>): void {
+    for (const key of Object.keys(settingsObject) as Array<keyof AppSettings>) {
+      // Reject unexpected keys from imported or legacy settings objects.
+      if (!Object.prototype.hasOwnProperty.call(this.settings, key)) continue;
+      const value = settingsObject[key];
+      if (value !== undefined) this.assignSetting(key, value);
     }
 
     this.saveAppSettings();
@@ -269,6 +279,7 @@ export class AppSettingsService {
 
   // Get the base URL part of the serverAPI, e.g. https://nanovault.io from https://nanovault.io/api/node-api.
   getServerApiBaseUrl(): string {
+    if (!this.settings.serverAPI) return '';
     const u = url.parse(this.settings.serverAPI);
     u.pathname = '/';
     return url.format(u);

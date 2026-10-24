@@ -1,12 +1,12 @@
 import { Injectable } from '@angular/core';
-import {BehaviorSubject} from 'rxjs';
+import {BehaviorSubject, Subscription} from 'rxjs';
 import {UtilService} from './util.service';
 import {ApiService} from './api.service';
 import {BigNumber} from 'bignumber.js';
 import {AddressBookService} from './address-book.service';
 import * as CryptoJS from 'crypto-js';
 import {WorkPoolService} from './work-pool.service';
-import {WebsocketService} from './websocket.service';
+import {WebsocketService, NanoConfirmation} from './websocket.service';
 import {NanoBlockService} from './nano-block.service';
 import {NotificationService} from './notification.service';
 import {AppSettingsService} from './app-settings.service';
@@ -35,7 +35,7 @@ export interface WalletAccount {
 export interface Block {
   account: string;
   hash: string;
-  amount: string;
+  amount: string | BigNumber;
   source: string;
 }
 
@@ -112,20 +112,20 @@ export class WalletService {
     accounts: [],
     selectedAccountId: null,
     selectedAccount: null,
-    selectedAccount$: new BehaviorSubject(null),
+    selectedAccount$: new BehaviorSubject<WalletAccount | null>(null),
     locked: false,
     locked$: new BehaviorSubject(false),
     unlockModalRequested$: new BehaviorSubject(false),
     password: '',
     pendingBlocks: [],
-    pendingBlocksUpdate$: new BehaviorSubject(null),
+    pendingBlocksUpdate$: new BehaviorSubject<ReceivableBlockUpdate | null>(null),
     newWallet$: new BehaviorSubject(false),
     refresh$: new BehaviorSubject(false),
   };
 
   processingPending = false;
-  successfulBlocks = [];
-  trackedHashes = [];
+  successfulBlocks: string[] = [];
+  trackedHashes: string[] = [];
   // Coalesce confirmations arriving while a previous balance RPC is still running.
   private balanceRefreshQueued = false;
 
@@ -284,7 +284,7 @@ export class WalletService {
     });
   }
 
-  async processStateBlock(transaction) {
+  async processStateBlock(transaction: NanoConfirmation) {
     // If we have a minimum receive,  once we know the account... add the amount to wallet pending? set pending to true
     if (transaction.block.subtype === 'send' && transaction.block.link_as_account) {
       // This is an incoming send block, we want to perform a receive
@@ -324,7 +324,7 @@ export class WalletService {
     });
   }
 
-  getWalletAccount(accountID) {
+  getWalletAccount(accountID: string): WalletAccount | undefined {
     return this.wallet.accounts.find(a => a.id === accountID);
   }
 
@@ -337,7 +337,7 @@ export class WalletService {
     const walletJson = JSON.parse(walletData);
 
     if (walletJson.accounts) {
-      const newAccounts = walletJson.accounts.map(account => {
+      const newAccounts = walletJson.accounts.map((account: { id: string; index: number }) => {
         if (account.id.indexOf('xrb_') !== -1) {
           account.id = account.id.replace('xrb_', 'nano_');
         }
@@ -372,7 +372,7 @@ export class WalletService {
     }
 
     if (walletJson.accounts && walletJson.accounts.length) {
-      walletJson.accounts.forEach(account => this.loadWalletAccount(account.index, account.id));
+      walletJson.accounts.forEach((account: { id: string; index: number }) => this.loadWalletAccount(account.index, account.id));
     }
 
     this.wallet.selectedAccountId = walletJson.selectedAccountId || null;
@@ -420,11 +420,13 @@ export class WalletService {
     const exportData: any = {
       indexes: this.wallet.accounts.map(a => a.index),
     };
+    // Ledger exports have no seed; never encrypt a nullable secret.
     let secret = '';
-    if (this.wallet.locked) {
-      secret = this.wallet.seed;
-    } else {
-      secret = CryptoJS.AES.encrypt(this.wallet.seed, this.wallet.password).toString();
+    if (this.wallet.type !== 'ledger') {
+      if (this.wallet.seed === null) throw new Error('Wallet seed unavailable for export');
+      secret = this.wallet.locked
+        ? this.wallet.seed
+        : CryptoJS.AES.encrypt(this.wallet.seed, this.wallet.password).toString();
     }
 
     if (this.wallet.type === 'seed') {
@@ -468,6 +470,7 @@ export class WalletService {
     return true;
   }
   unlockWallet(password: string) {
+    if (this.wallet.seed === null) return false;
     try {
       const decryptedBytes = CryptoJS.AES.decrypt(this.wallet.seed, password);
       const decryptedSeed = decryptedBytes.toString(CryptoJS.enc.Utf8);
@@ -520,7 +523,7 @@ export class WalletService {
 
     // Getting accounts...
     for (let batchIdx = 0; batchIdx < batchesCount; batchIdx++) {
-      const batchAccounts = {};
+      const batchAccounts: Record<string, {index: number; publicKey: string}> = {};
       const batchAccountsArray = [];
       for (let i = 0; i < ACCOUNTS_PER_API_REQUEST; i++) {
         const index = batchIdx * ACCOUNTS_PER_API_REQUEST + i;
@@ -614,7 +617,7 @@ export class WalletService {
     this.saveWalletExport();
   }
 
-  async createLedgerAccount(index) {
+  async createLedgerAccount(index: number): Promise<WalletAccount> {
     const account: any = await this.ledgerService.getLedgerAccount(index);
 
     const accountID = account.address;
@@ -640,7 +643,7 @@ export class WalletService {
     return newAccount;
   }
 
-  createKeyedAccount(index, accountBytes, accountKeyPair) {
+  createKeyedAccount(index: number, accountBytes: Uint8Array, accountKeyPair: {publicKey: Uint8Array; secretKey: Uint8Array}): WalletAccount {
     const accountName = this.util.account.getPublicAccountID(accountKeyPair.publicKey);
     const addressBookName = this.addressBook.getAccountName(accountName);
 
@@ -663,7 +666,7 @@ export class WalletService {
     return newAccount;
   }
 
-  async createSeedAccount(index) {
+  async createSeedAccount(index: number): Promise<WalletAccount> {
     const accountBytes = this.util.account.generateAccountSecretKeyBytes(this.wallet.seedBytes, index);
     const accountKeyPair = this.util.account.generateAccountKeyPair(accountBytes);
     return this.createKeyedAccount(index, accountBytes, accountKeyPair);
@@ -856,6 +859,9 @@ export class WalletService {
           }
 
           const walletAccount = this.wallet.accounts.find(a => a.id === block);
+          // Nodes may include addresses outside this wallet; never attach
+          // receivable work to an unknown wallet account.
+          if (!walletAccount) continue;
 
           if (pending.blocks[block]) {
             let accountPending = new BigNumber(0);
@@ -946,7 +952,7 @@ export class WalletService {
     this.informBalanceRefresh();
   }
 
-  async loadWalletAccount(accountIndex, accountID) {
+  async loadWalletAccount(accountIndex: number, accountID: string): Promise<WalletAccount> {
     const index = accountIndex;
     const addressBookName = this.addressBook.getAccountName(accountID);
 
@@ -982,7 +988,7 @@ export class WalletService {
       while (this.wallet.accounts.find(a => a.index === index)) index++;
     }
 
-    let newAccount: WalletAccount|null;
+    let newAccount: WalletAccount;
 
     if (this.isSingleKeyWallet()) {
       throw new Error(`Wallet consists of a single private key.`);
@@ -995,7 +1001,8 @@ export class WalletService {
         // this.notifications.sendWarning(`Unable to load account from ledger.  Make sure it is connected`);
         throw err;
       }
-
+    } else {
+      throw new Error('Unsupported wallet type for adding another account.');
     }
 
     this.wallet.accounts.push(newAccount);
@@ -1037,7 +1044,7 @@ export class WalletService {
     console.log('Stopped tracking transactions on ' + address);
   }
 
-  addPendingBlock(accountID, blockHash, amount, source) {
+  addPendingBlock(accountID: string, blockHash: string, amount: string | BigNumber, source: string): boolean {
     if (this.successfulBlocks.indexOf(blockHash) !== -1) return false; // Already successful with this block
 
     const existingHash = this.wallet.pendingBlocks.find(b => b.hash === blockHash);
@@ -1056,7 +1063,7 @@ export class WalletService {
   }
 
   // Remove a pending account from the pending list
-  async removePendingBlock(blockHash) {
+  async removePendingBlock(blockHash: string) {
     const index = this.wallet.pendingBlocks.findIndex(b => b.hash === blockHash);
     this.wallet.pendingBlocks.splice(index, 1);
   }
@@ -1066,10 +1073,10 @@ export class WalletService {
     this.wallet.pendingBlocks.splice(0, this.wallet.pendingBlocks.length);
   }
 
-  sortByAmount(a, b) {
+  sortByAmount(a: Block, b: Block): number {
     const x = new BigNumber(a.amount);
     const y = new BigNumber(b.amount);
-    return y.comparedTo(x);
+    return y.comparedTo(x) ?? 0;
   }
 
   async processPendingBlocks() {
@@ -1088,7 +1095,7 @@ export class WalletService {
     this.processingPending = true;
 
     const nextBlock = this.wallet.pendingBlocks[0];
-    if (this.successfulBlocks.find(b => b.hash === nextBlock.hash)) {
+    if (this.successfulBlocks.includes(nextBlock.hash)) {
       return setTimeout(() => this.processPendingBlocks(), 1500); // Block has already been processed
     }
     const walletAccount = this.getWalletAccount(nextBlock.account);
@@ -1158,6 +1165,7 @@ export class WalletService {
 
     if (this.wallet.type === 'ledger') {
     } else {
+      if (this.wallet.seed === null) throw new Error('Wallet seed unavailable for storage');
       // Forcefully encrypt the seed so an unlocked wallet is never saved
       if (!this.wallet.locked) {
         const encryptedSeed = CryptoJS.AES.encrypt(this.wallet.seed, this.wallet.password || '');
@@ -1203,10 +1211,10 @@ export class WalletService {
   requestWalletUnlock() {
     this.wallet.unlockModalRequested$.next(true);
 
-    return new Promise(
+    return new Promise<boolean>(
       (resolve, reject) => {
-        let subscriptionForUnlock;
-        let subscriptionForCancel;
+        let subscriptionForUnlock: Subscription | undefined;
+        let subscriptionForCancel: Subscription | undefined;
 
         const removeSubscriptions = () => {
           if (subscriptionForUnlock != null) {

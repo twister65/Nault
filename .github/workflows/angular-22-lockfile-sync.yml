@@ -1,0 +1,59 @@
+name: Sync Angular 22 npm lockfile
+on:
+  push:
+    branches: [upgrade/angular-22]
+    paths:
+      - .github/workflows/angular-22-lockfile-sync.yml
+      - package.json
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  sync:
+    if: github.repository == 'twister65/Nault'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.3'
+          cache: npm
+      - name: Recompute lockfile only
+        run: npm install --package-lock-only --lockfile-version=2 --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Verify Angular 22 / ESLint lockfile
+        run: |
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          const manifest=require('./package.json');
+          const lock=require('./package-lock.json');
+          assert.equal(lock.lockfileVersion,2);
+          for (const name of ['@angular/core','@ng-bootstrap/ng-bootstrap','eslint','@typescript-eslint/parser','electron-settings','url']) {
+            const want=manifest.dependencies?.[name] ?? manifest.devDependencies?.[name];
+            assert.equal((lock.packages[''].dependencies?.[name] ?? lock.packages[''].devDependencies?.[name]),want,name+' manifest mismatch');
+          }
+          assert.equal(lock.packages['node_modules/eslint'].version,'10.13.0');
+          assert.equal(lock.packages['node_modules/@typescript-eslint/parser'].version,'8.72.0');
+          assert.equal(lock.packages['node_modules/@typescript-eslint/eslint-plugin'].version,'8.72.0');
+          assert.match(lock.packages['node_modules/@angular/core'].version,/^22\./);
+          console.log('Angular 22 dependency lockfile synchronized');
+          NODE
+      - name: Commit lockfile exclusively to Angular 22 branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add package-lock.json
+          if git diff --cached --quiet; then
+            echo 'Already up to date'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'build(angular22): synchronize npm lockfile after Angular 21 integration'
+          git push origin HEAD:refs/heads/upgrade/angular-22

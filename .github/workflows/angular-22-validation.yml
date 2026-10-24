@@ -1,0 +1,91 @@
+name: Validate Angular 22 migration
+on:
+  push:
+    branches: [upgrade/angular-22]
+  pull_request:
+    branches: [master]
+permissions:
+  contents: read
+concurrency:
+  group: angular22-validation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    if: github.repository == 'twister65/Nault'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - name: Install native build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Install reproducible lockfile and enforce deprecation budget
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --legacy-peer-deps --no-audit --no-fund 2>&1 | tee /tmp/nautl-npm-deprecations.log
+          node scripts/check-deprecated-dependencies.cjs /tmp/nautl-npm-deprecations.log
+      - name: Assert Angular 22 and TypeScript 6 with ESLint 10
+        run: |
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          const p=require('./package.json');
+          const version=require('@angular/core/package.json').version;
+          assert.match(version,/^22\./);
+          assert.match(require('typescript/package.json').version,/^6\.0\./);
+          assert.equal(require('eslint/package.json').version,'10.13.0');
+          assert.equal(require('@typescript-eslint/parser/package.json').version,'8.72.0');
+          assert.ok(p.scripts['lint:flat']);
+          console.log({Angular:version,TypeScript:require('typescript/package.json').version,ESLint:require('eslint/package.json').version});
+          NODE
+          ./node_modules/.bin/ng version
+      - name: Verify French and Spanish translation dictionaries
+        run: npm run test:i18n
+      - name: Build production Web wallet and service worker
+        run: |
+          npm run wallet:build
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const sw=JSON.parse(fs.readFileSync('dist/ngsw.json','utf8'));
+          if(!sw.hashTable||!sw.assetGroups?.length)throw Error('Missing PWA service worker manifest');
+          console.log('PWA service worker manifest verified');
+          NODE
+      - name: Build Electron renderer and TypeScript main/preload
+        run: npm run desktop:build
+      - name: Lint TypeScript, HTML templates and inline Angular templates
+        run: |
+          npm run lint
+          npm run lint:flat
+      - name: Run automated Ledger USB/BLE transport regression checks
+        run: node scripts/test-ledger-bluetooth.js
+      - name: Run focused Nano and RsNano RPC tests
+        shell: bash
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          export CHROME_BIN
+          npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false \
+            --include=src/app/services/api.service.spec.ts \
+            --include=src/app/services/wallet.service.spec.ts \
+            --include=src/app/services/websocket.service.spec.ts \
+            --include=src/app/services/rpc-transport.service.spec.ts \
+            --include=src/app/services/endpoint-policy.service.spec.ts
+      - name: Run Playwright end-to-end wallet launch smoke test
+        shell: bash
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          export CHROME_BIN
+          npm run e2e
+      - name: Run full Angular unit test suite
+        shell: bash
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          export CHROME_BIN
+          npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false

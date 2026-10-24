@@ -1,4 +1,4 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {NgbActiveModal} from '@ng-bootstrap/ng-bootstrap';
 import { NotificationService } from '../../services/notification.service';
 import { BarcodeFormat } from '@zxing/library';
@@ -12,15 +12,16 @@ export type QRType = 'account' | 'hash' | 'mnemonic' | 'generic';
     selector: 'app-qr-modal',
     templateUrl: './qr-modal.component.html',
     styleUrls: ['./qr-modal.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class QrModalComponent implements OnInit {
 
   @Input() title = 'QR Scanner';
-  @Input() reference: string;
-  @Input() type: QRType;
-  availableDevices: MediaDeviceInfo[];
-  currentDevice: MediaDeviceInfo = null;
+  @Input() reference!: string;
+  @Input() type!: QRType;
+  availableDevices: MediaDeviceInfo[] = [];
+  currentDevice: MediaDeviceInfo | null = null;
   nano_scheme = /^(xrb|nano|nanorep|nanoseed|nanokey):.+$/g;
 
   formatsEnabled: BarcodeFormat[] = [
@@ -30,8 +31,8 @@ export class QrModalComponent implements OnInit {
     BarcodeFormat.QR_CODE,
   ];
 
-  hasDevices: boolean;
-  hasPermission: boolean;
+  hasDevices = false;
+  hasPermission = false;
 
   torchEnabled = false;
   torchAvailable$ = new BehaviorSubject<boolean>(false);
@@ -52,7 +53,7 @@ export class QrModalComponent implements OnInit {
   }
 
   onCodeResult(resultString: string) {
-    let type: QRType = null;
+    let type: QRType | null = null;
     let content = '';
     // account
     if (this.util.account.isValidAccount(resultString)) {

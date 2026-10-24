@@ -1,6 +1,6 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import BigNumber from 'bignumber.js';
-import {AddressBookService} from '../../services/address-book.service';
+import {AddressBookService, AddressBookEntry} from '../../services/address-book.service';
 import {BehaviorSubject} from 'rxjs';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
@@ -12,17 +12,19 @@ import {ActivatedRoute} from '@angular/router';
 import {PriceService} from '../../services/price.service';
 import {NanoBlockService} from '../../services/nano-block.service';
 import { QrModalService } from '../../services/qr-modal.service';
+import type {QRType} from '../qr-modal/qr-modal.component';
 import { environment } from 'environments/environment';
-import { TranslocoService } from '@ngneat/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 import { HttpClient } from '@angular/common/http';
 import * as nanocurrency from 'nanocurrency';
 
-const nacl = window['nacl'];
+const nacl = (window as unknown as {nacl: unknown}).nacl;
 
 @Component({
     selector: 'app-send',
     templateUrl: './send.component.html',
     styleUrls: ['./send.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class SendComponent implements OnInit {
@@ -49,12 +51,12 @@ export class SendComponent implements OnInit {
     ...this.ALIAS_LOOKUP_DEFAULT_STATE,
     address: '',
   }
-  aliasResults$ = new BehaviorSubject([]);
-  addressBookResults$ = new BehaviorSubject([]);
+  aliasResults$ = new BehaviorSubject<Array<{fullText: string; name: string; domain: string}>>([]);
+  addressBookResults$ = new BehaviorSubject<AddressBookEntry[]>([]);
   isDestinationAccountAlias = false;
   showAddressBook = false;
-  addressBookMatch = '';
-  addressAliasMatch = '';
+  addressBookMatch: string | null = '';
+  addressAliasMatch: string | null = '';
 
   amounts = [
     { name: 'XNO', shortName: 'XNO', value: 'mnano' },
@@ -63,19 +65,19 @@ export class SendComponent implements OnInit {
   ];
   selectedAmount = this.amounts[0];
 
-  amount = null;
+  amount: number | string | null = null;
   amountExtraRaw = new BigNumber(0);
   amountFiat: number|null = null;
   rawAmount: BigNumber = new BigNumber(0);
   fromAccount: any = {};
-  fromAccountID: any = '';
+  fromAccountID = '';
   fromAddressBook = '';
   toAccount: any = false;
   toAccountID = '';
-  toOwnAccountID: any = '';
-  toAddressBook = '';
-  toAccountStatus = null;
-  amountStatus = null;
+  toOwnAccountID = '';
+  toAddressBook: string | null = '';
+  toAccountStatus: number | null = null;
+  amountStatus: number | null = null;
   preparingTransaction = false;
   confirmingTransaction = false;
   selAccountInit = false;
@@ -136,8 +138,8 @@ export class SendComponent implements OnInit {
     }
   }
 
-  updateQueries(params) {
-    if ( params && params.amount && !isNaN(params.amount) ) {
+  updateQueries(params: {amount?: string | number | null; to?: string}) {
+    if ( params && params.amount && !isNaN(Number(params.amount)) ) {
       const amountAsRaw =
         new BigNumber(
           this.util.nano.mnanoToRaw(
@@ -170,7 +172,7 @@ export class SendComponent implements OnInit {
     }
 
     // Look for the first account that has a balance
-    const accountIDWithBalance = this.accounts.reduce((previous, current) => {
+    const accountIDWithBalance = this.accounts.reduce<string | null>((previous, current) => {
       if (previous) return previous;
       if (current.balance.gt(0)) return current.id;
       return null;
@@ -328,7 +330,9 @@ export class SendComponent implements OnInit {
     }
 
     if (this.settings.settings.decentralizedAliasesOption === 'disabled') {
-      const UIkit = window['UIkit'];
+      const UIkit = (window as unknown as {
+        UIkit: {modal: {confirm(message: string, options?: {labels: {cancel: string; ok: string}}): Promise<void>}};
+      }).UIkit;
       try {
         await UIkit.modal.confirm(
           `<p class="uk-alert uk-alert-warning"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span>
@@ -400,7 +404,7 @@ export class SendComponent implements OnInit {
 
           const matchingAccount =
             res.names.find(
-              (account) =>
+              (account: {name: string; address: string}) =>
                 (account.name === aliasName)
             );
 
@@ -449,7 +453,7 @@ export class SendComponent implements OnInit {
       });
   }
 
-  selectBookEntry(account) {
+  selectBookEntry(account: string) {
     this.showAddressBook = false;
     this.toAccountID = account;
     this.isDestinationAccountAlias = false;
@@ -509,7 +513,7 @@ export class SendComponent implements OnInit {
     }
   }
 
-  getAccountLabel(accountID, defaultLabel) {
+  getAccountLabel(accountID: string, defaultLabel: string | null): string | null {
     const walletAccount = this.walletService.wallet.accounts.find(a => a.id === accountID);
 
     if (walletAccount == null) {
@@ -520,7 +524,7 @@ export class SendComponent implements OnInit {
   }
 
   validateAmount() {
-    if (this.util.account.isValidNanoAmount(this.amount)) {
+    if (this.amount !== null && this.util.account.isValidNanoAmount(String(this.amount))) {
       this.amountStatus = 1;
       return true;
     } else {
@@ -585,7 +589,7 @@ export class SendComponent implements OnInit {
 
     const nanoAmount = this.rawAmount.div(this.nano);
 
-    if (this.amount < 0 || rawAmount.lessThan(0)) {
+    if (Number(this.amount ?? 0) < 0 || rawAmount.lessThan(0)) {
       return this.notificationService.sendWarning(`Amount is invalid`);
     }
     if (from.balanceBN.minus(rawAmount).lessThan(0)) {
@@ -601,6 +605,7 @@ export class SendComponent implements OnInit {
     this.fromAddressBook = (
         this.addressBookService.getAccountName(this.fromAccountID)
       || this.getAccountLabel(this.fromAccountID, 'Account')
+      || 'Account'
     );
 
     this.toAddressBook = (
@@ -655,7 +660,7 @@ export class SendComponent implements OnInit {
         }
       }
     } catch (err) {
-      this.notificationService.sendError(`There was an error sending your transaction: ${err.message}`);
+      this.notificationService.sendError(`There was an error sending your transaction: ${err instanceof Error ? err.message : String(err)}`);
     }
 
 
@@ -680,7 +685,7 @@ export class SendComponent implements OnInit {
     this.amountExtraRaw = new BigNumber(0);
   }
 
-  getAmountBaseValue(value) {
+  getAmountBaseValue(value: string | number | BigNumber) {
 
     switch (this.selectedAmount.value) {
       default:
@@ -690,7 +695,7 @@ export class SendComponent implements OnInit {
     }
   }
 
-  getAmountValueFromBase(value) {
+  getAmountValueFromBase(value: string | number | BigNumber) {
     switch (this.selectedAmount.value) {
       default:
       case 'nano': return this.util.nano.rawToNano(value);
@@ -700,7 +705,7 @@ export class SendComponent implements OnInit {
   }
 
   // open qr reader modal
-  openQR(reference, type) {
+  openQR(reference: string, type: QRType) {
     const qrResult = this.qrModalService.openQR(reference, type);
     qrResult.then((data) => {
       switch (data.reference) {

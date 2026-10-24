@@ -1,20 +1,29 @@
 import { Injectable } from '@angular/core';
 import * as Rx from 'rxjs';
 
-type NotificationType = 'info'|'success'|'warning'|'error';
+export type NotificationType = 'info'|'success'|'warning'|'error';
+export interface NotificationOptions {
+  length?: number;
+  identifier?: string;
+}
+export interface AppNotification {
+  type: NotificationType;
+  message: string;
+  options: NotificationOptions;
+}
 
 @Injectable()
 export class NotificationService {
 
-  notifications$ = new Rx.BehaviorSubject(null);
-  removeNotification$ = new Rx.BehaviorSubject(null);
+  notifications$ = new Rx.BehaviorSubject<AppNotification | null>(null);
+  removeNotification$ = new Rx.BehaviorSubject<string | null>(null);
 
   constructor() { }
 
   // This provides an entry point for all components to send notifications.
   // It exposes an observable that the actual component uses to grab new notifications
 
-  sendNotification(type: NotificationType, message: string, options = {}) {
+  sendNotification(type: NotificationType, message: string, options: NotificationOptions = {}) {
     this.notifications$.next({ type, message, options });
   }
 
@@ -22,16 +31,16 @@ export class NotificationService {
     this.removeNotification$.next(identifier);
   }
 
-  sendInfo(message: string, options = {}) {
+  sendInfo(message: string, options: NotificationOptions = {}) {
     this.sendNotification('info', message, options);
   }
-  sendSuccess(message: string, options = {}) {
+  sendSuccess(message: string, options: NotificationOptions = {}) {
     this.sendNotification('success', message, options);
   }
-  sendWarning(message: string, options = {}) {
+  sendWarning(message: string, options: NotificationOptions = {}) {
     this.sendNotification('warning', message, options);
   }
-  sendError(message: string, options = {}) {
+  sendError(message: string, options: NotificationOptions = {}) {
     this.sendNotification('error', message, options);
   }
 

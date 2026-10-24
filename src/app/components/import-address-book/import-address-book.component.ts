@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {NotificationService} from '../../services/notification.service';
 import {ActivatedRoute} from '@angular/router';
 import {AddressBookService} from '../../services/address-book.service';
@@ -8,6 +8,7 @@ import {Router} from '@angular/router';
     selector: 'app-import-address-book',
     templateUrl: './import-address-book.component.html',
     styleUrls: ['./import-address-book.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class ImportAddressBookComponent implements OnInit {
@@ -52,7 +53,8 @@ export class ImportAddressBookComponent implements OnInit {
       this.validImportData = true;
       this.activePanel = 'import';
 
-      let importDataAddress = {};
+      // A null-prototype dictionary prevents inherited property names from shadowing addresses.
+      const importDataAddress: Record<string, boolean> = Object.create(null);
       let importData = [];
 
       for (const entry of importBlob) {
@@ -105,7 +107,7 @@ export class ImportAddressBookComponent implements OnInit {
   }
 
   // converts back to string from binary
-  fromBinary(binary) {
+  fromBinary(binary: string): string | null {
     try {
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < bytes.length; i++) {
@@ -134,7 +136,7 @@ export class ImportAddressBookComponent implements OnInit {
     this.notifications.sendSuccess(`Successfully imported ${importedCount} address book entries`);
   }
 
-  importDataError(message) {
+  importDataError(message: string) {
     this.activePanel = 'error';
     return this.notifications.sendError(message);
   }

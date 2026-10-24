@@ -24,14 +24,14 @@ export class DesktopService {
   connect() {
   }
 
-  on(channel: string, listener) {
+  on(channel: string, listener: Parameters<NaultDesktopBridge['on']>[1]) {
     if (!this._ipc) return false;
     return this._ipc.on(channel, listener);
   }
 
-  send(channel: string, ...args) {
+  send(...args: Parameters<NaultDesktopBridge['send']>) {
     if (!this._ipc) return false;
-    return this._ipc.send(channel, ...args);
+    return this._ipc.send(...args);
   }
 
 }

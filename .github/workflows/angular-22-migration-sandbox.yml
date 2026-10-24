@@ -1,0 +1,74 @@
+name: Migrate Angular 21 to 22 (sandbox)
+on:
+  push:
+    branches: ['upgrade/angular-22']
+permissions:
+  contents: write
+jobs:
+  migrate:
+    if: github.repository == 'twister65/Nault' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/upgrade/angular-22'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      NPM_CONFIG_LEGACY_PEER_DEPS: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: 'upgrade/angular-22'
+          persist-credentials: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.22.3'
+          cache: npm
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Install validated Angular 21 baseline
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Run official Angular 22 update schematics
+        run: ./node_modules/.bin/ng update @angular/cli@22 @angular/core@22 --force
+      - name: Align Angular framework and service worker
+        run: |
+          npm install --save --legacy-peer-deps --no-audit --no-fund \
+            @angular-devkit/core@22 \
+            @angular/localize@22 \
+            @angular/service-worker@22 \
+            zone.js@~0.16.3
+      - name: Align Angular 22 ESLint and TypeScript 6
+        run: |
+          npm install --save-dev --legacy-peer-deps --no-audit --no-fund \
+            @angular-eslint/builder@22 \
+            @angular-eslint/eslint-plugin@22 \
+            @angular-eslint/eslint-plugin-template@22 \
+            @angular-eslint/schematics@22 \
+            @angular-eslint/template-parser@22 \
+            @angular/language-service@22 \
+            eslint@^9.39.0 \
+            typescript@~6.0.2
+      - name: Preserve Webpack for existing PoW worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(node -p "require('@angular-devkit/build-angular/package.json').dependencies.webpack")"
+          npm install --save-dev --save-exact --legacy-peer-deps --no-audit --no-fund "webpack@$expected"
+          node -e "const p=require('path');const angular=require.resolve('webpack',{paths:[p.dirname(require.resolve('@angular-devkit/build-angular/package.json'))]});const root=require.resolve('webpack');if(angular!==root)throw Error('Webpack mismatch');console.log(root)"
+      - name: Verify Angular 22 toolchain
+        run: |
+          node -e "const p=require('./package.json');for(const [n,v] of Object.entries({...p.dependencies,...p.devDependencies})){if((n.startsWith('@angular/')||n.startsWith('@angular-eslint/')||n==='@angular-devkit/core'||n==='@angular-devkit/build-angular')&&!/^[~^]?22\./.test(v))throw Error(n+': '+v)}if(!/^[~^]?6\.0\./.test(p.devDependencies.typescript))throw Error('TypeScript invalid')"
+          ./node_modules/.bin/ng version
+      - name: Commit migration only to Angular 22 branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "build(angular): migrate Angular 21 to 22"
+            git push origin HEAD:upgrade/angular-22
+          fi
+      - name: Smoke test Angular 22 Web production build
+        run: npm run wallet:build

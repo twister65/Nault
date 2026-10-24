@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {ActivatedRoute, Router} from '@angular/router';
 import {NotificationService} from '../../services/notification.service';
 import * as CryptoJS from 'crypto-js';
@@ -9,6 +9,7 @@ import {UtilService} from '../../services/util.service';
     selector: 'app-import-wallet',
     templateUrl: './import-wallet.component.html',
     styleUrls: ['./import-wallet.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class ImportWalletComponent implements OnInit {
@@ -45,7 +46,7 @@ export class ImportWalletComponent implements OnInit {
     }
   }
 
-  importDataError(message) {
+  importDataError(message: string) {
     this.activePanel = 'error';
     return this.notifications.sendError(message);
   }
@@ -54,7 +55,7 @@ export class ImportWalletComponent implements OnInit {
     // Attempt to decrypt the seed value using the password
     try {
       await new Promise(resolve => setTimeout(resolve, 500)); // brute force delay
-      let walletType: WalletType;
+      let walletType: WalletType | null = null;
       let secret = '';
       if (this.importData.seed) {
         secret = this.importData.seed;
@@ -65,6 +66,9 @@ export class ImportWalletComponent implements OnInit {
       } else if (this.importData.expandedKey) {
         secret = this.importData.expandedKey;
         walletType = 'expandedKey';
+      }
+      if (walletType === null) {
+        return this.importDataError(`Bad import data. Check your link and try again.`);
       }
       const decryptedBytes = CryptoJS.AES.decrypt(secret, this.walletPassword);
       const decryptedSecret = decryptedBytes?.toString(CryptoJS.enc.Utf8);

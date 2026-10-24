@@ -1,5 +1,5 @@
-import {Component, ElementRef, HostListener, OnInit, ViewChild, Renderer2} from '@angular/core';
-import {WalletService} from './services/wallet.service';
+import {Component, ElementRef, HostListener, OnInit, ViewChild, Renderer2, ChangeDetectionStrategy} from '@angular/core';
+import {WalletService, WalletAccount} from './services/wallet.service';
 import {AddressBookService} from './services/address-book.service';
 import {AppSettingsService} from './services/app-settings.service';
 import {WebsocketService} from './services/websocket.service';
@@ -14,13 +14,14 @@ import {NodeService} from './services/node.service';
 import { DesktopService, LedgerService } from './services';
 import { environment } from 'environments/environment';
 import { DeeplinkService } from './services/deeplink.service';
-import { TranslocoService } from '@ngneat/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 
 
 @Component({
     selector: 'app-root',
     templateUrl: './app.component.html',
     styleUrls: ['./app.component.less'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class AppComponent implements OnInit {
@@ -48,8 +49,8 @@ export class AppComponent implements OnInit {
       });
     }
 
-  @ViewChild('selectButton') selectButton: ElementRef;
-  @ViewChild('accountsDropdown') accountsDropdown: ElementRef;
+  @ViewChild('selectButton') selectButton!: ElementRef<HTMLElement>;
+  @ViewChild('accountsDropdown') accountsDropdown!: ElementRef<HTMLElement>;
 
   wallet = this.walletService.wallet;
   node = this.nodeService.node;
@@ -67,14 +68,16 @@ export class AppComponent implements OnInit {
   isConfigured = this.walletService.isConfigured;
   donationAccount = environment.donationAddress;
 
-  @HostListener('window:resize', ['$event']) onResize (e) {
-    this.onWindowResize(e.target);
+  @HostListener('window:resize') onResize(): void {
+    this.onWindowResize(window);
   }
 
-  @HostListener('document:mousedown', ['$event']) onGlobalClick(event): void {
+  @HostListener('document:mousedown', ['$event']) onGlobalClick(event: MouseEvent): void {
+    const target = event.target;
+    if (!(target instanceof Node)) return;
     if (
-            ( this.selectButton.nativeElement.contains(event.target) === false )
-          && ( this.accountsDropdown.nativeElement.contains(event.target) === false )
+            ( this.selectButton.nativeElement.contains(target) === false )
+          && ( this.accountsDropdown.nativeElement.contains(target) === false )
       ) {
         this.showAccountsDropdown = false;
     }
@@ -132,7 +135,7 @@ export class AppComponent implements OnInit {
       localStorage.removeItem('fragment');
 
       if (search && search.length) {
-        const queryParams = {};
+        const queryParams: Record<string, string> = {};
         const urlSearch = new URLSearchParams(search);
         urlSearch.forEach(function(value, key) {
           queryParams[key] = value;
@@ -168,7 +171,7 @@ export class AppComponent implements OnInit {
     });
 
     // handle deeplinks
-    this.desktop.on('deeplink', (e, deeplink) => {
+    this.desktop.on('deeplink', (_event: unknown, deeplink: string) => {
       if (!this.deeplinkService.navigate(deeplink)) this.notifications.sendWarning('This URI has an invalid address.', { length: 5000 });
     });
     this.desktop.send('deeplink-ready');
@@ -207,7 +210,7 @@ export class AppComponent implements OnInit {
     }
   }
 
-  onWindowResize(windowObject) {
+  onWindowResize(windowObject: Pick<Window, 'innerWidth' | 'innerHeight'>): void {
     this.innerWidth = windowObject.innerWidth;
     this.innerHeight = windowObject.innerHeight;
 
@@ -226,7 +229,7 @@ export class AppComponent implements OnInit {
    */
   async patchXrbToNanoPrefixData() {
     // If wallet is version 2, data has already been patched.  Otherwise, patch all data
-    if (this.settings.settings.walletVersion >= 2) return;
+    if ((this.settings.settings.walletVersion ?? 0) >= 2) return;
 
     await this.walletService.patchOldSavedData(); // Change saved xrb_ addresses to nano_
     this.addressBook.patchXrbPrefixData();
@@ -290,7 +293,7 @@ export class AppComponent implements OnInit {
     this.accountsDropdown.nativeElement.scrollTop = 0;
   }
 
-  selectAccount(account) {
+  selectAccount(account: WalletAccount | null): void {
     // note: account is null when user is switching to 'Total Balance'
     this.wallet.selectedAccountId = account ? account.id : null;
     this.wallet.selectedAccount = account;

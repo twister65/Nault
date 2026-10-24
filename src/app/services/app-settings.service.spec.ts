@@ -19,6 +19,7 @@ describe('AppSettingsService', () => {
   it('lists Twister32 RsNano but never selects it at random', inject([AppSettingsService], (service: AppSettingsService) => {
     const server = service.serverOptions.find(option => option.value === 'twister32-rsnano');
     expect(server).toBeTruthy();
+    if (!server) throw new Error('Twister32 RsNano must be listed in serverOptions');
     expect(server.api).toBe('https://twister32.changeip.net/proxy');
     expect(server.ws).toBe('wss://twister32.changeip.net/ws');
     expect(server.work).toBe('https://twister32.changeip.net/pow');

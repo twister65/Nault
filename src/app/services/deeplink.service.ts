@@ -79,7 +79,7 @@ export class DeeplinkService {
     return this.walletService.wallet.accounts.length > 0;
   }
 
-  handleSeed(seed) {
+  handleSeed(seed: string): void {
     if (this.hasAccounts()) {
       // Wallet already set up, sweeping...
       this.router.navigate(['sweeper'], { state: { seed: seed } });
@@ -89,7 +89,7 @@ export class DeeplinkService {
     }
   }
 
-  handlePrivateKey(key) {
+  handlePrivateKey(key: string): void {
     if (this.hasAccounts()) {
       // Wallet already set up, sweeping...
       this.router.navigate(['sweeper'], { state: { seed: key } });

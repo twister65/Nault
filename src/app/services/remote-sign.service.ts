@@ -13,7 +13,7 @@ export class RemoteSignService {
     private util: UtilService,
   ) { }
 
-  navigateSignBlock(url) {
+  navigateSignBlock(url: URL) {
     if (!this.checkSignBlock(url.pathname)) {
       return this.notifcationService.sendWarning('Not a recognized format of an unsigned block.', { length: 5000 });
     }
@@ -51,7 +51,7 @@ export class RemoteSignService {
     }
   }
 
-  navigateProcessBlock(url) {
+  navigateProcessBlock(url: URL) {
     if (!this.checkSignBlock(url.pathname) || !this.checkProcessBlock(url.pathname)) {
       return this.notifcationService.sendWarning('Not a recognized format of a signed block.', { length: 5000 });
     }

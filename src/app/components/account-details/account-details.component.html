@@ -116,6 +116,9 @@
                     <ul class="uk-iconnav">
                       <li><a ngxClipboard [cbContent]="accountID" (cbOnSuccess)="copied()" uk-icon="icon: copy" [title]="'general.copy' | transloco" uk-tooltip></a></li>
                       <li><a (click)="qrModal.show()" [title]="'general.show-qr-code' | transloco" uk-tooltip class="icon-qr-code"></a></li>
+                      <li *ngIf="walletAccount && isLedgerWallet">
+                        <a uk-icon="icon: commenting" [title]="'accounts.confirm-address-on-ledger' | transloco" (click)="showLedgerAddress(walletAccount)" uk-tooltip></a>
+                      </li>
                     </ul>
                   </div>
                 </div>
@@ -220,7 +223,7 @@
             <div>
               <div>{{ 'account-details.confirmed-blocks' | transloco }}:</div>
               <div>
-                {{ account.confirmation_height | translocoDecimal  }} / {{ account.block_count | translocoDecimal }}
+                {{ account.confirmation_height | number:'1.0-0' }} / {{ account.block_count | number:'1.0-0' }}
               </div>
               <div class="uk-text-small text-half-muted">
                 {{ ( (account.confirmation_height / account.block_count) * 100 ) | number:'1.0-2' }}%

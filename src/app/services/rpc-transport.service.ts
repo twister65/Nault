@@ -11,7 +11,13 @@ export class RpcTransportService {
     return new Observable(observer => {
       const controller = new AbortController();
       const headers = new Headers({ 'Content-Type': 'application/json' });
-      if (options.headers) options.headers.keys().forEach(key => headers.set(key, options.headers.get(key)));
+      const rpcHeaders = options.headers;
+      if (rpcHeaders) {
+        rpcHeaders.keys().forEach(key => {
+          const value = rpcHeaders.get(key);
+          if (value !== null) headers.set(key, value);
+        });
+      }
       fetch(secureEndpoint(url, 'rpc'), {
         method: 'POST', body: JSON.stringify(payload), headers,
         redirect: 'error', credentials: 'omit', cache: 'no-store',

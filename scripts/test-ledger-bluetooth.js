@@ -176,10 +176,10 @@ async function main() {
   const controlCode = ts.transpileModule(fs.readFileSync(path.join(root, 'src/app/services/ledger-ble-control.ts'), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017 }
   }).outputText;
-  const control = load(controlCode, { 'rxjs/operators': require('rxjs/operators') });
+  const control = load(controlCode, { 'rxjs-ledger/operators': require('rxjs-ledger/operators') });
   await check('real BLE exchange tolerates repeated MTU replies and returns the signature bytes', async () => {
     const RealBLE = require('@ledgerhq/hw-transport-web-ble').default;
-    const frames = new (require('rxjs').Subject)();
+    const frames = new (require('rxjs-ledger').Subject)();
     let disconnected = false;
     const transport = new RealBLE({ id: 'test', gatt: { disconnect() { disconnected = true; } } }, {}, frames, {});
     transport.mtuSize = 153;
@@ -204,7 +204,7 @@ async function main() {
   }).outputText;
   const SessionBLE = load(sessionCode, {
     '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
-    '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+    '@ledgerhq/devices': require('@ledgerhq/devices'), 'rxjs-ledger': require('rxjs-ledger'), buffer: require('buffer')
   }).default;
   function gattHarness(shouldReplyToMtu = () => true) {
     const device = new EventEmitter();
@@ -249,7 +249,7 @@ async function main() {
     const pendingRelease = new Promise(resolve => { finishRelease = resolve; });
     const BridgeBLE = load(sessionCode, {
       '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
-      '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+      '@ledgerhq/devices': require('@ledgerhq/devices'), 'rxjs-ledger': require('rxjs-ledger'), buffer: require('buffer')
     }, {
       window: { naultDesktop: { releaseLedgerUsb() {
         requests++;
@@ -275,7 +275,7 @@ async function main() {
   await check('failed USB release prevents GATT discovery', async () => {
     const BridgeBLE = load(sessionCode, {
       '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
-      '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+      '@ledgerhq/devices': require('@ledgerhq/devices'), 'rxjs-ledger': require('rxjs-ledger'), buffer: require('buffer')
     }, { window: { naultDesktop: { releaseLedgerUsb: async () => false } } }).default;
     const h = gattHarness();
     await assert.rejects(BridgeBLE.open(h.device, 1000), /USB transport could not be released/);
@@ -286,7 +286,7 @@ async function main() {
     const messages = [];
     const DiagnosticBLE = load(sessionCode, {
       '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
-      '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+      '@ledgerhq/devices': require('@ledgerhq/devices'), 'rxjs-ledger': require('rxjs-ledger'), buffer: require('buffer')
     }, { console: {
       info(message, detail) { messages.push({ level: 'info', message, detail }); },
       warn(message, detail) { messages.push({ level: 'warn', message, detail }); },
@@ -326,7 +326,7 @@ async function main() {
     const messages = [];
     const DiagnosticBLE = load(sessionCode, {
       '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
-      '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+      '@ledgerhq/devices': require('@ledgerhq/devices'), 'rxjs-ledger': require('rxjs-ledger'), buffer: require('buffer')
     }, { console: {
       info(message, detail) { messages.push({ message, detail }); },
       warn(message, detail) { messages.push({ message, detail }); },
@@ -440,7 +440,7 @@ async function main() {
   });
   const calls = [];
   class BLE extends EventEmitter {
-    constructor() { super(); this.notifyObservable = new (require('rxjs').Subject)(); this.device = { gatt: { disconnect: () => calls.push('disconnect') } }; }
+    constructor() { super(); this.notifyObservable = new (require('rxjs-ledger').Subject)(); this.device = { gatt: { disconnect: () => calls.push('disconnect') } }; }
     static isSupported() { return Promise.resolve(true); }
     static async create() { calls.push('create'); if (BLE.fail) throw BLE.fail instanceof Error ? BLE.fail : Error('GATT failed'); return new BLE(); }
     async close() { this.device.gatt.disconnect(); }
@@ -456,17 +456,19 @@ async function main() {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, experimentalDecorators: true }
   }).outputText;
   const { LedgerService } = load(code, {
-    './ledger-web-ble': { default: BLE },
+    './ledger-web-ble': { __esModule: true, default: BLE },
     './ledger-ble-control': control,
-    '@angular/core': { Injectable: () => value => value }, 'hw-app-nano': { default: Nano },
-    '@ledgerhq/hw-transport-webusb': { default: BLE },
-    '@ledgerhq/hw-transport-webhid': { default: BLE }, '@ledgerhq/hw-transport-web-ble': { default: BLE },
+    '@angular/core': { Injectable: () => value => value }, 'hw-app-nano': { __esModule: true, default: Nano },
+    '@ledgerhq/hw-transport-webusb': { __esModule: true, default: BLE },
+    '@ledgerhq/hw-transport-webhid': { __esModule: true, default: BLE }, '@ledgerhq/hw-transport-web-ble': { __esModule: true, default: BLE },
     rxjs: require('rxjs'), '../../environments/environment': { environment: { desktop: true } }
   }, { navigator });
   const sends = []; let listener;
   const preferences = {};
+  const removedNotifications = [];
   const service = new LedgerService({}, { connect() {}, on(_channel, fn) { listener = fn; }, send(_channel, data) { sends.push(data); return true; } },
-    { sendWarning() {} }, { getAppSetting(key) { return preferences[key]; }, setAppSetting(key, value) { preferences[key] = value; } });
+    { sendWarning() {}, removeNotification(identifier) { removedNotifications.push(identifier); } },
+    { getAppSetting(key) { return preferences[key]; }, setAppSetting(key, value) { preferences[key] = value; } });
   service.pollLedgerStatus = () => {};
   await flush();
   await check('browser USB selects only WebUSB or WebHID, never legacy U2F', async () => {
@@ -537,6 +539,8 @@ async function main() {
   await check('desktop Bluetooth connects through renderer, not native IPC', async () => {
     service.enableBluetoothMode(true); sends.length = 0;
     assert.equal(await service.loadLedger(), true); assert.equal(service.ledger.status, 'ready'); assert.equal(sends.length, 0);
+    assert(removedNotifications.includes('ledger-connection-help'),
+      'successful reconnect must clear any previous Ledger readiness warning');
   });
   await check('address, cached block and signature use Web Bluetooth', async () => {
     calls.length = 0; await service.getLedgerAccount(0, true);
@@ -636,7 +640,7 @@ async function main() {
       { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, experimentalDecorators: true } }
     ).outputText;
     const { WalletWidgetComponent } = load(widgetCode, {
-      '@angular/core': { Component: () => value => value, ViewChild: () => () => {} },
+      '@angular/core': { Component: () => value => value, ChangeDetectionStrategy: { Eager: 1 }, ViewChild: () => () => {} },
       '../../services/wallet.service': {},
       '../../services/notification.service': {},
       '../../services/ledger.service': { LedgerStatus: { READY: 'ready', NOT_CONNECTED: 'not-connected' } },
@@ -674,7 +678,7 @@ async function main() {
       { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, experimentalDecorators: true } }
     ).outputText;
     const { WalletWidgetComponent } = load(widgetCode, {
-      '@angular/core': { Component: () => value => value, ViewChild: () => () => {} },
+      '@angular/core': { Component: () => value => value, ChangeDetectionStrategy: { Eager: 1 }, ViewChild: () => () => {} },
       '../../services/wallet.service': {},
       '../../services/notification.service': {},
       '../../services/ledger.service': { LedgerStatus: { READY: 'ready', NOT_CONNECTED: 'not-connected' } },

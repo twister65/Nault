@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { BarcodeFormat } from '@zxing/library';
 import { NotificationService } from 'app/services';
 import { BehaviorSubject } from 'rxjs';
@@ -8,13 +8,14 @@ import { DeeplinkService } from '../../services/deeplink.service';
     selector: 'app-qr-scan',
     templateUrl: './qr-scan.component.html',
     styleUrls: ['./qr-scan.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class QrScanComponent implements OnInit {
   [x: string]: any;
 
-  availableDevices: MediaDeviceInfo[];
-  currentDevice: MediaDeviceInfo = null;
+  availableDevices: MediaDeviceInfo[] = [];
+  currentDevice: MediaDeviceInfo | null = null;
 
   formatsEnabled: BarcodeFormat[] = [
     BarcodeFormat.CODE_128,
@@ -23,10 +24,10 @@ export class QrScanComponent implements OnInit {
     BarcodeFormat.QR_CODE,
   ];
 
-  hasDevices: boolean;
-  hasPermission: boolean;
+  hasDevices = false;
+  hasPermission = false;
 
-  qrResultString: string;
+  qrResultString: string | null = null;
 
   torchEnabled = false;
   torchAvailable$ = new BehaviorSubject<boolean>(false);

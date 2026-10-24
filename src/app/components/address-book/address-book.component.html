@@ -119,19 +119,19 @@
                             @if ((walletService.wallet.updatingBalance === false)) {
                               <div class="account-amounts-primary uk-width-1-1">
                                 <span [title]="( accounts[addressBook.account]?.balanceRaw.gt(0) ? ( '+' + ( accounts[addressBook.account]?.balanceRaw.toString(10) ) + ' raw' ) : '' )">
-                                  <span class="amount-integer">{{ accounts[addressBook.account]?.balance | rai: 'mnano,true' | amountsplit: 0 }}</span>
-                                  <span class="amount-fractional">{{ accounts[addressBook.account]?.balance | rai: 'mnano,true' | amountsplit: 1 }}</span>
+                                  <span class="amount-integer">{{ $safeNavigationMigration(accounts[addressBook.account]?.balance) | rai: 'mnano,true' | amountsplit: 0 }}</span>
+                                  <span class="amount-fractional">{{ $safeNavigationMigration(accounts[addressBook.account]?.balance) | rai: 'mnano,true' | amountsplit: 1 }}</span>
                                   <span class="currency-name">XNO</span>
                                 </span>
                                 @if (accounts[addressBook.account]?.pending.gt(0)) {
                                   <div class="incoming-label">
                                     <div class="text-snippet">New</div>
-                                    <div class="text-full">+{{ accounts[addressBook.account]?.pending | rai: 'mnano,true' | amountsplit: 0 }}{{ accounts[addressBook.account]?.pending | rai: 'mnano,true' | amountsplit: 1 }} XNO</div>
+                                    <div class="text-full">+{{ $safeNavigationMigration(accounts[addressBook.account]?.pending) | rai: 'mnano,true' | amountsplit: 0 }}{{ $safeNavigationMigration(accounts[addressBook.account]?.pending) | rai: 'mnano,true' | amountsplit: 1 }} XNO</div>
                                   </div>
                                 }
                               </div>
                               <div class="account-amounts-converted uk-width-1-1 text-half-muted">
-                                {{ accounts[addressBook.account]?.balanceFiat | fiat: appSettings.settings.displayCurrency }}
+                                {{ $safeNavigationMigration(accounts[addressBook.account]?.balanceFiat) | fiat: appSettings.settings.displayCurrency }}
                               </div>
                             } @else {
                               <div class="account-amounts-primary uk-width-1-1">

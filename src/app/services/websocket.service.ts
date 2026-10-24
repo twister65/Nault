@@ -3,10 +3,29 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Subject } from 'rxjs';
 import {AppSettingsService} from './app-settings.service';
 
+export interface NanoConfirmation {
+  account: string;
+  amount: string;
+  hash: string;
+  block: {
+    type: string;
+    subtype: string;
+    account: string;
+    link_as_account: string;
+    representative: string;
+  };
+}
+
+interface SubscriptionCommand {
+  action: 'subscribe' | 'unsubscribe';
+  topic: 'confirmation';
+  options: { accounts: string[] };
+}
+
 @Injectable()
 export class WebsocketService {
 
-  queuedCommands = [];
+  queuedCommands: SubscriptionCommand[] = [];
 
   keepaliveTimeout = 60 * 1000;
   pongTimeout = 15 * 1000;
@@ -14,21 +33,21 @@ export class WebsocketService {
 
   keepaliveSet = false;
   private reconnectAttempts = 0;
-  private reconnectTimer: ReturnType<typeof setTimeout>;
-  private connectionTimer: ReturnType<typeof setTimeout>;
-  private pongTimer: ReturnType<typeof setTimeout>;
-  private keepaliveTimer: ReturnType<typeof setTimeout>;
+  private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  private connectionTimer: ReturnType<typeof setTimeout> | undefined;
+  private pongTimer: ReturnType<typeof setTimeout> | undefined;
+  private keepaliveTimer: ReturnType<typeof setTimeout> | undefined;
   // A finite budget per explicit connection cycle, including short-lived opens.
   private readonly maxReconnectAttempts = 5;
 
-  socket = {
+  socket: { connected: boolean; ws: WebSocket | null } = {
     connected: false,
     ws: null,
   };
 
-  subscribedAccounts = [];
+  subscribedAccounts: string[] = [];
 
-  newTransactions$ = new BehaviorSubject(null);
+  newTransactions$ = new BehaviorSubject<NanoConfirmation | null>(null);
   // A new connection does not replay confirmations missed while offline.
   readonly connected$ = new Subject<void>();
 
@@ -97,13 +116,13 @@ export class WebsocketService {
     ws.onmessage = event => {
       if (this.socket.ws !== ws) return;
       try {
-        const newEvent = JSON.parse(event.data);
+        const newEvent: { ack?: string; topic?: string; message?: NanoConfirmation } = JSON.parse(event.data);
         console.log('WS', newEvent);
 
         if (newEvent.ack === 'pong') clearTimeout(this.pongTimer);
 
         if (newEvent.topic === 'confirmation') {
-          this.newTransactions$.next(newEvent.message);
+          this.newTransactions$.next(newEvent.message ?? null);
         }
       } catch (err) {
         console.log(`Error parsing message`, err);
@@ -128,7 +147,10 @@ export class WebsocketService {
     this.keepaliveSet = false;
     this.socket.connected = false;
     this.socket.ws = null;
-    ws.onclose = ws.onopen = ws.onmessage = ws.onerror = null;
+    ws.onclose = null;
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onerror = null;
     // Do not wait for the TCP close handshake on a disconnected network.
     ws.close();
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
@@ -156,7 +178,7 @@ export class WebsocketService {
   }
 
   subscribeAccounts(accountIDs: string[]) {
-    const event = {
+    const event: SubscriptionCommand = {
       action: 'subscribe',
       topic: 'confirmation',
       options: {
@@ -176,11 +198,11 @@ export class WebsocketService {
       }
       return;
     }
-    this.socket.ws.send(JSON.stringify(event));
+    this.socket.ws?.send(JSON.stringify(event));
   }
 
   unsubscribeAccounts(accountIDs: string[]) {
-    const event = {
+    const event: SubscriptionCommand = {
       action: 'unsubscribe',
       topic: 'confirmation',
       options: {
@@ -196,7 +218,7 @@ export class WebsocketService {
     });
     // If we aren't connected, we don't need to do anything.  On reconnect, it won't subscribe.
     if (this.socket.connected) {
-      this.socket.ws.send(JSON.stringify(event));
+      this.socket.ws?.send(JSON.stringify(event));
     }
   }
 

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import {BehaviorSubject} from 'rxjs';
-import {BaseApiAccount, WalletApiAccount, WalletService} from './wallet.service';
+import {WalletService} from './wallet.service';
+import type {BaseApiAccount, WalletApiAccount} from './wallet.service';
 import BigNumber from 'bignumber.js';
 import {ApiService} from './api.service';
 import {UtilService} from './util.service';
@@ -20,8 +21,8 @@ export interface RepresentativeStatus {
   warn: boolean;
   known: boolean;
   daysSinceLastVoted: number;
-  uptime: number;
-  score: number;
+  uptime: number | null;
+  score: number | null;
 }
 
 export interface RepresentativeOverview {
@@ -35,6 +36,8 @@ export interface StoredRepresentative {
  name: string;
  warn?: boolean;
  trusted?: boolean;
+ weight?: number;
+ online?: boolean;
 }
 
 
@@ -58,16 +61,17 @@ export interface FullRepresentativeOverview extends RepresentativeApiOverview {
 export class RepresentativeService {
   storeKey = `nanovault-representatives`;
 
-  representatives$ = new BehaviorSubject([]);
-  representatives = [];
+  representatives$ = new BehaviorSubject<StoredRepresentative[]>([]);
+  representatives: StoredRepresentative[] = [];
 
-  walletReps$ = new BehaviorSubject([null]);
-  walletReps = [];
+  // [null] is the initial/loading state, distinct from an empty loaded list.
+  walletReps$ = new BehaviorSubject<Array<FullRepresentativeOverview | null>>([null]);
+  walletReps: FullRepresentativeOverview[] = [];
 
-  changeableReps$ = new BehaviorSubject([]);
-  changeableReps = [];
+  changeableReps$ = new BehaviorSubject<FullRepresentativeOverview[]>([]);
+  changeableReps: FullRepresentativeOverview[] = [];
 
-  onlineStakeTotal = new BigNumber(115202418);
+  onlineStakeTotal: BigNumber | null = new BigNumber(115202418);
 
   loaded = false;
 
@@ -127,7 +131,7 @@ export class RepresentativeService {
     const online_stake_total = quorum ? this.util.nano.rawToMnano(quorum.online_stake_total) : null;
     this.onlineStakeTotal = online_stake_total ? new BigNumber(online_stake_total) : null;
 
-    const allReps = [];
+    const allReps: FullRepresentativeOverview[] = [];
 
     // Now, loop through each representative and determine some details about it
     for (const representative of representatives) {
@@ -267,7 +271,7 @@ export class RepresentativeService {
         id: representative.account,
         percent: percent,
         statusText: status,
-        label: label,
+        label: label ?? null,
         status: repStatus,
         donationAddress: knownRepNinja?.donation?.account,
       };
@@ -289,7 +293,7 @@ export class RepresentativeService {
    * @returns {RepresentativeOverview[]}
    */
   getUniqueRepresentatives(accounts: WalletApiAccount[]): RepresentativeOverview[] {
-    const representatives = [];
+    const representatives: RepresentativeOverview[] = [];
     for (const account of accounts) {
       if (!account || !account.representative) continue; // Account doesn't exist yet
 
@@ -315,7 +319,7 @@ export class RepresentativeService {
    * @returns {Promise<string[]>}
    */
   async getOnlineRepresentatives(): Promise<string[] | null> {
-    const representatives = [];
+    const representatives: string[] = [];
     let reps;
     try {
       reps = await this.api.representativesOnline();
@@ -378,7 +382,7 @@ export class RepresentativeService {
     const representativeStore = localStorage.getItem(this.storeKey);
     if (!representativeStore) return;
 
-    const list = JSON.parse(representativeStore);
+    const list: StoredRepresentative[] = JSON.parse(representativeStore);
 
     const newRepList = list.map(entry => {
       if (entry.id.indexOf('xrb_') !== -1) {
@@ -392,7 +396,7 @@ export class RepresentativeService {
     return true;
   }
 
-  getRepresentative(id): StoredRepresentative | undefined {
+  getRepresentative(id: string): StoredRepresentative | undefined {
     return this.representatives.find(rep => rep.id === id);
   }
 
@@ -404,8 +408,8 @@ export class RepresentativeService {
   }
 
 
-  saveRepresentative(accountID, name, trusted = false, warn = false): void {
-    const newRepresentative: any = {
+  saveRepresentative(accountID: string, name: string, trusted = false, warn = false): void {
+    const newRepresentative: StoredRepresentative = {
       id: accountID,
       name: name,
     };
@@ -425,7 +429,7 @@ export class RepresentativeService {
     this.representatives$.next(this.representatives);
   }
 
-  deleteRepresentative(accountID): void {
+  deleteRepresentative(accountID: string): void {
     const existingIndex = this.representatives.findIndex(a => a.id.toLowerCase() === accountID.toLowerCase());
     if (existingIndex === -1) return;
 
@@ -451,7 +455,7 @@ export class RepresentativeService {
       return r;
     });
 
-    return weightedReps.sort((a, b) => b.weight - a.weight);
+    return weightedReps.sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
   }
 
   nameExists(name: string): boolean {
@@ -459,7 +463,7 @@ export class RepresentativeService {
   }
 
   // Default representatives list
-  defaultRepresentatives = [];
+  defaultRepresentatives: StoredRepresentative[] = [];
 
   // Bad representatives hardcoded to be avoided. Not visible in the user rep list
   nfReps = [

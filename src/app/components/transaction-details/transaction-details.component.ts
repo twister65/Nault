@@ -1,4 +1,5 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import {Subscription} from 'rxjs';
 import {ActivatedRoute, ChildActivationEnd, Router} from '@angular/router';
 import {WalletService} from '../../services/wallet.service';
 import {ApiService} from '../../services/api.service';
@@ -6,18 +7,19 @@ import {NotificationService} from '../../services/notification.service';
 import {AppSettingsService} from '../../services/app-settings.service';
 import BigNumber from 'bignumber.js';
 import {AddressBookService} from '../../services/address-book.service';
-import { TranslocoService } from '@ngneat/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 
 @Component({
     selector: 'app-transaction-details',
     templateUrl: './transaction-details.component.html',
     styleUrls: ['./transaction-details.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class TransactionDetailsComponent implements OnInit {
   nano = 1000000000000000000000000;
 
-  routerSub = null;
+  routerSub: Subscription | null = null;
   transaction: any = {};
   hashID = '';
   blockType = '';
@@ -190,17 +192,19 @@ export class TransactionDetailsComponent implements OnInit {
     this.fromAddressBook = (
         this.addressBook.getAccountName(fromAccount)
       || this.getAccountLabel(fromAccount, null)
+      || ''
     );
 
     this.toAddressBook = (
         this.addressBook.getAccountName(toAccount)
       || this.getAccountLabel(toAccount, null)
+      || ''
     );
 
     this.loadingBlock = false;
   }
 
-  getAccountLabel(accountID, defaultLabel) {
+  getAccountLabel(accountID: string, defaultLabel: string | null): string | null {
     const walletAccount = this.walletService.wallet.accounts.find(a => a.id === accountID);
 
     if (walletAccount == null) {
@@ -210,11 +214,11 @@ export class TransactionDetailsComponent implements OnInit {
     return (this.translocoService.translate('general.account') + ' #' + walletAccount.index);
   }
 
-  getBalanceFromHex(balance) {
+  getBalanceFromHex(balance: string | number) {
     return new BigNumber(balance, 16);
   }
 
-  getBalanceFromDec(balance) {
+  getBalanceFromDec(balance: string | number) {
     return new BigNumber(balance, 10);
   }
 

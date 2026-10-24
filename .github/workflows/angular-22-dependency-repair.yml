@@ -1,0 +1,71 @@
+name: Repair Angular 22 legacy dependencies
+on:
+  push:
+    branches: ['upgrade/angular-22']
+permissions:
+  contents: write
+jobs:
+  migrate-dependencies:
+    if: github.repository == 'twister65/Nault' && startsWith(github.event.head_commit.message, 'deps(angular22)')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      NPM_CONFIG_LEGACY_PEER_DEPS: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: 'upgrade/angular-22'
+          persist-credentials: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.22.3'
+          cache: npm
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Install Angular 22 migrated baseline
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Replace Angular 13 era ng-bootstrap and old Transloco
+        run: |
+          npm uninstall --save --legacy-peer-deps --no-audit --no-fund @ngneat/transloco
+          npm install --save --legacy-peer-deps --no-audit --no-fund \
+            @ng-bootstrap/ng-bootstrap@21 \
+            @popperjs/core@^2.11.8 \
+            @jsverse/transloco@8
+      - name: Migrate imports and type-only representative models
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          count = 0
+          for base in (Path('src'), Path('e2e')):
+              if not base.exists():
+                  continue
+              for p in base.rglob('*.ts'):
+                  old = p.read_text()
+                  new = old.replace("from '@ngneat/transloco'", "from '@jsverse/transloco'")
+                  if p.as_posix() == 'src/app/services/representative.service.ts':
+                      new = new.replace(
+                          "import {BaseApiAccount, WalletApiAccount, WalletService} from './wallet.service';",
+                          "import {WalletService} from './wallet.service';\nimport type {BaseApiAccount, WalletApiAccount} from './wallet.service';"
+                      )
+                  if new != old:
+                      p.write_text(new)
+                      count += 1
+          print('Changed TypeScript files:', count)
+          PY
+      - name: Commit isolated dependency compatibility update
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json src e2e
+          if ! git diff --cached --quiet; then
+            git commit -m "fix(angular22): replace obsolete Transloco and ng-bootstrap integrations"
+            git push origin HEAD:upgrade/angular-22
+          fi
+      - name: Verify production Web build
+        run: npm run wallet:build
