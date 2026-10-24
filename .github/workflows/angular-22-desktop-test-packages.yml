@@ -1,0 +1,115 @@
+name: Angular 22 Electron Linux/Windows test packages
+
+# Test artifacts only: no GitHub release, signing, auto-publishing or master merge.
+on:
+  workflow_dispatch:
+  push:
+    branches: [upgrade/angular-22]
+    paths:
+      - '.github/workflows/angular-22-desktop-test-packages.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Unsigned ${{ matrix.label }} package
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            label: Linux-x64
+          - runner: windows-2022
+            label: Windows-x64
+    env:
+      CI: 'true'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - name: Configure Python for legacy native addons
+        uses: actions/setup-python@v5
+        id: python
+        with:
+          python-version: '3.11'
+      - name: Install Linux native module prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Install locked dependencies (including Electron)
+        env:
+          npm_config_python: ${{ steps.python.outputs.python-path }}
+        run: npm ci --legacy-peer-deps --include=optional --no-audit --no-fund
+      - name: Compile Angular renderer and Electron main/preload
+        run: npm run desktop:build
+      - name: Run hardware-free Ledger USB/Bluetooth checks
+        run: node scripts/test-ledger-bluetooth.js
+
+      - name: Build unsigned Linux x64 AppImage
+        if: runner.os == 'Linux'
+        run: npx --no-install electron-builder --linux AppImage --x64 --publish never -c.npmRebuild=false
+      - name: Verify Linux AppImage structure
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          appimage="$(find desktop-app/build -maxdepth 1 -name '*.AppImage' -type f -print -quit)"
+          test -n "$appimage" && test -s "$appimage"
+          chmod +x "$appimage"
+          "$appimage" --appimage-extract >/dev/null
+          test -s squashfs-root/resources/app.asar
+          test -f squashfs-root/resources/app.asar.unpacked/package.json || true
+          sha256sum "$appimage" > desktop-app/build/SHA256SUMS.txt
+          printf 'Source: %s\nCommit: %s\nUnsigned Linux x64 Angular 22 test AppImage. Do not publish as a release.\n' "$GITHUB_REPOSITORY" "$GITHUB_SHA" > desktop-app/build/BUILD.txt
+      - name: Upload Linux test AppImage
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nault-Angular22-Linux-x64
+          path: |
+            desktop-app/build/*.AppImage
+            desktop-app/build/SHA256SUMS.txt
+            desktop-app/build/BUILD.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Build unsigned Windows x64 ZIP
+        if: runner.os == 'Windows'
+        run: npx --no-install electron-builder --config desktop-app/windows-bluetooth.json --win --x64 --publish never
+      - name: Verify Windows package using packaged Electron
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = 'desktop-app/build-windows/win-unpacked/Nault.exe'
+          if (-not (Test-Path $exe)) { throw 'Packaged Nault.exe missing' }
+          $env:ELECTRON_RUN_AS_NODE = '1'
+          $env:NAULT_SMOKE_APP = (Resolve-Path 'desktop-app/build-windows/win-unpacked/resources/app.asar').Path
+          & $exe -e "const fs=require('fs'),p=require('path'),app=process.env.NAULT_SMOKE_APP; for(const f of ['dist/index.html','desktop-app/dist/desktop-app.js','desktop-app/dist/preload.js']) {if(!fs.existsSync(p.join(app,f))) throw Error('Missing '+f)}; const req=require('module').createRequire(p.join(app,'package.json')); req('node-hid'); req('usb'); req('@ledgerhq/hw-transport-node-hid'); console.log('Electron native modules OK',process.versions.electron)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $zip = 'desktop-app/build-windows/Nault-WebBluetooth-Windows-x64.zip'
+          if (-not (Test-Path $zip)) { throw 'Windows test ZIP missing' }
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  Nault-WebBluetooth-Windows-x64.zip" | Set-Content 'desktop-app/build-windows/SHA256SUMS.txt'
+          "Source: $env:GITHUB_REPOSITORY`nCommit: $env:GITHUB_SHA`nUnsigned Windows x64 Angular 22 test ZIP. Extract all files before launching Nault.exe. Do not publish as a release." | Set-Content 'desktop-app/build-windows/BUILD.txt'
+      - name: Upload Windows test ZIP
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nault-Angular22-Windows-x64
+          path: |
+            desktop-app/build-windows/Nault-WebBluetooth-Windows-x64.zip
+            desktop-app/build-windows/SHA256SUMS.txt
+            desktop-app/build-windows/BUILD.txt
+          if-no-files-found: error
+          retention-days: 14
