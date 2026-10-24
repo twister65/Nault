@@ -8,6 +8,18 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+### PR #25 — suspension explicite de la fusion et tests matériels à venir (24 octobre 2026)
+
+**Consigne explicite de l'utilisateur : NE PAS FUSIONNER DANS `master` pour l'instant, même si les contrôles CI ont réussi.** La [PR #25](https://github.com/twister65/Nault/pull/25) a été passée par l'utilisateur en **Ready for Review** (non Draft), mais cela **n'autorise pas la fusion**. `master` doit rester inchangé jusqu'à l'exécution des derniers tests Windows et Mac, puis à une autorisation explicite. La description publique de la PR est tenue **entièrement en anglais** ; les futurs titres, corps et commentaires de PR GitHub seront en anglais.
+
+**Calendrier transmis par l'utilisateur (samedi 24 octobre 2026) :**
+- **Dimanche 25 octobre** : assistance au dépannage du démarrage Windows. Problème annoncé sur le disque au démarrage ; sa cause n'est pas déterminée. Réaliser ensuite, si Windows redevient fonctionnel, les tests Nault Electron sur Windows (démarrage, comptes, Ledger USB, deux reconnexions, Bluetooth si compatible, redémarrage). Aucune validation Windows à ce stade.
+- **Lundi 26 octobre ou après** : test Nault Electron sur le **MacBook Air prêté** après réparation. Le Mac refuse actuellement de démarrer ; l'utilisateur attend une **batterie neuve lundi**. Pas de test macOS effectué à ce stade.
+- **Travaux possibles lors de la prochaine session, sans entreprendre de modifications hors session :** compléter les traductions manquantes (en particulier **Outils avancés**, FR/ES), contrôler la mise à jour inter-version de la PWA, puis configurer et effectuer un déploiement **strictement sur le projet Vercel tablet** (à distinguer de `nault-android-test`) pour des tests sur **tablette Android et smartphone**. Vérifier d'abord le projet, l'alias et la limite de déploiements Vercel ; éviter tout déploiement involontaire.
+- **Dernier état CI :** [`Merge gate` run #40115398621](https://github.com/twister65/Nault/actions/runs/40115398621) **SUCCESS**, toutes les étapes de sécurité/régression/npm audit vertes au commit `41c1c42`. Ceci valide la chaîne automatique **mais ne clôt pas les tests de plateformes, n'efface pas S-01 et n'autorise pas une fusion**.
+
+**Garde-fou de reprise :** ne modifier ni `master` ni la publication des releases ; conserver la PR #25 ouverte et non fusionnée. Attendre les retours matériels Windows/macOS, documenter les résultats, vérifier les CI d'éventuels changements complémentaires, puis demander **un accord explicite de fusion** après bilan.
+
 ### Pull request Angular 22 en brouillon — 24 octobre 2026
 
 **PR créée :** [#25 — build: migrate Nault to Angular 22 (pre-merge validation)](https://github.com/twister65/Nault/pull/25), base `master`, head `upgrade/angular-22`, **Draft**, non fusionnée. Elle documente le test d'envoi Ledger confirmé par l'utilisateur et les réserves Windows, Sweeper, hot wallet S-01 et multisig. GitHub signalait `mergeable=true` (pas de conflit de fusion détecté), mais `mergeable_state=blocked` (gate requis non conclu) au moment de la première consultation.
