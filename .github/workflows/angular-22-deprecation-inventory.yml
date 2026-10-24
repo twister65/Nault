@@ -1,0 +1,47 @@
+name: Inventory Angular 22 deprecated dependencies
+on:
+  push:
+    branches: [upgrade/angular-22]
+    paths: [.github/workflows/angular-22-deprecation-inventory.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inventory:
+    if: github.repository == 'twister65/Nault'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - name: Identify deprecated transitive dependencies
+        run: |
+          npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund 2>&1 | tee /tmp/installation.log
+          node - <<'NODE'
+          const lock = require('./package-lock.json');
+          const names = ['uuid','request','har-validator','glob','@npmcli/move-file','npmlog','are-we-there-yet','gauge','debug','@ngtools/webpack','@angular-devkit/build-angular'];
+          const ps = lock.packages || {};
+          for (const name of names) {
+            const versions = Object.entries(ps).filter(([p]) => p === 'node_modules/' + name || p.endsWith('/node_modules/' + name))
+              .map(([p,v]) => ({ path:p, version:v.version }));
+            const parents = Object.entries(ps).filter(([p,v]) => v.dependencies?.[name] || v.optionalDependencies?.[name] || v.devDependencies?.[name])
+              .map(([p,v]) => ({ path:p || '(root)', requires:v.dependencies?.[name] || v.optionalDependencies?.[name] || v.devDependencies?.[name] }));
+            console.log('DEPRECATION GRAPH '+JSON.stringify({name,versions,parents}));
+          }
+          NODE
+          for pkg in uuid request har-validator glob @npmcli/move-file npmlog are-we-there-yet gauge debug @ngtools/webpack @angular-devkit/build-angular; do
+            echo "===== npm explain ${pkg} ====="
+            npm explain "${pkg}" 2>&1 | head -90 || true
+          done
+      - name: Check maintained parent versions (read-only)
+        run: |
+          for pkg in electron-updater electron-builder qrcode protractor karma karma-coverage-istanbul-reporter node-hid @ledgerhq/hw-transport-node-hid-noevents @angular/build; do
+            echo "===== npm view ${pkg} ====="
+            npm view "${pkg}" version engines deprecated --json || true
+          done
