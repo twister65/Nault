@@ -4,7 +4,7 @@ import Nano from 'hw-app-nano';
 
 import * as rx from 'rxjs';
 
-import { ipcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
+import { ipcMain, IpcMainEvent, IpcMainInvokeEvent, WebContents } from 'electron';
 
 const STATUS_CODES = {
   SECURITY_STATUS_NOT_SATISFIED: 0x6982,
@@ -12,6 +12,21 @@ const STATUS_CODES = {
   INVALID_SIGNATURE: 0x6a81,
   CACHE_MISS: 0x6a82
 };
+
+function ledgerErrorMessage(error: unknown): string {
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return String(error);
+}
+
+function ledgerStatusCode(error: unknown): number | undefined {
+  if (error && typeof error === 'object' && 'statusCode' in error && typeof error.statusCode === 'number') {
+    return error.statusCode;
+  }
+  return undefined;
+}
 
 const LedgerStatus = {
   NOT_CONNECTED: 'not-connected',
@@ -140,7 +155,7 @@ export class LedgerService {
         await this.loadTransport(bluetooth);
       } catch (err) {
         console.log(`Error loading transport? `, err);
-        this.setLedgerStatus(LedgerStatus.NOT_CONNECTED, `Unable to load Ledger transport: ${err.message || err}`);
+        this.setLedgerStatus(LedgerStatus.NOT_CONNECTED, `Unable to load Ledger transport: ${ledgerErrorMessage(err)}`);
         this.resetLedger();
         return false;
       }
@@ -177,7 +192,7 @@ export class LedgerService {
     } catch (err) {
       clearTimeout(connectionTimeout);
       console.log(err);
-      if (err.statusCode === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
+      if (ledgerStatusCode(err) === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
         this.setLedgerStatus(LedgerStatus.LOCKED, `Ledger device locked`);
       }
     }
@@ -185,7 +200,7 @@ export class LedgerService {
     return false;
   }
 
-  async getLedgerAccount(accountIndex, showOnScreen = false) {
+  async getLedgerAccount(accountIndex: number, showOnScreen = false) {
     try {
       this.queryingLedger = true;
       console.info('[Ledger diagnosis] Requesting Nano address (index only):', accountIndex);
@@ -198,10 +213,10 @@ export class LedgerService {
       this.queryingLedger = false;
       console.error('[Ledger diagnosis] Nano address request failed:', err);
 
-      const data = { error: true, errorMessage: typeof err === 'string' ? err : err.message };
+      const data = { error: true, errorMessage: ledgerErrorMessage(err) };
       this.ledgerMessage$.next({ event: 'account-details', data: Object.assign({ accountIndex }, data) });
 
-      if (err.statusCode === STATUS_CODES.CONDITIONS_OF_USE_NOT_SATISFIED) {
+      if (ledgerStatusCode(err) === STATUS_CODES.CONDITIONS_OF_USE_NOT_SATISFIED) {
         // This means they simply denied it...
 
         return; // We won't reset the ledger status in this instance
@@ -212,7 +227,7 @@ export class LedgerService {
     }
   }
 
-  async cacheBlock(accountIndex, cacheData, signature) {
+  async cacheBlock(accountIndex: number, cacheData: unknown, signature: unknown) {
     try {
       this.queryingLedger = true;
       const cacheResponse = await this.ledger.nano.cacheBlock(this.ledgerPath(accountIndex), cacheData, signature);
@@ -222,14 +237,14 @@ export class LedgerService {
     } catch (err) {
       this.queryingLedger = false;
 
-      const data = { error: true, errorMessage: typeof err === 'string' ? err : err.message };
+      const data = { error: true, errorMessage: ledgerErrorMessage(err) };
       this.ledgerMessage$.next({ event: 'cache-block', data: Object.assign({ accountIndex }, data) });
 
       this.resetLedger(); // Apparently ledger not working?
     }
   }
 
-  async signBlock(accountIndex, blockData) {
+  async signBlock(accountIndex: number, blockData: unknown) {
     try {
       this.queryingLedger = true;
       const signResponse = await this.ledger.nano.signBlock(this.ledgerPath(accountIndex), blockData);
@@ -239,19 +254,19 @@ export class LedgerService {
     } catch (err) {
       this.queryingLedger = false;
 
-      const data = { error: true, errorMessage: typeof err === 'string' ? err : err.message };
+      const data = { error: true, errorMessage: ledgerErrorMessage(err) };
       this.ledgerMessage$.next({ event: 'sign-block', data: Object.assign({ accountIndex }, data) });
 
       this.resetLedger(); // Apparently ledger not working?
     }
   }
 
-  setLedgerStatus(status, statusText = '') {
+  setLedgerStatus(status: string, statusText = '') {
     this.ledger.status = status;
     this.ledgerStatus$.next({ status: this.ledger.status, statusText });
   }
 
-  ledgerPath(accountIndex) {
+  ledgerPath(accountIndex: number) {
     return `${this.walletPrefix}${accountIndex}'`;
   }
 
@@ -271,17 +286,17 @@ export class LedgerService {
       await this.getLedgerAccount(0, false);
       this.setLedgerStatus(LedgerStatus.READY);
     } catch (err) {
-      if (err.statusCode === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
+      if (ledgerStatusCode(err) === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
         this.setLedgerStatus(LedgerStatus.LOCKED, `Ledger device locked`);
       } else {
-        this.setLedgerStatus(LedgerStatus.NOT_CONNECTED, `Ledger Disconnected: ${err.message || err }`);
+        this.setLedgerStatus(LedgerStatus.NOT_CONNECTED, `Ledger Disconnected: ${ledgerErrorMessage(err)}`);
       }
       this.pollingLedger = false;
     }
   }
 }
 
-let sendingWindow = null;
+let sendingWindow: WebContents | null = null;
 
 // Create a copy of the ledger service and register listeners with the browser window
 export function initialize(isTrustedSender: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean) {

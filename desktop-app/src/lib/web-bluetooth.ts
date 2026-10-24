@@ -10,7 +10,7 @@ export function configureWebBluetooth(window: BrowserWindow, isTrustedURL: (url:
   type Scan = {
     callback: (id: string) => void;
     devices: Electron.BluetoothDevice[];
-    timer: ReturnType<typeof setTimeout>;
+    timer: ReturnType<typeof setTimeout> | null;
     refresh?: ReturnType<typeof setTimeout>;
     abort: AbortController;
     showing: boolean;
@@ -21,7 +21,7 @@ export function configureWebBluetooth(window: BrowserWindow, isTrustedURL: (url:
   function finish(request: Scan, id = '') {
     if (scan !== request) return;
     scan = null;
-    clearTimeout(request.timer);
+    if (request.timer) clearTimeout(request.timer);
     clearTimeout(request.refresh);
     request.abort.abort();
     if (id) selected.add(id);
