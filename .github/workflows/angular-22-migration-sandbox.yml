@@ -6,7 +6,7 @@ permissions:
   contents: write
 jobs:
   migrate:
-    if: github.repository == 'twister65/Nault' && startsWith(github.event.head_commit.message, 'ci(angular22)')
+    if: github.repository == 'twister65/Nault' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/upgrade/angular-22'
     runs-on: ubuntu-24.04
     timeout-minutes: 70
     env:
