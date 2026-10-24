@@ -36,8 +36,8 @@
     "ledger-device-must-be-ready": "Ledger device must be ready",
     "missing-accounts": {
       "1": "Missing accounts?",
-      "2-link": "Add new account",
-      "3": "to import a previously used address."
+      "3": "to import a previously used address.",
+      "2-link": "Add new account"
     },
     "simple-mode": "Simple Mode",
     "successfully-created-new-account": "Successfully created new account {{ account }}",
@@ -50,8 +50,8 @@
     "you-can-only-track-up-to-x-accounts-at-a-time": "You can only track up to {{ accounts }} accounts at a time.",
     "you-dont-have-any-accounts-yet": {
       "1": "You don't have any accounts yet,",
-      "2-link": "click here to create one",
-      "3": "."
+      "3": ".",
+      "2-link": "click here to create one"
     }
   },
   "address-book": {
@@ -100,8 +100,8 @@
     },
     "you-do-not-have-any-address-book-entries-saved-yet": {
       "1": "You do not have any address book entries saved yet,",
-      "2-link": "click here to create one",
-      "3": "."
+      "3": ".",
+      "2-link": "click here to create one"
     }
   },
   "change-rep-widget": {
@@ -233,18 +233,18 @@
     "this-has-to-be-a-valid-authorization-header": "This has to be a valid Authorization header.",
     "this-has-to-be-a-valid-rpc": {
       "1": "This has to be a valid",
-      "2-link-rpc": "nano RPC endpoint",
-      "3": "or an API compliant with it."
+      "3": "or an API compliant with it.",
+      "2-link-rpc": "nano RPC endpoint"
     },
     "this-has-to-be-a-valid-websocket": {
       "1": "This has to be a valid",
-      "2-link-websocket": "Nano Node Websocket",
-      "3": "or a WebSocket API compliant with it."
+      "3": "or a WebSocket API compliant with it.",
+      "2-link-websocket": "Nano Node Websocket"
     },
     "this-has-to-be-a-valid-work": {
       "1": "This has to be a valid",
-      "2-link-work": "Nano Work Server",
-      "3": "endpoint or an API compliant with it. If your server on localhost does not work, try the desktop app instead."
+      "3": "endpoint or an API compliant with it. If your server on localhost does not work, try the desktop app instead.",
+      "2-link-work": "Nano Work Server"
     },
     "this-representative-will-be-used-for-any-new-account": "This representative will be used for any new account",
     "this-server-is-used-for-rpc-communication-with-the-nano-node": "This server is used for RPC communication with the nano node",
@@ -274,8 +274,8 @@
       "recovery-phrases-alert": {
         "1": {
           "1": "Make sure to write down your seed and/or mnemonic or save it somewhere safe, and ",
-          "2-strong": "never share it with anyone",
-          "3": "!"
+          "3": "!",
+          "2-strong": "never share it with anyone"
         },
         "2": "It is the master key to all of your accounts, and the only way to recover your funds in an emergency."
       },
@@ -366,30 +366,30 @@
       "1": "Nault is a web application that can be used on most desktop and handheld devices.",
       "2": {
         "1": "You may also use the desktop application for Windows, Linux or Mac. It is available for download",
-        "2-link-github-releases": "from the GitHub releases page",
-        "3": "."
+        "3": ".",
+        "2-link-github-releases": "from the GitHub releases page"
       },
       "3": {
         "1": "All code is open source and",
-        "2-link-github": "available on GitHub",
-        "3": "."
+        "3": ".",
+        "2-link-github": "available on GitHub"
       },
       "title": "Any Device, Anywhere"
     },
     "any-node-always-available": {
       "1": {
         "1": "Even if the official",
-        "2-link-nault": "nault.cc",
         "3": "domain would become inaccessible, you would still be able to use the",
-        "4-link-github-releases": "desktop application",
         "5": "or",
-        "6-link-github-web-app": "host the web application yourself",
-        "7": "."
+        "7": ".",
+        "2-link-nault": "nault.cc",
+        "4-link-github-releases": "desktop application",
+        "6-link-github-web-app": "host the web application yourself"
       },
       "2": {
         "1": "In Nault there is no single source of truth. All information is provided by the server that's set in app settings. That also means there is no single point of failure – you may choose any public or self-hosted",
-        "2-link-nano-node": "nano node",
-        "3": "as the server."
+        "3": "as the server.",
+        "2-link-nano-node": "nano node"
       },
       "title": "Any Node, Always Available"
     },
@@ -398,8 +398,8 @@
     "secure-the-nano-network": {
       "1": {
         "1": "Nano uses",
-        "2-link-orv": "ORV consensus",
-        "3": ", which allows users to be in control of how much voting power representatives have on the network."
+        "3": ", which allows users to be in control of how much voting power representatives have on the network.",
+        "2-link-orv": "ORV consensus"
       },
       "2": "Nault will automatically check the status of your representatives and provide recommendations to ensure security and censorship resistance for all network participants.",
       "title": "Secure the Nano Network"
@@ -412,5 +412,98 @@
       "3": "No sensitive data is ever sent across the internet.",
       "title": "Your Keys, Your Coins"
     }
+  },
+  "ui-shell": {
+    "currently-selected": "Currently Selected",
+    "total-balance": "Total Balance",
+    "processing-transactions": "Processing Transactions...",
+    "unlock-to-receive": "Unlock Wallet to Receive",
+    "manual-receive": "Set to Receive Manually",
+    "incoming-balance": "Incoming Balance",
+    "server-unavailable": "Unable to connect to the server",
+    "refresh": "Refresh",
+    "or": "or",
+    "select-other-server": "select a different server",
+    "offline-mode": "Wallet is in offline mode",
+    "select-server": "Select a server",
+    "to-interact": "to interact with the network",
+    "manage-wallet": "Manage Wallet",
+    "configure-new-wallet": "Configure New Wallet",
+    "advanced-tools": "Advanced Tools",
+    "wallet-sweeper": "Wallet Sweeper",
+    "remote-signing": "Remote Signing",
+    "multi-signature": "Multi Signature",
+    "keypair-generator": "Keypair Generator",
+    "unit-converter": "Unit Converter",
+    "qr-generator": "QR Generator",
+    "search-placeholder": "Search for an account or block hash",
+    "donate": "Donate",
+    "community": "Community",
+    "night-mode": "Night Mode",
+    "based-on": "Based on",
+    "view-github": "View our GitHub"
+  },
+  "ui-ledger": {
+    "disconnected": "Ledger disconnected",
+    "reconnect-via-usb": "Reconnect via USB",
+    "reconnect-via-bluetooth": "Reconnect via Bluetooth",
+    "troubleshooting": "view Troubleshooting Guide",
+    "locked": "Ledger locked",
+    "unlock-device-then": "Unlock the device, then",
+    "ready": "Ledger Ready",
+    "pow-slow": "Proof of Work is taking a while...",
+    "change-pow": "Change PoW method",
+    "cancel-pow": "cancel PoW",
+    "wallet-locked": "Wallet Locked",
+    "wallet-unlocked": "Wallet Unlocked",
+    "configure-wallet": "Configure Wallet",
+    "unlock-wallet": "Unlock Wallet",
+    "unlock": "Unlock",
+    "ble-notifications-lost": "Web Bluetooth stopped receiving notifications.",
+    "reset-bluetooth": "Reset Bluetooth session",
+    "no-wallet-change": "(instead of USB; keeps the current wallet configuration).",
+    "reset-warning": "(reloads Nault's window; unsaved form changes will be lost)."
+  },
+  "ui-send": {
+    "send-to-address": "Send to address",
+    "transfer-own": "Transfer between own accounts",
+    "from-account": "From Account",
+    "to-address": "To Address",
+    "to-account": "To Account",
+    "alias-lookup": "Alias Lookup",
+    "address-book-results": "Address Book Results",
+    "set-maximum": "Set Maximum Amount",
+    "current-balance": "Current Balance",
+    "about-to-send": "You are about to send",
+    "confirm-send": "Confirm & Send",
+    "sending": "Sending",
+    "account-destination": "Account to transfer to",
+    "search-placeholder": "Address to send to / Alias / nano:..",
+    "scan-qr": "Scan from QR code",
+    "copy-address": "Copy Account Address",
+    "remove-extra-raw": "Remove the additional raw amount from the total amount"
+  },
+  "ui-receive": {
+    "merchant-switch": "Switch to Merchant Mode",
+    "merchant-mode": "Merchant Mode",
+    "receive-nano": "Receive Nano",
+    "all-accounts": "All Accounts",
+    "requested-amount": "Requested Amount",
+    "optional": "optional",
+    "amount-xno": "Amount of XNO",
+    "nano-received": "Nano Received",
+    "select-qr": "Select an account to view QR code",
+    "incoming-transactions": "Incoming Transactions",
+    "reload-incoming": "Reload incoming transactions from the network",
+    "loading-incoming": "Loading incoming transactions...",
+    "account-block": "Account / Block",
+    "ready-to-receive": "Ready to receive",
+    "receiving": "Receiving",
+    "received": "Received!",
+    "receive-funds": "Receive funds",
+    "view-transaction": "View transaction details",
+    "awaiting-payment": "Awaiting payment...",
+    "cancel-payment": "Cancel Payment",
+    "new-payment": "New Payment"
   }
 }
