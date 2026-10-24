@@ -8,6 +8,19 @@
 
 > **Lecture obligatoire avant reprise par ChatGPT Work ou un autre intervenant :** commencer par le présent état opérationnel, puis lire les décisions techniques et l'historique archivés ci-dessous. Leurs descriptions au présent étaient exactes à leur date mais ne remplacent pas cet état actualisé. Vérifier systématiquement la tête Git, les versions installées et les derniers runs avant toute modification.
 
+## Reprise CI du 24 octobre 2026 — correctif Electron / dépendances
+
+**Branche :** `upgrade/angular-22`; **commit publié :** [`aca84c0`](https://github.com/twister65/Nault/commit/aca84c07a836a114cb03731d5956296cc73a1a77). **Ne pas fusionner dans `master`.**
+
+- Échec initial : [Validate Angular 22 migration #40016611697](https://github.com/twister65/Nault/actions/runs/40016611697), sur le commit `fdfaee7`. `npm ci`, assertion Angular/TypeScript/ESLint, build Web production et manifeste PWA réussis ; `npm run desktop:build` échoue à `desktop:compile` avec des erreurs strictes TypeScript 6 (implicit any, nullable, catch unknown, déclarations `hw-app-nano`/`node-hid`, `lib.esnext.intl.d.ts`). Les étapes de lint, de tests USB/BLE, RPC et de suite Angular **n'ont pas été exécutées** dans cette tentative.
+- `deprecated.log` du 24/10 : `@zxing/library@0.23.0` exige Node >=24 (ancien runner Node 22.22.3) ; dépréciations `uuid@3.4.0`, `request@2.88.2`, `har-validator@5.1.3`, `glob@7.2.3`/`8.1.0`, `@npmcli/move-file@2.0.1`, `npmlog@6.0.2`, `are-we-there-yet@3.0.1`, `gauge@4.0.4`, `debug@3.2.6`, `@ngtools/webpack@22.2.4`, `@angular-devkit/build-angular@22.2.4`. **Ces dépréciations ne sont pas encore résolues**.
+- Correctif `aca84c0` : types des fenêtres, callbacks et timer Electron, contrôles d'erreur stricts de Ledger, `parentPort` non nullable, timer BLE nullable, déclaration locale `hw-app-nano`, `skipLibCheck` pour erreurs de déclarations externes, et Node 24.15.0 dans le workflow Angular 22. Aucun changement intentionnel des APDU, signatures ni protocoles RPC/IPC.
+- Validation requise : [nouvelle exécution Angular 22 #40068217213](https://github.com/twister65/Nault/actions/runs/40068217213), ainsi que CodeQL, Linting, dépendances critiques et autres contrôles applicables. **Ne pas considérer CI verte tant que les conclusions `success` ne sont pas confirmées pour le SHA de tête.**
+- À faire : attribuer les dépendances dépréciées à leurs vrais parents via `npm explain` et/ou le lockfile, puis migrer progressivement sans imposer des `overrides` majeurs ; la migration Webpack vers `@angular/build:application` doit préserver PWA, Electron et polyfills et être testée séparément. Examiner aussi la compatibilité et la couverture du vieux Protractor/Karma et ne pas les supprimer pour masquer l'échec des tests.
+- Attention : `skipLibCheck` aide à isoler les fichiers `.d.ts` externes, **ne prouve pas leur compatibilité runtime**. Les essais matériels USB/BLE et les tests de signature restent nécessaires.
+
+---
+
 ## Bilan de validation ChromeOS — session du 23 octobre 2026 (terminée)
 
 **Environnement de test :** Chromium/Chrome sur Chromebook (ChromeOS), dans une fenêtre de navigation privée, DevTools ouverts, site **https://nault-android-test.vercel.app**. Les tests matériels ont été réalisés avec une **Ledger Nano X en USB, Bluetooth désactivé**. Ils ne démontrent pas la compatibilité d'une Nano S Plus USB ni celle du Bluetooth. Le portail de test Vercel utilise le code Angular 22 de la branche `upgrade/angular-22`, commit applicatif [`fdfaee7`](https://github.com/twister65/Nault/commit/fdfaee76e109326e84573120793ac38b1e3d8555) pour les derniers contrôles UI. Le déploiement correspondant [`dpl_8RSkPdAqHwppikpHUw9uPMDEJzzv`](https://vercel.com/olaverre-1312/nault-android-test/8RSkPdAqHwppikpHUw9uPMDEJzzv) est **READY** et l'alias `nault-android-test.vercel.app` a été confirmé.
