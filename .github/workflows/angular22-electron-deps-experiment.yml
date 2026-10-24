@@ -1,0 +1,42 @@
+name: Experiment Electron updater and builder modernization
+on:
+  push:
+    branches: [experiment/angular22-electron-deps]
+    paths: [.github/workflows/angular22-electron-deps-experiment.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  experiment:
+    if: github.repository == 'twister65/Nault'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - name: Install baseline
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+          npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Trial upgrade of Electron publishing components
+        run: |
+          npm install --save --legacy-peer-deps --no-audit --no-fund electron-updater@6.8.11
+          npm install --save-dev --legacy-peer-deps --no-audit --no-fund electron-builder@26.18.0
+          npm ci --legacy-peer-deps --no-audit --no-fund 2>&1 | tee /tmp/electron-modernization-npm.log
+          grep -E 'npm warn deprecated' /tmp/electron-modernization-npm.log || true
+          npm explain debug || true
+      - name: TypeScript Electron and renderer compilation
+        run: npm run desktop:build
+      - name: Automated Ledger USB BLE and full Angular tests
+        run: |
+          node scripts/test-ledger-bluetooth.js
+          CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          export CHROME_BIN
+          npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false
