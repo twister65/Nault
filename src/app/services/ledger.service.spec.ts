@@ -1,7 +1,7 @@
 import { ComponentTestModule, isolateConstructorIO } from '../../testing/component-test.module';
 import { TestBed, inject } from '@angular/core/testing';
 
-import { LedgerService, LedgerStatus, isAndroidBrowser, LedgerNotReadyError } from './ledger.service';
+import { LedgerService, LedgerStatus, isAndroidBrowser, LedgerNotReadyError, getLedgerReadinessIssue } from './ledger.service';
 
 describe('LedgerService', () => {
   beforeEach(() => {
@@ -20,6 +20,66 @@ describe('LedgerService', () => {
     expect(isAndroidBrowser('Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 Chrome/120')).toBe(true);
     expect(isAndroidBrowser('Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) Chrome/154')).toBe(false);
     expect(isAndroidBrowser('Mozilla/5.0 (X11; Linux x86_64) Chrome/154')).toBe(false);
+  });
+});
+
+describe('Ledger readiness error classification', () => {
+  it('recognizes a device locked at firmware level (0x5515)', () => {
+    expect(getLedgerReadinessIssue({ statusCode: 0x5515, message: 'UNKNOWN_ERROR' })).toBe('locked');
+    expect(getLedgerReadinessIssue(new Error('Ledger device: UNKNOWN_ERROR (0x5515)'))).toBe('locked');
+  });
+
+  it('recognizes an unavailable Nano app (0x6e01)', () => {
+    expect(getLedgerReadinessIssue({ statusCode: 0x6e01, message: 'UNKNOWN_ERROR' })).toBe('app-not-open');
+    expect(getLedgerReadinessIssue(new Error('Ledger device: UNKNOWN_ERROR (0x6e01)'))).toBe('app-not-open');
+  });
+
+  it('never classifies a denied signature or an unrelated transport error as locked', () => {
+    expect(getLedgerReadinessIssue({ statusCode: 0x6985, message: 'Conditions not satisfied' })).toBeNull();
+    expect(getLedgerReadinessIssue(new Error('Bluetooth disconnected'))).toBeNull();
+  });
+
+  it('shows an actionable message when Nano app closes during the polling cycle', async () => {
+    const service = Object.create(LedgerService.prototype) as any;
+    const sendWarning = jasmine.createSpy('sendWarning');
+    const next = jasmine.createSpy('next');
+    const resetLedger = jasmine.createSpy('resetLedger');
+    service.ledger = { status: LedgerStatus.READY };
+    service.bluetoothGeneration = 0;
+    service.pollingLedger = true;
+    service.notifications = { sendWarning };
+    service.ledgerStatus$ = { next };
+    service.resetLedger = resetLedger;
+    service.getLedgerAccount = jasmine.createSpy('getLedgerAccount')
+      .and.returnValue(Promise.reject({ statusCode: 0x6e01, message: 'UNKNOWN_ERROR (0x6e01)' }));
+
+    await service.checkLedgerStatus();
+
+    expect(service.ledger.status).toBe(LedgerStatus.NOT_CONNECTED);
+    expect(sendWarning).toHaveBeenCalledTimes(1);
+    expect(sendWarning.calls.mostRecent().args[0]).toContain('Open the Nano app');
+    expect(resetLedger).toHaveBeenCalled();
+    expect(next.calls.mostRecent().args[0].statusText).toContain('Open the Nano app');
+  });
+
+  it('marks a firmware-locked Ledger as locked during polling', async () => {
+    const service = Object.create(LedgerService.prototype) as any;
+    const sendWarning = jasmine.createSpy('sendWarning');
+    const next = jasmine.createSpy('next');
+    service.ledger = { status: LedgerStatus.READY };
+    service.bluetoothGeneration = 0;
+    service.pollingLedger = true;
+    service.notifications = { sendWarning };
+    service.ledgerStatus$ = { next };
+    service.resetLedger = jasmine.createSpy('resetLedger');
+    service.getLedgerAccount = jasmine.createSpy('getLedgerAccount')
+      .and.returnValue(Promise.reject({ statusCode: 0x5515, message: 'UNKNOWN_ERROR (0x5515)' }));
+
+    await service.checkLedgerStatus();
+
+    expect(service.ledger.status).toBe(LedgerStatus.LOCKED);
+    expect(sendWarning.calls.mostRecent().args[0]).toContain('Unlock your Ledger');
+    expect(next.calls.mostRecent().args[0].status).toBe(LedgerStatus.LOCKED);
   });
 });
 
