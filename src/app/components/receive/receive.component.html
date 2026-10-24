@@ -8,8 +8,8 @@
         (click)="merchantModeEnable()"
         >
         <span class="nlt-icon" uk-icon="icon: cart;"></span>
-        <span class="merchant-mode-text-full">Switch to Merchant Mode</span>
-        <span class="merchant-mode-text-short">Merchant Mode</span>
+        <span class="merchant-mode-text-full">{{ 'ui-receive.merchant-switch' | transloco }}</span>
+        <span class="merchant-mode-text-short">{{ 'ui-receive.merchant-mode' | transloco }}</span>
       </button>
     </ng-template>
 
@@ -50,7 +50,7 @@
     </ng-template>
 
     <div class="uk-margin-bottom uk-flex uk-flex-between">
-      <h2 class="uk-flex-1 uk-heading-divider uk-margin-remove">Receive Nano</h2>
+      <h2 class="uk-flex-1 uk-heading-divider uk-margin-remove">{{ 'ui-receive.receive-nano' | transloco }}</h2>
       <div class="uk-flex-none uk-visible@s uk-flex uk-flex-top uk-margin-medium-left">
         <ng-container *ngTemplateOutlet="switchToMerchantModeButton"></ng-container>
       </div>
@@ -62,10 +62,10 @@
 
           <div class="uk-flex-1">
             <div class="uk-margin">
-              <label for="form-horizontal-select" class="uk-form-label label-block">Account</label>
+              <label for="form-horizontal-select" class="uk-form-label label-block">{{ 'general.account' | transloco }}</label>
               <div class="form-account">
                 <select id="form-horizontal-select" class="uk-select" [(ngModel)]="pendingAccountModel" (change)="onSelectedAccountChange(pendingAccountModel)">
-                  <option [value]="0">All Accounts</option>
+                  <option [value]="0">{{ 'ui-receive.all-accounts' | transloco }}</option>
                   @for (account of accounts; track account) {
                     <option [value]="account.id">{{account.addressBookName ? account.addressBookName + ' - ' : '#' + account.index + ' - ' }} {{ account.id | squeeze }} ({{ account.balance | rai: 'mnano,true' | amountsplit: 0 }}{{ account.balance | rai: 'mnano,true' | amountsplit: 1 }} XNO)</option>
                   }
@@ -74,11 +74,11 @@
             </div>
 
             <div class="uk-margin">
-              <label for="form-horizontal-amount" class="uk-form-label label-block">Requested Amount <span class="uk-text-muted label-optional">optional</span></label>
+              <label for="form-horizontal-amount" class="uk-form-label label-block">{{ 'ui-receive.requested-amount' | transloco }} <span class="uk-text-muted label-optional">{{ 'ui-receive.optional' | transloco }}</span></label>
               <div class="form-amount">
                 <div class="uk-width-1-1 uk-inline">
                   <label class="uk-form-icon uk-link-reset uk-link-muted xno-symbol" for="form-horizontal-amount"></label>
-                  <input [(ngModel)]="amountNano" [ngClass]="{ 'uk-form-danger': !validNano }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" class="uk-input" id="form-horizontal-amount" (input)="nanoAmountChange()" style="padding-left: 52px !important;" type="number" step="any" placeholder="Amount of XNO" maxlength="40">
+                  <input [(ngModel)]="amountNano" [ngClass]="{ 'uk-form-danger': !validNano }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" class="uk-input" id="form-horizontal-amount" (input)="nanoAmountChange()" style="padding-left: 52px !important;" type="number" step="any" [placeholder]="'ui-receive.amount-xno' | transloco" maxlength="40">
                 </div>
                 @if (settings.settings.displayCurrency) {
                   <div style="margin-top: 10px;">
@@ -108,7 +108,7 @@
                   <img class="uk-position-absolute" [src]="qrCodeImage" alt="QR code">
                   <div class="qr-confirmation" [class]="qrSuccessClass">
                     <div uk-icon="icon: check; ratio: 5"></div>
-                    <span class="uk-text-large uk-text-center">Nano Received</span>
+                    <span class="uk-text-large uk-text-center">{{ 'ui-receive.nano-received' | transloco }}</span>
                   </div>
                   <div style="padding-top: 100%"></div>
                 </div>
@@ -116,7 +116,7 @@
             } @else {
               <div class="qr-code qr-placeholder">
                 @if ((pendingAccountModel === '0')) {
-                  <div class="uk-position-absolute text-half-muted">Select an account<br/>to view QR code</div>
+                  <div class="uk-position-absolute text-half-muted">{{ 'ui-receive.select-qr' | transloco }}</div>
                 }
                 @if ((pendingAccountModel !== '0')) {
                   <div class="uk-position-absolute text-half-muted"><div uk-spinner="ratio: 3;"></div></div>
@@ -143,7 +143,7 @@
     </div>
 
     <div class="transactions-list-header uk-width-1-1 uk-flex uk-flex-center uk-flex-middle uk-margin-small-bottom">
-      <h3 class="uk-margin-remove-bottom">Incoming Transactions</h3>
+      <h3 class="uk-margin-remove-bottom">{{ 'ui-receive.incoming-transactions' | transloco }}</h3>
       <ul class="uk-width-auto uk-iconnav uk-margin-remove-left" style="margin-top: -1px;">
         <li>
           @if (loadingIncomingTxList) {
@@ -152,7 +152,7 @@
               class="icon-transactions-refresh spinner"
             ></div>
           } @else {
-            <a uk-icon="icon: refresh;" class="icon-transactions-refresh" (click)="getPending()" uk-tooltip title="Reload incoming transactions from the network"></a>
+            <a uk-icon="icon: refresh;" class="icon-transactions-refresh" (click)="getPending()" uk-tooltip [title]="'ui-receive.reload-incoming' | transloco"></a>
           }
         </li>
       </ul>
@@ -199,7 +199,7 @@
           }
           @if (loadingIncomingTxList) {
             <div class="rounded-area">
-              <div style="text-align: center;"><span class="uk-margin-right" uk-spinner></span> Loading incoming transactions...</div>
+              <div style="text-align: center;"><span class="uk-margin-right" uk-spinner></span> {{ 'ui-receive.loading-incoming' | transloco }}</div>
             </div>
           }
         </div>
@@ -208,9 +208,9 @@
           <thead>
             <tr>
               <th scope="col" class="type-column"></th>
-              <th scope="col" class="account-column">Account / Block</th>
-              <th scope="col" class="amount-column">Amount</th>
-              <th scope="col" class="date-column">Actions</th>
+              <th scope="col" class="account-column">{{ 'ui-receive.account-block' | transloco }}</th>
+              <th scope="col" class="amount-column">{{ 'general.amount' | transloco }}</th>
+              <th scope="col" class="date-column">{{ 'general.actions' | transloco }}</th>
             </tr>
           </thead>
           <tbody>
@@ -277,12 +277,12 @@
                       <button class="uk-button uk-button-primary uk-text-center uk-width-auto" type="button" (click)="receiveReceivableBlock(pending)">RECEIVE</button>
                     }
                     @if (pending.loading) {
-                      <button class="uk-button uk-button-secondary uk-disabled uk-button-small nlt-icon-button nlt-icon-button-inline"><span class="spinner" uk-spinner="ratio: 0.5;"></span> Receiving</button>
+                      <button class="uk-button uk-button-secondary uk-disabled uk-button-small nlt-icon-button nlt-icon-button-inline"><span class="spinner" uk-spinner="ratio: 0.5;"></span> {{ 'ui-receive.receiving' | transloco }}</button>
                     }
                   </div>
                 </ng-template>
                 <td class="amount-column uk-text-middle uk-text-muted" [title]="('Incoming Transaction') + ( (pending.amountRaw && (pending.amountRaw > 0) ) ? ( ', +' + ( pending.amountRaw.toString(10) ) + ' raw' ) : '' )">
-                  <span class="uk-text-small">Ready to receive</span><br>
+                  <span class="uk-text-small">{{ 'ui-receive.ready-to-receive' | transloco }}</span><br>
                   <span class="amount-integer">{{ pending.amount | rai: 'mnano,true' | amountsplit: 0 }}</span>
                   <span class="amount-fractional">{{ pending.amount | rai: 'mnano,true' | amountsplit: 1 }}</span>
                   <span class="currency-name">XNO</span>
@@ -306,7 +306,7 @@
             }
             @if (loadingIncomingTxList) {
               <tr>
-                <td colspan="4" style="text-align: center;"><span class="uk-margin-right" uk-spinner></span> Loading incoming transactions...</td>
+                <td colspan="4" style="text-align: center;"><span class="uk-margin-right" uk-spinner></span> {{ 'ui-receive.loading-incoming' | transloco }}</td>
               </tr>
             }
           </table>
@@ -357,10 +357,10 @@
                 ></span>
               }
               @if (!mobileTransactionData.received && !mobileTransactionData.loading) {
-                <span>Receive funds</span>
+                <span>{{ 'ui-receive.receive-funds' | transloco }}</span>
               }
               @if (!mobileTransactionData.received && mobileTransactionData.loading) {
-                <span>Receiving...</span>
+                <span>{{ 'ui-receive.receiving' | transloco }}</span>
               }
               @if (mobileTransactionData.received) {
                 <span
@@ -369,7 +369,7 @@
                 ></span>
               }
               @if (mobileTransactionData.received) {
-                <span>Received!</span>
+                <span>{{ 'ui-receive.received' | transloco }}</span>
               }
             </div>
             <div
@@ -378,7 +378,7 @@
               (click)="mobileTransactionMenuModal.hide()"
               >
               <span class="icon" uk-icon="icon: search; ratio: 1.3;" style="vertical-align: 2px;"></span>
-              <span>View transaction details</span>
+              <span>{{ 'ui-receive.view-transaction' | transloco }}</span>
             </div>
           </div>
         }
@@ -442,7 +442,7 @@
               <div class="form-amount">
                 <div class="uk-width-1-1 uk-inline">
                   <label class="uk-form-icon uk-link-reset uk-link-muted xno-symbol" for="form-horizontal-amount"></label>
-                  <input [(ngModel)]="amountNano" [ngClass]="{ 'uk-form-danger': !validNano }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" class="uk-input" id="form-horizontal-amount" (input)="nanoAmountChange()" style="padding-left: 52px !important;" type="number" step="any" placeholder="Amount of XNO" maxlength="40">
+                  <input [(ngModel)]="amountNano" [ngClass]="{ 'uk-form-danger': !validNano }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" class="uk-input" id="form-horizontal-amount" (input)="nanoAmountChange()" style="padding-left: 52px !important;" type="number" step="any" [placeholder]="'ui-receive.amount-xno' | transloco" maxlength="40">
                 </div>
                 @if (settings.settings.displayCurrency) {
                   <div style="margin-top: 10px;">
@@ -579,7 +579,7 @@
             </div>
           }
           @if (merchantModePrompts.length === 0) {
-            <p class="uk-text-large uk-margin-top text-half-muted">Awaiting payment...</p>
+            <p class="uk-text-large uk-margin-top text-half-muted">{{ 'ui-receive.awaiting-payment' | transloco }}</p>
             <button
               class="uk-width-auto uk-button uk-text-center nlt-icon-button"
               [class.uk-button-primary]="!loadingIncomingTxList"
@@ -603,7 +603,7 @@
             (click)="merchantModeHideQR()"
             >
             <span uk-icon="icon: close; ratio: 1.4;" class="uk-margin-small-right" style="margin-top: 2px;"></span>
-            <span class="label">Cancel Payment</span>
+            <span class="label">{{ 'ui-receive.cancel-payment' | transloco }}</span>
           </div>
         }
         @if ((inMerchantModePaymentComplete === true)) {
@@ -667,7 +667,7 @@
             (click)="merchantModeResetState()"
             >
             <span uk-icon="icon: plus-circle; ratio: 1.4;" class="uk-margin-small-right" style="margin-top: 2px;"></span>
-            <span class="label">New Payment</span>
+            <span class="label">{{ 'ui-receive.new-payment' | transloco }}</span>
           </div>
         }
       </div>
