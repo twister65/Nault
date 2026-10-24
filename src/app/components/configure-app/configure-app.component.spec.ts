@@ -24,6 +24,20 @@ describe('ConfigureAppComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+
+  it('keeps selector labels as translation keys until Transloco has loaded', () => {
+    // Do not eagerly call translate() in the component constructor: the
+    // asynchronous dictionary may not be ready, leaving raw keys visible.
+    expect(component.storageOptions[0].name).toBe('configure-app.storage-options.browser-local-storage');
+    expect(component.powOptions.find(option => option.value === 'clientWebGL')?.name)
+      .toBe('configure-app.pow-options.client-side-gpu-webgl');
+    expect(component.pendingOptions.find(option => option.value === 'amount')?.name)
+      .toBe('configure-app.pending-options.automatic-largest-amount-first');
+    expect(component.inactivityOptions.find(option => option.value === 15)?.params)
+      .toEqual({ minutes: 15 });
+    expect(component.selectedPoWOption).toBe('best');
+    expect(component.selectedPendingOption).toBe('amount');
+  });
 });
 
 // Behavior coverage is separate from the constructor smoke test above.
