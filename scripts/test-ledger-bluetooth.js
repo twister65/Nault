@@ -465,8 +465,10 @@ async function main() {
   }, { navigator });
   const sends = []; let listener;
   const preferences = {};
+  const removedNotifications = [];
   const service = new LedgerService({}, { connect() {}, on(_channel, fn) { listener = fn; }, send(_channel, data) { sends.push(data); return true; } },
-    { sendWarning() {} }, { getAppSetting(key) { return preferences[key]; }, setAppSetting(key, value) { preferences[key] = value; } });
+    { sendWarning() {}, removeNotification(identifier) { removedNotifications.push(identifier); } },
+    { getAppSetting(key) { return preferences[key]; }, setAppSetting(key, value) { preferences[key] = value; } });
   service.pollLedgerStatus = () => {};
   await flush();
   await check('browser USB selects only WebUSB or WebHID, never legacy U2F', async () => {
@@ -537,6 +539,8 @@ async function main() {
   await check('desktop Bluetooth connects through renderer, not native IPC', async () => {
     service.enableBluetoothMode(true); sends.length = 0;
     assert.equal(await service.loadLedger(), true); assert.equal(service.ledger.status, 'ready'); assert.equal(sends.length, 0);
+    assert(removedNotifications.includes('ledger-connection-help'),
+      'successful reconnect must clear any previous Ledger readiness warning');
   });
   await check('address, cached block and signature use Web Bluetooth', async () => {
     calls.length = 0; await service.getLedgerAccount(0, true);
