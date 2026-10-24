@@ -27,7 +27,7 @@ jobs:
           npm ci --legacy-peer-deps --no-audit --no-fund
       - name: Trial upgrade of Electron publishing components
         run: |
-          npm install --save --legacy-peer-deps --no-audit --no-fund electron-updater@6.8.11
+          # Leave electron-updater v4 unchanged; test whether builder alone removes legacy native chains.
           npm install --save-dev --legacy-peer-deps --no-audit --no-fund electron-builder@26.18.0
           npm ci --legacy-peer-deps --no-audit --no-fund 2>&1 | tee /tmp/electron-modernization-npm.log
           grep -E 'npm warn deprecated' /tmp/electron-modernization-npm.log || true
