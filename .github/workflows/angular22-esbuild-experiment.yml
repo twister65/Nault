@@ -88,3 +88,48 @@ jobs:
           CHROME_BIN="$(command -v google-chrome || command -v chromium)"
           export CHROME_BIN
           npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false
+
+      - name: Remove deprecated Webpack builder and move Karma to Angular 22 unit-test
+        run: |
+          npm uninstall --save-dev --legacy-peer-deps --no-audit --no-fund \
+            @angular-devkit/build-angular webpack worker-loader
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          p=Path('angular.json')
+          a=json.loads(p.read_text())
+          architect=a['projects']['nault']['architect']
+          assert architect['build']['builder']=='@angular/build:application'
+          architect['build']['configurations']['testing']={
+            'polyfills':['src/polyfills.ts','zone.js/testing'],
+            'optimization':False, 'sourceMap':True
+          }
+          architect['test']={
+            'builder':'@angular/build:unit-test',
+            'options':{
+              'runner':'karma',
+              'runnerConfig':'karma.conf.js',
+              'buildTarget':'nault:build:testing',
+              'tsConfig':'src/tsconfig.spec.json'
+            }
+          }
+          p.write_text(json.dumps(a,indent=2)+'\n')
+          p=Path('karma.conf.js')
+          s=p.read_text()
+          s=s.replace("frameworks: ['jasmine', '@angular-devkit/build-angular']", "frameworks: ['jasmine']")
+          s=s.replace("      require('@angular-devkit/build-angular/plugins/karma')\n", "")
+          s=s.replace("      require('karma-coverage-istanbul-reporter'),\n", "      require('karma-coverage-istanbul-reporter')\n")
+          p.write_text(s)
+          PY
+      - name: Validate webpack-free production Web PWA and desktop
+        run: |
+          npm ci --legacy-peer-deps --no-audit --no-fund 2>&1 | tee /tmp/modern-npm.log
+          if grep -E 'npm warn deprecated (@ngtools/webpack|@angular-devkit/build-angular)' /tmp/modern-npm.log; then exit 1; fi
+          npm run wallet:build
+          node -e "const fs=require('fs');const sw=require('./dist/ngsw.json');if(!sw.assetGroups?.length || !fs.existsSync('dist/index.html'))throw Error('Missing PWA')"
+          npm run desktop:build
+      - name: Check Karma compatibility without webpack
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          export CHROME_BIN
+          npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false
