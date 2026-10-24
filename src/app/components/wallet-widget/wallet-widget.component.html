@@ -8,7 +8,9 @@
         <div class="status-labels">
           <div class="label primary uk-text-warning">Ledger disconnected</div>
           @if (ledgerService.transportMode === 'Bluetooth' && ledgerStatus.statusText &&
-               (ledgerStatus.statusText.includes('pairing') || ledgerStatus.statusText.includes('authentication'))) {
+               (ledgerStatus.statusText.includes('pairing') ||
+                ledgerStatus.statusText.includes('authentication') ||
+                ledgerStatus.statusText.includes('Nano app is not open'))) {
             <div class="label secondary uk-text-warning">{{ ledgerStatus.statusText }}</div>
           }
           @if (ledgerService.isDesktop && ledgerService.transportMode === 'Bluetooth') {
