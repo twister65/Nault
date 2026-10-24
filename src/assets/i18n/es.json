@@ -131,5 +131,169 @@
     "we-found-no-issues-with-uptime-or-weight": "No se han detectado problemas de disponibilidad ni de distribución del peso de voto de tu representante actual.",
     "you-can-change-representative-at-any-time": "Puedes cambiar de representante en cualquier momento haciendo clic en su nombre.",
     "you-have-marked-this-representative-as-trusted": "Has marcado este representante como de confianza, por lo que su estado seguirá siendo «Bueno» incluso si presenta problemas graves de disponibilidad o de distribución del peso de voto."
+  },
+  "configure-app": {
+    "advanced-options": "Opciones avanzadas",
+    "allow-external-requests": "Permitir solicitudes externas",
+    "api-server": "Servidor API",
+    "app-display-settings-successfully-updated": "¡Configuración de apariencia actualizada!",
+    "app-wallet-settings-successfully-updated": "¡Configuración de cartera actualizada!",
+    "are-you-sure": "¿Estás seguro?",
+    "authorization": "Autorización",
+    "change-if-your-wallet-should-be-locked-automatically-after": "Elige cuándo debe bloquearse automáticamente tu cartera tras un período sin actividad.",
+    "change-the-currency-pair-used-when-showing-fiat-values": "Cambia la divisa utilizada para mostrar importes en dinero fiduciario. Selecciona Ninguno para ocultarlos.",
+    "change-where-your-wallet-is-stored-if-you-select-none-your": "Elige dónde guardar tu cartera. Si seleccionas Ninguno, se restablecerá cada vez que recargues la página.",
+    "change-which-server-is-used-to-communicate-with-the-nano": "Elige el servidor que se utiliza para comunicarse con la red Nano.",
+    "clear-all-data": {
+      "1": "Estás a punto de eliminar todos los datos almacenados en Nault, incluidos los datos locales de tu cartera, todas las entradas de las libretas de direcciones y representantes y los datos de la caché. Se restablecerán todos los ajustes predeterminados.",
+      "successfully-deleted-locally-stored-data-and-reset-the": "¡Datos locales eliminados y ajustes restablecidos!"
+    },
+    "clear-work-cache": "Vaciar caché de PoW",
+    "click-to-refresh": "Haz clic para actualizar",
+    "component": {
+      "wallet-storage": "Almacenamiento de la cartera"
+    },
+    "configure-nault": "Configurar Nault",
+    "cpu-worker-support-not-available-set-pow-to-best": "El cálculo PoW mediante Web Workers de CPU no está disponible; selecciona la mejor opción.",
+    "currencies": {
+      "none": "Ninguno"
+    },
+    "custom-api-server-has-an-invalid-address": "La dirección del servidor API personalizado no es válida.",
+    "custom-update-server-has-an-invalid-address": "La dirección del servidor de actualización personalizado no es válida.",
+    "decentralized-aliases": "Alias descentralizados",
+    "decentralized-aliases-options": {
+      "disabled": "Desactivado",
+      "enabled": "Activado — permitir solicitudes externas a dominios de alias"
+    },
+    "decentralized-aliases-require-external-requests": "Los alias descentralizados requieren solicitudes a dominios externos. Si buscas @madeline@example.com, el dominio example.com podría registrar tu dirección IP.",
+    "default-representative": "Representante predeterminado",
+    "default-representative-is-not-a-valid-account": "El representante predeterminado no es una cuenta válida",
+    "delete-all-data": "Eliminar TODOS los datos",
+    "delete-wallet-data": "Eliminar datos de la cartera",
+    "display-settings": "Opciones de visualización",
+    "fiat-currency": "Moneda fiduciaria",
+    "for-example-using-basic-auth": "Por ejemplo, con autenticación básica: Basic xyz",
+    "identicon-options": {
+      "1-hour": "1 hora",
+      "1-minute": "1 minuto",
+      "nanoidenticons-by-keerifox": "Nanoidenticons (por keerifox)",
+      "natricon-by-appditto": "Natricon (por Appditto)",
+      "never": "Nunca",
+      "none": "Ninguno",
+      "x-hours": "{{ hours }} horas",
+      "x-minutes": "{{ minutes }} minutos"
+    },
+    "identicons": "Identiconos",
+    "if-automatically-receiving-incoming-transactions-with-the": "Puedes recibir automáticamente las transacciones entrantes, primero las de mayor importe o por orden cronológico. El modo manual permite elegir las transacciones que quieres recibir desde la pantalla Recibir.",
+    "language": "Idioma",
+    "leave-blank-to-accept-transactions-of-any-amount": "Dejar en blanco para aceptar cualquier importe",
+    "leave-blank-to-use-a-recommended-one": "Dejar en blanco para utilizar uno recomendado",
+    "lock-after-inactivity": "Bloquear tras inactividad",
+    "min-receive-amount": "Importe mínimo de recepción",
+    "minimum-nano-amount-to-receive-transactions-below-this": "Importe mínimo de XNO para recibir. Las transacciones inferiores se ignorarán tanto al recibirlas como en la lista de transacciones. Déjalo vacío o escribe 0 para aceptar todas.",
+    "multiplier-options": {
+      "default-1x-or-1-64x": "Predeterminado (1× o 1/64×)"
+    },
+    "night-mode": "Modo nocturno",
+    "night-mode-options": {
+      "disabled": "Desactivado",
+      "enabled": "Activado"
+    },
+    "node-stats": "Estadísticas del nodo",
+    "note-since-this-server-only-notifies-about-new-transactions": "Nota: este servidor solo avisa de nuevas transacciones, por lo que la mayoría de las funciones de la cartera pueden usarse sin él.",
+    "optional-increased-work-for-transaction-priority-during": "Aumenta opcionalmente la dificultad del PoW para dar prioridad a las transacciones cuando la red esté saturada. Sustituye las dificultades predeterminadas de ENVÍO (1×) y RECEPCIÓN (1/64×).",
+    "pending-options": {
+      "automatic-largest-amount-first": "Automático — primero el importe más alto",
+      "automatic-oldest-transaction-first": "Automático — primero la transacción más antigua",
+      "manual": "Manual"
+    },
+    "pow-multiplier": "Multiplicador de PoW",
+    "pow-options": {
+      "best-option-available": "Mejor opción disponible",
+      "client-side-cpu-slowest": "Local — CPU (más lento)",
+      "client-side-gpu-webgl": "Local — GPU/WebGL",
+      "external-custom-server": "Externo — servidor personalizado",
+      "external-selected-server": "Externo — servidor seleccionado"
+    },
+    "pow-source": "Fuente de PoW",
+    "random-server": "Servidor aleatorio",
+    "receive-method": "Método de recepción",
+    "save-settings-to-update": "Guarda los ajustes para actualizar",
+    "server-configuration": "Configuración del servidor",
+    "server-settings": "Ajustes del servidor",
+    "server-settings-successfully-updated": "¡Ajustes del servidor actualizados!",
+    "storage-options": {
+      "browser-local-storage": "Almacenamiento local del navegador",
+      "none": "Ninguno"
+    },
+    "successfully-cleared-the-work-cache": "¡Caché de PoW vaciada correctamente!",
+    "successfully-deleted-all-wallet-data": "¡Se han eliminado todos los datos de la cartera!",
+    "successfully-updated": "¡Actualizado correctamente!",
+    "switched-back-to-browser-local-storage-for-the-wallet-data": "Se ha vuelto al «almacenamiento local del navegador» para los datos de la cartera. Pulsa de nuevo el botón si quieres guardar otros ajustes.",
+    "this-has-to-be-a-valid-authorization-header": "Debe ser una cabecera Authorization válida.",
+    "this-has-to-be-a-valid-rpc": {
+      "1": "Debe ser un",
+      "3": "o una API compatible con él.",
+      "2-link-rpc": "punto de acceso RPC de Nano"
+    },
+    "this-has-to-be-a-valid-websocket": {
+      "1": "Debe ser un",
+      "3": "o una API WebSocket compatible.",
+      "2-link-websocket": "WebSocket del nodo Nano"
+    },
+    "this-has-to-be-a-valid-work": {
+      "1": "Debe ser un",
+      "3": "punto de acceso o una API compatible. Si tu servidor localhost no funciona, prueba la aplicación de escritorio.",
+      "2-link-work": "servidor de cálculo PoW de Nano"
+    },
+    "this-representative-will-be-used-for-any-new-account": "Este representante se utilizará para las cuentas nuevas",
+    "this-server-is-used-for-rpc-communication-with-the-nano-node": "Este servidor se utiliza para la comunicación RPC con el nodo Nano",
+    "this-server-is-used-to-notify-the-wallet-in-real-time-when": "Este servidor notifica a la cartera en tiempo real cuando llegan nuevas transacciones",
+    "this-will-delete-all-data-related-to-your-wallet-your-seed-a": "Se eliminarán todos los datos de tu cartera (semilla y cuentas)",
+    "this-will-delete-all-locally-cached-proof-of-work-values": "Se eliminarán todos los valores de prueba de trabajo (PoW) almacenados en caché",
+    "this-will-delete-all-stored-data-and-reset-app-settings-incl": "Se eliminarán TODOS los datos guardados y se restablecerán los ajustes, incluidos la cartera, la libreta de direcciones y más",
+    "update-display-settings": "Actualizar apariencia",
+    "update-server-settings": "Actualizar servidores",
+    "update-wallet-settings": "Actualizar cartera",
+    "use-if-the-api-requires-authentication": "Utiliza esta opción si la API requiere autenticación",
+    "wallet-settings": "Configuración de la cartera",
+    "webgl-support-not-available-set-pow-to-best": "WebGL no está disponible; selecciona la mejor opción de PoW.",
+    "websocket-server": "Servidor WebSocket",
+    "work-server": "Servidor de PoW",
+    "you-are-about-to-delete-all-locally-cached-proof-of-work": "Estás a punto de eliminar todos los valores de prueba de trabajo (PoW) almacenados localmente.",
+    "you-are-about-to-delete-all-locally-stored-data-about-your": "Estás a punto de eliminar todos los datos locales de la cartera configurada.",
+    "you-are-about-to-disable-storage-of-all-wallet-data-which": "Estás a punto de desactivar el almacenamiento de los datos de tu cartera; la próxima vez que uses Nault no habrá ninguna cartera configurada."
+  },
+  "configure-wallet": {
+    "new-wallet": {
+      "copy-secret-recovery-mnemonic": "Copiar frase mnemónica secreta de recuperación",
+      "copy-secret-recovery-seed": "Copiar semilla secreta de recuperación",
+      "create-wallet": "Crear cartera",
+      "i-have-securely-stored-recovery-phrases": "He guardado de forma segura la semilla y/o la frase mnemónica secreta de recuperación",
+      "please-take-some-time-to-write-down-recovery-phrases": "Dedica un momento a guardar la semilla y/o la frase mnemónica secreta para poder acceder a esta cartera en el futuro.",
+      "recovery-phrases-alert": {
+        "1": {
+          "1": "Asegúrate de anotar tu semilla y/o frase mnemónica o guardarlas en un lugar seguro, y ",
+          "3": "!",
+          "2-strong": "no las compartas nunca con nadie"
+        },
+        "2": "Es la clave maestra de todas tus cuentas y la única manera de recuperar tus fondos en caso de emergencia."
+      },
+      "recovery-phrases-for-new-wallet": "Frases de recuperación de la nueva cartera",
+      "secret-recovery-mnemonic": "Frase mnemónica secreta de recuperación",
+      "secret-recovery-seed": "Semilla secreta de recuperación",
+      "successfully-copied-secret-recovery-mnemonic": "¡Frase mnemónica secreta copiada al portapapeles!",
+      "successfully-copied-secret-recovery-seed": "¡Semilla secreta copiada al portapapeles!"
+    },
+    "set-wallet-password": {
+      "choose-a-wallet-password-that-will-be-used-to-unlock-this-application": "Elige la contraseña que utilizarás para desbloquear esta aplicación.",
+      "errors": {
+        "password-must-be-at-least-x-characters-long": "La contraseña debe tener al menos {{ minCharacters }} caracteres",
+        "passwords-do-not-match": "¡Las contraseñas no coinciden!"
+      },
+      "for-the-safety-of-your-funds-use-a-secure-password": "Por la seguridad de tus fondos, utiliza una contraseña segura.",
+      "set-wallet-password": "Establecer contraseña de la cartera",
+      "while-the-application-is-locked-the-secret-recovery-phrase-will-be-encrypted": "Mientras la aplicación esté bloqueada, la frase secreta de recuperación estará cifrada, lo que impedirá enviar o recibir fondos y administrar cuentas."
+    }
   }
 }
