@@ -3,7 +3,8 @@ import {AppSettingsService} from './app-settings.service';
 import {ApiService} from './api.service';
 import {NotificationService} from './notification.service';
 import { PoWSource } from './app-settings.service';
-import Worker from 'worker-loader!./../../assets/lib/cpupow.js';
+// Native browser worker; esbuild bundles the worker from a stable module-relative URL.
+const createPowWorker = () => new Worker(new URL('../../assets/lib/cpupow.js', import.meta.url));
 import {UtilService} from './util.service';
 import {BehaviorSubject} from 'rxjs';
 
@@ -300,7 +301,7 @@ export class PowService {
       workerList = [];
       for (let i = 0; i < workerCount; i++) {
         // const worker = new Worker()
-        const worker = new (Worker as any)();
+        const worker = createPowWorker();
         worker.postMessage({
           blockHash: hash,
           workerIndex: i,
