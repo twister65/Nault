@@ -607,7 +607,10 @@
     "than-requested": "que demandé",
     "last-price": "Dernier cours",
     "view-account": "Voir les détails du compte",
-    "view-block": "Voir les détails du bloc"
+    "view-block": "Voir les détails du bloc",
+    "copied": "Copié !",
+    "copy-payment-link": "Copier le lien de paiement",
+    "copy-address-short": "Copier l'adresse"
   },
   "ui-shell-extra": {
     "total-balance": "Solde total",
