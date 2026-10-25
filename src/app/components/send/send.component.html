@@ -1,6 +1,6 @@
 <div class="uk-animation-slide-left-small" uk-grid>
   <div class="uk-width-1-1">
-    <h2 class="uk-heading-divider">{{ (sendDestinationType === 'own-address') ? 'Transfer Nano Between Own Accounts' : 'Send Nano' }}</h2>
+    <h2 class="uk-heading-divider">{{ (sendDestinationType === 'own-address' ? 'ui-send.transfer-title' : 'ui-send.send-title') | transloco }}</h2>
 
     <!-- Send Panel -->
     @if (activePanel == 'send') {
@@ -41,7 +41,7 @@
                                 @if ((aliasLookupInProgress.domain !== '')) {
                                   <li>
                                     <a>
-                                      <span class="spinner uk-margin-small-right" uk-spinner="ratio: 0.5;"></span><span class="text-half-muted">Looking up {{ aliasLookupInProgress.fullText }}...</span>
+                                      <span class="spinner uk-margin-small-right" uk-spinner="ratio: 0.5;"></span><span class="text-half-muted">{{ 'ui-send.looking-up' | transloco: { alias: aliasLookupInProgress.fullText } }}</span>
                                     </a>
                                   </li>
                                 }
@@ -49,7 +49,7 @@
                                   @for (alias of aliasResults$ | async; track alias) {
                                     <li>
                                       <a (click)="lookupAlias()" class="uk-padding-remove-bottom">
-                                        <span class="text-half-muted">Press Enter or click here to request alias from</span>
+                                        <span class="text-half-muted">{{ 'ui-send.alias-from' | transloco }}</span>
                                       </a>
                                       <a (click)="lookupAlias()">
                                         <span class="uk-text-primary">{{ alias.domain }}</span>
@@ -115,19 +115,19 @@
                           <div class="uk-inline uk-width-1-1">
                             <a class="max-amt-button uk-form-icon uk-form-icon-flip form-icon-btn" (click)="setMaxAmount()" uk-tooltip [title]="'ui-send.set-maximum' | transloco">Max</a>
                             <label class="uk-form-icon uk-link-reset uk-link-muted xno-symbol" for="form-horizontal-amount"></label>
-                            <input [(ngModel)]="amount" [ngClass]="{ 'uk-form-danger': amountStatus === 0 }" style="padding-left: 52px !important;" class="uk-input" id="form-horizontal-text" (input)="syncFiatPrice()" type="number" step="any" placeholder="Amount of {{ selectedAmount.name }}" maxlength="40">
+                            <input [(ngModel)]="amount" [ngClass]="{ 'uk-form-danger': amountStatus === 0 }" style="padding-left: 52px !important;" class="uk-input" id="form-horizontal-text" (input)="syncFiatPrice()" type="number" step="any" [placeholder]="'ui-send.amount-placeholder' | transloco: { currency: selectedAmount.name }" maxlength="40">
                           </div>
                         </div>
                         @if (amountExtraRaw.gt(0)) {
                           <div class="amount-raw-extra uk-width-1-1 uk-text-small text-half-muted">
-                            <span uk-tooltip title="Additional raw to {{ (sendDestinationType === 'own-address') ? 'transfer' : 'send' }}">+{{ amountExtraRaw.toString(10) }} raw</span> &nbsp; <a class="uk-text-danger" (click)="resetRaw()" uk-tooltip [title]="'ui-send.remove-extra-raw' | transloco" uk-icon="icon: close"></a>
+                            <span uk-tooltip [title]="'ui-send.extra-raw' | transloco: { action: ((sendDestinationType === 'own-address' ? 'ui-send.extra-transfer' : 'ui-send.extra-send') | transloco) }">+{{ amountExtraRaw.toString(10) }} raw</span> &nbsp; <a class="uk-text-danger" (click)="resetRaw()" uk-tooltip [title]="'ui-send.remove-extra-raw' | transloco" uk-icon="icon: close"></a>
                           </div>
                         }
                         @if (settings.settings.displayCurrency) {
                           <div class="uk-width-1-1" style="margin-top: 10px;">
                             <div class="uk-width-1-1 uk-inline">
-                              <a class="uk-form-icon uk-link-reset uk-link-muted fiat-currency-ticker" uk-tooltip title="Last Price: {{ price.price.lastPrice | fiat: settings.settings.displayCurrency }} / XNO">{{ settings.settings.displayCurrency | currencySymbol }}</a>
-                              <input [(ngModel)]="amountFiat" (input)="syncNanoPrice()" style="padding-left: 52px !important;" class="uk-input" id="form-horizontal-text-fiat" type="number" step="any" placeholder="Amount of {{ settings.settings.displayCurrency }}">
+                              <a class="uk-form-icon uk-link-reset uk-link-muted fiat-currency-ticker" uk-tooltip [title]="'ui-send.last-price' | transloco: { price: (price.price.lastPrice | fiat: settings.settings.displayCurrency) }">{{ settings.settings.displayCurrency | currencySymbol }}</a>
+                              <input [(ngModel)]="amountFiat" (input)="syncNanoPrice()" style="padding-left: 52px !important;" class="uk-input" id="form-horizontal-text-fiat" type="number" step="any" [placeholder]="'ui-send.amount-placeholder' | transloco: { currency: settings.settings.displayCurrency }">
                             </div>
                           </div>
                         }
@@ -141,13 +141,13 @@
               <div class="uk-text-right@s nlt-button-group">
                 @if (!preparingTransaction) {
                   <button class="uk-button uk-button-primary uk-width-1-1@s uk-width-auto@m uk-float-right nlt-icon-button" type="button" (click)="sendTransaction()">
-                    {{ (sendDestinationType === 'own-address') ? 'Transfer nano' : 'Send nano' }}
+                    {{ (sendDestinationType === 'own-address' ? 'ui-send.transfer-button' : 'ui-send.send-button') | transloco }}
                   </button>
                 }
                 @if (preparingTransaction) {
                   <button class="uk-button uk-button-secondary uk-disabled uk-width-1-1@s uk-width-auto@m uk-float-right nlt-icon-button" type="button">
                     <span class="spinner" uk-spinner="ratio: 0.5;"></span>
-                    Preparing transaction
+                    {{ 'ui-send.preparing' | transloco }}
                   </button>
                 }
                 @if ((sendDestinationType !== 'own-address')) {
@@ -157,7 +157,7 @@
                     type="button"
                     (click)="preparingTransaction ? return : openQR('account1','account')"
                     >
-                    Scan QR code
+                    {{ 'general.scan-qr-code' | transloco }}
                   </button>
                 }
               </div>
@@ -198,7 +198,7 @@
                   <div class="uk-card-header">
                     <div class="snippet-caption uk-text-small text-half-muted">{{ 'ui-send.from-account' | transloco }}</div>
                     <div class="uk-flex uk-flex-nowrap uk-width-auto uk-text-truncate" style="max-width: calc(100% - 35px);">
-                      <a [routerLink]="'/account/' + fromAccountID" class="uk-link-reset account-container uk-text-truncate" uk-tooltip title="View Account Details">
+                      <a [routerLink]="'/account/' + fromAccountID" class="uk-link-reset account-container uk-text-truncate" uk-tooltip [title]="'general.view-details' | transloco">
                         <div class="identicon-address-book-row">
                           @if ((settings.settings.identiconsStyle !== 'none')) {
                             <app-nano-identicon scale="12" [accountID]="fromAccountID" [settingIdenticonsStyle]="settings.settings.identiconsStyle" class="nano-identicon"></app-nano-identicon>
@@ -248,7 +248,7 @@
                   <div class="uk-card-header">
                     <div class="snippet-caption uk-text-small text-half-muted">{{ 'ui-send.to-account' | transloco }}</div>
                     <div class="uk-flex uk-flex-nowrap uk-width-auto uk-text-truncate" style="max-width: calc(100% - 35px);">
-                      <a [routerLink]="'/account/' + getDestinationID()" class="uk-link-reset account-container uk-text-truncate" uk-tooltip title="View Account Details">
+                      <a [routerLink]="'/account/' + getDestinationID()" class="uk-link-reset account-container uk-text-truncate" uk-tooltip [title]="'general.view-details' | transloco">
                         <div class="identicon-address-book-row">
                           @if ((settings.settings.identiconsStyle !== 'none')) {
                             <app-nano-identicon scale="12" [accountID]="getDestinationID()" [settingIdenticonsStyle]="settings.settings.identiconsStyle" class="nano-identicon"></app-nano-identicon>
