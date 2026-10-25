@@ -59,5 +59,10 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "upgrade/angular-22": false
+    }
+  }
 }
