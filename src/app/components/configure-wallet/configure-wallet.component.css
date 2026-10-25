@@ -55,6 +55,9 @@ pre.mnemonic span.mnemonic-word::before {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
+  /* The single 'New wallet' tile must not stretch to the height of the grid row. */
+  align-items: flex-start;
+  align-content: flex-start;
   padding-top: 30px;
   padding-bottom: 30px;
 }
