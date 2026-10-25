@@ -615,5 +615,34 @@
   "ui-shell-extra": {
     "total-balance": "Saldo total",
     "or": "o"
+  },
+  "ui-manage-representatives": {
+    "title": "Agenda de representantes",
+    "overview": "Volver a la lista de representantes",
+    "add": "Añadir entrada",
+    "edit": "Editar entrada",
+    "intro": "Puedes dar nombres a los representantes, marcarlos como fiables (lo que oculta los avisos) o señalar los que deben evitarse.",
+    "trusted-tip": "Representante marcado como fiable",
+    "avoid-tip": "Representante marcado como no recomendado",
+    "empty": "Todavía no has guardado representantes,",
+    "empty-link": "haz clic aquí para añadir uno",
+    "flags": "Indicadores del representante",
+    "trusted": "Representante fiable",
+    "avoid": "Representante que debe evitarse",
+    "trust-tip": "Ocultar los avisos sobre este representante",
+    "warn-tip": "Mostrar un aviso al usar este representante",
+    "placeholder": "Nombre del representante"
+  },
+  "ui-qr-scan": {
+    "device": "Cámara",
+    "no-device": "Ninguna cámara seleccionada",
+    "wait-title": "Esperando permisos.",
+    "wait-detail": "Si tu dispositivo no tiene cámara, no aparecerá ninguna solicitud de permiso.",
+    "denied": "Has denegado el permiso de la cámara.",
+    "denied-detail": "Escanear un código QR requiere acceso a una cámara.",
+    "error": "No se pudieron comprobar las cámaras.",
+    "security": "Puede deberse a los permisos de la cámara o a la configuración de seguridad.",
+    "none": "No se detectó ninguna cámara.",
+    "none-detail": "No hay ninguna cámara disponible en este dispositivo."
   }
 }

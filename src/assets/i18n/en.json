@@ -615,5 +615,34 @@
   "ui-shell-extra": {
     "total-balance": "Total Balance",
     "or": "or"
+  },
+  "ui-manage-representatives": {
+    "title": "Representatives Book",
+    "overview": "Back to representatives overview",
+    "add": "Add New Entry",
+    "edit": "Edit Entry",
+    "intro": "You can give representatives custom display names, mark them as trusted (which hides warnings), or mark them as ones to avoid.",
+    "trusted-tip": "Representative marked as trusted",
+    "avoid-tip": "Representative marked as 'should be avoided'",
+    "empty": "You do not have any representatives saved yet,",
+    "empty-link": "click here to add new entry",
+    "flags": "Representative Flags",
+    "trusted": "Trusted Representative",
+    "avoid": "Avoid Representative",
+    "trust-tip": "Suppress all warnings about this representative",
+    "warn-tip": "Warn when using this representative",
+    "placeholder": "Representative Name"
+  },
+  "ui-qr-scan": {
+    "device": "Device",
+    "no-device": "No Device Selected",
+    "wait-title": "Waiting for permissions.",
+    "wait-detail": "If your device has no camera, no permission request will appear.",
+    "denied": "You denied the camera permission.",
+    "denied-detail": "Scanning a QR code requires camera access.",
+    "error": "Couldn't check for devices.",
+    "security": "This may be caused by a camera permission or security issue.",
+    "none": "No devices were found.",
+    "none-detail": "No camera is currently available on this device."
   }
 }

@@ -1,7 +1,7 @@
 <div class="uk-animation-slide-left-small" uk-grid>
   <div class="uk-width-1-1">
 
-    <h2 class="uk-heading-divider">Scan QR Code</h2>
+    <h2 class="uk-heading-divider">{{ 'general.scan-qr-code' | transloco }}</h2>
 
     <div uk-grid class="uk-margin-top">
 
@@ -11,10 +11,10 @@
           <div class="uk-form-horizontal">
 
             <div class="uk-margin">
-              <label class="uk-form-label">Device</label>
+              <label class="uk-form-label">{{ 'ui-qr-scan.device' | transloco }}</label>
               <div class="uk-form-controls">
                 <select class="uk-select" (change)="onDeviceSelectChange($event.target.value)">
-                  <option value="" [selected]="!currentDevice">No Device Selected</option>
+                  <option value="" [selected]="!currentDevice">{{ 'ui-qr-scan.no-device' | transloco }}</option>
                   @for (device of availableDevices; track device) {
                     <option [value]="device.deviceId"
                     [selected]="currentDevice && device.deviceId === currentDevice.deviceId">{{device.label}}</option>
@@ -45,8 +45,8 @@
   <div>
     <div class="uk-alert uk-alert-info nlt-inline-alert">
       <p>
-        <b>Waiting for permissions.</b><br>
-        If your device does not has cameras, no permissions will be asked.
+        <b>{{ 'ui-qr-scan.wait-title' | transloco }}</b><br>
+        {{ 'ui-qr-scan.wait-detail' | transloco }}
       </p>
     </div>
   </div>
@@ -56,8 +56,8 @@
   <div>
     <div class="uk-alert uk-alert-danger nlt-inline-alert">
       <p>
-        <b>You denied the camera permission.</b><br>
-        We can't scan anything without it. 😪
+        <b>{{ 'ui-qr-scan.denied' | transloco }}</b><br>
+        {{ 'ui-qr-scan.denied-detail' | transloco }}
       </p>
     </div>
   </div>
@@ -67,8 +67,8 @@
   <div>
     <div class="uk-alert uk-alert-danger nlt-inline-alert">
       <p>
-        <b>Couldn't check for devices.</b><br>
-        This may be caused by some security error.
+        <b>{{ 'ui-qr-scan.error' | transloco }}</b><br>
+        {{ 'ui-qr-scan.security' | transloco }}
       </p>
     </div>
   </div>
@@ -78,8 +78,8 @@
   <div>
     <div class="uk-alert uk-alert-danger nlt-inline-alert">
       <p>
-        <b>No devices were found.</b><br>
-        I believe your device has no media devices attached to.
+        <b>{{ 'ui-qr-scan.none' | transloco }}</b><br>
+        {{ 'ui-qr-scan.none-detail' | transloco }}
       </p>
     </div>
   </div>

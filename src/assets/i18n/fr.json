@@ -615,5 +615,34 @@
   "ui-shell-extra": {
     "total-balance": "Solde total",
     "or": "ou"
+  },
+  "ui-manage-representatives": {
+    "title": "Carnet des représentants",
+    "overview": "Retour à la liste des représentants",
+    "add": "Ajouter une entrée",
+    "edit": "Modifier l'entrée",
+    "intro": "Vous pouvez attribuer un nom aux représentants, les marquer comme fiables (ce qui masque les avertissements) ou signaler ceux à éviter.",
+    "trusted-tip": "Représentant marqué comme fiable",
+    "avoid-tip": "Représentant signalé comme à éviter",
+    "empty": "Vous n'avez encore enregistré aucun représentant,",
+    "empty-link": "cliquez ici pour en ajouter un",
+    "flags": "Indicateurs du représentant",
+    "trusted": "Représentant fiable",
+    "avoid": "Représentant à éviter",
+    "trust-tip": "Masquer les avertissements concernant ce représentant",
+    "warn-tip": "Afficher un avertissement lors de l'utilisation de ce représentant",
+    "placeholder": "Nom du représentant"
+  },
+  "ui-qr-scan": {
+    "device": "Caméra",
+    "no-device": "Aucune caméra sélectionnée",
+    "wait-title": "En attente des autorisations.",
+    "wait-detail": "Si votre appareil n'a pas de caméra, aucune demande d'autorisation n'apparaîtra.",
+    "denied": "Vous avez refusé l'accès à la caméra.",
+    "denied-detail": "Le scan d'un code QR nécessite l'accès à une caméra.",
+    "error": "Impossible de vérifier les caméras.",
+    "security": "Cela peut venir des autorisations ou des paramètres de sécurité.",
+    "none": "Aucune caméra détectée.",
+    "none-detail": "Aucune caméra n'est actuellement disponible sur cet appareil."
   }
 }
