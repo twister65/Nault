@@ -25,7 +25,8 @@
     "desktop:local": "electron-builder -p never -c.npmRebuild=false",
     "test:ledger-bluetooth": "npm run desktop:compile && node scripts/test-ledger-bluetooth.js",
     "test:i18n": "node scripts/check-i18n.cjs",
-    "lint:flat": "eslint \"src/**/*.{ts,html}\""
+    "lint:flat": "eslint \"src/**/*.{ts,html}\"",
+    "test:nano-crypto-compat": "node --test scripts/test-nanocurrency-web-compat.test.cjs"
   },
   "private": true,
   "dependencies": {
@@ -68,7 +69,7 @@
     "hw-app-nano": "^1.3.0",
     "nano-base32": "^1.0.1",
     "nanocurrency": "^2.5.0",
-    "nanocurrency-web": "^1.4.3",
+    "nanocurrency-web": "^2.0.0",
     "ngx-clipboard": "16.0.0",
     "node-hid": "^2.2.0",
     "qrcode": "^1.4.4",

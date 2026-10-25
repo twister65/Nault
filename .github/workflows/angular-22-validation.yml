@@ -47,6 +47,8 @@ jobs:
           console.log({Angular:version,TypeScript:require('typescript/package.json').version,ESLint:require('eslint/package.json').version});
           NODE
           ./node_modules/.bin/ng version
+      - name: Check Nano BIP39 derivation, signatures and patched CryptoJS dependency tree
+        run: npm run test:nano-crypto-compat
       - name: Verify French and Spanish translation dictionaries
         run: npm run test:i18n
       - name: Build production Web wallet and service worker
