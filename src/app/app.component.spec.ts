@@ -1,4 +1,5 @@
 import { TestBed, fakeAsync, tick, waitForAsync } from '@angular/core/testing';
+import { Renderer2 } from '@angular/core';
 import { ApiService } from './services/api.service';
 import { WebsocketService } from './services/websocket.service';
 import { AppComponent } from './app.component';
@@ -7,7 +8,15 @@ import { ComponentTestModule, isolateConstructorIO } from '../testing/component-
 describe('AppComponent', () => {
   beforeEach(waitForAsync(() => {
     isolateConstructorIO();
-    TestBed.configureTestingModule({ imports: [ComponentTestModule], providers: [AppComponent] }).compileComponents();
+    TestBed.configureTestingModule({
+      imports: [ComponentTestModule],
+      // The controller-only tests do not render a host view, so Renderer2 needs
+      // an explicit double. The existing smoke tests still render the real UI.
+      providers: [
+        AppComponent,
+        { provide: Renderer2, useValue: { addClass: () => {}, removeClass: () => {} } }
+      ]
+    }).compileComponents();
   }));
   it('constructs the application with its real dependency graph', () => {
     expect(TestBed.createComponent(AppComponent).componentInstance).toBeTruthy();
