@@ -707,7 +707,7 @@
     "password-mismatch": "Passwords do not match!",
     "password-update": "Update password",
     "backup-title": "Back up wallet",
-    "unlock-seed": "Déverrouillez le portefeuille pour accéder à la seed ou à la phrase de récupération.",
+    "unlock-seed": "Unlock wallet to access the recovery seed or phrase.",
     "unlock-key": "Unlock wallet to access the private key.",
     "backup-mnemonic": "To back up the wallet recovery phrase,",
     "backup-seed": "To back up the wallet recovery seed,",
@@ -745,7 +745,7 @@
     "start": "Get started",
     "offline": "Not available offline",
     "export-history": "Export history",
-    "cooldown": "Veuillez patienter",
+    "cooldown": "Please wait",
     "fetching": "Fetching history..."
   }
 }
