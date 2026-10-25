@@ -7,7 +7,7 @@ import { ComponentTestModule, isolateConstructorIO } from '../testing/component-
 describe('AppComponent', () => {
   beforeEach(waitForAsync(() => {
     isolateConstructorIO();
-    TestBed.configureTestingModule({ imports: [ComponentTestModule] }).compileComponents();
+    TestBed.configureTestingModule({ imports: [ComponentTestModule], providers: [AppComponent] }).compileComponents();
   }));
   it('constructs the application with its real dependency graph', () => {
     expect(TestBed.createComponent(AppComponent).componentInstance).toBeTruthy();
@@ -20,7 +20,7 @@ describe('AppComponent', () => {
   });
 
   it('rechecks RPC and clears the offline alert after Wi-Fi returns', fakeAsync(() => {
-    const app = TestBed.createComponent(AppComponent).componentInstance;
+    const app = TestBed.inject(AppComponent);
     app.settings.settings.serverAPI = 'https://example.test/proxy';
     app.settings.settings.serverWS = 'wss://example.test/ws';
     const rpc = spyOn(TestBed.inject(ApiService), 'blockCount').and.callFake(async () => {
@@ -40,7 +40,7 @@ describe('AppComponent', () => {
   }));
 
   it('keeps the offline alert on an RPC failure and retries after a delay', fakeAsync(() => {
-    const app = TestBed.createComponent(AppComponent).componentInstance;
+    const app = TestBed.inject(AppComponent);
     app.settings.settings.serverAPI = 'https://example.test/proxy';
     let calls = 0;
     const rpc = spyOn(TestBed.inject(ApiService), 'blockCount').and.callFake(async () => {
@@ -61,7 +61,7 @@ describe('AppComponent', () => {
   }));
 
   it('does not probe RPC in the explicit offline mode', fakeAsync(() => {
-    const app = TestBed.createComponent(AppComponent).componentInstance;
+    const app = TestBed.inject(AppComponent);
     app.settings.settings.serverAPI = null;
     const rpc = spyOn(TestBed.inject(ApiService), 'blockCount').and.stub();
     app.onNetworkOnline();
