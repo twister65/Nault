@@ -3,6 +3,11 @@ import { localizeNotificationMessage } from './notification-message';
 describe('localizeNotificationMessage', () => {
   const messages: Record<string, string> = {
     'ui-notifications.node-offline': 'Impossible de se connecter au nœud Nano. Les soldes affichés peuvent être inexacts !',
+    'ui-notifications.ledger-pending-reconnect': 'Des XNO sont en attente de réception. Déverrouillez votre Ledger, ouvrez l’application Nano, puis cliquez sur « Reconnecter » pour les recevoir.',
+    'ui-notifications.tracked-receivable': 'L’adresse suivie {{account}} peut maintenant recevoir {{amount}} XNO.',
+    'ui-notifications.tracked-sent': 'L’adresse suivie {{account}} a envoyé {{amount}} XNO.',
+    'ui-notifications.tracked-received': 'L’adresse suivie {{account}} a reçu {{amount}} XNO.',
+    'ui-notifications.tracked-representative': 'L’adresse suivie {{account}} a changé de représentant : {{representative}}.',
     'ui-notifications.bluetooth-unavailable': 'Bluetooth indisponible. Vérifiez le Bluetooth de votre ordinateur et de votre Ledger, ou reconnectez-vous en USB.',
     'ui-notifications.ledger-confirmation-waiting': 'En attente de confirmation sur la Ledger…',
     'ui-notifications.ledger-hid-read-timeout': 'délai de lecture HID de la Ledger dépassé',
@@ -18,6 +23,34 @@ describe('localizeNotificationMessage', () => {
     expect(localizeNotificationMessage(
       'Unable to connect to the nano node, your balances may be inaccurate!', translate
     )).toBe('Impossible de se connecter au nœud Nano. Les soldes affichés peuvent être inexacts !');
+  });
+
+  it('localizes the Ledger incoming-XNO reconnection guidance', () => {
+    expect(localizeNotificationMessage(
+      'Incoming XNO is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.', translate
+    )).toContain('Des XNO sont en attente de réception');
+  });
+
+  it('translates tracked-address WebSocket messages and keeps the account link and amount', () => {
+    const addressLink = '<a href="/account/nano_123456">Natrium</a>';
+    const cases: Array<[string, string]> = [
+      [`Tracked address ${addressLink} can now receive 1 XNO`,
+        `L’adresse suivie ${addressLink} peut maintenant recevoir 1 XNO.`],
+      [`Tracked address ${addressLink} sent 0.25 XNO`,
+        `L’adresse suivie ${addressLink} a envoyé 0.25 XNO.`],
+      [`Tracked address ${addressLink} received incoming 1e-7 XNO`,
+        `L’adresse suivie ${addressLink} a reçu 1e-7 XNO.`],
+      [`Tracked address ${addressLink} changed its representative to nano_rep123`,
+        `L’adresse suivie ${addressLink} a changé de représentant : nano_rep123.`],
+    ];
+    for (const [original, localized] of cases) {
+      expect(localizeNotificationMessage(original, translate)).toBe(localized);
+    }
+  });
+
+  it('does not alter unrelated or unsafe-looking tracked-account messages', () => {
+    const input = 'Tracked address <a href="javascript:alert(1)">Natrium</a> can now receive 1 XNO';
+    expect(localizeNotificationMessage(input, translate)).toBe(input);
   });
 
   it('localizes the Bluetooth adapter-unavailable instructions', () => {

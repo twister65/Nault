@@ -7,6 +7,8 @@ export function localizeNotificationMessage(message: string, translate: Notifica
   switch (message) {
     case 'Unable to connect to the nano node, your balances may be inaccurate!':
       return translate('ui-notifications.node-offline');
+    case 'Incoming XNO is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.':
+      return translate('ui-notifications.ledger-pending-reconnect');
     case 'Bluetooth unavailable. Check Bluetooth on your computer and Ledger, or choose Reconnect via USB.':
       return translate('ui-notifications.bluetooth-unavailable');
     case 'Waiting for confirmation on Ledger Device...':
@@ -33,6 +35,26 @@ export function localizeNotificationMessage(message: string, translate: Notifica
     return received[1]
       ? translate('ui-notifications.received-amount', { amount: received[1] })
       : translate('ui-notifications.received');
+  }
+
+  // Keep address-book links intact while localizing tracked-account WebSocket toasts.
+  // Account identifiers must be path-safe and labels are plain text within the link.
+  const trackedTransfer = /^Tracked address (<a href="\/account\/[a-zA-Z0-9_]+">[^<>]*<\/a>) (can now receive|sent|received incoming) ((?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:e[+-]?[0-9]+)?) XNO$/.exec(message);
+  if (trackedTransfer) {
+    const keys: Record<string, string> = {
+      'can now receive': 'ui-notifications.tracked-receivable',
+      'sent': 'ui-notifications.tracked-sent',
+      'received incoming': 'ui-notifications.tracked-received',
+    };
+    return translate(keys[trackedTransfer[2]], { account: trackedTransfer[1], amount: trackedTransfer[3] });
+  }
+
+  const trackedRepresentative = /^Tracked address (<a href="\/account\/[a-zA-Z0-9_]+">[^<>]*<\/a>) changed its representative to ([a-zA-Z0-9_]+)$/.exec(message);
+  if (trackedRepresentative) {
+    return translate('ui-notifications.tracked-representative', {
+      account: trackedRepresentative[1],
+      representative: trackedRepresentative[2],
+    });
   }
 
   return message;

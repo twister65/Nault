@@ -842,6 +842,11 @@
     "received-amount": "Successfully received {{amount}} XNO!",
     "received": "Nano received successfully!",
     "ledger-user-rejected": "Transaction rejected on Ledger (0x6985).",
-    "node-offline": "Unable to connect to the nano node, your balances may be inaccurate!"
+    "node-offline": "Unable to connect to the nano node, your balances may be inaccurate!",
+    "ledger-pending-reconnect": "Incoming XNO is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.",
+    "tracked-receivable": "Tracked address {{account}} can now receive {{amount}} XNO",
+    "tracked-sent": "Tracked address {{account}} sent {{amount}} XNO",
+    "tracked-received": "Tracked address {{account}} received incoming {{amount}} XNO",
+    "tracked-representative": "Tracked address {{account}} changed its representative to {{representative}}"
   }
 }
