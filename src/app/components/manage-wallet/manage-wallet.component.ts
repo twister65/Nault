@@ -1,4 +1,6 @@
 import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { inject } from '@angular/core';
+import { TranslocoService } from '@jsverse/transloco';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {ApiService} from '../../services/api.service';
@@ -27,6 +29,8 @@ interface HistoryExportEntry {
     standalone: false
 })
 export class ManageWalletComponent implements OnInit {
+  private readonly translocoService = inject(TranslocoService);
+
 
   wallet = this.walletService.wallet;
   accounts = this.walletService.wallet.accounts;
@@ -81,10 +85,10 @@ export class ManageWalletComponent implements OnInit {
 
   async changePassword() {
     if (this.newPassword !== this.confirmPassword) {
-      return this.notifications.sendError(`Passwords do not match`);
+      return this.notifications.sendError(this.translocoService.translate('ui-notifications.passwords-mismatch'));
     }
     if (this.newPassword.length < 1) {
-      return this.notifications.sendError(`Password cannot be empty`);
+      return this.notifications.sendError(this.translocoService.translate('ui-notifications.password-empty'));
     }
     if (this.walletService.isLocked()) {
       const wasUnlocked = await this.walletService.requestWalletUnlock();
@@ -99,7 +103,7 @@ export class ManageWalletComponent implements OnInit {
 
     this.newPassword = '';
     this.confirmPassword = '';
-    this.notifications.sendSuccess(`Wallet password successfully updated`);
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.password-updated'));
 
     this.showQRExport = false;
   }
@@ -121,7 +125,7 @@ export class ManageWalletComponent implements OnInit {
 
   copied() {
     this.notifications.removeNotification('success-copied');
-    this.notifications.sendSuccess(`Wallet seed copied to clipboard!`, { identifier: 'success-copied' });
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-seed-copied'), { identifier: 'success-copied' });
   }
 
   seedMnemonic() {
@@ -206,7 +210,7 @@ export class ManageWalletComponent implements OnInit {
     const exportData = this.walletService.generateExportData();
     this.triggerFileDownload(fileName, exportData, 'json');
 
-    this.notifications.sendSuccess(`Wallet export downloaded!`);
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-export-downloaded'));
   }
 
   csvCountChange(count: string) {
@@ -254,13 +258,13 @@ export class ManageWalletComponent implements OnInit {
 
     if (this.invalidCsvCount) {
       if (this.beyondCsvLimit) {
-        return this.notifications.sendWarning(`To export transactions above the limit, please use a custom Nault server`);
+        return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.history-server-limit'));
       } else {
-        return this.notifications.sendWarning(`Invalid limit`);
+        return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.history-invalid-limit'));
       }
     }
     if (this.invalidCsvOffset) {
-      return this.notifications.sendWarning(`Invalid offset`);
+      return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.history-invalid-offset'));
     }
 
     this.exportingCsv = true;
@@ -279,12 +283,12 @@ export class ManageWalletComponent implements OnInit {
     }
 
     if (csvData.length === 0) {
-      return this.notifications.sendWarning(`No transaction history found or bad server response!`);
+      return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.history-empty'));
     }
 
     // download file
     const fileName = `${this.csvAccount}_offset=${this.csvOffset === '' ? 0 : this.csvOffset}${this.selectedOrder === true ? '_oldestFirst' : '_newestFirst'}.csv`;
     this.triggerFileDownload(fileName, csvData, 'csv');
-    this.notifications.sendSuccess(`Transaction history downloaded!`);
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.history-downloaded'));
   }
 }

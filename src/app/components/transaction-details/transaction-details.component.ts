@@ -224,7 +224,7 @@ export class TransactionDetailsComponent implements OnInit {
 
   copied() {
     this.notifications.removeNotification('success-copied');
-    this.notifications.sendSuccess(`Successfully copied to clipboard!`, { identifier: 'success-copied' });
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.clipboard-copied'), { identifier: 'success-copied' });
   }
 
 }

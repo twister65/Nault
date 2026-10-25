@@ -113,13 +113,13 @@ export class ConfigureWalletComponent implements OnInit {
   }
 
   async importExistingWallet() {
-    this.notifications.sendInfo(`Starting to scan the first 20 accounts and importing them if they have been used...`, {length: 7000});
+    this.notifications.sendInfo(this.translocoService.translate('ui-notifications.wallet-scanning'), {length: 7000});
     this.route.navigate(['accounts']); // load accounts and watch them update in real-time
     await this.walletService.createWalletFromSeed(this.importSeed);
     this.importSeed = '';
     this.storePassword();
 
-    this.notifications.sendSuccess(`Successfully imported wallet!`, {length: 10000});
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-imported'), {length: 10000});
 
     // this.repService.detectChangeableReps(); // this is now called from change-rep-widget.component when new wallet
     this.walletService.informNewWallet();
@@ -131,7 +131,7 @@ export class ConfigureWalletComponent implements OnInit {
     this.route.navigate(['accounts']); // load accounts and watch them update in real-time
     this.keyString = '';
 
-    this.notifications.sendSuccess(`Successfully imported wallet from a private key!`);
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-key-imported'));
     this.walletService.informNewWallet();
   }
 
@@ -160,7 +160,7 @@ export class ConfigureWalletComponent implements OnInit {
     }
 
     // Determine status of ledger device using ledger service
-    this.notifications.sendInfo(`Checking for Ledger device...`, { identifier: 'ledger-status', length: 0 });
+    this.notifications.sendInfo(this.translocoService.translate('ui-notifications.ledger-checking'), { identifier: 'ledger-status', length: 0 });
     await this.ledgerService.loadLedger(true);
     this.notifications.removeNotification('ledger-status');
     this.notifications.removeNotification('ledger-error');
@@ -169,17 +169,17 @@ export class ConfigureWalletComponent implements OnInit {
       this.ledgerService.resetLedger();
       const pairingAdvice = this.ledgerService.bluetoothErrorMessage;
       return this.notifications.sendWarning(
-        pairingAdvice || `Failed to connect the Ledger device. Make sure the nano app is running on the Ledger. If the error persists: Check the <a href="https://docs.nault.cc/2020/08/04/ledger-guide.html#troubleshooting" target="_blank" rel="noopener noreferrer">troubleshooting guide</a>`,
+        pairingAdvice || this.translocoService.translate('ui-notifications.ledger-connect-failed'),
         { identifier: 'ledger-error', length: 0 }
       );
     }
 
     if (this.ledger.status === LedgerStatus.LOCKED) {
-      return this.notifications.sendWarning(`Unlock your Ledger device and open the nano app to continue`);
+      return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.ledger-unlock'));
     }
 
     if (this.ledger.status === LedgerStatus.READY) {
-      this.notifications.sendSuccess(`Successfully connected to Ledger device`);
+      this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.ledger-connected'));
     }
 
     if (refreshOnly) {
@@ -191,7 +191,7 @@ export class ConfigureWalletComponent implements OnInit {
 
     // Create new ledger wallet
     const newWallet = await this.walletService.createLedgerWallet();
-    this.notifications.sendSuccess(`Successfully loaded ledger device!`);
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.ledger-loaded'));
 
     this.walletService.informNewWallet();
   }
@@ -209,7 +209,7 @@ export class ConfigureWalletComponent implements OnInit {
       return true;
     } catch (err) {
       if (!this.walletService.isLedgerWallet()) {
-        this.notifications.sendInfo(`You can use the 'Manage Wallet' page to backup your wallet's secret recovery seed and/or mnemonic`);
+        this.notifications.sendInfo(this.translocoService.translate('ui-notifications.wallet-backup-tip'));
       }
       return false;
     }
@@ -221,25 +221,25 @@ export class ConfigureWalletComponent implements OnInit {
       if (this.selectedImportOption === 'mnemonic' || this.selectedImportOption === 'seed') {
         if (this.selectedImportOption === 'seed') {
           const existingSeed = this.importSeedModel.trim();
-          if (existingSeed.length !== 64 || !this.util.nano.isValidSeed(existingSeed)) return this.notifications.sendError(`Seed is invalid, double check it!`);
+          if (existingSeed.length !== 64 || !this.util.nano.isValidSeed(existingSeed)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.seed-invalid'));
           this.importSeed = existingSeed;
         } else if (this.selectedImportOption === 'mnemonic') {
           // Clean the value by trimming it and removing newlines
           const mnemonic = this.importSeedMnemonicModel.toLowerCase().trim().replace(/\n/g, ``);
 
           const words = mnemonic.split(' ');
-          if (words.length < 20) return this.notifications.sendError(`Mnemonic is too short, double check it!`);
+          if (words.length < 20) return this.notifications.sendError(this.translocoService.translate('ui-notifications.mnemonic-short'));
 
           // Try and decode the mnemonic
           try {
             const newSeed = bip39.mnemonicToEntropy(mnemonic);
-            if (!newSeed || newSeed.length !== 64 || !this.util.nano.isValidSeed(newSeed)) return this.notifications.sendError(`Mnemonic is invalid, double check it!`);
+            if (!newSeed || newSeed.length !== 64 || !this.util.nano.isValidSeed(newSeed)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.mnemonic-invalid'));
             this.importSeed = newSeed.toUpperCase(); // Force uppercase, for consistency
           } catch (err) {
-            return this.notifications.sendError(`Unable to decode mnemonic, double check it!`);
+            return this.notifications.sendError(this.translocoService.translate('ui-notifications.mnemonic-decode-failed'));
           }
         } else {
-          return this.notifications.sendError(`Invalid import option`);
+          return this.notifications.sendError(this.translocoService.translate('ui-notifications.import-option-invalid'));
         }
       } else if (this.selectedImportOption === 'privateKey' || this.selectedImportOption === 'expandedKey') {
         if (this.selectedImportOption === 'privateKey') {
@@ -247,7 +247,7 @@ export class ConfigureWalletComponent implements OnInit {
         } else if (this.selectedImportOption === 'expandedKey') {
           this.isExpanded = true;
         } else {
-          return this.notifications.sendError(`Invalid import option`);
+          return this.notifications.sendError(this.translocoService.translate('ui-notifications.import-option-invalid'));
         }
 
         this.keyString = this.isExpanded ? this.importExpandedKeyModel : this.importPrivateKeyModel;
@@ -256,18 +256,18 @@ export class ConfigureWalletComponent implements OnInit {
           // includes deterministic R value material which we ignore
           this.keyString = this.keyString.substring(0, 64);
           if (!this.util.nano.isValidSeed(this.keyString)) {
-            return this.notifications.sendError(`Private key is invalid, double check it!`);
+            return this.notifications.sendError(this.translocoService.translate('ui-notifications.private-key-invalid'));
           }
         } else if (this.keyString.length !== 64 || !this.util.nano.isValidSeed(this.keyString)) {
-          return this.notifications.sendError(`Private key is invalid, double check it!`);
+          return this.notifications.sendError(this.translocoService.translate('ui-notifications.private-key-invalid'));
         }
       } else if (this.selectedImportOption === 'bip39-mnemonic') {
         // If bip39, import wallet as a single private key
         if (!bip39.validateMnemonic(this.importSeedBip39MnemonicModel)) {
-          return this.notifications.sendError(`Mnemonic is invalid, double check it!`);
+          return this.notifications.sendError(this.translocoService.translate('ui-notifications.mnemonic-invalid'));
         }
         if (!this.validIndex) {
-          return this.notifications.sendError(`The account index is invalid, double check it!`);
+          return this.notifications.sendError(this.translocoService.translate('ui-notifications.account-index-invalid'));
         }
 
         // convert mnemonic to bip39 seed
@@ -311,7 +311,7 @@ export class ConfigureWalletComponent implements OnInit {
 
   confirmNewSeed() {
     if (!this.hasConfirmedBackup) {
-      return this.notifications.sendWarning(`Please confirm you have saved a wallet backup!`);
+      return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.confirm-wallet-backup'));
     }
     this.walletService.createNewWallet(this.newWalletSeed);
     this.storePassword();
@@ -324,10 +324,10 @@ export class ConfigureWalletComponent implements OnInit {
 
   saveWalletPassword() {
     if (this.walletPasswordConfirmModel !== this.walletPasswordModel) {
-      return this.notifications.sendError(`Password confirmation does not match, try again!`);
+      return this.notifications.sendError(this.translocoService.translate('ui-notifications.password-confirm-invalid'));
     }
     if (this.walletPasswordModel.length < 6) {
-      return this.notifications.sendWarning(`Password length must be at least 6`);
+      return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.password-minimum'));
     }
     this.newPassword = this.walletPasswordModel;
     this.walletPasswordModel = '';
@@ -352,7 +352,7 @@ export class ConfigureWalletComponent implements OnInit {
     this.walletService.saveWalletExport();
     this.walletService.informNewWallet();
 
-    this.notifications.sendSuccess(`Successfully created new wallet! Do not lose the secret recovery seed/mnemonic!`);
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-created'));
   }
 
   setPanel(panel: panels) {
@@ -388,19 +388,19 @@ export class ConfigureWalletComponent implements OnInit {
     reader.onload = (event) => {
       const fileData = reader.result;
       if (typeof fileData !== 'string') {
-        return this.notifications.sendError(`Unable to parse import data, make sure you selected the right file!`);
+        return this.notifications.sendError(this.translocoService.translate('ui-notifications.import-file-invalid'));
       }
       try {
         const importData = JSON.parse(fileData);
         if ((!importData.seed && !importData.privateKey && !importData.expandedKey) ||
         (!importData.hasOwnProperty('accountsIndex') && !importData.hasOwnProperty('indexes'))) {
-          return this.notifications.sendError(`Bad import data `);
+          return this.notifications.sendError(this.translocoService.translate('ui-notifications.import-data-bad'));
         }
 
         const walletEncrypted = btoa(JSON.stringify(importData));
         this.route.navigate(['import-wallet'], { fragment: walletEncrypted });
       } catch (err) {
-        this.notifications.sendError(`Unable to parse import data, make sure you selected the right file!`);
+        this.notifications.sendError(this.translocoService.translate('ui-notifications.import-file-invalid'));
       }
     };
 

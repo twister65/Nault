@@ -1,4 +1,6 @@
 import { Component, ElementRef, OnInit, ViewChild, ChangeDetectionStrategy } from '@angular/core';
+import { inject } from '@angular/core';
+import { TranslocoService } from '@jsverse/transloco';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {LedgerService, LedgerStatus} from '../../services/ledger.service';
@@ -13,6 +15,8 @@ import {PowService} from '../../services/pow.service';
     standalone: false
 })
 export class WalletWidgetComponent implements OnInit {
+  private readonly translocoService = inject(TranslocoService);
+
   wallet = this.walletService.wallet;
 
   ledgerStatus = {
@@ -79,13 +83,13 @@ export class WalletWidgetComponent implements OnInit {
       return; // No need to lock a ledger wallet, no password saved
     }
     if (!this.wallet.password) {
-      return this.notificationService.sendWarning(`You must set a password on your wallet - it is currently blank!`);
+      return this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.wallet-password-required'));
     }
     const locked = await this.walletService.lockWallet();
     if (locked) {
-      this.notificationService.sendSuccess(`Wallet locked`);
+      this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.wallet-locked'));
     } else {
-      this.notificationService.sendError(`Unable to lock wallet`);
+      this.notificationService.sendError(this.translocoService.translate('ui-notifications.wallet-lock-failed'));
     }
   }
 
@@ -108,14 +112,14 @@ export class WalletWidgetComponent implements OnInit {
   }
 
   async reloadLedger() {
-    this.notificationService.sendInfo(`Checking Ledger Status...`, { identifier: 'ledger-status', length: 0 });
+    this.notificationService.sendInfo(this.translocoService.translate('ui-notifications.ledger-checking'), { identifier: 'ledger-status', length: 0 });
     try {
       // A manual status click is an explicit reconnect request for Bluetooth.
       // Do not reuse a transport whose radio session might be stale.
       await this.ledgerService.loadLedger(false, this.ledgerService.transportMode === 'Bluetooth');
       this.notificationService.removeNotification('ledger-status');
       if (this.ledgerStatus.status === LedgerStatus.READY) {
-        this.notificationService.sendSuccess(`Successfully connected to Ledger device`);
+        this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.ledger-connected'));
       }
     } catch (err) {
       console.log(`Got error when loading ledger! `, err);
@@ -175,11 +179,11 @@ export class WalletWidgetComponent implements OnInit {
     const unlocked = await this.walletService.unlockWallet(this.unlockPassword);
 
     if (unlocked) {
-      this.notificationService.sendSuccess(`Wallet unlocked`);
+      this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.wallet-unlocked'));
       this.modal.hide();
       if (this.unlockPassword.length < 6) {
         // eslint-disable-next-line max-len
-        this.notificationService.sendWarning(`You are using an insecure password and encouraged to change it from settings > manage wallet`);
+        this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.wallet-password-weak'));
       }
 
       if (this.timeoutIdAllowingUnlock !== null) {
@@ -189,7 +193,7 @@ export class WalletWidgetComponent implements OnInit {
 
       this.allowUnlock({ focusInputElement: false });
     } else {
-      this.notificationService.sendError(`Incorrect password, please try again!`);
+      this.notificationService.sendError(this.translocoService.translate('ui-notifications.wallet-password-incorrect'));
     }
   }
 

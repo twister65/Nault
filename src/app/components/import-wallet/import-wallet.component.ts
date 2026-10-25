@@ -1,4 +1,6 @@
 import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { inject } from '@angular/core';
+import { TranslocoService } from '@jsverse/transloco';
 import {ActivatedRoute, Router} from '@angular/router';
 import {NotificationService} from '../../services/notification.service';
 import * as CryptoJS from 'crypto-js';
@@ -13,6 +15,8 @@ import {UtilService} from '../../services/util.service';
     standalone: false
 })
 export class ImportWalletComponent implements OnInit {
+  private readonly translocoService = inject(TranslocoService);
+
   activePanel = 'error';
 
   walletPassword = '';
@@ -27,7 +31,7 @@ export class ImportWalletComponent implements OnInit {
     const importData = this.route.snapshot.fragment;
     const queryData = this.route.snapshot.queryParams;
     if (!importData || !importData.length) {
-      return this.importDataError(`No import data found.  Check your link and try again.`);
+      return this.importDataError(this.translocoService.translate('ui-notifications.import-data-missing'));
     }
 
     if ('hostname' in queryData) this.hostname = queryData.hostname;
@@ -36,13 +40,13 @@ export class ImportWalletComponent implements OnInit {
     try {
       const importBlob = JSON.parse(decodedData);
       if (!importBlob || (!importBlob.seed && !importBlob.privateKey && !importBlob.expandedKey)) {
-        return this.importDataError(`Bad import data.  Check your link and try again.`);
+        return this.importDataError(this.translocoService.translate('ui-notifications.import-data-link-bad'));
       }
       this.validImportData = true;
       this.importData = importBlob;
       this.activePanel = 'import';
     } catch (err) {
-      return this.importDataError(`Unable to decode import data.  Check your link and try again.`);
+      return this.importDataError(this.translocoService.translate('ui-notifications.import-data-decode'));
     }
   }
 
@@ -68,31 +72,31 @@ export class ImportWalletComponent implements OnInit {
         walletType = 'expandedKey';
       }
       if (walletType === null) {
-        return this.importDataError(`Bad import data. Check your link and try again.`);
+        return this.importDataError(this.translocoService.translate('ui-notifications.import-data-link-bad'));
       }
       const decryptedBytes = CryptoJS.AES.decrypt(secret, this.walletPassword);
       const decryptedSecret = decryptedBytes?.toString(CryptoJS.enc.Utf8);
       if (!decryptedSecret || decryptedSecret.length !== 64) {
         this.walletPassword = '';
-        return this.notifications.sendError(`Invalid password, please try again`);
+        return this.notifications.sendError(this.translocoService.translate('ui-notifications.password-invalid'));
       }
       if (!this.util.nano.isValidSeed(decryptedSecret)) {
         this.walletPassword = '';
-        return this.notifications.sendError(`Invalid seed format (non HEX characters)`);
+        return this.notifications.sendError(this.translocoService.translate('ui-notifications.import-seed-invalid'));
       }
 
       this.router.navigate(['accounts']); // load accounts and watch them update in real-time
-      this.notifications.sendInfo(`Loading all accounts for the wallet...`);
+      this.notifications.sendInfo(this.translocoService.translate('ui-notifications.wallet-loading'));
       if (await this.walletService.loadImportedWallet(decryptedSecret, this.walletPassword,
         this.importData.accountsIndex || 0, this.importData.indexes || null, walletType)) {
-          this.notifications.sendSuccess(`Successfully imported the wallet!`, {length: 10000});
+          this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-imported'), {length: 10000});
       } else {
-        return this.notifications.sendError(`Failed importing the wallet. Invalid data!`);
+        return this.notifications.sendError(this.translocoService.translate('ui-notifications.wallet-import-failed'));
       }
 
     } catch (err) {
       this.walletPassword = '';
-      return this.notifications.sendError(`Invalid password, please try again`);
+      return this.notifications.sendError(this.translocoService.translate('ui-notifications.password-invalid'));
     }
   }
 
