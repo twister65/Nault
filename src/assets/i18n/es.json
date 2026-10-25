@@ -834,6 +834,12 @@
     "endpoint-server-secure": "Usa HTTPS/WSS. HTTP/WS solo se permite para localhost y direcciones de bucle local.",
     "refresh-balance-failed": "No se pudieron actualizar los saldos. Comprueba la conexión.",
     "refresh-balance-server": "No se pudieron actualizar los saldos. Comprueba la conexión o elige otro servidor.",
-    "qr-unrecognized": "No se reconoce este código QR."
+    "qr-unrecognized": "No se reconoce este código QR.",
+    "bluetooth-unavailable": "Bluetooth no disponible. Comprueba el Bluetooth del ordenador y de Ledger, o elige « Reconectar por USB ».",
+    "ledger-confirmation-waiting": "Esperando confirmación en el dispositivo Ledger…",
+    "ledger-hid-read-timeout": "se agotó el tiempo de espera de lectura HID de Ledger",
+    "ledger-signing-error": "Error al firmar el bloque: {{error}}",
+    "received-amount": "¡Se recibieron {{amount}} XNO correctamente!",
+    "received": "¡XNO recibidos correctamente!"
   }
 }

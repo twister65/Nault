@@ -1,5 +1,7 @@
 import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {NotificationService, NotificationType} from '../../services/notification.service';
+import { TranslocoService } from '@jsverse/transloco';
+import { localizeNotificationMessage } from '../../services/notification-message';
 
 @Component({
     selector: 'app-notifications',
@@ -19,7 +21,7 @@ export class NotificationsComponent implements OnInit {
     identifier: string | null;
     length: number;
   }> = [];
-  constructor(private notificationService: NotificationService) { }
+  constructor(private notificationService: NotificationService, private translocoService: TranslocoService) { }
 
   ngOnInit() {
     this.notificationService.notifications$.subscribe(notification => {
@@ -41,7 +43,7 @@ export class NotificationsComponent implements OnInit {
 
       const newNotification = {
         type: notification.type,
-        message: notification.message,
+        message: localizeNotificationMessage(notification.message, (key, params) => this.translocoService.translate(key, params)),
         cssClass: this.getCssClass(notification.type),
         identifier: identifier,
         length: length,
