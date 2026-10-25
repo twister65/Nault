@@ -2,6 +2,7 @@ import { localizeNotificationMessage } from './notification-message';
 
 describe('localizeNotificationMessage', () => {
   const messages: Record<string, string> = {
+    'ui-notifications.node-offline': 'Impossible de se connecter au nœud Nano. Les soldes affichés peuvent être inexacts !',
     'ui-notifications.bluetooth-unavailable': 'Bluetooth indisponible. Vérifiez le Bluetooth de votre ordinateur et de votre Ledger, ou reconnectez-vous en USB.',
     'ui-notifications.ledger-confirmation-waiting': 'En attente de confirmation sur la Ledger…',
     'ui-notifications.ledger-hid-read-timeout': 'délai de lecture HID de la Ledger dépassé',
@@ -12,6 +13,12 @@ describe('localizeNotificationMessage', () => {
   };
   const translate = (key: string, params?: Record<string, string>) =>
     (messages[key] || key).replace(/{{(\w+)}}/g, (_, name: string) => params?.[name] || '');
+
+  it('localizes the persistent node-offline warning', () => {
+    expect(localizeNotificationMessage(
+      'Unable to connect to the nano node, your balances may be inaccurate!', translate
+    )).toBe('Impossible de se connecter au nœud Nano. Les soldes affichés peuvent être inexacts !');
+  });
 
   it('localizes the Bluetooth adapter-unavailable instructions', () => {
     expect(localizeNotificationMessage(

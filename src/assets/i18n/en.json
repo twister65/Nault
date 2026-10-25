@@ -841,6 +841,7 @@
     "ledger-signing-error": "Error signing block: {{error}}",
     "received-amount": "Successfully received {{amount}} XNO!",
     "received": "Nano received successfully!",
-    "ledger-user-rejected": "Transaction rejected on Ledger (0x6985)."
+    "ledger-user-rejected": "Transaction rejected on Ledger (0x6985).",
+    "node-offline": "Unable to connect to the nano node, your balances may be inaccurate!"
   }
 }

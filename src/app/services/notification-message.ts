@@ -5,6 +5,8 @@ export type NotificationTranslator = (key: string, params?: Record<string, strin
 
 export function localizeNotificationMessage(message: string, translate: NotificationTranslator): string {
   switch (message) {
+    case 'Unable to connect to the nano node, your balances may be inaccurate!':
+      return translate('ui-notifications.node-offline');
     case 'Bluetooth unavailable. Check Bluetooth on your computer and Ledger, or choose Reconnect via USB.':
       return translate('ui-notifications.bluetooth-unavailable');
     case 'Waiting for confirmation on Ledger Device...':

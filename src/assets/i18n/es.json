@@ -841,6 +841,7 @@
     "ledger-signing-error": "Error al firmar el bloque: {{error}}",
     "received-amount": "¡Se recibieron {{amount}} XNO correctamente!",
     "received": "¡XNO recibidos correctamente!",
-    "ledger-user-rejected": "Transacción rechazada en Ledger (0x6985)."
+    "ledger-user-rejected": "Transacción rechazada en Ledger (0x6985).",
+    "node-offline": "No se puede conectar al nodo Nano. Los saldos mostrados pueden ser inexactos."
   }
 }
