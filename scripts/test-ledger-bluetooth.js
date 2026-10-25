@@ -640,12 +640,13 @@ async function main() {
       { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, experimentalDecorators: true } }
     ).outputText;
     const { WalletWidgetComponent } = load(widgetCode, {
-      '@angular/core': { Component: () => value => value, ChangeDetectionStrategy: { Eager: 1 }, ViewChild: () => () => {} },
+      '@angular/core': { Component: () => value => value, ChangeDetectionStrategy: { Eager: 1 }, ViewChild: () => () => {}, inject: () => ({ translate: key => key }) },
       '../../services/wallet.service': {},
       '../../services/notification.service': {},
       '../../services/ledger.service': { LedgerStatus: { READY: 'ready', NOT_CONNECTED: 'not-connected' } },
       '../../services/app-settings.service': {},
-      '../../services/pow.service': {}
+      '../../services/pow.service': {},
+       '@jsverse/transloco': { TranslocoService: class {} }
     });
     const operations = [];
     const ledger = {
@@ -678,12 +679,13 @@ async function main() {
       { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, experimentalDecorators: true } }
     ).outputText;
     const { WalletWidgetComponent } = load(widgetCode, {
-      '@angular/core': { Component: () => value => value, ChangeDetectionStrategy: { Eager: 1 }, ViewChild: () => () => {} },
+      '@angular/core': { Component: () => value => value, ChangeDetectionStrategy: { Eager: 1 }, ViewChild: () => () => {}, inject: () => ({ translate: key => key }) },
       '../../services/wallet.service': {},
       '../../services/notification.service': {},
       '../../services/ledger.service': { LedgerStatus: { READY: 'ready', NOT_CONNECTED: 'not-connected' } },
       '../../services/app-settings.service': {},
-      '../../services/pow.service': {}
+      '../../services/pow.service': {},
+       '@jsverse/transloco': { TranslocoService: class {} }
     }, { window: { location: { reload() { reloads++; } } } });
     const ledger = { isDesktop: true, transportMode: 'Bluetooth' };
     const widget = new WalletWidgetComponent({ wallet: {} }, {}, ledger, {}, {});
