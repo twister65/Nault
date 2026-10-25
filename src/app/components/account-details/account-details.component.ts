@@ -753,7 +753,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       // Check for deleting an entry in the address book
       if (this.addressBookEntry) {
         this.addressBook.deleteAddress(this.accountID);
-        this.notifications.sendSuccess(`Successfully removed address book entry!`);
+        this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.addressbook-entry-removed'));
         this.addressBookEntry = null;
       }
 
@@ -838,7 +838,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
   copied() {
     this.notifications.removeNotification('success-copied');
-    this.notifications.sendSuccess(`Successfully copied to clipboard!`, { identifier: 'success-copied' });
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.clipboard-copied'), { identifier: 'success-copied' });
   }
 
   get isLedgerWallet(): boolean {
@@ -1007,7 +1007,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   async receiveReceivableBlock(receivableBlock: ReceivableHistoryItem) {
     const walletAccount = this.walletAccount;
     if (!walletAccount) {
-      this.notifications.sendWarning('Select a wallet account before receiving funds.');
+      this.notifications.sendWarning(this.translocoService.translate('ui-notifications.account-select-receive'));
       return;
     }
     const sourceBlock = receivableBlock.hash;
@@ -1029,7 +1029,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       createdReceiveBlockHash =
         await this.nanoBlock.generateReceive(walletAccount, sourceBlock, this.wallet.isLedgerWallet());
     } catch (err) {
-      this.notifications.sendError('Error receiving transaction: ' + (err instanceof Error ? err.message : String(err)));
+      this.notifications.sendError(this.translocoService.translate('ui-notifications.receive-failed-detail', { error: err instanceof Error ? err.message : String(err) }));
       hasShownErrorNotification = true;
     }
 
@@ -1037,13 +1037,13 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       receivableBlock.received = true;
       this.mobileTransactionMenuModal.hide();
       this.notifications.removeNotification('success-receive');
-      this.notifications.sendSuccess(`Successfully received nano!`, { identifier: 'success-receive' });
+      this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.receive-success'), { identifier: 'success-receive' });
       // clear the list of pending blocks. Updated again with reloadBalances()
       this.wallet.clearPendingBlocks();
     } else {
       if (hasShownErrorNotification === false) {
         if (!this.wallet.isLedgerWallet()) {
-          this.notifications.sendError(`Error receiving transaction, please try again`, {length: 10000});
+          this.notifications.sendError(this.translocoService.translate('ui-notifications.receive-failed'), {length: 10000});
         }
       }
     }
@@ -1057,15 +1057,15 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
   async generateSend() {
     const isValid = this.util.account.isValidAccount(this.toAccountID);
-    if (!isValid) return this.notifications.sendWarning(`To account address is not valid`);
-    if (!this.accountID || !this.toAccountID) return this.notifications.sendWarning(`From and to account are required`);
-    if (!this.validateAmount()) return this.notifications.sendWarning(`Invalid XNO Amount`);
+    if (!isValid) return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.send-address-invalid'));
+    if (!this.accountID || !this.toAccountID) return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.send-addresses-required'));
+    if (!this.validateAmount()) return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.send-amount-invalid'));
 
     this.qrCodeImageBlock = null;
 
     const from = await this.api.accountInfo(this.accountID);
     const to = await this.api.accountInfo(this.toAccountID);
-    if (!from) return this.notifications.sendError(`From account not found`);
+    if (!from) return this.notifications.sendError(this.translocoService.translate('ui-notifications.send-from-not-found'));
 
     from.balanceBN = new BigNumber(from.balance || 0);
     to.balanceBN = new BigNumber(to.balance || 0);
@@ -1078,8 +1078,8 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
     const nanoAmount = this.rawAmount.div(this.nano);
 
-    if (Number(this.amount ?? 0) < 0 || rawAmount.lessThan(0)) return this.notifications.sendWarning(`Amount is invalid`);
-    if (from.balanceBN.minus(rawAmount).lessThan(0)) return this.notifications.sendError(`From account does not have enough XNO`);
+    if (Number(this.amount ?? 0) < 0 || rawAmount.lessThan(0)) return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.send-amount-invalid'));
+    if (from.balanceBN.minus(rawAmount).lessThan(0)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.send-balance-insufficient'));
 
     // Determine a proper raw amount to show in the UI, if a decimal was entered
     this.amountRaw = this.rawAmount.mod(this.nano);
@@ -1111,7 +1111,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
     // Previous block info
     const previousBlockInfo = await this.api.blockInfo(blockData.previous);
-    if (!('contents' in previousBlockInfo)) return this.notifications.sendError(`Previous block not found`);
+    if (!('contents' in previousBlockInfo)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.previous-block-missing'));
     const jsonBlock = JSON.parse(previousBlockInfo.contents);
     const blockDataPrevious = {
       account: jsonBlock.account.replace('xrb_', 'nano_').toLowerCase(),
@@ -1172,7 +1172,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     let blockDataPrevious = null;
     if (!openEquiv) {
       const previousBlockInfo = await this.api.blockInfo(blockData.previous);
-      if (!('contents' in previousBlockInfo)) return this.notifications.sendError(`Previous block not found`);
+      if (!('contents' in previousBlockInfo)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.previous-block-missing'));
       const jsonBlock = JSON.parse(previousBlockInfo.contents);
       blockDataPrevious = {
         account: jsonBlock.account.replace('xrb_', 'nano_').toLowerCase(),
@@ -1204,14 +1204,14 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   }
 
   async generateChange() {
-    if (!this.util.account.isValidAccount(this.representativeModel)) return this.notifications.sendError(`Not a valid representative account`);
+    if (!this.util.account.isValidAccount(this.representativeModel)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-invalid'));
     this.qrCodeImageBlock = null;
     this.blockHash = null;
     this.qrString = null;
 
     const account = await this.api.accountInfo(this.accountID);
 
-    if (!account || !('frontier' in account)) return this.notifications.sendError(`Account must be opened first!`);
+    if (!account || !('frontier' in account)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-account-unopened'));
 
     const balance = new BigNumber(account.balance);
     const balanceDecimal = balance.toString(10);
@@ -1236,7 +1236,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
     // Previous block info
     const previousBlockInfo = await this.api.blockInfo(blockData.previous);
-    if (!('contents' in previousBlockInfo)) return this.notifications.sendError(`Previous block not found`);
+    if (!('contents' in previousBlockInfo)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.previous-block-missing'));
     const jsonBlock = JSON.parse(previousBlockInfo.contents);
     const blockDataPrevious = {
       account: jsonBlock.account.replace('xrb_', 'nano_').toLowerCase(),

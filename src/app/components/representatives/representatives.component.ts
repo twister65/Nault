@@ -309,7 +309,7 @@ export class RepresentativesComponent implements OnInit {
       }
     }
     if (!accounts || !accounts.length) {
-      return this.notifications.sendWarning(`You must select at least one account to change`);
+      return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.rep-select-account'));
     }
 
     this.changingRepresentatives = true;
@@ -317,7 +317,7 @@ export class RepresentativesComponent implements OnInit {
     const valid = this.util.account.isValidAccount(newRep);
     if (!valid) {
       this.changingRepresentatives = false;
-      return this.notifications.sendWarning(`Representative is not a valid account`);
+      return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.rep-invalid'));
     }
 
     const allAccounts = accounts.find(a => a.id === 'All Current Accounts');
@@ -339,7 +339,7 @@ export class RepresentativesComponent implements OnInit {
 
     if (!accountsNeedingChange.length) {
       this.changingRepresentatives = false;
-      return this.notifications.sendInfo(`None of the accounts selected need to be updated`);
+      return this.notifications.sendInfo(this.translocoService.translate('ui-notifications.rep-no-change'));
     }
 
     // Now loop and change them
@@ -352,10 +352,10 @@ export class RepresentativesComponent implements OnInit {
       try {
         const changed = await this.nanoBlock.generateChange(walletAccount, newRep, this.walletService.isLedgerWallet());
         if (!changed) {
-          this.notifications.sendError(`Error changing representative for ${account.id}, please try again`);
+          this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-change-failed-account', { account: account.id }));
         }
       } catch (err) {
-        this.notifications.sendError('Error changing representative: ' + (err instanceof Error ? err.message : String(err)));
+        this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-change-failed', { error: err instanceof Error ? err.message : String(err) }));
       }
     }
 
@@ -371,7 +371,7 @@ export class RepresentativesComponent implements OnInit {
     this.changingRepresentatives = false;
     this.selectedRecommendedRep = null;
 
-    this.notifications.sendSuccess(`Successfully updated representatives!`);
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.rep-updated'));
 
     let useCachedReps = false;
 

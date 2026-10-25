@@ -379,7 +379,7 @@ export class ConfigureAppComponent implements OnInit {
   async updateWalletSettings() {
     if (this.customWorkServer && this.customWorkServer.trim()) {
       try { this.customWorkServer = secureEndpoint(this.customWorkServer, 'rpc'); } catch (_) {
-        return this.notifications.sendWarning('Use HTTPS for the work server; HTTP is allowed only on loopback.');
+        return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.endpoint-work-https'));
       }
     }
     const newStorage = this.selectedStorage;
@@ -487,7 +487,7 @@ export class ConfigureAppComponent implements OnInit {
       this.walletService.saveWalletExport(); // If swapping the storage engine, resave the wallet
     }
     if (reloadPending) {
-      this.walletService.reloadBalances().catch(() => this.notifications.sendWarning('Unable to refresh balances. Check your connection.'));
+      this.walletService.reloadBalances().catch(() => this.notifications.sendWarning(this.translocoService.translate('ui-notifications.refresh-balance-failed')));
     }
   }
 
@@ -504,7 +504,7 @@ export class ConfigureAppComponent implements OnInit {
         if (this.serverAPI && this.serverAPI.trim()) newSettings.serverAPI = secureEndpoint(this.serverAPI, 'rpc');
         if (this.serverWS && this.serverWS.trim()) newSettings.serverWS = secureEndpoint(this.serverWS, 'ws');
       } catch (_) {
-        return this.notifications.sendWarning('Use HTTPS/WSS. HTTP/WS is allowed only for localhost, 127.0.0.1 or [::1].');
+        return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.endpoint-server-secure'));
       }
     }
 
@@ -525,7 +525,7 @@ export class ConfigureAppComponent implements OnInit {
     try {
       await this.walletService.reloadBalances();
     } catch (_) {
-      this.notifications.sendWarning('Unable to refresh balances. Check your connection or select another server.');
+      this.notifications.sendWarning(this.translocoService.translate('ui-notifications.refresh-balance-server'));
     }
     // this is updated after setting server to random and doing recheck of wallet balance
     this.serverAPIUpdated = this.appSettings.settings.serverAPI;

@@ -1,6 +1,8 @@
 
 import {map} from 'rxjs/operators';
 import {AfterViewInit, Component, OnInit, ChangeDetectionStrategy} from '@angular/core';
+import { inject } from '@angular/core';
+import { TranslocoService } from '@jsverse/transloco';
 import {AddressBookService} from '../../services/address-book.service';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
@@ -18,6 +20,8 @@ import {UtilService} from '../../services/util.service';
     standalone: false
 })
 export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
+  private readonly translocoService = inject(TranslocoService);
+
 
   activePanel = 0;
   creatingNewEntry = false;
@@ -75,29 +79,29 @@ export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
 
   async saveNewRepresentative() {
     if (!this.newRepAccount || !this.newRepName) {
-      return this.notificationService.sendError(`Account and name are required`);
+      return this.notificationService.sendError(this.translocoService.translate('ui-notifications.rep-name-required'));
     }
 
     this.newRepAccount = this.newRepAccount.replace(/ /g, ''); // Remove spaces
 
     // If the name has been changed, make sure no other entries are using that name
     if ( (this.newRepName !== this.previousRepName) && this.repService.nameExists(this.newRepName) ) {
-      return this.notificationService.sendError(`This name is already in use! Please use a unique name`);
+      return this.notificationService.sendError(this.translocoService.translate('ui-notifications.rep-name-duplicate'));
     }
 
     // Make sure the address is valid
     const valid = this.util.account.isValidAccount(this.newRepAccount);
     if (!valid) {
-      return this.notificationService.sendWarning(`Account ID is not a valid account`);
+      return this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.rep-id-invalid'));
     }
 
     try {
       await this.repService.saveRepresentative(this.newRepAccount, this.newRepName, this.newRepTrusted, this.newRepWarn);
-      this.notificationService.sendSuccess(`Representative entry saved successfully!`);
+      this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.rep-entry-saved'));
 
       this.cancelNewRep();
     } catch (err) {
-      this.notificationService.sendError(`Unable to save entry: ${err instanceof Error ? err.message : String(err)}`);
+      this.notificationService.sendError(this.translocoService.translate('ui-notifications.rep-entry-save-failed', { error: err instanceof Error ? err.message : String(err) }));
     }
   }
 
@@ -111,7 +115,7 @@ export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
 
   copied() {
     this.notificationService.removeNotification('success-copied');
-    this.notificationService.sendSuccess(`Account address copied to clipboard!`, { identifier: 'success-copied' });
+    this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.clipboard-copied'), { identifier: 'success-copied' });
   }
 
   async getOnlineRepresentatives(): Promise<string[]> {
@@ -126,7 +130,7 @@ export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
         representatives.push(reps.representatives[representative]);
       }
     } catch (err) {
-      this.notificationService.sendWarning(`Unable to determine online status of representatives`);
+      this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.rep-online-unknown'));
     }
 
     return representatives;
@@ -135,9 +139,9 @@ export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
   async deleteRepresentative(accountID: string) {
     try {
       this.repService.deleteRepresentative(accountID);
-      this.notificationService.sendSuccess(`Successfully deleted representative`);
+      this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.rep-deleted'));
     } catch (err) {
-      this.notificationService.sendError(`Unable to delete representative: ${err instanceof Error ? err.message : String(err)}`);
+      this.notificationService.sendError(this.translocoService.translate('ui-notifications.rep-delete-failed', { error: err instanceof Error ? err.message : String(err) }));
     }
   }
 

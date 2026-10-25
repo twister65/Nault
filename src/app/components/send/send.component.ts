@@ -398,7 +398,7 @@ export class SendComponent implements OnInit {
 
           if (aliasesInJsonCount === 0) {
             this.toAccountStatus = 0; // Error state
-            this.notificationService.sendWarning(`Alias @${aliasName} not found on ${aliasDomain}`);
+            this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.alias-not-found', { alias: aliasName, domain: aliasDomain }));
             return;
           }
 
@@ -410,13 +410,13 @@ export class SendComponent implements OnInit {
 
           if (matchingAccount == null) {
             this.toAccountStatus = 0; // Error state
-            this.notificationService.sendWarning(`Alias @${aliasName} not found on ${aliasDomain}`);
+            this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.alias-not-found', { alias: aliasName, domain: aliasDomain }));
             return;
           }
 
           if (!this.util.account.isValidAccount(matchingAccount.address)) {
             this.toAccountStatus = 0; // Error state
-            this.notificationService.sendWarning(`Alias ${aliasFullText} does not have a valid address`);
+            this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.alias-invalid-address', { alias: aliasFullText }));
             return;
           }
 
@@ -433,7 +433,7 @@ export class SendComponent implements OnInit {
           return;
         } catch(err) {
           this.toAccountStatus = 0; // Error state
-          this.notificationService.sendWarning(`Unknown error has occurred while trying to lookup ${aliasFullText}`);
+          this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.alias-lookup-error', { alias: aliasFullText }));
           return;
         }
       })
@@ -444,9 +444,9 @@ export class SendComponent implements OnInit {
         this.toAccountStatus = 0; // Error state
 
         if (err.status === 404) {
-          this.notificationService.sendWarning(`No aliases found on ${aliasDomain}`);
+          this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.alias-none', { domain: aliasDomain }));
         } else {
-          this.notificationService.sendWarning(`Could not reach domain ${aliasDomain}`);
+          this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.alias-domain-error', { domain: aliasDomain }));
         }
 
         return;
@@ -558,13 +558,13 @@ export class SendComponent implements OnInit {
     const destinationID = this.getDestinationID();
     const isValid = this.util.account.isValidAccount(destinationID);
     if (!isValid) {
-      return this.notificationService.sendWarning(`To account address is not valid`);
+      return this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.send-address-invalid'));
     }
     if (!this.fromAccountID || !destinationID) {
-      return this.notificationService.sendWarning(`From and to account are required`);
+      return this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.send-addresses-required'));
     }
     if (!this.validateAmount()) {
-      return this.notificationService.sendWarning(`Invalid XNO amount`);
+      return this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.send-amount-invalid'));
     }
 
     this.preparingTransaction = true;
@@ -575,7 +575,7 @@ export class SendComponent implements OnInit {
     this.preparingTransaction = false;
 
     if (!from) {
-      return this.notificationService.sendError(`From account not found`);
+      return this.notificationService.sendError(this.translocoService.translate('ui-notifications.send-from-not-found'));
     }
 
     from.balanceBN = new BigNumber(from.balance || 0);
@@ -590,10 +590,10 @@ export class SendComponent implements OnInit {
     const nanoAmount = this.rawAmount.div(this.nano);
 
     if (Number(this.amount ?? 0) < 0 || rawAmount.lessThan(0)) {
-      return this.notificationService.sendWarning(`Amount is invalid`);
+      return this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.send-amount-invalid'));
     }
     if (from.balanceBN.minus(rawAmount).lessThan(0)) {
-      return this.notificationService.sendError(`From account does not have enough XNO`);
+      return this.notificationService.sendError(this.translocoService.translate('ui-notifications.send-balance-insufficient'));
     }
 
     // Determine a proper raw amount to show in the UI, if a decimal was entered
@@ -642,7 +642,7 @@ export class SendComponent implements OnInit {
 
       if (newHash) {
         this.notificationService.removeNotification('success-send');
-        this.notificationService.sendSuccess(`Successfully sent ${this.amount} ${this.selectedAmount.shortName}!`, { identifier: 'success-send' });
+        this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.send-success', { amount: this.amount, unit: this.selectedAmount.shortName }), { identifier: 'success-send' });
         this.activePanel = 'send';
         this.amount = null;
         this.amountFiat = null;
@@ -656,11 +656,11 @@ export class SendComponent implements OnInit {
         this.addressAliasMatch = '';
       } else {
         if (!this.walletService.isLedgerWallet()) {
-          this.notificationService.sendError(`There was an error sending your transaction, please try again.`);
+          this.notificationService.sendError(this.translocoService.translate('ui-notifications.send-failed'));
         }
       }
     } catch (err) {
-      this.notificationService.sendError(`There was an error sending your transaction: ${err instanceof Error ? err.message : String(err)}`);
+      this.notificationService.sendError(this.translocoService.translate('ui-notifications.send-failed-detail', { error: err instanceof Error ? err.message : String(err) }));
     }
 
 
@@ -720,7 +720,7 @@ export class SendComponent implements OnInit {
 
   copied() {
     this.notificationService.removeNotification('success-copied');
-    this.notificationService.sendSuccess(`Successfully copied to clipboard!`, { identifier: 'success-copied' });
+    this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.clipboard-copied'), { identifier: 'success-copied' });
   }
 
 }

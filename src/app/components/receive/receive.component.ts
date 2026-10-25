@@ -389,7 +389,7 @@ export class ReceiveComponent implements OnInit, OnDestroy {
       createdReceiveBlockHash =
         await this.nanoBlock.generateReceive(walletAccount, sourceBlock, this.walletService.isLedgerWallet());
     } catch (err) {
-      this.notificationService.sendError('Error receiving transaction: ' + (err instanceof Error ? err.message : String(err)));
+      this.notificationService.sendError(this.translocoService.translate('ui-notifications.receive-failed-detail', { error: err instanceof Error ? err.message : String(err) }));
       hasShownErrorNotification = true;
     }
 
@@ -397,14 +397,14 @@ export class ReceiveComponent implements OnInit, OnDestroy {
       receivableBlock.received = true;
       this.mobileTransactionMenuModal.hide();
       this.notificationService.removeNotification('success-receive');
-      this.notificationService.sendSuccess(`Successfully received nano!`, { identifier: 'success-receive' });
+      this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.receive-success'), { identifier: 'success-receive' });
       // pending has been processed, can be removed from the list
       // list also updated with reloadBalances but not if called too fast
       this.walletService.removePendingBlock(receivableBlock.hash);
     } else {
       if (hasShownErrorNotification === false) {
         if (!this.walletService.isLedgerWallet()) {
-          this.notificationService.sendError(`Error receiving transaction, please try again`, {length: 10000});
+          this.notificationService.sendError(this.translocoService.translate('ui-notifications.receive-failed'), {length: 10000});
         }
       }
     }
@@ -415,7 +415,7 @@ export class ReceiveComponent implements OnInit, OnDestroy {
 
   copied() {
     this.notificationService.removeNotification('success-copied');
-    this.notificationService.sendSuccess(`Successfully copied to clipboard!`, { identifier: 'success-copied' });
+    this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.clipboard-copied'), { identifier: 'success-copied' });
   }
 
   copiedAccountAddress() {
