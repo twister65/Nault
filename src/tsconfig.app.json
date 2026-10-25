@@ -5,7 +5,8 @@
     "allowJs": false,
     "types": [
       "custom"
-    ]
+    ],
+    "skipLibCheck": true
   },
   "files": [
     "main.ts",
