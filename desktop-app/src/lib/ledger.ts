@@ -28,6 +28,14 @@ function ledgerStatusCode(error: unknown): number | undefined {
   return undefined;
 }
 
+// APDU 0x6985 means the user rejected the requested action on the Ledger.
+// It is not a transport failure and must never close a still-healthy HID handle.
+// Recognize the hex fallback as some transport boundaries only preserve .message.
+export function isLedgerUserRejection(error: unknown): boolean {
+  return ledgerStatusCode(error) === STATUS_CODES.CONDITIONS_OF_USE_NOT_SATISFIED ||
+    /\b0x6985\b/i.test(ledgerErrorMessage(error));
+}
+
 const LedgerStatus = {
   NOT_CONNECTED: 'not-connected',
   LOCKED: 'locked',
@@ -216,10 +224,9 @@ export class LedgerService {
       const data = { error: true, errorMessage: ledgerErrorMessage(err) };
       this.ledgerMessage$.next({ event: 'account-details', data: Object.assign({ accountIndex }, data) });
 
-      if (ledgerStatusCode(err) === STATUS_CODES.CONDITIONS_OF_USE_NOT_SATISFIED) {
-        // This means they simply denied it...
-
-        return; // We won't reset the ledger status in this instance
+      if (isLedgerUserRejection(err)) {
+        // Refusing address confirmation does not invalidate USB/HID transport.
+        return;
       }
 
       this.resetLedger(data.errorMessage); // Apparently ledger not working?
@@ -240,7 +247,9 @@ export class LedgerService {
       const data = { error: true, errorMessage: ledgerErrorMessage(err) };
       this.ledgerMessage$.next({ event: 'cache-block', data: Object.assign({ accountIndex }, data) });
 
-      this.resetLedger(); // Apparently ledger not working?
+      // Cancellation is expected; preserve READY, Nano app and HID session.
+      if (isLedgerUserRejection(err)) return;
+      this.resetLedger();
     }
   }
 
@@ -257,7 +266,11 @@ export class LedgerService {
       const data = { error: true, errorMessage: ledgerErrorMessage(err) };
       this.ledgerMessage$.next({ event: 'sign-block', data: Object.assign({ accountIndex }, data) });
 
-      this.resetLedger(); // Apparently ledger not working?
+      // 0x6985 is a declined transaction, not a USB/HID disconnect.
+      // Report the refusal to the renderer, but keep the worker transport open
+      // so the user can approve a later transaction without reconnecting.
+      if (isLedgerUserRejection(err)) return;
+      this.resetLedger();
     }
   }
 

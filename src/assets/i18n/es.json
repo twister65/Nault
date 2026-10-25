@@ -840,6 +840,7 @@
     "ledger-hid-read-timeout": "se agotó el tiempo de espera de lectura HID de Ledger",
     "ledger-signing-error": "Error al firmar el bloque: {{error}}",
     "received-amount": "¡Se recibieron {{amount}} XNO correctamente!",
-    "received": "¡XNO recibidos correctamente!"
+    "received": "¡XNO recibidos correctamente!",
+    "ledger-user-rejected": "Transacción rechazada en Ledger (0x6985)."
   }
 }

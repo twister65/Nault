@@ -141,6 +141,67 @@ async function main() {
     assert.equal(closes, 1, 'USB HID must finish closing before acknowledgement');
   });
 
+  await check('USB rejection 0x6985 preserves session and a subsequent signature succeeds', async () => {
+    const { LedgerService: NativeLedgerService, isLedgerUserRejection } = load(
+      fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8'), {
+        './ledger-hid-worker-transport': {}, 'hw-app-nano': {},
+        rxjs: require('rxjs'), electron: {}
+      }
+    );
+    assert.equal(isLedgerUserRejection({ statusCode: 0x6985, message: 'Conditions not satisfied' }), true);
+    assert.equal(isLedgerUserRejection(new Error('Ledger device: Condition of use not satisfied (0x6985)')), true);
+    assert.equal(isLedgerUserRejection(new Error('Ledger HID read timed out')), false);
+    assert.equal(isLedgerUserRejection({ statusCode: 0x6982, message: 'Locked' }), false);
+
+    const service = new NativeLedgerService();
+    let closes = 0;
+    const transport = { async close() { closes++; } };
+    const events = [];
+    const statuses = [];
+    service.ledger = {
+      transport, status: 'ready',
+      nano: {
+        signBlock: async () => {
+          throw Object.assign(new Error('Ledger device: Condition of use not satisfied (denied by the user?) (0x6985)'), { statusCode: 0x6985 });
+        },
+        cacheBlock: async () => { throw new Error('Ledger device: Condition of use not satisfied (0x6985)'); }
+      }
+    };
+    service.ledgerMessage$.subscribe(event => events.push(event));
+    service.ledgerStatus$.subscribe(status => statuses.push(status));
+
+    await service.signBlock(0, {});
+    assert.equal(events.at(-1).event, 'sign-block');
+    assert.equal(events.at(-1).data.error, true, 'the refused signature must still notify the renderer');
+    assert.match(events.at(-1).data.errorMessage, /0x6985/);
+    assert.strictEqual(service.ledger.transport, transport);
+    assert.equal(service.ledger.status, 'ready');
+    assert.equal(closes, 0);
+    assert.equal(statuses.length, 0, 'refusal must not notify disconnect');
+
+    await service.cacheBlock(0, {}, '');
+    assert.equal(events.at(-1).event, 'cache-block');
+    assert.equal(events.at(-1).data.error, true);
+    assert.strictEqual(service.ledger.transport, transport);
+    assert.equal(service.ledger.status, 'ready');
+    assert.equal(closes, 0);
+
+    service.ledger.nano.signBlock = async () => ({ signature: 'mock-signature' });
+    await service.signBlock(0, {});
+    assert.equal(events.at(-1).data.signature, 'mock-signature',
+      'the next signature succeeds on the original USB session');
+    assert.strictEqual(service.ledger.transport, transport);
+    assert.equal(closes, 0);
+
+    service.ledger.nano.signBlock = async () => { throw new Error('Ledger HID read timed out'); };
+    await service.signBlock(0, {});
+    assert.equal(events.at(-1).data.error, true);
+    await service.usbClosing;
+    assert.equal(closes, 1, 'a genuine HID failure still releases the transport');
+    assert.equal(service.ledger.status, 'not-connected');
+    assert.equal(statuses.at(-1).status, 'not-connected');
+  });
+
   await check('BLE switch cancels a USB worker that is still opening', async () => {
     let finishOpen;
     let closes = 0;

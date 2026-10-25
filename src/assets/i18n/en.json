@@ -840,6 +840,7 @@
     "ledger-hid-read-timeout": "Ledger HID read timed out",
     "ledger-signing-error": "Error signing block: {{error}}",
     "received-amount": "Successfully received {{amount}} XNO!",
-    "received": "Nano received successfully!"
+    "received": "Nano received successfully!",
+    "ledger-user-rejected": "Transaction rejected on Ledger (0x6985)."
   }
 }

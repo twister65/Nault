@@ -11,6 +11,13 @@ export function localizeNotificationMessage(message: string, translate: Notifica
       return translate('ui-notifications.ledger-confirmation-waiting');
   }
 
+  // A declined Ledger transaction (APDU 0x6985) is a user action, not
+  // a malfunction. The native transport remains connected after a refusal.
+  if (message === 'Transaction denied on Ledger device' ||
+      /^(?:Error (?:signing|caching) block: |Ledger device: ).*\b0x6985\b/i.test(message)) {
+    return translate('ui-notifications.ledger-user-rejected');
+  }
+
   const signingFailure = /^Error signing block: (.+)$/.exec(message);
   if (signingFailure) {
     const detail = signingFailure[1] === 'Ledger HID read timed out'

@@ -6,6 +6,7 @@ describe('localizeNotificationMessage', () => {
     'ui-notifications.ledger-confirmation-waiting': 'En attente de confirmation sur la Ledger…',
     'ui-notifications.ledger-hid-read-timeout': 'délai de lecture HID de la Ledger dépassé',
     'ui-notifications.ledger-signing-error': 'Erreur lors de la signature du bloc : {{error}}',
+    'ui-notifications.ledger-user-rejected': 'Transaction refusée sur la Ledger (0x6985).',
     'ui-notifications.received-amount': 'Réception de {{amount}} XNO réussie !',
     'ui-notifications.received': 'Réception de XNO réussie !',
   };
@@ -26,6 +27,18 @@ describe('localizeNotificationMessage', () => {
   it('localizes a HID timeout while retaining the signing failure semantics', () => {
     expect(localizeNotificationMessage('Error signing block: Ledger HID read timed out', translate))
       .toBe('Erreur lors de la signature du bloc : délai de lecture HID de la Ledger dépassé');
+  });
+
+  it('localizes a Ledger user refusal rather than reporting a failed signing operation', () => {
+    for (const raw of [
+      'Error signing block: Ledger device: Condition of use not satisfied (denied by the user?) (0x6985)',
+      'Error caching block: Ledger device: Condition of use not satisfied (0x6985)',
+      'Ledger device: Condition of use not satisfied (0x6985)',
+      'Transaction denied on Ledger device'
+    ]) {
+      expect(localizeNotificationMessage(raw, translate))
+        .toBe('Transaction refusée sur la Ledger (0x6985).');
+    }
   });
 
   it('preserves unknown device errors verbatim within the localized signing prefix', () => {
