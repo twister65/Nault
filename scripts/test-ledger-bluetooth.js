@@ -695,6 +695,22 @@ async function main() {
       BLE.fail = false;
     }
   });
+  await check('setup keeps alternate USB and Bluetooth choices visible when another Ledger is READY', async () => {
+    const template = fs.readFileSync(path.join(root,
+      'src/app/components/configure-wallet/configure-wallet.component.html'), 'utf8');
+    // These must not require NOT_CONNECTED: a Nano S Plus already READY via
+    // USB must not hide the option to explicitly import a Nano X via Bluetooth.
+    assert.match(template,
+      /@if \(selectedImportOption === 'ledger' && !ledgerService\.isAndroidWeb\) \{[\s\S]*?<button[^>]*\(click\)="connectLedgerByUsb\(\)"/);
+    assert.match(template,
+      /@if \(selectedImportOption === 'ledger'\) \{\s*<button[^>]*\(click\)="connectLedgerByBluetooth\(\)"/);
+    assert.match(template,
+      /@if \(selectedImportOption === 'ledger' && ledger\.status !== ledgerStatus\.NOT_CONNECTED\) \{\s*<button[^>]*\(click\)="refreshLedgerStatus\(\)"/);
+    assert.match(template, /switch-ledger-guide/);
+    assert.match(template, /\[disabled\]="ledgerSetupInProgress \|\| !ledgerService\.supportsBluetooth"/);
+    assert.match(template, /\[disabled\]="ledgerSetupInProgress \|\| !ledgerService\.supportsUSB"/);
+  });
+
   await check('wallet widget switches Bluetooth to native USB only on explicit click', async () => {
     const widgetCode = ts.transpileModule(
       fs.readFileSync(path.join(root, 'src/app/components/wallet-widget/wallet-widget.component.ts'), 'utf8'),
