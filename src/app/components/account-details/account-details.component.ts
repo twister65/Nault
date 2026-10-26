@@ -86,7 +86,6 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   routerSub: Subscription | null = null;
   priceSub: Subscription | null = null;
   balanceRefreshSub: Subscription | null = null;
-  balanceRefreshSub: Subscription | null = null;
 
   initialLoadDone = false;
   manualRefreshAllowed = true;
@@ -200,10 +199,6 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       // First launch may be offline; the next successful wallet refresh retries it.
     }
     this.initialLoadDone = true;
-    // A recovered wallet RPC snapshot must also update the visible account history.
-    this.balanceRefreshSub = this.wallet.wallet.refresh$.subscribe(refreshed => {
-      if (refreshed && this.initialLoadDone) this.loadAccountDetailsThrottled();
-    });
     this.addressBook.loadAddressBook();
 
     this.populateRepresentativeList();
@@ -629,7 +624,6 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     if (this.priceSub) {
       this.priceSub.unsubscribe();
     }
-    this.balanceRefreshSub?.unsubscribe();
     this.balanceRefreshSub?.unsubscribe();
   }
 
