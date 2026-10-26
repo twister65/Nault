@@ -591,7 +591,7 @@
     "import-secret-seed": "Importer une seed secrète de récupération",
     "import-secret-mnemonic": "Importer une phrase mnémonique secrète de récupération",
     "import-bip39": "Importer une phrase mnémonique BIP39 de récupération",
-    "existing-ledger-wallet": "Le solde et les comptes affichés dans le menu appartiennent toujours à votre Ledger précédemment configurée. Connecter une autre clé en USB ou Bluetooth ne les remplace pas. Pour utiliser une autre Ledger, branchez-la, déverrouillez-la, ouvrez l’application Nano, puis choisissez « Remplacer le portefeuille Ledger » ci-dessous.",
+    "existing-ledger-wallet": "Les comptes et le solde affichés dans le menu appartiennent encore à la Ledger précédemment configurée. Après connexion d’une autre Ledger en USB ou Bluetooth, Nault vérifie son adresse et demande confirmation avant de remplacer le portefeuille si le compte est différent. Un simple changement de connexion sur la même Ledger conserve les comptes.",
     "replace-ledger-wallet": "Remplacer le portefeuille Ledger",
     "replace-ledger-confirm": "Remplacer les comptes Ledger enregistrés dans Nault par ceux de la clé actuellement connectée ? Les clés Ledger et vos fonds ne seront pas modifiés. Annulez pour conserver les comptes actuels.",
     "ledger-hardware": "Utiliser un portefeuille matériel Ledger",
