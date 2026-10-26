@@ -413,6 +413,7 @@
                           {{ 'ui-wallet-setup.ledger-imported' | transloco }}
                         </p>
                       </div>
+                      <p class="uk-margin-small-top uk-text-muted">{{ 'ui-wallet-setup.switch-ledger-guide' | transloco }}</p>
                     </div>
                   }
                 </div>
@@ -479,14 +480,16 @@
         @if (selectedImportOption === 'seed') {
           <button class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="setPasswordInit()">{{ 'ui-wallet-setup.import-from-seed' | transloco }}</button>
         }
-        @if (selectedImportOption === 'ledger' && ledger.status === ledgerStatus.NOT_CONNECTED && !ledgerService.isAndroidWeb) {
-          <button [disabled]="!ledgerService.supportsUSB" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="connectLedgerByUsb()">{{ 'ui-wallet-setup.connect-usb' | transloco }}</button>
+        @if (selectedImportOption === 'ledger' && !ledgerService.isAndroidWeb) {
+          <!-- Configure a new hardware wallet even while the previous Ledger is READY.
+               Replacing its stored accounts still requires explicit confirmation. -->
+          <button [disabled]="ledgerSetupInProgress || !ledgerService.supportsUSB" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="connectLedgerByUsb()">{{ 'ui-wallet-setup.connect-usb' | transloco }}</button>
         }
-        @if (selectedImportOption === 'ledger' && ledger.status === ledgerStatus.NOT_CONNECTED) {
-          <button [disabled]="!ledgerService.supportsBluetooth" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="connectLedgerByBluetooth()">{{ 'ui-wallet-setup.connect-bluetooth' | transloco }}</button>
+        @if (selectedImportOption === 'ledger') {
+          <button [disabled]="ledgerSetupInProgress || !ledgerService.supportsBluetooth" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="connectLedgerByBluetooth()">{{ 'ui-wallet-setup.connect-bluetooth' | transloco }}</button>
         }
         @if (selectedImportOption === 'ledger' && ledger.status !== ledgerStatus.NOT_CONNECTED) {
-          <button class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="refreshLedgerStatus()">{{ 'ui-wallet-setup.refresh-ledger' | transloco }}</button>
+          <button [disabled]="ledgerSetupInProgress" class="uk-button uk-button-default uk-width-auto@s uk-width-1-1" (click)="refreshLedgerStatus()">{{ 'ui-wallet-setup.refresh-ledger' | transloco }}</button>
         }
         @if (selectedImportOption === 'privateKey') {
           <button class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="setPasswordInit()">{{ 'ui-wallet-setup.import-from-private' | transloco }}</button>
