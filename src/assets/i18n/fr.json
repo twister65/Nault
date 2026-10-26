@@ -635,6 +635,7 @@
     "pro-tip": "Conseil :",
     "tip-password": "Si vous oubliez votre mot de passe, vous pouvez restaurer le portefeuille avec votre seed ou phrase de récupération sauvegardée.",
     "tip-ledger": "Cliquez sur l'état de la Ledger à gauche pour l'actualiser après une connexion ou une déconnexion.",
+    "confirm-overwrite": "Confirmer le remplacement",
     "overwrite-ledger-before": "Un portefeuille Ledger est déjà configuré dans Nault. Cette opération va",
     "overwrite-ledger-strong": "remplacer ses comptes enregistrés par ceux de la Ledger connectée",
     "overwrite-ledger-after": "Vos fonds et vos appareils Ledger ne seront pas modifiés. Annulez pour conserver le portefeuille actuel.",
