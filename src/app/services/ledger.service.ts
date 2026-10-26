@@ -311,6 +311,9 @@ export class LedgerService {
   enableBluetoothMode(enabled: boolean) {
     // Disallow accidental USB selection from old wallet state or indirect UI paths.
     if (this.isAndroidWeb && !enabled) return;
+    // A Bluetooth app/pairing error belongs to that transport session only.
+    // Never show it after the user explicitly switches back to USB.
+    this.bluetoothErrorMessage = '';
     if ((this.transportMode === 'Bluetooth') !== enabled) {
       this.resetLedger();
       this.ledger.status = LedgerStatus.NOT_CONNECTED;
@@ -571,13 +574,21 @@ export class LedgerService {
           this.reportWalletMismatch();
           return resolve(false);
         }
-        console.log(`Error on account details: `, err);
-        if (ledgerErrorFields(err).statusCode === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
-          this.ledger.status = LedgerStatus.LOCKED;
-          if (!hideNotifications) {
-            this.notifications.sendWarning(`Ledger device locked.  Unlock and open the nano application`);
-          }
+        // Reading the first account is the actual USB readiness check. A
+        // failed address read must not resolve successfully or start scanning
+        // accounts on a transport that isn't ready yet.
+        console.log('Error on account details: ', err);
+        const readinessIssue = getLedgerReadinessIssue(err);
+        this.ledger.status = readinessIssue === 'locked'
+          ? LedgerStatus.LOCKED : LedgerStatus.NOT_CONNECTED;
+        const message = readinessIssue
+          ? ledgerReadinessMessage(readinessIssue)
+          : 'Unable to read Ledger account. Check the Nano app and retry the connection.';
+        this.ledgerStatus$.next({ status: this.ledger.status, statusText: message });
+        if (!hideNotifications) {
+          this.notifications.sendWarning(message);
         }
+        return resolve(false);
       }
 
       resolve(true);
