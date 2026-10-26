@@ -577,6 +577,7 @@
     "ledger-app-guide": "Comprueba que la aplicación Nano está instalada y abierta en Ledger y pulsa Conectar.",
     "ledger-unlock-guide": "Desbloquea tu Ledger y pulsa el botón de abajo para volver a intentarlo.",
     "ledger-imported": "Los datos de Ledger se han importado correctamente.",
+    "switch-ledger-guide": "Para importar otro Ledger, elige USB o Bluetooth abajo. Tu cartera actual seguirá guardada a menos que confirmes su sustitución.",
     "unsupported-browser": "Navegador no compatible",
     "ble-unavailable": "Web Bluetooth no disponible",
     "nano-app-open": "Comprueba que la aplicación Nano está instalada y abierta en Ledger y elige abajo la conexión USB o Bluetooth.",
