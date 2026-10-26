@@ -13,6 +13,7 @@ describe('localizeNotificationMessage', () => {
     'ui-notifications.bluetooth-unavailable': 'Bluetooth indisponible. Vérifiez le Bluetooth de votre ordinateur et de votre Ledger, ou reconnectez-vous en USB.',
     'ui-notifications.ledger-confirmation-waiting': 'En attente de confirmation sur la Ledger…',
     'ui-notifications.ledger-wallet-mismatch': 'La Ledger connectée ne correspond pas au portefeuille configuré. Pour utiliser cette clé, sélectionnez « Configurer un nouveau portefeuille » → « Utiliser Ledger ».',
+    'ui-notifications.ledger-not-ready': 'La Ledger n’est pas prête. Déverrouillez-la, ouvrez l’application Nano, puis cliquez sur « Reconnecter ».',
     'ui-notifications.ledger-nano-app-not-open': 'L’application Nano n’est pas ouverte sur votre Ledger. Ouvrez-la, puis cliquez sur « Reconnecter ».',
     'ui-notifications.ledger-locked-reconnect': 'Ledger verrouillée. Déverrouillez-la, ouvrez l’application Nano, puis cliquez sur « Reconnecter ».',
     'ui-notifications.ledger-hid-read-timeout': 'délai de lecture HID de la Ledger dépassé',
@@ -52,6 +53,20 @@ describe('localizeNotificationMessage', () => {
   });
 
   it('localizes the mismatched Ledger error during reconnect', () => {
+    expect(localizeNotificationMessage('Ledger does not match the configured wallet.', translate))
+      .toContain('ne correspond pas au portefeuille configuré');
+  });
+
+  it('localizes all known Ledger-not-ready messages without confusing a mismatched wallet with a locked Nano app', () => {
+    const cases = [
+      'Ledger is not ready. Unlock your Ledger, open the Nano app, then click Reconnect.',
+      'Ledger is not ready. Unlock it, open the Nano app and reconnect.',
+      'Ledger unavailable. Unlock your Ledger, open the Nano app, then click Reconnect.',
+    ];
+    for (const raw of cases) {
+      expect(localizeNotificationMessage(raw, translate))
+        .toBe('La Ledger n’est pas prête. Déverrouillez-la, ouvrez l’application Nano, puis cliquez sur « Reconnecter ».');
+    }
     expect(localizeNotificationMessage('Ledger does not match the configured wallet.', translate))
       .toContain('ne correspond pas au portefeuille configuré');
   });
