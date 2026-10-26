@@ -17,6 +17,44 @@ describe('Use Ledger explicitly configures the attached device', () => {
     expect(importLedgerWallet).toHaveBeenCalledWith();
   });
 
+  it('does not close the transport twice when changing Bluetooth to USB during setup', async () => {
+    const resetLedger = jasmine.createSpy('resetLedger');
+    const ledger = { status: LedgerStatus.READY };
+    const component: any = {
+      ledger,
+      ledgerService: {
+        isAndroidWeb: false,
+        isDesktop: false,
+        transportMode: 'Bluetooth',
+        enableBluetoothMode: jasmine.createSpy('enableBluetoothMode').and.callFake(() => {
+          resetLedger(); // Already done inside LedgerService.enableBluetoothMode.
+        }),
+        resetLedger,
+        ledgerStatus$: { next: jasmine.createSpy('next') },
+      },
+      importLedgerWallet: jasmine.createSpy('importLedgerWallet').and.resolveTo()
+    };
+
+    await ConfigureWalletComponent.prototype.connectLedgerByUsb.call(component);
+
+    expect(resetLedger).toHaveBeenCalledTimes(1);
+    expect(component.ledgerService.enableBluetoothMode).toHaveBeenCalledWith(false);
+    expect(component.importLedgerWallet).toHaveBeenCalled();
+    expect(ledger.status).toBe(LedgerStatus.NOT_CONNECTED);
+  });
+
+  it('does not reuse an old Bluetooth Nano-app warning after switching to USB', () => {
+    const component: any = {
+      ledgerService: {
+        bluetoothErrorMessage: 'Nano app is not open on your Ledger. Open the Nano app, then click Reconnect.'
+      },
+      translocoService: { translate: (key: string) =>
+        key === 'ui-notifications.ledger-nano-app-not-open' ? 'L’application Nano n’est pas ouverte.' : key }
+    };
+    expect(Object.getOwnPropertyDescriptor(ConfigureWalletComponent.prototype, 'bluetoothConnectionHint')!
+      .get!.call(component)).toBe('L’application Nano n’est pas ouverte.');
+  });
+
   it('publishes disconnected status to sidebar before new USB wallet configuration', async () => {
     const ledgerStatus$ = { next: jasmine.createSpy('next') };
     const ledger = { status: LedgerStatus.READY };
