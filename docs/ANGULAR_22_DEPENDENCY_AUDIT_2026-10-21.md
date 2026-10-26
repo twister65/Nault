@@ -1,3 +1,11 @@
+### Validation matérielle — refus de signature et nouvelle tentative en USB (26 octobre 2026)
+
+**Retour utilisateur : tests n° 1 et n° 4 de la grille de tests de signature du chat RÉUSSIS.** Dans le parcours de test **Nano S Plus connectée en USB**, l'utilisateur a testé le **refus d'une signature d'envoi sur l'appareil**, puis **une nouvelle tentative de signature sans reconnecter la Ledger**, et confirme explicitement : **« Pas de déconnexion de la clé »**. Le point de régression historique `0x6985` provoquant une déconnexion après refus ne s'est donc **pas reproduit durant ces essais**. Cette validation concerne le refus et la continuité de session USB ; elle ne démontre pas à elle seule la diffusion d'une transaction confirmée, la vérification du montant/destinataire sur l'écran de la Ledger, ni la réception signée.
+
+**Attention à la numérotation :** « test 4 » désigne ici l'étape du tableau de la conversation **« Après un refus, refaire un envoi sans reconnecter la clé »** et **non** le point 4 de la liste documentaire ci-dessous (tests Nano X Bluetooth). Aucune validation de refus/signature Bluetooth Nano X n'est déduite de ce message.
+
+**Toujours à valider explicitement :** envoi confirmé avec contrôle des détails sur l'appareil et de sa diffusion, bloc de réception signé et solde actualisé, refus/acceptation sur Nano X Bluetooth, et impossibilité de signer avec une Ledger différente. Le bouton UIkit « CANCEL » reste une anomalie de localisation EN/FR/ES en attente. PR #27 conservée Draft, pas de fusion ni redéploiement demandé.
+
 ### Validation matérielle — annulation du remplacement et programme de signatures (26 octobre 2026)
 
 **Retour matériel utilisateur — annulation : OK.** Sur la PWA de test avec les Ledger Nano S Plus / Nano X, l'utilisateur confirme que **l'annulation du remplacement du portefeuille fonctionne** : l'ancien portefeuille est conservé. **Anomalie d'interface toujours visible** : le bouton de cette boîte de dialogue affiche encore « CANCEL » en anglais, même si `confirmWalletOverwrite()` fournit déjà à UIkit `i18n.cancel = translocoService.translate('general.cancel')`. Ne pas considérer la traduction validée ; analyser la version/API UIkit réellement utilisée à l'occasion d'un correctif ciblé. Ne pas mélanger ce problème mineur de libellé avec la réussite de l'annulation fonctionnelle.
