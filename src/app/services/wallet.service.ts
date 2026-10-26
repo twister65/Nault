@@ -142,6 +142,13 @@ export class WalletService {
     private ledgerService: LedgerService,
     private noZerosPipe: NoPaddingZerosPipe,
     private notifications: NotificationService) {
+    // A reconnect must verify the actual Ledger against this wallet, even
+    // after restart or when switching between USB and Bluetooth.
+    this.ledgerService.configuredWalletAccount = () => {
+      if (!this.isLedgerWallet()) return null;
+      const account = this.wallet.accounts[0];
+      return account ? { index: account.index, id: account.id } : null;
+    };
     this.websocket.newTransactions$.subscribe(async (transaction) => {
       if (!transaction) return; // Not really a new transaction
       console.log('New Transaction', transaction);
@@ -273,7 +280,7 @@ export class WalletService {
     });
 
     this.ledgerService.ledgerStatus$.subscribe(({ status }) => {
-      if (status !== LedgerStatus.READY) return;
+      if (status !== LedgerStatus.READY || this.ledgerService.configuringWallet) return;
       this.ledgerService.clearPendingReconnect();
       if (this.isLedgerWallet() && this.wallet.pendingBlocks.length) {
         this.processPendingBlocks();
@@ -648,7 +655,7 @@ export class WalletService {
     return candidates;
   }
 
-  /** Activate only a fully prepared set of accounts, after user confirmation. */
+  /** Activate the hardware accounts prepared by the explicit setup flow. */
   activatePreparedLedgerWallet(accounts: WalletAccount[]): void {
     if (!accounts.length) throw new Error('Ledger account list is empty.');
     this.resetWallet();
