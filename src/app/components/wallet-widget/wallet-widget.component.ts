@@ -19,10 +19,23 @@ export class WalletWidgetComponent implements OnInit {
 
   wallet = this.walletService.wallet;
 
-  ledgerStatus = {
+  // The service owns the current connection status. The event stream adds
+  // diagnostic text, but can lag a synchronous transport reset made by the
+  // wallet setup screen; never render a stale READY status from that stream.
+  private lastReportedLedgerStatus = {
     status: 'not-connected',
     statusText: '',
   };
+
+  get ledgerStatus(): { status: string; statusText: string } {
+    const status = this.ledgerService.ledger.status;
+    return {
+      status,
+      statusText: this.lastReportedLedgerStatus.status === status
+        ? this.lastReportedLedgerStatus.statusText
+        : '',
+    };
+  }
   powAlert = false;
 
   unlockPassword = '';
@@ -58,7 +71,7 @@ export class WalletWidgetComponent implements OnInit {
     this.modal = modal;
 
     this.ledgerService.ledgerStatus$.subscribe((ledgerStatus) => {
-      this.ledgerStatus = ledgerStatus;
+      this.lastReportedLedgerStatus = ledgerStatus;
     });
 
     // Detect if a PoW is taking too long and alert
