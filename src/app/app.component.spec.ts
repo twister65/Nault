@@ -28,13 +28,13 @@ describe('AppComponent', () => {
     expect(app.inactiveSeconds).toBe(0);
   });
 
-  it('rechecks RPC and clears the offline alert after Wi-Fi returns', fakeAsync(() => {
+  it('checks wallet RPC and clears the offline alert after Wi-Fi returns', fakeAsync(() => {
     const app = TestBed.inject(AppComponent);
     app.settings.settings.serverAPI = 'https://example.test/proxy';
     app.settings.settings.serverWS = 'wss://example.test/ws';
-    const rpc = spyOn(TestBed.inject(ApiService), 'blockCount').and.callFake(async () => {
+    const rpc = spyOn(TestBed.inject(ApiService), 'accountsBalances').and.callFake(async () => {
       app.nodeService.setOnline(); // ApiService does this when a real RPC succeeds.
-      return { count: 1, unchecked: 0, cemented: 1 };
+      return { balances: {} };
     });
     const ws = spyOn(TestBed.inject(WebsocketService), 'forceReconnect').and.stub();
 
@@ -52,11 +52,11 @@ describe('AppComponent', () => {
     const app = TestBed.inject(AppComponent);
     app.settings.settings.serverAPI = 'https://example.test/proxy';
     let calls = 0;
-    const rpc = spyOn(TestBed.inject(ApiService), 'blockCount').and.callFake(async () => {
+    const rpc = spyOn(TestBed.inject(ApiService), 'accountsBalances').and.callFake(async () => {
       calls++;
       if (calls === 1) throw new Error('No network');
       app.nodeService.setOnline();
-      return { count: 1, unchecked: 0, cemented: 1 };
+      return { balances: {} };
     });
 
     app.onNetworkOffline();
@@ -69,10 +69,10 @@ describe('AppComponent', () => {
     expect(app.nodeService.node.status).toBe(true);
   }));
 
-  it('does not probe RPC in the explicit offline mode', fakeAsync(() => {
+  it('does not probe wallet RPC in the explicit offline mode', fakeAsync(() => {
     const app = TestBed.inject(AppComponent);
     app.settings.settings.serverAPI = null;
-    const rpc = spyOn(TestBed.inject(ApiService), 'blockCount').and.stub();
+    const rpc = spyOn(TestBed.inject(ApiService), 'accountsBalances').and.stub();
     app.onNetworkOnline();
     tick(0);
     expect(rpc).not.toHaveBeenCalled();
