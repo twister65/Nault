@@ -14,7 +14,7 @@ describe('localizeNotificationMessage', () => {
     'ui-notifications.ledger-confirmation-waiting': 'En attente de confirmation sur la Ledger…',
     'ui-notifications.ledger-wallet-mismatch': 'La Ledger connectée ne correspond pas au portefeuille configuré. Pour utiliser cette clé, sélectionnez « Configurer un nouveau portefeuille » → « Utiliser Ledger ».',
     'ui-notifications.ledger-nano-app-not-open': 'L’application Nano n’est pas ouverte sur votre Ledger. Ouvrez-la, puis cliquez sur « Reconnecter ».',
-    'ui-notifications.ledger-locked-reconnect': 'Ledger verrouillée. Déverrouillez-la, ouvrez l’application Nano, puis cliquez sur « Reconnecter ».','
+    'ui-notifications.ledger-locked-reconnect': 'Ledger verrouillée. Déverrouillez-la, ouvrez l’application Nano, puis cliquez sur « Reconnecter ».',
     'ui-notifications.ledger-hid-read-timeout': 'délai de lecture HID de la Ledger dépassé',
     'ui-notifications.ledger-signing-error': 'Erreur lors de la signature du bloc : {{error}}',
     'ui-notifications.ledger-user-rejected': 'Transaction refusée sur la Ledger (0x6985).',
