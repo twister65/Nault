@@ -105,6 +105,29 @@ export class LedgerService {
   // isDesktop = true;
   isDesktop = environment.desktop;
   readonly isAndroidWeb = !this.isDesktop && typeof navigator !== 'undefined' && isAndroidBrowser(navigator.userAgent);
+  // WalletService supplies the expected account without injecting it here (avoids a service cycle).
+  configuredWalletAccount: (() => { index: number; id: string } | null) | null = null;
+  // The explicit setup screen may select a different physical device.
+  configuringWallet = false;
+
+  async verifyConnectedWallet(): Promise<void> {
+    if (this.configuringWallet) return;
+    const expected = this.configuredWalletAccount?.();
+    if (!expected) return;
+    const account = await this.getLedgerAccount(expected.index);
+    if (account.address.replace(/^xrb_/, 'nano_') !== expected.id) {
+      throw new Error('Ledger does not match the configured wallet.');
+    }
+  }
+
+  private reportWalletMismatch(): void {
+    const message = 'Ledger does not match the configured wallet.';
+    this.resetLedger();
+    this.ledger.status = LedgerStatus.NOT_CONNECTED;
+    this.ledgerStatus$.next({ status: this.ledger.status, statusText: message });
+    this.notifications.sendWarning(message, { identifier: 'ledger-wallet-mismatch', length: 10000 });
+  }
+
   queryingDesktopLedger = false;
   private bluetoothConnecting = false;
   private bluetoothGeneration = 0;
@@ -149,6 +172,7 @@ export class LedgerService {
   }
 
   private async requireReadyForSigning(): Promise<void> {
+    if (this.configuringWallet) throw new LedgerNotReadyError();
     if (this.ledger.status !== LedgerStatus.READY) {
       await this.loadLedger(true);
     }
@@ -511,6 +535,7 @@ export class LedgerService {
       // Attempt to load account 0 - which confirms the app is unlocked and ready
       try {
         const accountDetails = await this.getLedgerAccount(0);
+        await this.verifyConnectedWallet();
         this.ledger.status = LedgerStatus.READY;
         this.ledgerStatus$.next({ status: this.ledger.status, statusText: `Nano Ledger application connected` });
 
@@ -519,6 +544,10 @@ export class LedgerService {
           this.pollLedgerStatus();
         }
       } catch (err) {
+        if ((err as Error)?.message === 'Ledger does not match the configured wallet.') {
+          this.reportWalletMismatch();
+          return resolve(false);
+        }
         console.log(`Error on account details: `, err);
         if (ledgerErrorFields(err).statusCode === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
           this.ledger.status = LedgerStatus.LOCKED;
@@ -609,6 +638,7 @@ export class LedgerService {
       await this.ledger.nano.getAppConfiguration();
       console.info('[Ledger BLE] reading account address');
       await this.ledger.nano.getAddress(this.ledgerPath(0), false);
+      await this.verifyConnectedWallet();
       console.info('[Ledger BLE] account address read successfully');
     };
     try {
@@ -632,6 +662,10 @@ export class LedgerService {
       console.error('[Ledger BLE] reconnect failed', error);
       const failure = ledgerErrorFields(error);
       if (generation !== this.bluetoothGeneration) return false;
+      if ((error as Error)?.message === 'Ledger does not match the configured wallet.') {
+        this.reportWalletMismatch();
+        return false;
+      }
       this.resetLedger();
       const readinessIssue = getLedgerReadinessIssue(error);
       this.ledger.status = readinessIssue === 'locked' ? LedgerStatus.LOCKED : LedgerStatus.NOT_CONNECTED;
@@ -753,6 +787,8 @@ export class LedgerService {
     let statusText = '';
     try {
       const accountDetails = await this.getLedgerAccount(0);
+      if (this.configuringWallet) return;
+      await this.verifyConnectedWallet();
       if (generation !== this.bluetoothGeneration) return;
       this.ledger.status = LedgerStatus.READY;
     } catch (err) {
@@ -763,6 +799,10 @@ export class LedgerService {
       // the device disconnected: resetting here interrupts the pending signature.
       if (failure.name === 'TransportRaceCondition' || failure.id === 'TransportRaceCondition' ||
           failure.id === 'TransportLocked') return;
+      if ((err as Error)?.message === 'Ledger does not match the configured wallet.') {
+        this.reportWalletMismatch();
+        return;
+      }
       console.log('Check ledger status failed ', JSON.stringify(err));
       const readinessIssue = getLedgerReadinessIssue(err);
       if (failure.statusCode === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED || readinessIssue === 'locked') {
