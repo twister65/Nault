@@ -128,6 +128,10 @@ export class LedgerService {
     this.notifications.sendWarning(message, { identifier: 'ledger-wallet-mismatch', length: 10000 });
   }
 
+  // Browser USB/HID selection can be dismissed by the user without a
+  // transport error. Setup must not show a misleading connection failure.
+  lastUsbSelectionCancelled = false;
+
   queryingDesktopLedger = false;
   private bluetoothConnecting = false;
   private bluetoothGeneration = 0;
@@ -440,6 +444,7 @@ export class LedgerService {
    * @returns {Promise<any>}
    */
   async loadLedger(hideNotifications = false, forceBluetoothReconnect = false) {
+    this.lastUsbSelectionCancelled = false;
     if (this.isAndroidWeb && this.transportMode !== 'Bluetooth') {
       this.ledger.status = LedgerStatus.NOT_CONNECTED;
       this.ledgerStatus$.next({
@@ -495,7 +500,9 @@ export class LedgerService {
           await this.loadTransport();
         } catch (err) {
           const detail = ledgerErrorFields(err);
-          if (detail.name !== 'TransportOpenUserCancelled') {
+          // Ledger WebUSB/WebHID wraps a dismissed browser picker in this error.
+          this.lastUsbSelectionCancelled = detail.name === 'TransportOpenUserCancelled';
+          if (!this.lastUsbSelectionCancelled) {
             console.log(`Error loading ${this.transportMode} transport `, err);
             this.ledger.status = LedgerStatus.NOT_CONNECTED;
             this.ledgerStatus$.next({ status: this.ledger.status, statusText: `Unable to load Ledger transport: ${detail.message || err}` });
