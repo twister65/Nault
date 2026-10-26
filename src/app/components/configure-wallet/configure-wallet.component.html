@@ -380,8 +380,8 @@
                         </div>
                         <p>
                           <b>{{ 'ui-wallet-setup.ledger-not-connected' | transloco }}</b><br>
-                          @if (ledgerService.bluetoothErrorMessage) {
-                            {{ ledgerService.bluetoothErrorMessage }}
+                          @if (ledgerService.transportMode === 'Bluetooth' && ledgerService.bluetoothErrorMessage) {
+                            {{ bluetoothConnectionHint }}
                           } @else {
                             {{ 'ui-wallet-setup.ledger-app-guide' | transloco }}
                           }
