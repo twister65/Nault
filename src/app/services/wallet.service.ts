@@ -631,6 +631,12 @@ export class WalletService {
       }
     }
 
+    // A hardware swap during the 20-index scan must never create a mixed wallet.
+    const deviceCheck = await this.ledgerService.getLedgerAccount(0);
+    if (deviceCheck.address.replace('xrb_', 'nano_') !== accountIds.get(0)) {
+      throw new Error('Ledger changed during account discovery. Please retry.');
+    }
+
     const indices = usedIndices.length ? usedIndices : [0];
     const candidates: WalletAccount[] = [];
     for (const index of indices) {
