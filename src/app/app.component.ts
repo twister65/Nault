@@ -384,8 +384,9 @@ export class AppComponent implements OnInit {
     try {
       // Prefer normal wallet reads: not every public RPC allows node statistics.
       if (this.wallet.accounts.length) await this.walletService.reloadBalances();
-      // An empty wallet (or a queued balance refresh) still needs a verified RPC response.
-      if (this.nodeService.node.status !== true) await this.api.blockCount();
+      // Check connectivity with the normal wallet RPC whitelist, not block_count,
+      // which privacy-preserving public nodes may intentionally deny.
+      if (this.nodeService.node.status !== true) await this.api.accountsBalances([]);
 
       if (!navigator.onLine || this.settings.settings.serverAPI !== endpoint) return;
 
