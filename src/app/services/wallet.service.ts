@@ -128,6 +128,7 @@ export class WalletService {
   trackedHashes: string[] = [];
   // Coalesce confirmations arriving while a previous balance RPC is still running.
   private balanceRefreshQueued = false;
+  private balanceRefreshPromise: Promise<void> | null = null;
 
   constructor(
     private util: UtilService,
@@ -762,32 +763,37 @@ export class WalletService {
     this.wallet.hasPending = false;
   }
 
-  async reloadBalances() {
-    // A WebSocket confirmation must not be lost during another balance refresh.
-    // Queue one additional RPC refresh rather than running concurrent requests.
-    if (this.wallet.updatingBalance) {
+  reloadBalances(): Promise<void> {
+    // All callers must wait for a real RPC refresh, even if one is in flight.
+    // Queue one follow-up refresh for WebSocket events or network recovery.
+    if (this.balanceRefreshPromise) {
       this.balanceRefreshQueued = true;
-      return;
+      return this.balanceRefreshPromise;
     }
 
     this.wallet.updatingBalance = true;
-    try {
-      await this.refreshBalances();
-    } catch (error) {
-      // A failed RPC must not leave the balance spinner running forever.
-      this.wallet.updatingBalance = false;
-      throw error;
-    } finally {
-      if (this.balanceRefreshQueued) {
-        this.balanceRefreshQueued = false;
-        // Allow a confirmed receive block to become visible to the RPC backend.
-        setTimeout(() => {
-          this.reloadBalances().catch(() => {
-            this.notifications.sendWarning('Unable to refresh balances. Check your connection.');
-          });
-        }, 350);
+    // Defer execution so the shared promise is registered before any callbacks run.
+    this.balanceRefreshPromise = Promise.resolve().then(async () => {
+      try {
+        do {
+          this.balanceRefreshQueued = false;
+          try {
+            await this.refreshBalances();
+          } catch (error) {
+            // The network may have returned during a failed in-flight request.
+            // Retry only if another caller requested a fresh snapshot.
+            if (!this.balanceRefreshQueued) throw error;
+          }
+          if (this.balanceRefreshQueued) {
+            await new Promise<void>(resolve => setTimeout(resolve, 350));
+          }
+        } while (this.balanceRefreshQueued);
+      } finally {
+        this.wallet.updatingBalance = false;
+        this.balanceRefreshPromise = null;
       }
-    }
+    });
+    return this.balanceRefreshPromise;
   }
 
   private async refreshBalances() {
@@ -808,8 +814,7 @@ export class WalletService {
 
     if (!accounts) {
       this.resetBalances();
-      this.wallet.updatingBalance = false;
-      this.wallet.balanceInitialized = true;
+        this.wallet.balanceInitialized = true;
       return;
     }
 
@@ -943,7 +948,6 @@ export class WalletService {
     // eslint-disable-next-line
     this.wallet.hasPending = walletPendingAboveThresholdConfirmed.gt(0);
 
-    this.wallet.updatingBalance = false;
     this.wallet.balanceInitialized = true;
 
     if (this.wallet.pendingBlocks.length) {
