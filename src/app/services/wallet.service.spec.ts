@@ -39,7 +39,7 @@ describe('WalletService.reloadBalances errors', () => {
 });
 
 describe('WalletService.reloadBalances when confirmations overlap', () => {
-  it('retries once after a refresh was skipped while an RPC call was running', async () => {
+  it('waits for the in-flight refresh and coalesces simultaneous confirmations into one follow-up', async () => {
     const service = Object.create(WalletService.prototype) as WalletService;
     service.wallet = { updatingBalance: false } as any;
 
@@ -49,30 +49,23 @@ describe('WalletService.reloadBalances when confirmations overlap', () => {
     spyOn<any>(service, 'refreshBalances').and.callFake(async () => {
       callCount++;
       if (callCount === 1) await firstRpc;
-      // In production refreshBalances resets the spinner when it completes.
-      service.wallet.updatingBalance = false;
     });
 
-    jasmine.clock().install();
-    try {
-      const initialRefresh = service.reloadBalances();
-      await service.reloadBalances();
-      await service.reloadBalances(); // Several WS confirmations are coalesced.
-      expect(callCount).toBe(1);
+    const initialRefresh = service.reloadBalances();
+    const overlappingRefresh = service.reloadBalances();
+    const anotherConfirmation = service.reloadBalances();
+    expect(overlappingRefresh).toBe(initialRefresh);
+    expect(anotherConfirmation).toBe(initialRefresh);
+    await Promise.resolve(); // Let the first RPC start.
+    expect(callCount).toBe(1);
+    expect(service.wallet.updatingBalance).toBe(true);
 
-      finishFirst();
-      await initialRefresh;
-      expect(callCount).toBe(1);
-
-      jasmine.clock().tick(351);
-      await Promise.resolve();
-      expect(callCount).toBe(2);
-    } finally {
-      jasmine.clock().uninstall();
-    }
+    finishFirst();
+    await Promise.all([initialRefresh, overlappingRefresh, anotherConfirmation]);
+    expect(callCount).toBe(2);
+    expect(service.wallet.updatingBalance).toBe(false);
   });
 });
-
 
 describe('WalletService reconciling missed confirmations after reconnect', () => {
   it('refreshes balances and pending blocks via RPC after the WebSocket connects', async () => {
