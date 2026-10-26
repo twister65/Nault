@@ -1,3 +1,14 @@
+### Validation matérielle — envoi confirmé et réception Nano S Plus USB (26 octobre 2026)
+
+**Résultat utilisateur : tests 1 et 2 du dernier programme de validation = OK**, sur le portefeuille **Nano S Plus en USB** de la PWA `nault-android-test.vercel.app`, version applicative déployée `3701116` :
+
+- **Envoi confirmé — OK :** l'utilisateur valide le scénario proposé comprenant le contrôle du montant et du destinataire sur l'écran de la Ledger, la confirmation matérielle et la diffusion de la transaction.
+- **Réception — OK :** l'utilisateur valide le scénario proposé comprenant la signature du bloc de réception par la Ledger et l'actualisation du solde.
+
+Le test de refus de signature et la reprise **sans déconnexion USB** avaient déjà été validés séparément. Il s'agit ici d'un retour de test utilisateur sur le parcours global, sans logs ni hash de transaction communiqués ; ne pas lui attribuer de vérifications supplémentaires non mentionnées.
+
+**Restent distincts et à valider :** signatures de refus et d'acceptation avec Nano X en Bluetooth, signature impossible lorsqu'une autre clé est branchée, tests complets des packages Electron ; anomalie de traduction UIkit « CANCEL » non résolue. La PR #27 demeure Draft, sans autorisation de fusion ni nouvelle demande de déploiement.
+
 ### Validation matérielle — refus de signature et nouvelle tentative en USB (26 octobre 2026)
 
 **Retour utilisateur : tests n° 1 et n° 4 de la grille de tests de signature du chat RÉUSSIS.** Dans le parcours de test **Nano S Plus connectée en USB**, l'utilisateur a testé le **refus d'une signature d'envoi sur l'appareil**, puis **une nouvelle tentative de signature sans reconnecter la Ledger**, et confirme explicitement : **« Pas de déconnexion de la clé »**. Le point de régression historique `0x6985` provoquant une déconnexion après refus ne s'est donc **pas reproduit durant ces essais**. Cette validation concerne le refus et la continuité de session USB ; elle ne démontre pas à elle seule la diffusion d'une transaction confirmée, la vérification du montant/destinataire sur l'écran de la Ledger, ni la réception signée.
