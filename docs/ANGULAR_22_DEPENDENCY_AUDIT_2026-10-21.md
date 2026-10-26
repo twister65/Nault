@@ -1,3 +1,13 @@
+### Validation matérielle — Nano X Bluetooth : import, refus de signature et envoi confirmé (26 octobre 2026)
+
+**Résultat utilisateur : OK pour le parcours Nano X via Bluetooth sur la PWA de test** (`nault-android-test.vercel.app`, dernière version applicative confirmée comme déployée : `3701116`).
+
+- **Configuration et importation du portefeuille Nano X en Bluetooth : OK dès la première tentative**, message « Ledger Nano X chargée avec succès ».
+- **Refus d'une transaction sur la Nano X : OK, sans déconnexion de la session Bluetooth.**
+- **Nouvelle transaction confirmée sur la Nano X : OK**, avec réception effective sur l'autre compte contrôlé par l'utilisateur. Le test suit directement le refus, sans déconnexion signalée.
+
+**Portée de la validation :** configuration initiale Bluetooth, refus de signature, maintien de la connexion et envoi signé effectivement reçu. Ce retour est une validation matérielle utilisateur, sans hash de transaction ni logs fournis ; ne pas extrapoler à un test de reconnexion Bluetooth après extinction, à un bloc de réception signé sur la Nano X, ni à une signature avec appareil différent. La Nano S Plus USB a été validée séparément pour envoi confirmé et réception. L'anomalie de traduction « CANCEL » reste ouverte ; tests d'identité à l'étape de signature et packaging Electron restent distincts. **PR #27 toujours Draft, pas de fusion ni de nouveau déploiement.**
+
 ### Validation matérielle — envoi confirmé et réception Nano S Plus USB (26 octobre 2026)
 
 **Résultat utilisateur : tests 1 et 2 du dernier programme de validation = OK**, sur le portefeuille **Nano S Plus en USB** de la PWA `nault-android-test.vercel.app`, version applicative déployée `3701116` :
@@ -7,7 +17,7 @@
 
 Le test de refus de signature et la reprise **sans déconnexion USB** avaient déjà été validés séparément. Il s'agit ici d'un retour de test utilisateur sur le parcours global, sans logs ni hash de transaction communiqués ; ne pas lui attribuer de vérifications supplémentaires non mentionnées.
 
-**Restent distincts et à valider :** signatures de refus et d'acceptation avec Nano X en Bluetooth, signature impossible lorsqu'une autre clé est branchée, tests complets des packages Electron ; anomalie de traduction UIkit « CANCEL » non résolue. La PR #27 demeure Draft, sans autorisation de fusion ni nouvelle demande de déploiement.
+**Les signatures de refus et d'acceptation sur Nano X Bluetooth ont depuis été validées (voir la section ci-dessus). Restent distincts et à valider :** signature impossible lorsqu'une autre clé est branchée, tests complets des packages Electron ; anomalie de traduction UIkit « CANCEL » non résolue. La PR #27 demeure Draft, sans autorisation de fusion ni nouvelle demande de déploiement.
 
 ### Validation matérielle — refus de signature et nouvelle tentative en USB (26 octobre 2026)
 
