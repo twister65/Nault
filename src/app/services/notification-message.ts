@@ -7,6 +7,8 @@ export function localizeNotificationMessage(message: string, translate: Notifica
   switch (message) {
     case 'Unable to connect to the nano node, your balances may be inaccurate!':
       return translate('ui-notifications.node-offline');
+    case 'Unable to refresh balances. Check your connection.':
+      return translate('ui-notifications.refresh-balance-failed');
     case 'Incoming XNO is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.':
       return translate('ui-notifications.ledger-pending-reconnect');
     case 'Bluetooth unavailable. Check Bluetooth on your computer and Ledger, or choose Reconnect via USB.':
