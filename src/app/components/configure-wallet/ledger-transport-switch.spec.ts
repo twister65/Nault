@@ -1,214 +1,142 @@
 import { ConfigureWalletComponent } from './configure-wallet.component';
 import { LedgerStatus } from '../../services/ledger.service';
 
-describe('Configured Ledger wallet transport switching', () => {
-  it('keeps the existing wallet when USB is replaced by Bluetooth', async () => {
-    const modes: boolean[] = [];
-    const imports: boolean[] = [];
-    const component = {
-      walletService: { isLedgerWallet: () => true },
-      ledgerService: { enableBluetoothMode: (enabled: boolean) => modes.push(enabled) },
-      importLedgerWallet: async (refreshOnly: boolean) => { imports.push(refreshOnly); },
-      verifyConfiguredLedgerDevice: jasmine.createSpy('verifyConfiguredLedgerDevice')
-    };
-    await ConfigureWalletComponent.prototype.connectLedgerByBluetooth.call(component as any);
-    expect(modes).toEqual([true]);
-    expect(imports).toEqual([true]);
-  });
-
-  it('keeps the existing wallet when Bluetooth is replaced by USB', async () => {
-    const modes: boolean[] = [];
-    const imports: boolean[] = [];
-    const component = {
-      walletService: { isLedgerWallet: () => true },
-      ledgerService: { isAndroidWeb: false, enableBluetoothMode: (enabled: boolean) => modes.push(enabled) },
-      importLedgerWallet: async (refreshOnly: boolean) => { imports.push(refreshOnly); },
-      verifyConfiguredLedgerDevice: jasmine.createSpy('verifyConfiguredLedgerDevice')
-    };
-    await ConfigureWalletComponent.prototype.connectLedgerByUsb.call(component as any);
-    expect(modes).toEqual([false]);
-    expect(imports).toEqual([true]);
-  });
-
-  it('still permits initial Ledger wallet creation on Bluetooth', async () => {
-    const imports: boolean[] = [];
-    const component = {
-      walletService: { isLedgerWallet: () => false },
-      ledgerService: { enableBluetoothMode: (_enabled: boolean) => {} },
-      importLedgerWallet: async (refreshOnly: boolean) => { imports.push(refreshOnly); },
-      verifyConfiguredLedgerDevice: jasmine.createSpy('verifyConfiguredLedgerDevice')
-    };
-    await ConfigureWalletComponent.prototype.connectLedgerByBluetooth.call(component as any);
-    expect(imports).toEqual([false]);
-  });
-});
-
-
-
-describe('Configured Ledger identity detection', () => {
-  function setup(stored: string, attached: string, storedIndex = 0) {
-    const replace = jasmine.createSpy('replaceConfiguredLedgerWallet').and.resolveTo(true);
-    const reset = jasmine.createSpy('resetLedger');
-    const read = jasmine.createSpy('getLedgerAccount').and.resolveTo({address: attached});
-    const warn = jasmine.createSpy('sendWarning');
+describe('Use Ledger explicitly configures the attached device', () => {
+  it('imports the attached Ledger when switching to USB even with a saved Ledger wallet', async () => {
+    const enableBluetoothMode = jasmine.createSpy('enableBluetoothMode');
+    const importLedgerWallet = jasmine.createSpy('importLedgerWallet').and.resolveTo();
     const component: any = {
-      walletService: {isLedgerWallet: () => true},
-      wallet: {accounts: [{id: stored, index: storedIndex}]},
-      ledger: {status: LedgerStatus.READY},
-      ledgerService: {getLedgerAccount: read, resetLedger: reset},
-      replaceConfiguredLedgerWallet: replace,
-      notifications: {sendWarning: warn},
-      translocoService: {translate: (key: string) => key}
+      ledgerService: { isAndroidWeb: false, enableBluetoothMode },
+      importLedgerWallet
     };
-    return {component, read, replace, reset, warn};
-  }
-
-  it('keeps stored accounts when the attached device derives the same address at the same index', async () => {
-    const c = setup('nano_same', 'xrb_same', 5);
-    await ConfigureWalletComponent.prototype.verifyConfiguredLedgerDevice.call(c.component);
-    expect(c.read).toHaveBeenCalledWith(5);
-    expect(c.replace).not.toHaveBeenCalled();
-    expect(c.reset).not.toHaveBeenCalled();
+    await ConfigureWalletComponent.prototype.connectLedgerByUsb.call(component);
+    expect(enableBluetoothMode).toHaveBeenCalledWith(false);
+    expect(importLedgerWallet).toHaveBeenCalledWith();
   });
 
-  it('offers wallet replacement on an address mismatch between Nano X and Nano S Plus', async () => {
-    const c = setup('nano_old_x', 'nano_new_s_plus');
-    await ConfigureWalletComponent.prototype.verifyConfiguredLedgerDevice.call(c.component);
-    expect(c.replace).toHaveBeenCalledTimes(1);
-    expect(c.reset).not.toHaveBeenCalled();
-    expect(c.component.wallet.accounts[0].id).toBe('nano_old_x');
+  it('imports the attached Ledger when switching to Bluetooth', async () => {
+    const enableBluetoothMode = jasmine.createSpy('enableBluetoothMode');
+    const importLedgerWallet = jasmine.createSpy('importLedgerWallet').and.resolveTo();
+    const component: any = { ledgerService: { enableBluetoothMode }, importLedgerWallet };
+    await ConfigureWalletComponent.prototype.connectLedgerByBluetooth.call(component);
+    expect(enableBluetoothMode).toHaveBeenCalledWith(true);
+    expect(importLedgerWallet).toHaveBeenCalledWith();
   });
 
-  it('disconnects a mismatched device if the user cancels replacement', async () => {
-    const c = setup('nano_old_x', 'nano_new_s_plus');
-    c.replace.and.resolveTo(false);
-    await ConfigureWalletComponent.prototype.verifyConfiguredLedgerDevice.call(c.component);
-    expect(c.reset).toHaveBeenCalled();
-    expect(c.component.ledger.status).toBe(LedgerStatus.NOT_CONNECTED);
-    expect(c.component.wallet.accounts[0].id).toBe('nano_old_x');
+  it('never opens a USB connection on Android', async () => {
+    const enableBluetoothMode = jasmine.createSpy('enableBluetoothMode');
+    const importLedgerWallet = jasmine.createSpy('importLedgerWallet');
+    const component: any = {
+      ledgerService: { isAndroidWeb: true, enableBluetoothMode },
+      importLedgerWallet
+    };
+    await ConfigureWalletComponent.prototype.connectLedgerByUsb.call(component);
+    expect(enableBluetoothMode).not.toHaveBeenCalled();
+    expect(importLedgerWallet).not.toHaveBeenCalled();
   });
 
-  it('preserves the old wallet if the Ledger device address cannot be verified', async () => {
-    const c = setup('nano_old_x', 'nano_new_s_plus');
-    c.read.and.rejectWith(new Error('App unavailable'));
-    await ConfigureWalletComponent.prototype.verifyConfiguredLedgerDevice.call(c.component);
-    expect(c.reset).toHaveBeenCalled();
-    expect(c.replace).not.toHaveBeenCalled();
-    expect(c.warn).toHaveBeenCalledWith('ui-notifications.ledger-identity-unverified');
-  });
-
-  it('skips hardware verification if the Ledger is not ready', async () => {
-    const c = setup('nano_old_x', 'nano_new_s_plus');
-    c.component.ledger.status = LedgerStatus.LOCKED;
-    await ConfigureWalletComponent.prototype.verifyConfiguredLedgerDevice.call(c.component);
-    expect(c.read).not.toHaveBeenCalled();
-    expect(c.replace).not.toHaveBeenCalled();
-  });
-});
-
-describe('Explicit Ledger hardware wallet replacement', () => {
-  function setup(confirm: () => Promise<unknown>, prepare: () => Promise<any[]>) {
-    const storageKey = 'nault-ledger-replacement-test';
-    localStorage.setItem(storageKey, JSON.stringify({ type: 'ledger', accounts: [{ id: 'nano_old' }] }));
-    const walletService = {
-      storeKey: storageKey,
-      isLedgerWallet: () => true,
-      prepareLedgerReplacementAccounts: jasmine.createSpy('prepareLedgerReplacementAccounts').and.callFake(prepare),
+  function setup(options: {ready?: boolean; walletType?: 'ledger' | 'seed'; scan?: Promise<any[]>} = {}) {
+    const walletType = options.walletType || 'ledger';
+    const stored = 'nault-test-use-ledger';
+    localStorage.setItem(stored, JSON.stringify({ type: walletType, accounts: [{id:'nano_x',index:0}] }));
+    const accounts = [{ id: 'nano_s_plus', index: 0 }];
+    const ledger = { status: options.ready === false ? LedgerStatus.NOT_CONNECTED : LedgerStatus.READY };
+    const notifications = {
+      sendInfo: jasmine.createSpy('sendInfo'),
+      removeNotification: jasmine.createSpy('removeNotification'),
+      sendWarning: jasmine.createSpy('sendWarning'),
+      sendSuccess: jasmine.createSpy('sendSuccess')
+    };
+    const walletService: any = {
+      storeKey: stored,
+      isLedgerWallet: () => walletType === 'ledger',
+      prepareLedgerReplacementAccounts: jasmine.createSpy('prepareLedgerReplacementAccounts')
+        .and.callFake(() => options.scan || Promise.resolve(accounts)),
       activatePreparedLedgerWallet: jasmine.createSpy('activatePreparedLedgerWallet'),
       loadStoredWallet: jasmine.createSpy('loadStoredWallet').and.resolveTo()
     };
-    const notification = {
-      sendInfo: jasmine.createSpy('sendInfo'),
-      sendWarning: jasmine.createSpy('sendWarning'),
-      sendSuccess: jasmine.createSpy('sendSuccess'),
-      removeNotification: jasmine.createSpy('removeNotification')
+    const ledgerService: any = {
+      configuringWallet: false,
+      loadLedger: jasmine.createSpy('loadLedger').and.resolveTo(options.ready !== false),
+      resetLedger: jasmine.createSpy('resetLedger')
     };
     const component: any = {
-      walletService,
-      ledger: { status: 'ready' },
-      replacingLedgerWallet: false,
+      isConfigured: () => true,
+      walletService, ledgerService, ledger, notifications,
       translocoService: { translate: (key: string) => key },
-      notifications: notification,
-      route: { navigate: jasmine.createSpy('navigate').and.resolveTo(true) }
+      route: { navigate: jasmine.createSpy('navigate').and.resolveTo(true) },
+      confirmWalletOverwrite: jasmine.createSpy('confirmWalletOverwrite').and.resolveTo(true)
     };
-    const previousUiKit = (window as any).UIkit;
-    (window as any).UIkit = { modal: { confirm } };
-    const restore = () => {
-      (window as any).UIkit = previousUiKit;
-      localStorage.removeItem(storageKey);
+    return {
+      component, walletService, ledgerService, notifications, accounts,
+      cleanup: () => localStorage.removeItem(stored)
     };
-    return { component, walletService, notification, restore, storageKey };
   }
 
-  it('leaves the old wallet untouched when device readiness is not confirmed', async () => {
-    const c = setup(async () => true, async () => [{ id: 'nano_new' }]);
-    c.component.ledger.status = 'not-connected';
+  it('replaces Nano X accounts with Nano S Plus accounts after discovery, without a replacement dialog', async () => {
+    const c = setup();
     try {
-      await ConfigureWalletComponent.prototype.replaceConfiguredLedgerWallet.call(c.component);
-      expect(c.walletService.prepareLedgerReplacementAccounts).not.toHaveBeenCalled();
-      expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
-    } finally {
-      c.restore();
-    }
-  });
-
-  it('keeps the old wallet when replacement confirmation is cancelled', async () => {
-    const c = setup(async () => { throw new Error('cancelled'); }, async () => [{ id: 'nano_new' }]);
-    try {
-      await ConfigureWalletComponent.prototype.replaceConfiguredLedgerWallet.call(c.component);
-      expect(c.walletService.prepareLedgerReplacementAccounts).not.toHaveBeenCalled();
-      expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
-      expect(JSON.parse(localStorage.getItem(c.storageKey)!).accounts[0].id).toBe('nano_old');
-    } finally {
-      c.restore();
-    }
-  });
-
-  it('activates the new Ledger accounts only after the full scan succeeds', async () => {
-    let finishScan!: (accounts: any[]) => void;
-    const scan = new Promise<any[]>(resolve => { finishScan = resolve; });
-    const c = setup(async () => true, () => scan);
-    try {
-      const replacement = ConfigureWalletComponent.prototype.replaceConfiguredLedgerWallet.call(c.component);
-      await Promise.resolve();
-      await Promise.resolve();
-      expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
-      finishScan([{ id: 'nano_new', index: 0 }]);
-      await replacement;
-      expect(c.walletService.activatePreparedLedgerWallet)
-        .toHaveBeenCalledWith([{ id: 'nano_new', index: 0 }]);
+      await ConfigureWalletComponent.prototype.importLedgerWallet.call(c.component);
+      expect(c.walletService.prepareLedgerReplacementAccounts).toHaveBeenCalled();
+      expect(c.walletService.activatePreparedLedgerWallet).toHaveBeenCalledWith(c.accounts);
+      expect(c.component.confirmWalletOverwrite).not.toHaveBeenCalled();
       expect(c.component.route.navigate).toHaveBeenCalledWith(['accounts']);
-      expect(c.component.replacingLedgerWallet).toBe(false);
-    } finally {
-      c.restore();
-    }
+      expect(c.ledgerService.configuringWallet).toBe(false);
+    } finally { c.cleanup(); }
   });
 
-  it('preserves the saved wallet when RPC discovery fails', async () => {
-    const c = setup(async () => true, async () => { throw new Error('RPC offline'); });
+  it('keeps the previous wallet while the Ledger account scan is in progress', async () => {
+    let finishScan!: (v: any[]) => void;
+    const pending = new Promise<any[]>(resolve => { finishScan = resolve; });
+    const c = setup({scan: pending});
     try {
-      await ConfigureWalletComponent.prototype.replaceConfiguredLedgerWallet.call(c.component);
+      const loading = ConfigureWalletComponent.prototype.importLedgerWallet.call(c.component);
+      await Promise.resolve();
+      await Promise.resolve();
       expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
-      expect(JSON.parse(localStorage.getItem(c.storageKey)!).accounts[0].id).toBe('nano_old');
-      expect(c.notification.sendWarning).toHaveBeenCalled();
-    } finally {
-      c.restore();
-    }
+      finishScan(c.accounts);
+      await loading;
+      expect(c.walletService.activatePreparedLedgerWallet).toHaveBeenCalledWith(c.accounts);
+    } finally { c.cleanup(); }
   });
 
-  it('restores the old persisted wallet when committing the new one fails', async () => {
-    const c = setup(async () => true, async () => [{ id: 'nano_new', index: 0 }]);
-    c.walletService.activatePreparedLedgerWallet.and.callFake(() => {
-      localStorage.setItem(c.storageKey, 'unexpected new state');
-      throw new Error('storage error');
-    });
+  it('leaves the Nano X wallet intact when the Nano S Plus is not ready', async () => {
+    const c = setup({ready: false});
     try {
-      await ConfigureWalletComponent.prototype.replaceConfiguredLedgerWallet.call(c.component);
-      expect(c.walletService.loadStoredWallet).toHaveBeenCalled();
-      expect(JSON.parse(localStorage.getItem(c.storageKey)!).accounts[0].id).toBe('nano_old');
-      expect(c.notification.sendWarning).toHaveBeenCalled();
-    } finally {
-      c.restore();
-    }
+      await ConfigureWalletComponent.prototype.importLedgerWallet.call(c.component);
+      expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
+      expect(c.ledgerService.resetLedger).toHaveBeenCalled();
+      expect(c.ledgerService.configuringWallet).toBe(false);
+    } finally { c.cleanup(); }
+  });
+
+  it('keeps the previous wallet if the RPC scan fails', async () => {
+    const c = setup({scan: Promise.reject(new Error('RPC offline'))});
+    try {
+      await ConfigureWalletComponent.prototype.importLedgerWallet.call(c.component);
+      expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
+      expect(c.notifications.sendWarning).toHaveBeenCalled();
+      expect(c.ledgerService.resetLedger).toHaveBeenCalled();
+    } finally { c.cleanup(); }
+  });
+
+  it('requires backup confirmation when replacing a software wallet', async () => {
+    const c = setup({walletType:'seed'});
+    c.component.confirmWalletOverwrite.and.resolveTo(false);
+    try {
+      await ConfigureWalletComponent.prototype.importLedgerWallet.call(c.component);
+      expect(c.component.confirmWalletOverwrite).toHaveBeenCalledTimes(1);
+      expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
+    } finally { c.cleanup(); }
+  });
+
+  it('refreshes Ledger status without replacing any wallet accounts', async () => {
+    const c = setup();
+    c.ledgerService.transportMode = 'USB';
+    try {
+      await ConfigureWalletComponent.prototype.refreshLedgerStatus.call(c.component);
+      expect(c.ledgerService.loadLedger).toHaveBeenCalledWith(true, false);
+      expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
+    } finally { c.cleanup(); }
   });
 });
