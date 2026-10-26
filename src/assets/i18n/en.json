@@ -591,7 +591,7 @@
     "import-secret-seed": "Import Secret Recovery Seed",
     "import-secret-mnemonic": "Import Secret Recovery Mnemonic",
     "import-bip39": "Import Secret Recovery BIP39 Mnemonic",
-    "existing-ledger-wallet": "The balance and accounts displayed in the sidebar still belong to your previously configured Ledger. Connecting another device via USB or Bluetooth does not replace them. To use a different Ledger, connect and unlock it, open the Nano app, then choose Replace Ledger wallet below.",
+    "existing-ledger-wallet": "The accounts and balance shown in the sidebar still belong to the previously configured Ledger. After you connect another Ledger via USB or Bluetooth, Nault checks its account address and asks for confirmation before replacing the saved wallet if the account differs. Simply changing connection type with the same Ledger keeps the current accounts.",
     "replace-ledger-wallet": "Replace Ledger wallet",
     "replace-ledger-confirm": "Replace the Ledger accounts saved in Nault with those of the currently connected Ledger? Your Ledger devices and funds will not be modified. Cancel to keep the existing accounts.",
     "ledger-hardware": "Use Ledger Hardware Wallet",
