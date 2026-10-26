@@ -151,7 +151,9 @@ describe('Use Ledger explicitly configures the attached device', () => {
       translocoService: { translate: (key: string) => ({
         'ui-wallet-setup.overwrite-ledger-before': 'A Ledger wallet is already configured in Nault. This will',
         'ui-wallet-setup.overwrite-ledger-strong': 'replace its saved accounts with those of the connected Ledger',
-        'ui-wallet-setup.overwrite-ledger-after': 'Your funds and Ledger devices will not be changed.'
+        'ui-wallet-setup.overwrite-ledger-after': 'Your funds and Ledger devices will not be changed.',
+        'ui-wallet-setup.confirm-overwrite': 'Confirm replacement',
+        'general.cancel': 'Cancel'
       } as Record<string, string>)[key] || key },
       notifications: { sendInfo: jasmine.createSpy('sendInfo') }
     };
@@ -161,7 +163,27 @@ describe('Use Ledger explicitly configures the attached device', () => {
       const message: string = modalConfirm.calls.mostRecent().args[0];
       expect(message).toContain('replace its saved accounts');
       expect(message).toContain('Your funds and Ledger devices will not be changed');
+      expect(modalConfirm.calls.mostRecent().args[1]).toEqual({
+        i18n: { ok: 'Confirm replacement', cancel: 'Cancel' }
+      });
     } finally { (window as any).UIkit = original; }
+  });
+
+  it('keeps the previous wallet without a failure notification when the USB chooser is cancelled', async () => {
+    const c = setup({ ready: false });
+    c.ledgerService.lastUsbSelectionCancelled = true;
+    const previous = localStorage.getItem(c.walletService.storeKey);
+    try {
+      await ConfigureWalletComponent.prototype.importLedgerWallet.call(c.component);
+      expect(c.walletService.prepareLedgerReplacementAccounts).not.toHaveBeenCalled();
+      expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
+      expect(c.component.confirmWalletOverwrite).not.toHaveBeenCalled();
+      expect(c.notifications.sendWarning).not.toHaveBeenCalled();
+      expect(localStorage.getItem(c.walletService.storeKey)).toBe(previous);
+      expect(c.ledgerService.ledgerStatus$.next).toHaveBeenCalledWith({
+        status: LedgerStatus.NOT_CONNECTED, statusText: ''
+      });
+    } finally { c.cleanup(); }
   });
 
   it('keeps the previous wallet while the Ledger account scan is in progress', async () => {
