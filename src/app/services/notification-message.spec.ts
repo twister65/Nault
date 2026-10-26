@@ -12,6 +12,8 @@ describe('localizeNotificationMessage', () => {
     'ui-notifications.tracked-representative': 'L’adresse suivie {{account}} a changé de représentant : {{representative}}.',
     'ui-notifications.bluetooth-unavailable': 'Bluetooth indisponible. Vérifiez le Bluetooth de votre ordinateur et de votre Ledger, ou reconnectez-vous en USB.',
     'ui-notifications.ledger-confirmation-waiting': 'En attente de confirmation sur la Ledger…',
+    'ui-notifications.ledger-nano-app-not-open': 'L’application Nano n’est pas ouverte sur votre Ledger. Ouvrez-la, puis cliquez sur « Reconnecter ».',
+    'ui-notifications.ledger-locked-reconnect': 'Ledger verrouillée. Déverrouillez-la, ouvrez l’application Nano, puis cliquez sur « Reconnecter ».','
     'ui-notifications.ledger-hid-read-timeout': 'délai de lecture HID de la Ledger dépassé',
     'ui-notifications.ledger-signing-error': 'Erreur lors de la signature du bloc : {{error}}',
     'ui-notifications.ledger-user-rejected': 'Transaction refusée sur la Ledger (0x6985).',
@@ -37,6 +39,15 @@ describe('localizeNotificationMessage', () => {
     expect(localizeNotificationMessage(
       'There was an issue retrieving latest nano price.  Ensure your AdBlocker is disabled on this page then reload to see accurate FIAT values.', translate
     )).toBe('Impossible de récupérer le dernier cours du Nano. Vérifiez votre connexion Internet ou les paramètres de votre bloqueur de publicités, puis actualisez la page pour afficher des montants en monnaie fiduciaire à jour.');
+  });
+
+  it('localizes Ledger Nano app and locked reconnect warnings', () => {
+    expect(localizeNotificationMessage(
+      'Nano app is not open on your Ledger. Open the Nano app, then click Reconnect.', translate
+    )).toBe('L’application Nano n’est pas ouverte sur votre Ledger. Ouvrez-la, puis cliquez sur « Reconnecter ».');
+    expect(localizeNotificationMessage(
+      'Ledger locked. Unlock your Ledger, open the Nano app, then click Reconnect.', translate
+    )).toBe('Ledger verrouillée. Déverrouillez-la, ouvrez l’application Nano, puis cliquez sur « Reconnecter ».');
   });
 
   it('localizes the Ledger incoming-XNO reconnection guidance', () => {
