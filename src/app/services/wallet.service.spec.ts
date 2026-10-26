@@ -178,7 +178,7 @@ describe('WalletService successful incoming-block coalescing', () => {
 
 
 describe('WalletService staged Ledger replacement', () => {
-  it('keeps existing accounts and storage untouched if the Nano RPC scan fails', async () => {
+  it('derives only Ledger account zero without RPC and does not reuse old wallet accounts', async () => {
     const service = Object.create(WalletService.prototype) as any;
     const previous = [{ id: 'nano_old', index: 0 }];
     service.wallet = { type: 'ledger', accounts: previous };
@@ -188,10 +188,13 @@ describe('WalletService staged Ledger replacement', () => {
     };
     service.api = { accountsFrontiers: jasmine.createSpy('accountsFrontiers')
       .and.returnValue(Promise.reject(new Error('RPC offline'))) };
+    spyOn(service, 'createLedgerAccount').and.callFake(async (index: number) =>
+      ({ id: 'nano_' + index, index }) as any);
     const reset = spyOn(service, 'resetWallet').and.stub();
 
-    await expectAsync(service.prepareLedgerReplacementAccounts()).toBeRejectedWithError('RPC offline');
+    const prepared = await service.prepareLedgerReplacementAccounts();
 
+    expect(prepared).toEqual([{ id: 'nano_0', index: 0 }] as any);
     expect(service.wallet.accounts).toBe(previous);
     expect(reset).not.toHaveBeenCalled();
   });
