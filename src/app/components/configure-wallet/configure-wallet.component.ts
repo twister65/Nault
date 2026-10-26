@@ -145,6 +145,12 @@ export class ConfigureWalletComponent implements OnInit {
   async connectLedgerByUsb() {
     if (this.ledgerService.isAndroidWeb) return; // Android web uses Bluetooth only.
     this.ledgerService.enableBluetoothMode(false);
+    // Explicit setup must not silently reuse a previously opened WebUSB/HID session.
+    // Let the browser select the physically attached Ledger for this new wallet.
+    if (!this.ledgerService.isDesktop) {
+      this.ledgerService.resetLedger();
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
+    }
     await this.importLedgerWallet();
   }
 
