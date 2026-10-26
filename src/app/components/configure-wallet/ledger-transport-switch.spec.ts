@@ -37,7 +37,7 @@ describe('Use Ledger explicitly configures the attached device', () => {
     expect(importLedgerWallet).not.toHaveBeenCalled();
   });
 
-  function setup(options: {ready?: boolean; walletType?: 'ledger' | 'seed'; scan?: Promise<any[]>} = {}) {
+  function setup(options: {ready?: boolean; walletType?: 'ledger' | 'seed'; scan?: Promise<any[]>; configured?: boolean} = {}) {
     const walletType = options.walletType || 'ledger';
     const stored = 'nault-test-use-ledger';
     localStorage.setItem(stored, JSON.stringify({ type: walletType, accounts: [{id:'nano_x',index:0}] }));
@@ -63,7 +63,7 @@ describe('Use Ledger explicitly configures the attached device', () => {
       resetLedger: jasmine.createSpy('resetLedger')
     };
     const component: any = {
-      isConfigured: () => true,
+      isConfigured: () => options.configured !== false,
       walletService, ledgerService, ledger, notifications,
       translocoService: { translate: (key: string) => key },
       route: { navigate: jasmine.createSpy('navigate').and.resolveTo(true) },
@@ -75,16 +75,64 @@ describe('Use Ledger explicitly configures the attached device', () => {
     };
   }
 
-  it('replaces Nano X accounts with Nano S Plus accounts after discovery, without a replacement dialog', async () => {
+  it('confirms before replacing existing Nano X accounts with Nano S Plus accounts', async () => {
     const c = setup();
     try {
       await ConfigureWalletComponent.prototype.importLedgerWallet.call(c.component);
       expect(c.walletService.prepareLedgerReplacementAccounts).toHaveBeenCalled();
       expect(c.walletService.activatePreparedLedgerWallet).toHaveBeenCalledWith(c.accounts);
-      expect(c.component.confirmWalletOverwrite).not.toHaveBeenCalled();
+      expect(c.component.confirmWalletOverwrite).toHaveBeenCalledTimes(1);
       expect(c.component.route.navigate).toHaveBeenCalledWith(['accounts']);
       expect(c.ledgerService.configuringWallet).toBe(false);
     } finally { c.cleanup(); }
+  });
+
+  it('leaves saved Ledger wallet accounts untouched if replacement is cancelled', async () => {
+    const c = setup();
+    c.component.confirmWalletOverwrite.and.resolveTo(false);
+    const previous = localStorage.getItem(c.walletService.storeKey);
+    try {
+      await ConfigureWalletComponent.prototype.importLedgerWallet.call(c.component);
+      expect(c.component.confirmWalletOverwrite).toHaveBeenCalledTimes(1);
+      expect(c.walletService.prepareLedgerReplacementAccounts).not.toHaveBeenCalled();
+      expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
+      expect(c.component.route.navigate).not.toHaveBeenCalled();
+      expect(localStorage.getItem(c.walletService.storeKey)).toBe(previous);
+      expect(c.ledgerService.configuringWallet).toBe(false);
+      expect(c.ledgerService.resetLedger).toHaveBeenCalled();
+    } finally { c.cleanup(); }
+  });
+
+  it('does not request replacement confirmation if no wallet is configured', async () => {
+    const c = setup({ configured: false });
+    try {
+      await ConfigureWalletComponent.prototype.importLedgerWallet.call(c.component);
+      expect(c.component.confirmWalletOverwrite).not.toHaveBeenCalled();
+      expect(c.walletService.activatePreparedLedgerWallet).toHaveBeenCalledWith(c.accounts);
+    } finally { c.cleanup(); }
+  });
+
+  it('shows a translated replacement warning for an existing Ledger wallet', async () => {
+    const modalConfirm = jasmine.createSpy('confirm').and.resolveTo(true);
+    const original = (window as any).UIkit;
+    (window as any).UIkit = { modal: { confirm: modalConfirm } };
+    const component: any = {
+      isConfigured: () => true,
+      walletService: { isLedgerWallet: () => true },
+      translocoService: { translate: (key: string) => ({
+        'ui-wallet-setup.overwrite-ledger-before': 'A Ledger wallet is already configured in Nault. This will',
+        'ui-wallet-setup.overwrite-ledger-strong': 'replace its saved accounts with those of the connected Ledger',
+        'ui-wallet-setup.overwrite-ledger-after': 'Your funds and Ledger devices will not be changed.'
+      } as Record<string, string>)[key] || key },
+      notifications: { sendInfo: jasmine.createSpy('sendInfo') }
+    };
+    try {
+      expect(await ConfigureWalletComponent.prototype.confirmWalletOverwrite.call(component)).toBe(true);
+      expect(modalConfirm).toHaveBeenCalledTimes(1);
+      const message: string = modalConfirm.calls.mostRecent().args[0];
+      expect(message).toContain('replace its saved accounts');
+      expect(message).toContain('Your funds and Ledger devices will not be changed');
+    } finally { (window as any).UIkit = original; }
   });
 
   it('keeps the previous wallet while the Ledger account scan is in progress', async () => {
