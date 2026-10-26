@@ -24,6 +24,40 @@ describe('WalletWidgetComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+  it('never shows Ledger ready after the shared device status was reset without an event', () => {
+    const ledger = component.ledgerService.ledger;
+    const initialStatus = ledger.status;
+    try {
+      ledger.status = 'ready';
+      (component as any).lastReportedLedgerStatus = {
+        status: 'ready', statusText: 'Nano Ledger application connected'
+      };
+      expect(component.ledgerStatus.status).toBe('ready');
+
+      // Configuring another wallet changes the service before the status event.
+      ledger.status = 'not-connected';
+      expect(component.ledgerStatus.status).toBe('not-connected');
+      expect(component.ledgerStatus.statusText).toBe('');
+    } finally {
+      ledger.status = initialStatus;
+    }
+  });
+
+  it('uses the authoritative ready status even when the previous event was disconnected', () => {
+    const ledger = component.ledgerService.ledger;
+    const initialStatus = ledger.status;
+    try {
+      (component as any).lastReportedLedgerStatus = {
+        status: 'not-connected', statusText: 'Ledger disconnected'
+      };
+      ledger.status = 'ready';
+      expect(component.ledgerStatus.status).toBe('ready');
+      expect(component.ledgerStatus.statusText).toBe('');
+    } finally {
+      ledger.status = initialStatus;
+    }
+  });
+
   it('shows the USB reconnect label in a ChromeOS PWA with a Nano S Plus', () => {
     component.ledgerService.isDesktop = false;
     component.ledgerService.transportMode = 'USB';
