@@ -635,6 +635,7 @@
     "pro-tip": "Consejo:",
     "tip-password": "Si olvidas tu contraseña, puedes restaurar la cartera con la semilla o frase de recuperación guardada.",
     "tip-ledger": "Haz clic en el estado de Ledger a la izquierda para actualizarlo tras conectarlo o desconectarlo.",
+    "confirm-overwrite": "Confirmar sustitución",
     "overwrite-ledger-before": "Ya hay una cartera Ledger configurada en Nault. Esta acción va a",
     "overwrite-ledger-strong": "sustituir sus cuentas guardadas por las del Ledger conectado",
     "overwrite-ledger-after": "Tus fondos y dispositivos Ledger no se modificarán. Cancela para conservar la cartera actual.",
