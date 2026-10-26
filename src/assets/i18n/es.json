@@ -755,6 +755,7 @@
     "wallet-imported": "¡Cartera importada correctamente!",
     "wallet-key-imported": "¡Cartera importada correctamente desde una clave privada!",
     "ledger-wallet-mismatch": "El Ledger conectado no corresponde a la cartera configurada. Para usar este dispositivo, selecciona «Configurar una cartera nueva» → «Usar Ledger».",
+    "ledger-not-ready": "Ledger no está lista. Desbloquéala, abre la aplicación Nano y pulsa «Reconectar».",
     "ledger-replace-failed": "No se pudo cambiar de cartera Ledger. Se ha conservado la cartera anterior. Comprueba la aplicación Nano y tu conexión e inténtalo de nuevo.",
     "ledger-checking": "Buscando el dispositivo Ledger…",
     "ledger-connect-failed": "No se pudo conectar a Ledger. Desbloquea el dispositivo y abre la aplicación Nano. Si es necesario, consulta la guía de solución de problemas.",
