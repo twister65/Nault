@@ -38,3 +38,111 @@ describe('Configured Ledger wallet transport switching', () => {
     expect(imports).toEqual([false]);
   });
 });
+
+
+describe('Explicit Ledger hardware wallet replacement', () => {
+  function setup(confirm: () => Promise<unknown>, prepare: () => Promise<any[]>) {
+    const storageKey = 'nault-ledger-replacement-test';
+    localStorage.setItem(storageKey, JSON.stringify({ type: 'ledger', accounts: [{ id: 'nano_old' }] }));
+    const walletService = {
+      storeKey: storageKey,
+      isLedgerWallet: () => true,
+      prepareLedgerReplacementAccounts: jasmine.createSpy('prepareLedgerReplacementAccounts').and.callFake(prepare),
+      activatePreparedLedgerWallet: jasmine.createSpy('activatePreparedLedgerWallet'),
+      loadStoredWallet: jasmine.createSpy('loadStoredWallet').and.resolveTo()
+    };
+    const notification = {
+      sendInfo: jasmine.createSpy('sendInfo'),
+      sendWarning: jasmine.createSpy('sendWarning'),
+      sendSuccess: jasmine.createSpy('sendSuccess'),
+      removeNotification: jasmine.createSpy('removeNotification')
+    };
+    const component: any = {
+      walletService,
+      ledger: { status: 'ready' },
+      replacingLedgerWallet: false,
+      translocoService: { translate: (key: string) => key },
+      notifications: notification,
+      route: { navigate: jasmine.createSpy('navigate').and.resolveTo(true) }
+    };
+    const previousUiKit = (window as any).UIkit;
+    (window as any).UIkit = { modal: { confirm } };
+    const restore = () => {
+      (window as any).UIkit = previousUiKit;
+      localStorage.removeItem(storageKey);
+    };
+    return { component, walletService, notification, restore, storageKey };
+  }
+
+  it('leaves the old wallet untouched when device readiness is not confirmed', async () => {
+    const c = setup(async () => true, async () => [{ id: 'nano_new' }]);
+    c.component.ledger.status = 'not-connected';
+    try {
+      await ConfigureWalletComponent.prototype.replaceConfiguredLedgerWallet.call(c.component);
+      expect(c.walletService.prepareLedgerReplacementAccounts).not.toHaveBeenCalled();
+      expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
+    } finally {
+      c.restore();
+    }
+  });
+
+  it('keeps the old wallet when replacement confirmation is cancelled', async () => {
+    const c = setup(async () => { throw new Error('cancelled'); }, async () => [{ id: 'nano_new' }]);
+    try {
+      await ConfigureWalletComponent.prototype.replaceConfiguredLedgerWallet.call(c.component);
+      expect(c.walletService.prepareLedgerReplacementAccounts).not.toHaveBeenCalled();
+      expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
+      expect(JSON.parse(localStorage.getItem(c.storageKey)!).accounts[0].id).toBe('nano_old');
+    } finally {
+      c.restore();
+    }
+  });
+
+  it('activates the new Ledger accounts only after the full scan succeeds', async () => {
+    let finishScan!: (accounts: any[]) => void;
+    const scan = new Promise<any[]>(resolve => { finishScan = resolve; });
+    const c = setup(async () => true, () => scan);
+    try {
+      const replacement = ConfigureWalletComponent.prototype.replaceConfiguredLedgerWallet.call(c.component);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
+      finishScan([{ id: 'nano_new', index: 0 }]);
+      await replacement;
+      expect(c.walletService.activatePreparedLedgerWallet)
+        .toHaveBeenCalledWith([{ id: 'nano_new', index: 0 }]);
+      expect(c.component.route.navigate).toHaveBeenCalledWith(['accounts']);
+      expect(c.component.replacingLedgerWallet).toBe(false);
+    } finally {
+      c.restore();
+    }
+  });
+
+  it('preserves the saved wallet when RPC discovery fails', async () => {
+    const c = setup(async () => true, async () => { throw new Error('RPC offline'); });
+    try {
+      await ConfigureWalletComponent.prototype.replaceConfiguredLedgerWallet.call(c.component);
+      expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
+      expect(JSON.parse(localStorage.getItem(c.storageKey)!).accounts[0].id).toBe('nano_old');
+      expect(c.notification.sendWarning).toHaveBeenCalled();
+    } finally {
+      c.restore();
+    }
+  });
+
+  it('restores the old persisted wallet when committing the new one fails', async () => {
+    const c = setup(async () => true, async () => [{ id: 'nano_new', index: 0 }]);
+    c.walletService.activatePreparedLedgerWallet.and.callFake(() => {
+      localStorage.setItem(c.storageKey, 'unexpected new state');
+      throw new Error('storage error');
+    });
+    try {
+      await ConfigureWalletComponent.prototype.replaceConfiguredLedgerWallet.call(c.component);
+      expect(c.walletService.loadStoredWallet).toHaveBeenCalled();
+      expect(JSON.parse(localStorage.getItem(c.storageKey)!).accounts[0].id).toBe('nano_old');
+      expect(c.notification.sendWarning).toHaveBeenCalled();
+    } finally {
+      c.restore();
+    }
+  });
+});
