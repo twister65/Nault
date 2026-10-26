@@ -177,7 +177,7 @@ export class ConfigureWalletComponent implements OnInit {
     this.notifications.sendInfo(this.translocoService.translate('ui-notifications.ledger-checking'),
       { identifier: 'ledger-status', length: 0 });
     try {
-      const connected = await this.ledgerService.loadLedger(true);
+      const connected = await this.ledgerService.loadLedger(true, this.ledgerService.transportMode === 'Bluetooth');
       if (!connected || this.ledger.status !== LedgerStatus.READY) {
         this.notifications.sendWarning(this.translocoService.translate(
           this.ledger.status === LedgerStatus.LOCKED
