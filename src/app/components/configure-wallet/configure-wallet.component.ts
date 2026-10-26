@@ -168,7 +168,6 @@ export class ConfigureWalletComponent implements OnInit {
     // The old configuration stays untouched until the connected hardware has
     // been read and its account list is ready to save.
     const previouslyConfigured = this.isConfigured();
-    const oldWalletIsLedger = this.walletService.isLedgerWallet();
     const storedWallet = localStorage.getItem(this.walletService.storeKey);
     let activating = false;
     let completed = false;
@@ -185,9 +184,10 @@ export class ConfigureWalletComponent implements OnInit {
         return;
       }
 
-      // Only a software wallet requires a backup warning. Selecting a
-      // different physical Ledger under "Use Ledger" is already explicit.
-      if (previouslyConfigured && !oldWalletIsLedger && !await this.confirmWalletOverwrite()) return;
+      // Replacing any configured wallet (Ledger or software) requires an
+      // explicit confirmation. Keep the Web Bluetooth device chooser before
+      // this dialog to preserve the browser user gesture.
+      if (previouslyConfigured && !await this.confirmWalletOverwrite()) return;
 
       this.notifications.sendInfo(this.translocoService.translate('ui-notifications.wallet-scanning'),
         { identifier: 'ledger-setup-scan', length: 0 });
