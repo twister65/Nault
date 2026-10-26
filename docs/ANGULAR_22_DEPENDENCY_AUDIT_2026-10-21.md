@@ -1,3 +1,9 @@
+### Validation matérielle — configuration Ledger USB → Bluetooth → USB (26 octobre 2026, 21 h 23)
+
+**Résultat utilisateur : OK** sur la PWA `https://nault-android-test.vercel.app/`, commit déployé `3701116`, pour le parcours de **configuration d'un nouveau portefeuille** dans cet ordre : **Nano S Plus en USB → Nano X en Bluetooth → Nano S Plus en USB**. Cette validation confirme que la sélection d'un autre transport et l'importation d'un portefeuille ne sont plus bloquées par l'état `Ledger READY` d'une autre clé. La PR #27 contient le correctif qui garde les boutons USB/Bluetooth visibles pendant ce parcours. **Ce retour valide le scénario global déclaré par l'utilisateur ; il ne vaut pas confirmation séparée des adresses dérivées, de l'annulation du remplacement, de la reconnexion à une clé différente, de la réception ni de la signature d'envoi.** Ces vérifications restent à effectuer avant fusion.
+
+**Statut :** validation fonctionnelle matérielle acquise pour le changement de portefeuille USB → Bluetooth → USB ; PR #27 toujours Draft, aucune fusion autorisée. Le déploiement de test demeure isolé de `master` et `upgrade/angular-22`.
+
 ### Bruit des notifications GitHub — workflow macOS sur PR #27 Draft (26 octobre 2026)
 
 L'utilisateur reçoit plusieurs emails « Run failed: macOS Web Bluetooth test build - fix/ledger-pwa-usb-reconnect-label ». Diagnostic GitHub Actions : les anciennes exécutions macOS x64/arm64 (par exemple `40381628806`) échouaient sur le test logiciel `scripts/test-ledger-bluetooth.js`, qui assignait l'ancien champ `ledgerStatus` devenu un getter en lecture seule ; ce test a été réparé et les exécutions `40384092613` et `40386226820` ont ensuite réussi sur les deux architectures. La configuration `pull_request.paths` relançait quand même le workflow à chaque synchronisation, y compris après des modifications de documentation, puisque la PR contient déjà des fichiers Ledger correspondant aux filtres.
