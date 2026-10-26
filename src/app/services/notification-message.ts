@@ -9,6 +9,8 @@ export function localizeNotificationMessage(message: string, translate: Notifica
       return translate('ui-notifications.node-offline');
     case 'Unable to refresh balances. Check your connection.':
       return translate('ui-notifications.refresh-balance-failed');
+    case 'There was an issue retrieving latest nano price.  Ensure your AdBlocker is disabled on this page then reload to see accurate FIAT values.':
+      return translate('ui-notifications.nano-price-unavailable');
     case 'Incoming XNO is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.':
       return translate('ui-notifications.ledger-pending-reconnect');
     case 'Bluetooth unavailable. Check Bluetooth on your computer and Ledger, or choose Reconnect via USB.':
