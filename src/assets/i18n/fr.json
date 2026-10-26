@@ -832,6 +832,7 @@
     "addressbook-entry-removed": "Entrée du carnet d’adresses supprimée avec succès !",
     "endpoint-work-https": "Utilisez HTTPS pour le serveur PoW. HTTP n’est autorisé qu’en local.",
     "endpoint-server-secure": "Utilisez HTTPS/WSS. HTTP/WS n’est autorisé que pour localhost et les adresses de bouclage.",
+    "nano-price-unavailable": "Impossible de récupérer le dernier cours du Nano. Vérifiez votre connexion Internet ou les paramètres de votre bloqueur de publicités, puis actualisez la page pour afficher des montants en monnaie fiduciaire à jour.",
     "refresh-balance-failed": "Impossible d’actualiser les soldes. Vérifiez votre connexion.",
     "refresh-balance-server": "Impossible d’actualiser les soldes. Vérifiez votre connexion ou choisissez un autre serveur.",
     "qr-unrecognized": "Ce code QR n’est pas reconnu.",
