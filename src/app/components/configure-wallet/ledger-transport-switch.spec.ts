@@ -240,7 +240,7 @@ describe('Use Ledger explicitly configures the attached device', () => {
       expect(message).toContain('replace its saved accounts');
       expect(message).toContain('Your funds and Ledger devices will not be changed');
       expect(modalConfirm.calls.mostRecent().args[1]).toEqual({
-        i18n: { ok: 'Confirm replacement', cancel: 'Cancel' }
+        labels: { ok: 'Confirm replacement', cancel: 'Cancel' }
       });
     } finally { (window as any).UIkit = original; }
   });
