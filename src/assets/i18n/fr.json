@@ -755,6 +755,7 @@
     "wallet-scanning": "Recherche des 20 premiers comptes et importation de ceux déjà utilisés…",
     "wallet-imported": "Portefeuille importé avec succès !",
     "wallet-key-imported": "Portefeuille importé avec succès depuis une clé privée !",
+    "ledger-identity-unverified": "Impossible de vérifier le compte de la Ledger connectée. Le portefeuille précédent a été conservé et la Ledger déconnectée. Déverrouillez la clé, ouvrez l’application Nano, puis reconnectez-la.",
     "ledger-replace-failed": "Impossible de changer de portefeuille Ledger. Le portefeuille précédent a été conservé. Vérifiez l’application Nano et votre connexion, puis réessayez.",
     "ledger-checking": "Recherche de la Ledger…",
     "ledger-connect-failed": "Impossible de se connecter à la Ledger. Déverrouillez-la et ouvrez l’application Nano. Si nécessaire, consultez le guide de dépannage.",
