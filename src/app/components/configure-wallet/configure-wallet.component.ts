@@ -149,6 +149,52 @@ export class ConfigureWalletComponent implements OnInit {
     await this.importLedgerWallet(this.walletService.isLedgerWallet());
   }
 
+  replacingLedgerWallet = false;
+
+  /**
+   * Connecting over another transport preserves the current Ledger wallet.
+   * Changing to another physical Ledger is a separate, explicit operation.
+   */
+  async replaceConfiguredLedgerWallet() {
+    if (!this.walletService.isLedgerWallet() || this.ledger.status !== LedgerStatus.READY ||
+        this.replacingLedgerWallet) return;
+
+    const UIkit = (window as unknown as { UIkit: { modal: { confirm(message: string): Promise<unknown> } } }).UIkit;
+    try {
+      await UIkit.modal.confirm(this.translocoService.translate('ui-wallet-setup.replace-ledger-confirm'));
+    } catch {
+      return; // A canceled replacement never changes the saved wallet.
+    }
+
+    this.replacingLedgerWallet = true;
+    const storedWallet = localStorage.getItem(this.walletService.storeKey);
+    let activationStarted = false;
+    this.notifications.sendInfo(this.translocoService.translate('ui-notifications.wallet-scanning'),
+      { identifier: 'ledger-replace-status', length: 0 });
+    try {
+      const accounts = await this.walletService.prepareLedgerReplacementAccounts();
+      if (this.ledger.status !== LedgerStatus.READY) {
+        throw new Error('Ledger disconnected during account discovery.');
+      }
+      activationStarted = true;
+      this.walletService.activatePreparedLedgerWallet(accounts);
+      this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.ledger-loaded'));
+      await this.route.navigate(['accounts']);
+    } catch (error) {
+      if (activationStarted) {
+        // Restore persisted and in-memory account selections in case commit fails.
+        if (storedWallet === null) localStorage.removeItem(this.walletService.storeKey);
+        else localStorage.setItem(this.walletService.storeKey, storedWallet);
+        await this.walletService.loadStoredWallet();
+      }
+      console.warn('Ledger wallet replacement failed', error);
+      this.notifications.sendWarning(this.translocoService.translate('ui-notifications.ledger-replace-failed'));
+    } finally {
+      this.replacingLedgerWallet = false;
+      this.notifications.removeNotification('ledger-replace-status');
+    }
+  }
+
   async importLedgerWallet(refreshOnly = false) {
      // If a wallet exists already, make sure they know they are overwriting it
      if (!refreshOnly && this.isConfigured()) {
