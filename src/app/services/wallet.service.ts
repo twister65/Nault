@@ -772,8 +772,9 @@ export class WalletService {
     }
 
     this.wallet.updatingBalance = true;
-    // Defer execution so the shared promise is registered before any callbacks run.
-    this.balanceRefreshPromise = Promise.resolve().then(async () => {
+    // Start the RPC attempt synchronously so an immediate second caller cannot
+    // have its queued refresh cleared before the first request has started.
+    this.balanceRefreshPromise = (async () => {
       try {
         do {
           this.balanceRefreshQueued = false;
@@ -792,7 +793,7 @@ export class WalletService {
         this.wallet.updatingBalance = false;
         this.balanceRefreshPromise = null;
       }
-    });
+    })();
     return this.balanceRefreshPromise;
   }
 
