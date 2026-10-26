@@ -17,6 +17,10 @@ export function localizeNotificationMessage(message: string, translate: Notifica
       return translate('ui-notifications.bluetooth-unavailable');
     case 'Waiting for confirmation on Ledger Device...':
       return translate('ui-notifications.ledger-confirmation-waiting');
+    case 'Nano app is not open on your Ledger. Open the Nano app, then click Reconnect.':
+      return translate('ui-notifications.ledger-nano-app-not-open');
+    case 'Ledger locked. Unlock your Ledger, open the Nano app, then click Reconnect.':
+      return translate('ui-notifications.ledger-locked-reconnect');
   }
 
   // A declined Ledger transaction (APDU 0x6985) is a user action, not
