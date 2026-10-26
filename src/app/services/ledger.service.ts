@@ -232,8 +232,24 @@ export class LedgerService {
       if (!message || !message.event || !this.usesDesktopUsb) return;
       switch (message.event) {
         case 'ledger-status':
-          this.ledger.status = message.data.status;
-          this.ledgerStatus$.next({ status: message.data.status, statusText: message.data.statusText });
+          if (message.data.status === LedgerStatus.READY && !this.configuringWallet) {
+            // Desktop USB also requires device/account matching before exposing READY.
+            this.ledger.status = LedgerStatus.NOT_CONNECTED;
+            void this.verifyConnectedWallet().then(() => {
+              this.ledger.status = LedgerStatus.READY;
+              this.ledgerStatus$.next({ status: LedgerStatus.READY, statusText: message.data.statusText });
+            }).catch((error) => {
+              if ((error as Error)?.message === 'Ledger does not match the configured wallet.') {
+                this.reportWalletMismatch();
+              } else {
+                this.ledger.status = LedgerStatus.NOT_CONNECTED;
+                this.ledgerStatus$.next({ status: this.ledger.status, statusText: String(error) });
+              }
+            });
+          } else {
+            this.ledger.status = message.data.status;
+            this.ledgerStatus$.next({ status: message.data.status, statusText: message.data.statusText });
+          }
           break;
 
         case 'account-details':
