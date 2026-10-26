@@ -22,7 +22,7 @@
           }
           @if (!ledgerService.isDesktop || ledgerService.transportMode !== 'Bluetooth') {
             <div class="label secondary">
-              <a (click)="reloadLedger()">{{ ledgerService.isDesktop ? ('ui-ledger.reconnect-via-usb' | transloco) : ('ui-ledger.reconnect-via-bluetooth' | transloco) }}</a> or
+              <a (click)="reloadLedger()">{{ reconnectTransportTranslationKey | transloco }}</a> {{ 'ui-shell.or' | transloco }}
               <a href="https://docs.nault.cc/2020/08/04/ledger-guide.html#troubleshooting" target="_blank" rel="noopener noreferrer">{{ 'ui-ledger.troubleshooting' | transloco }}</a>
             </div>
           }
@@ -50,12 +50,12 @@
           @if (ledgerService.isDesktop && ledgerService.transportMode === 'Bluetooth') {
             <div class="label secondary">
               {{ 'ui-ledger.unlock-device-then' | transloco }} <a (click)="reconnectUsb()">{{ 'ui-ledger.reconnect-via-usb' | transloco }}</a>
-              or <a (click)="reloadLedger()">{{ 'ui-ledger.reconnect-via-bluetooth' | transloco }}</a>.
+              {{ 'ui-shell.or' | transloco }} <a (click)="reloadLedger()">{{ 'ui-ledger.reconnect-via-bluetooth' | transloco }}</a>.
             </div>
           }
           @if (!ledgerService.isDesktop || ledgerService.transportMode !== 'Bluetooth') {
             <div class="label secondary">
-              {{ 'ui-ledger.unlock-device-then' | transloco }} <a (click)="reloadLedger()">{{ ledgerService.isDesktop ? ('ui-ledger.reconnect-via-usb' | transloco) : ('ui-ledger.reconnect-via-bluetooth' | transloco) }}</a> to reconnect.
+              {{ 'ui-ledger.unlock-device-then' | transloco }} <a (click)="reloadLedger()">{{ reconnectTransportTranslationKey | transloco }}</a>.
             </div>
           }
         </div>
