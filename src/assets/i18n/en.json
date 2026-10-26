@@ -755,6 +755,7 @@
     "wallet-scanning": "Scanning the first 20 accounts and importing those already used...",
     "wallet-imported": "Wallet imported successfully!",
     "wallet-key-imported": "Wallet imported successfully from a private key!",
+    "ledger-identity-unverified": "Unable to verify the connected Ledger account. The previous wallet was kept and the Ledger disconnected. Unlock the device, open the Nano app, and reconnect.",
     "ledger-replace-failed": "Unable to switch Ledger wallets. The previously configured wallet has been kept. Check the Nano app and your connection, then try again.",
     "ledger-checking": "Checking for Ledger device...",
     "ledger-connect-failed": "Impossible to connect to Ledger. Unlock the device and open the Nano app. If needed, consult the troubleshooting guide.",
