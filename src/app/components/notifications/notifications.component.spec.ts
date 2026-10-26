@@ -31,6 +31,34 @@ describe('NotificationsComponent', () => {
 
 
 describe('NotificationsComponent offline language loading', () => {
+  it('retranslates the persistent price warning when offline language loading finishes', () => {
+    const service = new NotificationService();
+    const translationsReady$ = new Subject<Record<string, unknown>>();
+    let ready = false;
+    const french = 'Impossible de récupérer le dernier cours du Nano. Vérifiez votre connexion Internet ou les paramètres de votre bloqueur de publicités, puis actualisez la page pour afficher des montants en monnaie fiduciaire à jour.';
+    const i18n = {
+      selectTranslation: () => translationsReady$.asObservable(),
+      translate: (key: string) => ready && key === 'ui-notifications.nano-price-unavailable' ? french : key
+    } as unknown as TranslocoService;
+    const notices = new NotificationsComponent(service, i18n);
+
+    notices.ngOnInit();
+    try {
+      service.sendWarning(
+        'There was an issue retrieving latest nano price.  Ensure your AdBlocker is disabled on this page then reload to see accurate FIAT values.',
+        { identifier: 'price-adblock', length: 0 }
+      );
+      expect(notices.notifications[0].message).toBe('ui-notifications.nano-price-unavailable');
+
+      ready = true;
+      translationsReady$.next({});
+      expect(notices.notifications[0].message).toBe(french);
+      expect(notices.notifications[0].identifier).toBe('price-adblock');
+    } finally {
+      notices.ngOnDestroy();
+    }
+  });
+
   it('retranslates existing offline toasts when the French dictionary becomes available', () => {
     const service = new NotificationService();
     const translationsReady$ = new Subject<Record<string, unknown>>();
