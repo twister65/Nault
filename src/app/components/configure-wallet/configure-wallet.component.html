@@ -341,6 +341,14 @@
         <div uk-grid class="uk-margin-top">
           <div class="uk-width-1-1">
             <h3>{{ 'ui-wallet-setup.ledger-hardware' | transloco }}</h3>
+            @if (walletService.isLedgerWallet()) {
+              <div class="uk-alert uk-alert-primary nlt-inline-alert">
+                <div class="icon-column">
+                  <div uk-icon="icon: info; ratio: 2;"></div>
+                </div>
+                <p>{{ 'ui-wallet-setup.existing-ledger-wallet' | transloco }}</p>
+              </div>
+            }
             @if (ledger.status === ledgerStatus.NOT_CONNECTED) {
               <div>
                 @if (!ledgerService.isAndroidWeb) {
@@ -487,6 +495,11 @@
         }
         @if (selectedImportOption === 'ledger' && ledger.status !== ledgerStatus.NOT_CONNECTED) {
           <button class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="importLedgerWallet(true)">{{ 'ui-wallet-setup.refresh-ledger' | transloco }}</button>
+        }
+        @if (selectedImportOption === 'ledger' && walletService.isLedgerWallet()) {
+          <button class="uk-button uk-button-default uk-width-auto@s uk-width-1-1"
+                  [disabled]="ledger.status !== ledgerStatus.READY || replacingLedgerWallet"
+                  (click)="replaceConfiguredLedgerWallet()">{{ 'ui-wallet-setup.replace-ledger-wallet' | transloco }}</button>
         }
         @if (selectedImportOption === 'privateKey') {
           <button class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="setPasswordInit()">{{ 'ui-wallet-setup.import-from-private' | transloco }}</button>
