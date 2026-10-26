@@ -711,6 +711,7 @@ async function main() {
     });
     const operations = [];
     const ledger = {
+      ledger: {status: 'ready'},
       isDesktop: true, supportsBluetooth: true, transportMode: 'Bluetooth',
       enableBluetoothMode(enabled) {
         operations.push(['mode', enabled]);
@@ -722,7 +723,7 @@ async function main() {
       sendInfo() {}, removeNotification() {}, sendSuccess() {}
     };
     const widget = new WalletWidgetComponent({ wallet: {} }, notifications, ledger, {}, {});
-    widget.ledgerStatus = { status: 'ready', statusText: '' };
+    widget.lastReportedLedgerStatus = { status: 'ready', statusText: '' };
     await widget.reconnectUsb();
     assert.equal(ledger.transportMode, 'USB');
     assert.deepEqual(operations, [['mode', false], ['load', false, false]]);
@@ -748,21 +749,22 @@ async function main() {
       '../../services/pow.service': {},
        '@jsverse/transloco': { TranslocoService: class {} }
     }, { window: { location: { reload() { reloads++; } } } });
-    const ledger = { isDesktop: true, transportMode: 'Bluetooth' };
+    const ledger = { ledger: {status: 'ready'}, isDesktop: true, transportMode: 'Bluetooth' };
     const widget = new WalletWidgetComponent({ wallet: {} }, {}, ledger, {}, {});
-    widget.ledgerStatus = { status: 'ready', statusText: 'MTU negotiation timed out' };
+    widget.lastReportedLedgerStatus = { status: 'ready', statusText: 'MTU negotiation timed out' };
     assert.equal(widget.canResetBluetoothSession, false);
     widget.resetBluetoothSession();
     ledger.transportMode = 'USB';
-    widget.ledgerStatus.status = 'not-connected';
+    ledger.ledger.status = 'not-connected';
+    widget.lastReportedLedgerStatus = { status: 'not-connected', statusText: 'MTU negotiation timed out' };
     assert.equal(widget.canResetBluetoothSession, false);
     widget.resetBluetoothSession();
     ledger.transportMode = 'Bluetooth';
-    widget.ledgerStatus.statusText = 'Ledger disconnected';
+    widget.lastReportedLedgerStatus.statusText = 'Ledger disconnected';
     assert.equal(widget.canResetBluetoothSession, false);
     widget.resetBluetoothSession();
     assert.equal(reloads, 0);
-    widget.ledgerStatus.statusText = 'Bluetooth connection failed: Ledger Bluetooth MTU negotiation timed out';
+    widget.lastReportedLedgerStatus.statusText = 'Bluetooth connection failed: Ledger Bluetooth MTU negotiation timed out';
     assert.equal(widget.canResetBluetoothSession, true);
     widget.resetBluetoothSession();
     assert.equal(reloads, 1);
