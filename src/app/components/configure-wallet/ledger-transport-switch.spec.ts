@@ -175,6 +175,10 @@ describe('Use Ledger explicitly configures the attached device', () => {
       const first = ConfigureWalletComponent.prototype.importLedgerWallet.call(c.component);
       expect(c.component.ledgerSetupInProgress).toBe(true);
       await ConfigureWalletComponent.prototype.importLedgerWallet.call(c.component);
+      // Let the first call finish the simulated connection and confirmation.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
       expect(c.walletService.prepareLedgerReplacementAccounts).toHaveBeenCalledTimes(1);
       expect(c.component.confirmWalletOverwrite).toHaveBeenCalledTimes(1);
       expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
