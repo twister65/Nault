@@ -31,6 +31,34 @@ describe('NotificationsComponent', () => {
 
 
 describe('NotificationsComponent offline language loading', () => {
+  it('translates a Ledger app-not-open toast after the French dictionary loads', () => {
+    const service = new NotificationService();
+    const ready$ = new Subject<Record<string, unknown>>();
+    let loaded = false;
+    const french = 'L’application Nano n’est pas ouverte sur votre Ledger. Ouvrez-la, puis cliquez sur « Reconnecter ».';
+    const i18n = {
+      selectTranslation: () => ready$.asObservable(),
+      translate: (key: string) =>
+        loaded && key === 'ui-notifications.ledger-nano-app-not-open' ? french : key
+    } as unknown as TranslocoService;
+    const notices = new NotificationsComponent(service, i18n);
+    notices.ngOnInit();
+    try {
+      service.sendWarning(
+        'Nano app is not open on your Ledger. Open the Nano app, then click Reconnect.',
+        { identifier: 'ledger-connection-help', length: 0 }
+      );
+      expect(notices.notifications[0].message).toBe('ui-notifications.ledger-nano-app-not-open');
+      loaded = true;
+      ready$.next({});
+      expect(notices.notifications[0].message).toBe(french);
+      expect(notices.notifications[0].identifier).toBe('ledger-connection-help');
+    } finally {
+      notices.ngOnDestroy();
+    }
+  });
+
+
   it('retranslates the persistent price warning when offline language loading finishes', () => {
     const service = new NotificationService();
     const translationsReady$ = new Subject<Record<string, unknown>>();
