@@ -136,17 +136,50 @@ export class ConfigureWalletComponent implements OnInit {
   }
 
   async connectLedgerByBluetooth() {
+    const hadLedgerWallet = this.walletService.isLedgerWallet();
+    // The transport chooser needs this synchronous user gesture.
     this.ledgerService.enableBluetoothMode(true);
-    // A configured Ledger wallet is independent of USB vs Bluetooth.
-    // Never ask to overwrite it merely to change transports: that confirmation
-    // also loses the user gesture required by Web Bluetooth's device chooser.
-    await this.importLedgerWallet(this.walletService.isLedgerWallet());
+    await this.importLedgerWallet(hadLedgerWallet);
+    if (hadLedgerWallet) await this.verifyConfiguredLedgerDevice();
   }
 
   async connectLedgerByUsb() {
     if (this.ledgerService.isAndroidWeb) return; // The Android browser uses Ledger Bluetooth only.
+    const hadLedgerWallet = this.walletService.isLedgerWallet();
     this.ledgerService.enableBluetoothMode(false);
-    await this.importLedgerWallet(this.walletService.isLedgerWallet());
+    await this.importLedgerWallet(hadLedgerWallet);
+    if (hadLedgerWallet) await this.verifyConfiguredLedgerDevice();
+  }
+
+  /**
+   * "Use Ledger" is a hardware-wallet setup flow, not just a transport switch.
+   * Check the account derived by the attached device against an existing
+   * account at the SAME derivation index. If different, ask before replacing
+   * any saved accounts. Simply changing USB/Bluetooth on the same Ledger
+   * must not prompt or discard the existing wallet.
+   */
+  async verifyConfiguredLedgerDevice(): Promise<void> {
+    if (!this.walletService.isLedgerWallet() || this.ledger.status !== LedgerStatus.READY) return;
+    const known = this.wallet.accounts.find(account => Number.isInteger(account.index));
+    try {
+      const current = await this.ledgerService.getLedgerAccount(known?.index ?? 0);
+      if (this.ledger.status !== LedgerStatus.READY) return;
+      const currentAddress: string = current.address.replace(/^xrb_/, 'nano_');
+      if (known && currentAddress === known.id) return;
+
+      const replaced = await this.replaceConfiguredLedgerWallet();
+      if (!replaced) {
+        // Do not leave a different Ledger ready to sign for old wallet accounts.
+        this.ledgerService.resetLedger();
+        this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      }
+    } catch (error) {
+      console.warn('Unable to verify connected Ledger wallet identity', error);
+      this.ledgerService.resetLedger();
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      this.notifications.sendWarning(
+        this.translocoService.translate('ui-notifications.ledger-identity-unverified'));
+    }
   }
 
   replacingLedgerWallet = false;
@@ -157,13 +190,13 @@ export class ConfigureWalletComponent implements OnInit {
    */
   async replaceConfiguredLedgerWallet() {
     if (!this.walletService.isLedgerWallet() || this.ledger.status !== LedgerStatus.READY ||
-        this.replacingLedgerWallet) return;
+        this.replacingLedgerWallet) return false;
 
     const UIkit = (window as unknown as { UIkit: { modal: { confirm(message: string): Promise<unknown> } } }).UIkit;
     try {
       await UIkit.modal.confirm(this.translocoService.translate('ui-wallet-setup.replace-ledger-confirm'));
     } catch {
-      return; // A canceled replacement never changes the saved wallet.
+      return false; // A canceled replacement never changes the saved wallet.
     }
 
     this.replacingLedgerWallet = true;
@@ -180,6 +213,7 @@ export class ConfigureWalletComponent implements OnInit {
       this.walletService.activatePreparedLedgerWallet(accounts);
       this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.ledger-loaded'));
       await this.route.navigate(['accounts']);
+      return true;
     } catch (error) {
       if (activationStarted) {
         // Restore persisted and in-memory account selections in case commit fails.
@@ -189,6 +223,7 @@ export class ConfigureWalletComponent implements OnInit {
       }
       console.warn('Ledger wallet replacement failed', error);
       this.notifications.sendWarning(this.translocoService.translate('ui-notifications.ledger-replace-failed'));
+      return false;
     } finally {
       this.replacingLedgerWallet = false;
       this.notifications.removeNotification('ledger-replace-status');
