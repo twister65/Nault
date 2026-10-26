@@ -1,3 +1,9 @@
+### Confirmation de l'origine du bouton « CANCEL » et réparation CI (26 octobre 2026)
+
+L’utilisateur confirme que « CANCEL » provenait **du dialogue de confirmation du remplacement du portefeuille** de Nault/UIkit, et non du sélecteur natif USB de ChromeOS. La correction des options UIkit `i18n.ok`/`i18n.cancel` est donc directement applicable : « Confirmer le remplacement » et « Annuler » en français, avec équivalents EN/ES. Le correctif de la sélection USB annulée demeure indépendant.
+
+La première CI du correctif (Merge gate `40381628731`) a échoué dans `scripts/test-ledger-bluetooth.js` : le harnais de tests affectait `walletWidget.ledgerStatus` alors que le correctif précédent de synchronisation du statut en avait fait un getter en lecture seule. Le harnais a été mis à jour pour simuler l'état partagé `ledgerService.ledger.status` et la dernière notification `lastReportedLedgerStatus` ; il conserve les scénarios de reconnexion native USB/Bluetooth et de reset manuel MTU. Nouvelle CI à vérifier. Pas de déploiement ni de fusion sans nouvelle autorisation.
+
 ### Annulation de la sélection USB et traduction « CANCEL » (26 octobre 2026)
 
 **Retour utilisateur :** après « Connecter en USB », l’utilisateur a choisi « CANCEL » (encore en anglais). Deux interfaces peuvent apparaître successivement : (1) le sélecteur matériel WebUSB/WebHID de ChromeOS, dont le libellé appartient au navigateur et ne peut pas être traduit par Nault ; (2) le dialogue UIkit de Nault demandant confirmation avant de remplacer un portefeuille enregistré, dont les libellés « OK / CANCEL » étaient jusqu’ici en anglais.
