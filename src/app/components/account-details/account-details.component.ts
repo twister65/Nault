@@ -86,6 +86,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   routerSub: Subscription | null = null;
   priceSub: Subscription | null = null;
   balanceRefreshSub: Subscription | null = null;
+  balanceRefreshSub: Subscription | null = null;
 
   initialLoadDone = false;
   manualRefreshAllowed = true;
@@ -188,7 +189,16 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     const mobileTransactionMenuModal = UIkit.modal('#mobile-transaction-menu-modal');
     this.mobileTransactionMenuModal = mobileTransactionMenuModal;
 
-    await this.loadAccountDetails();
+    // Recover account history when a wallet RPC reconciliation succeeds after reconnect.
+    this.balanceRefreshSub = this.wallet.wallet.refresh$.subscribe(refreshed => {
+      if (refreshed && this.initialLoadDone) this.loadAccountDetailsThrottled();
+    });
+
+    try {
+      await this.loadAccountDetails();
+    } catch (_) {
+      // First launch may be offline; the next successful wallet refresh retries it.
+    }
     this.initialLoadDone = true;
     // A recovered wallet RPC snapshot must also update the visible account history.
     this.balanceRefreshSub = this.wallet.wallet.refresh$.subscribe(refreshed => {
@@ -620,6 +630,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       this.priceSub.unsubscribe();
     }
     this.balanceRefreshSub?.unsubscribe();
+    this.balanceRefreshSub?.unsubscribe();
   }
 
   async generateReceiveQR(accountID: string) {
@@ -641,6 +652,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     }
 
     this.loadingTxList = true;
+    try {
     this.updateTodayYesterdayDateStrings();
 
     const history = await this.api.accountHistory(accountID, this.pageSize, true);
@@ -749,7 +761,9 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       this.accountHistory = [];
     }
 
-    this.loadingTxList = false;
+    } finally {
+      this.loadingTxList = false;
+    }
   }
 
   async loadMore() {
