@@ -837,6 +837,8 @@
     "refresh-balance-server": "No se pudieron actualizar los saldos. Comprueba la conexión o elige otro servidor.",
     "qr-unrecognized": "No se reconoce este código QR.",
     "bluetooth-unavailable": "Bluetooth no disponible. Comprueba el Bluetooth del ordenador y de Ledger, o elige « Reconectar por USB ».",
+    "ledger-nano-app-not-open": "La aplicación Nano no está abierta en tu Ledger. Ábrela y pulsa «Reconectar».",
+    "ledger-locked-reconnect": "Ledger bloqueada. Desbloquéala, abre la aplicación Nano y pulsa «Reconectar».",
     "ledger-confirmation-waiting": "Esperando confirmación en el dispositivo Ledger…",
     "ledger-hid-read-timeout": "se agotó el tiempo de espera de lectura HID de Ledger",
     "ledger-signing-error": "Error al firmar el bloque: {{error}}",
