@@ -110,6 +110,53 @@ describe('LedgerService pending-receive reconnect message', () => {
   });
 });
 
+describe('Ledger WebUSB device picker cancellation', () => {
+  it('returns disconnected without an error notification when the user dismisses the chooser', async () => {
+    const service = Object.create(LedgerService.prototype) as any;
+    service.isAndroidWeb = false;
+    service.isDesktop = false;
+    service.supportsWebUSB = true;
+    service.supportsWebHID = false;
+    service.transportMode = 'USB';
+    service.ledger = {status: LedgerStatus.NOT_CONNECTED, transport: null, nano: null};
+    service.appSettings = {setAppSetting: jasmine.createSpy('setAppSetting')};
+    service.detectUsbTransport = jasmine.createSpy('detectUsbTransport');
+    service.loadTransport = jasmine.createSpy('loadTransport').and.rejectWith({
+      name: 'TransportOpenUserCancelled', message: 'User cancelled the device selection'
+    });
+    service.resetLedger = jasmine.createSpy('resetLedger');
+    const notifications = {sendWarning: jasmine.createSpy('sendWarning')};
+    service.notifications = notifications;
+    service.ledgerStatus$ = {next: jasmine.createSpy('next')};
+
+    expect(await service.loadLedger(false)).toBe(false);
+    expect(service.lastUsbSelectionCancelled).toBe(true);
+    expect(service.resetLedger).toHaveBeenCalled();
+    expect(notifications.sendWarning).not.toHaveBeenCalled();
+  });
+
+  it('still distinguishes a real USB failure from user cancellation', async () => {
+    const service = Object.create(LedgerService.prototype) as any;
+    service.isAndroidWeb = false;
+    service.isDesktop = false;
+    service.supportsWebUSB = true;
+    service.supportsWebHID = false;
+    service.transportMode = 'USB';
+    service.ledger = {status: LedgerStatus.NOT_CONNECTED, transport: null, nano: null};
+    service.appSettings = {setAppSetting: jasmine.createSpy('setAppSetting')};
+    service.detectUsbTransport = jasmine.createSpy('detectUsbTransport');
+    service.loadTransport = jasmine.createSpy('loadTransport').and.rejectWith(new Error('USB unavailable'));
+    service.resetLedger = jasmine.createSpy('resetLedger');
+    const notifications = {sendWarning: jasmine.createSpy('sendWarning')};
+    service.notifications = notifications;
+    service.ledgerStatus$ = {next: jasmine.createSpy('next')};
+
+    expect(await service.loadLedger(false)).toBe(false);
+    expect(service.lastUsbSelectionCancelled).toBe(false);
+    expect(notifications.sendWarning).toHaveBeenCalled();
+  });
+});
+
 describe('Ledger wallet identity guard and Android USB policy', () => {
   it('accepts the same seed/account on a different supported transport', async () => {
     const service = Object.create(LedgerService.prototype) as any;
