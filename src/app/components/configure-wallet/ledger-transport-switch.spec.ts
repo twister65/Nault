@@ -6,7 +6,9 @@ describe('Use Ledger explicitly configures the attached device', () => {
     const enableBluetoothMode = jasmine.createSpy('enableBluetoothMode');
     const importLedgerWallet = jasmine.createSpy('importLedgerWallet').and.resolveTo();
     const component: any = {
-      ledgerService: { isAndroidWeb: false, enableBluetoothMode },
+      ledgerService: { isAndroidWeb: false, isDesktop: false, enableBluetoothMode,
+        resetLedger: jasmine.createSpy('resetLedger') },
+      ledger: { status: LedgerStatus.READY },
       importLedgerWallet
     };
     await ConfigureWalletComponent.prototype.connectLedgerByUsb.call(component);
