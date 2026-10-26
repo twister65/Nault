@@ -65,6 +65,7 @@ export class ConfigureWalletComponent implements OnInit {
 
   ledgerStatus = LedgerStatus;
   ledger = this.ledgerService.ledger;
+  ledgerSetupInProgress = false;
 
   constructor(
     private router: ActivatedRoute,
@@ -139,11 +140,13 @@ export class ConfigureWalletComponent implements OnInit {
   // "Use Ledger" always configures the attached hardware wallet. Reconnect
   // elsewhere in Nault only validates the identity of the stored wallet.
   async connectLedgerByBluetooth() {
+    if (this.ledgerSetupInProgress) return;
     this.ledgerService.enableBluetoothMode(true); // Keep browser user activation.
     await this.importLedgerWallet();
   }
 
   async connectLedgerByUsb() {
+    if (this.ledgerSetupInProgress) return;
     if (this.ledgerService.isAndroidWeb) return; // Android web uses Bluetooth only.
     const switchingFromBluetooth = this.ledgerService.transportMode === 'Bluetooth';
     this.ledgerService.enableBluetoothMode(false);
@@ -166,6 +169,7 @@ export class ConfigureWalletComponent implements OnInit {
   }
 
   async refreshLedgerStatus() {
+    if (this.ledgerSetupInProgress) return;
     this.notifications.sendInfo(this.translocoService.translate('ui-notifications.ledger-checking'),
       { identifier: 'ledger-status', length: 0 });
     try {
@@ -176,6 +180,10 @@ export class ConfigureWalletComponent implements OnInit {
   }
 
   async importLedgerWallet() {
+    // An explicit setup must be singular: overlapping clicks could otherwise
+    // close a transport while it is reading or replace the wallet out of order.
+    if (this.ledgerSetupInProgress) return;
+    this.ledgerSetupInProgress = true;
     // The old configuration stays untouched until the connected hardware has
     // been read and its account list is ready to save.
     const previouslyConfigured = this.isConfigured();
@@ -227,6 +235,7 @@ export class ConfigureWalletComponent implements OnInit {
       this.notifications.sendWarning(this.translocoService.translate(key));
     } finally {
       this.ledgerService.configuringWallet = false;
+      this.ledgerSetupInProgress = false;
       this.notifications.removeNotification('ledger-status');
       this.notifications.removeNotification('ledger-setup-scan');
       if (!completed) {
