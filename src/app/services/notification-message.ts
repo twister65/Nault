@@ -19,6 +19,10 @@ export function localizeNotificationMessage(message: string, translate: Notifica
       return translate('ui-notifications.ledger-confirmation-waiting');
     case 'Ledger does not match the configured wallet.':
       return translate('ui-notifications.ledger-wallet-mismatch');
+    case 'Ledger is not ready. Unlock your Ledger, open the Nano app, then click Reconnect.':
+    case 'Ledger is not ready. Unlock it, open the Nano app and reconnect.':
+    case 'Ledger unavailable. Unlock your Ledger, open the Nano app, then click Reconnect.':
+      return translate('ui-notifications.ledger-not-ready');
     case 'Nano app is not open on your Ledger. Open the Nano app, then click Reconnect.':
       return translate('ui-notifications.ledger-nano-app-not-open');
     case 'Ledger locked. Unlock your Ledger, open the Nano app, then click Reconnect.':
