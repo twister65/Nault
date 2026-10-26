@@ -252,14 +252,14 @@ export class ConfigureWalletComponent implements OnInit {
     if (!this.isConfigured()) return true;
 
     const UIkit = (window as unknown as { UIkit: { modal: {
-      confirm(message: string, options?: { i18n: { ok: string; cancel: string } }): Promise<unknown>
+      confirm(message: string, options?: { labels: { ok: string; cancel: string } }): Promise<unknown>
     } } }).UIkit;
     try {
       const msg = this.walletService.isLedgerWallet()
         ? '<p class="uk-alert uk-alert-info"><br><span class="uk-flex"><span uk-icon="icon: info; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">' + this.translocoService.translate('ui-wallet-setup.overwrite-ledger-before') + ' <b>' + this.translocoService.translate('ui-wallet-setup.overwrite-ledger-strong') + '</b>.</span><br><br>' + this.translocoService.translate('ui-wallet-setup.overwrite-ledger-after') + '</p><br>'
         : '<p class="uk-alert uk-alert-danger"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">' + this.translocoService.translate('ui-wallet-setup.overwrite-ledger-before') + ' <b>' + this.translocoService.translate('ui-wallet-setup.overwrite-software-strong') + '</b>.</span><br><br><b style="font-size: 18px;">' + this.translocoService.translate('reset-wallet.before-continuing-make-sure-you-have-saved-the-nano-seed') + '</b><br><br><b style="font-size: 18px;">' + this.translocoService.translate('reset-wallet.you-will-not-be-able-to-recover-the-funds-without-a-backup') + '</b></p><br>';
       await UIkit.modal.confirm(msg, {
-        i18n: {
+        labels: {
           ok: this.translocoService.translate('ui-wallet-setup.confirm-overwrite'),
           cancel: this.translocoService.translate('general.cancel'),
         },
