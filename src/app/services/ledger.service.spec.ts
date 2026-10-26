@@ -110,6 +110,50 @@ describe('LedgerService pending-receive reconnect message', () => {
   });
 });
 
+describe('Ledger USB account readiness after transport changes', () => {
+  function setup(error: unknown) {
+    const service = Object.create(LedgerService.prototype) as any;
+    service.isAndroidWeb = false;
+    service.isDesktop = false;
+    service.supportsWebUSB = true;
+    service.supportsWebHID = false;
+    service.transportMode = 'USB';
+    service.configuringWallet = true;
+    service.pollingLedger = false;
+    service.ledger = {
+      status: LedgerStatus.NOT_CONNECTED,
+      transport: { close: jasmine.createSpy('close').and.resolveTo() },
+      nano: { getAppConfiguration: jasmine.createSpy('getAppConfiguration').and.resolveTo({version:'1.0'}) }
+    };
+    service.getLedgerAccount = jasmine.createSpy('getLedgerAccount').and.rejectWith(error);
+    service.verifyConnectedWallet = jasmine.createSpy('verifyConnectedWallet');
+    service.ledgerStatus$ = {next: jasmine.createSpy('next')};
+    service.notifications = {sendWarning: jasmine.createSpy('sendWarning')};
+    return service;
+  }
+
+  it('never returns a successful connection after the USB account read fails', async () => {
+    const service = setup(new Error('USB transport session not yet ready'));
+
+    expect(await service.loadLedger(true)).toBe(false);
+    expect(service.ledger.status).toBe(LedgerStatus.NOT_CONNECTED);
+    expect(service.ledgerStatus$.next).toHaveBeenCalledWith({
+      status: LedgerStatus.NOT_CONNECTED,
+      statusText: 'Unable to read Ledger account. Check the Nano app and retry the connection.'
+    });
+    expect(service.verifyConnectedWallet).not.toHaveBeenCalled();
+  });
+
+  it('classifies an unavailable Nano app rather than reporting successful USB readiness', async () => {
+    const service = setup({statusCode: 0x6e01, message: 'UNKNOWN_ERROR (0x6e01)'});
+
+    expect(await service.loadLedger(true)).toBe(false);
+    expect(service.ledger.status).toBe(LedgerStatus.NOT_CONNECTED);
+    expect(service.ledgerStatus$.next.calls.mostRecent().args[0].statusText)
+      .toContain('Open the Nano app');
+  });
+});
+
 describe('Ledger WebUSB device picker cancellation', () => {
   it('returns disconnected without an error notification when the user dismisses the chooser', async () => {
     const service = Object.create(LedgerService.prototype) as any;
