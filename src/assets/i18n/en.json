@@ -635,6 +635,7 @@
     "pro-tip": "Tip:",
     "tip-password": "If you forget your password, you can restore your wallet using your saved recovery seed or phrase.",
     "tip-ledger": "Click the Ledger status area on the left to refresh its status after connecting or disconnecting it.",
+    "confirm-overwrite": "Confirm replacement",
     "overwrite-ledger-before": "A Ledger wallet is already configured in Nault. This will",
     "overwrite-ledger-strong": "replace its saved accounts with those of the connected Ledger",
     "overwrite-ledger-after": "Your funds and Ledger devices will not be changed. Cancel to keep the current wallet.",
