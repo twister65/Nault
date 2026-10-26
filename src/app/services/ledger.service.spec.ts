@@ -109,3 +109,81 @@ describe('LedgerService pending-receive reconnect message', () => {
     expect(service.isUnavailableError(new Error('Transaction denied on Ledger device'))).toBe(false);
   });
 });
+
+describe('Ledger wallet identity guard and Android USB policy', () => {
+  it('accepts the same seed/account on a different supported transport', async () => {
+    const service = Object.create(LedgerService.prototype) as any;
+    service.configuringWallet = false;
+    service.configuredWalletAccount = () => ({ id: 'nano_same', index: 4 });
+    const getAccount = jasmine.createSpy('getLedgerAccount')
+      .and.resolveTo({address: 'xrb_same'});
+    service.getLedgerAccount = getAccount;
+    await expectAsync(service.verifyConnectedWallet()).toBeResolved();
+    expect(getAccount).toHaveBeenCalledWith(4);
+  });
+
+  it('rejects a Ledger whose account is different from the configured wallet', async () => {
+    const service = Object.create(LedgerService.prototype) as any;
+    service.configuringWallet = false;
+    service.configuredWalletAccount = () => ({ id: 'nano_expected', index: 0 });
+    service.getLedgerAccount = jasmine.createSpy('getLedgerAccount')
+      .and.resolveTo({address: 'nano_other'});
+    await expectAsync(service.verifyConnectedWallet())
+      .toBeRejectedWithError('Ledger does not match the configured wallet.');
+  });
+
+  it('allows a different hardware wallet only during the explicit wallet setup operation', async () => {
+    const service = Object.create(LedgerService.prototype) as any;
+    service.configuringWallet = true;
+    service.configuredWalletAccount = () => ({id:'nano_previous',index:0});
+    const getAccount = jasmine.createSpy('getLedgerAccount');
+    service.getLedgerAccount = getAccount;
+    await expectAsync(service.verifyConnectedWallet()).toBeResolved();
+    expect(getAccount).not.toHaveBeenCalled();
+  });
+
+  it('disconnects and explains a mismatch detected during periodic status checking', async () => {
+    const service = Object.create(LedgerService.prototype) as any;
+    service.ledger = { status: LedgerStatus.READY };
+    service.bluetoothGeneration = 0;
+    service.pollingLedger = true;
+    service.configuringWallet = false;
+    service.configuredWalletAccount = () => ({id:'nano_original',index:0});
+    service.getLedgerAccount = jasmine.createSpy('getLedgerAccount')
+      .and.resolveTo({address:'nano_different'});
+    service.resetLedger = jasmine.createSpy('resetLedger');
+    const sendWarning = jasmine.createSpy('sendWarning');
+    service.notifications = {sendWarning};
+    service.ledgerStatus$ = {next: jasmine.createSpy('next')};
+
+    await service.checkLedgerStatus();
+
+    expect(service.ledger.status).toBe(LedgerStatus.NOT_CONNECTED);
+    expect(service.resetLedger).toHaveBeenCalled();
+    expect(sendWarning).toHaveBeenCalledWith(
+      'Ledger does not match the configured wallet.',
+      {identifier: 'ledger-wallet-mismatch', length: 10000}
+    );
+    expect(service.ledgerStatus$.next).toHaveBeenCalledWith({
+      status: LedgerStatus.NOT_CONNECTED,
+      statusText: 'Ledger does not match the configured wallet.'
+    });
+  });
+
+  it('refuses USB on Android before trying to open a transport', async () => {
+    const service = Object.create(LedgerService.prototype) as any;
+    service.isAndroidWeb = true;
+    service.isDesktop = false;
+    service.transportMode = 'USB';
+    service.ledger = { status: LedgerStatus.NOT_CONNECTED };
+    service.ledgerStatus$ = {next: jasmine.createSpy('next')};
+    const connect = jasmine.createSpy('loadTransport');
+    service.loadTransport = connect;
+
+    expect(await service.loadLedger()).toBe(false);
+    expect(connect).not.toHaveBeenCalled();
+    expect(service.ledgerStatus$.next).toHaveBeenCalledWith(
+      jasmine.objectContaining({ status: LedgerStatus.NOT_CONNECTED,
+        statusText: jasmine.stringMatching(/disabled on Android/) }));
+  });
+});
