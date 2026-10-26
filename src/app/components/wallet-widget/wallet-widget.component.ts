@@ -38,6 +38,15 @@ export class WalletWidgetComponent implements OnInit {
     public settings: AppSettingsService,
     private powService: PowService) { }
 
+  // The PWA is not Electron: choose its reconnect label from the transport,
+  // not from isDesktop. In particular, ChromeOS PWAs can use WebUSB/WebHID
+  // with a Nano S Plus, which has no Bluetooth radio.
+  get reconnectTransportTranslationKey(): string {
+    return this.ledgerService.transportMode === 'Bluetooth'
+      ? 'ui-ledger.reconnect-via-bluetooth'
+      : 'ui-ledger.reconnect-via-usb';
+  }
+
   @ViewChild('passwordInput') passwordInput!: ElementRef<HTMLInputElement>;
 
   ngOnInit() {
