@@ -88,6 +88,22 @@ describe('Use Ledger explicitly configures the attached device', () => {
     expect(importLedgerWallet).toHaveBeenCalledWith();
   });
 
+  it('does not change transports during an existing Ledger wallet import', async () => {
+    const changeMode = jasmine.createSpy('enableBluetoothMode');
+    const load = jasmine.createSpy('importLedgerWallet');
+    const component: any = {
+      ledgerSetupInProgress: true,
+      ledgerService: { isAndroidWeb: false, enableBluetoothMode: changeMode },
+      importLedgerWallet: load
+    };
+
+    await ConfigureWalletComponent.prototype.connectLedgerByBluetooth.call(component);
+    await ConfigureWalletComponent.prototype.connectLedgerByUsb.call(component);
+
+    expect(changeMode).not.toHaveBeenCalled();
+    expect(load).not.toHaveBeenCalled();
+  });
+
   it('never opens a USB connection on Android', async () => {
     const enableBluetoothMode = jasmine.createSpy('enableBluetoothMode');
     const importLedgerWallet = jasmine.createSpy('importLedgerWallet');
@@ -148,6 +164,24 @@ describe('Use Ledger explicitly configures the attached device', () => {
       expect(c.component.confirmWalletOverwrite).toHaveBeenCalledTimes(1);
       expect(c.component.route.navigate).toHaveBeenCalledWith(['accounts']);
       expect(c.ledgerService.configuringWallet).toBe(false);
+    } finally { c.cleanup(); }
+  });
+
+  it('rejects overlapping wallet imports while a Ledger account scan is running', async () => {
+    let finishScan!: (v: any[]) => void;
+    const pendingScan = new Promise<any[]>(resolve => { finishScan = resolve; });
+    const c = setup({ scan: pendingScan });
+    try {
+      const first = ConfigureWalletComponent.prototype.importLedgerWallet.call(c.component);
+      expect(c.component.ledgerSetupInProgress).toBe(true);
+      await ConfigureWalletComponent.prototype.importLedgerWallet.call(c.component);
+      expect(c.walletService.prepareLedgerReplacementAccounts).toHaveBeenCalledTimes(1);
+      expect(c.component.confirmWalletOverwrite).toHaveBeenCalledTimes(1);
+      expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
+      finishScan(c.accounts);
+      await first;
+      expect(c.walletService.activatePreparedLedgerWallet).toHaveBeenCalledTimes(1);
+      expect(c.component.ledgerSetupInProgress).toBe(false);
     } finally { c.cleanup(); }
   });
 
