@@ -635,9 +635,9 @@
     "pro-tip": "Tip:",
     "tip-password": "If you forget your password, you can restore your wallet using your saved recovery seed or phrase.",
     "tip-ledger": "Click the Ledger status area on the left to refresh its status after connecting or disconnecting it.",
-    "overwrite-ledger-before": "You are about to configure a new wallet, which will",
-    "overwrite-ledger-strong": "disconnect your Ledger device from Nault",
-    "overwrite-ledger-after": "To use your Ledger wallet again, simply import your device.",
+    "overwrite-ledger-before": "A Ledger wallet is already configured in Nault. This will",
+    "overwrite-ledger-strong": "replace its saved accounts with those of the connected Ledger",
+    "overwrite-ledger-after": "Your funds and Ledger devices will not be changed. Cancel to keep the current wallet.",
     "overwrite-software-strong": "replace your currently configured wallet",
     "import-wallet": "Import wallet"
   },
