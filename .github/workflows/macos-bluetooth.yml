@@ -15,6 +15,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - '.github/workflows/macos-bluetooth.yml'
       - 'desktop-app/macos-bluetooth.json'
@@ -26,11 +27,19 @@ on:
       - 'package.json'
       - 'package-lock.json'
 
+# Repeated commits to a Draft PR should not queue expensive x64/arm64
+# packages or email failure notifications. Manual dispatch remains available
+# for hardware test candidates; automated builds run when review is requested.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   macos:
+    if: ${{ github.event_name == 'workflow_dispatch' || !github.event.pull_request.draft }}
     name: ${{ matrix.arch }} unsigned package and smoke tests
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
