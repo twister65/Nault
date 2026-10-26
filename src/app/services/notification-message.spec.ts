@@ -3,6 +3,7 @@ import { localizeNotificationMessage } from './notification-message';
 describe('localizeNotificationMessage', () => {
   const messages: Record<string, string> = {
     'ui-notifications.node-offline': 'Impossible de se connecter au nœud Nano. Les soldes affichés peuvent être inexacts !',
+    'ui-notifications.refresh-balance-failed': 'Impossible d’actualiser les soldes. Vérifiez votre connexion.',
     'ui-notifications.ledger-pending-reconnect': 'Des XNO sont en attente de réception. Déverrouillez votre Ledger, ouvrez l’application Nano, puis cliquez sur « Reconnecter » pour les recevoir.',
     'ui-notifications.tracked-receivable': 'L’adresse suivie {{account}} peut maintenant recevoir {{amount}} XNO.',
     'ui-notifications.tracked-sent': 'L’adresse suivie {{account}} a envoyé {{amount}} XNO.',
@@ -23,6 +24,12 @@ describe('localizeNotificationMessage', () => {
     expect(localizeNotificationMessage(
       'Unable to connect to the nano node, your balances may be inaccurate!', translate
     )).toBe('Impossible de se connecter au nœud Nano. Les soldes affichés peuvent être inexacts !');
+  });
+
+  it('localizes the balance refresh error emitted at offline startup', () => {
+    expect(localizeNotificationMessage(
+      'Unable to refresh balances. Check your connection.', translate
+    )).toBe('Impossible d’actualiser les soldes. Vérifiez votre connexion.');
   });
 
   it('localizes the Ledger incoming-XNO reconnection guidance', () => {
