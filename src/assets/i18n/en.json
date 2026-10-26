@@ -832,6 +832,7 @@
     "addressbook-entry-removed": "Address book entry removed successfully!",
     "endpoint-work-https": "Use HTTPS for the work server. HTTP is only allowed on loopback.",
     "endpoint-server-secure": "Use HTTPS/WSS. HTTP/WS is only allowed for localhost and loopback addresses.",
+    "nano-price-unavailable": "There was an issue retrieving latest nano price.  Ensure your AdBlocker is disabled on this page then reload to see accurate FIAT values.",
     "refresh-balance-failed": "Unable to refresh balances. Check your connection.",
     "refresh-balance-server": "Unable to refresh balances. Check your connection or choose another server.",
     "qr-unrecognized": "This QR code is not recognized.",
