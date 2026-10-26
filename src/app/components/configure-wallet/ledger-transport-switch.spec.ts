@@ -7,13 +7,38 @@ describe('Use Ledger explicitly configures the attached device', () => {
     const importLedgerWallet = jasmine.createSpy('importLedgerWallet').and.resolveTo();
     const component: any = {
       ledgerService: { isAndroidWeb: false, isDesktop: false, enableBluetoothMode,
-        resetLedger: jasmine.createSpy('resetLedger') },
+        resetLedger: jasmine.createSpy('resetLedger'),
+        ledgerStatus$: { next: jasmine.createSpy('next') } },
       ledger: { status: LedgerStatus.READY },
       importLedgerWallet
     };
     await ConfigureWalletComponent.prototype.connectLedgerByUsb.call(component);
     expect(enableBluetoothMode).toHaveBeenCalledWith(false);
     expect(importLedgerWallet).toHaveBeenCalledWith();
+  });
+
+  it('publishes disconnected status to sidebar before new USB wallet configuration', async () => {
+    const ledgerStatus$ = { next: jasmine.createSpy('next') };
+    const ledger = { status: LedgerStatus.READY };
+    const component: any = {
+      ledger,
+      ledgerService: {
+        isAndroidWeb: false,
+        isDesktop: false,
+        enableBluetoothMode: jasmine.createSpy('enableBluetoothMode'),
+        resetLedger: jasmine.createSpy('resetLedger'),
+        ledgerStatus$
+      },
+      importLedgerWallet: jasmine.createSpy('importLedgerWallet').and.resolveTo()
+    };
+
+    await ConfigureWalletComponent.prototype.connectLedgerByUsb.call(component);
+
+    expect(ledger.status).toBe(LedgerStatus.NOT_CONNECTED);
+    expect(ledgerStatus$.next).toHaveBeenCalledWith({
+      status: LedgerStatus.NOT_CONNECTED, statusText: ''
+    });
+    expect(component.importLedgerWallet).toHaveBeenCalled();
   });
 
   it('imports the attached Ledger when switching to Bluetooth', async () => {
@@ -60,7 +85,8 @@ describe('Use Ledger explicitly configures the attached device', () => {
     const ledgerService: any = {
       configuringWallet: false,
       loadLedger: jasmine.createSpy('loadLedger').and.resolveTo(options.ready !== false),
-      resetLedger: jasmine.createSpy('resetLedger')
+      resetLedger: jasmine.createSpy('resetLedger'),
+      ledgerStatus$: { next: jasmine.createSpy('next') }
     };
     const component: any = {
       isConfigured: () => options.configured !== false,
@@ -100,6 +126,9 @@ describe('Use Ledger explicitly configures the attached device', () => {
       expect(localStorage.getItem(c.walletService.storeKey)).toBe(previous);
       expect(c.ledgerService.configuringWallet).toBe(false);
       expect(c.ledgerService.resetLedger).toHaveBeenCalled();
+      expect(c.ledgerService.ledgerStatus$.next).toHaveBeenCalledWith({
+        status: LedgerStatus.NOT_CONNECTED, statusText: ''
+      });
     } finally { c.cleanup(); }
   });
 
