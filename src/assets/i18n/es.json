@@ -832,6 +832,7 @@
     "addressbook-entry-removed": "¡Entrada de la libreta de direcciones eliminada correctamente!",
     "endpoint-work-https": "Usa HTTPS para el servidor de trabajo. HTTP solo se permite en el equipo local.",
     "endpoint-server-secure": "Usa HTTPS/WSS. HTTP/WS solo se permite para localhost y direcciones de bucle local.",
+    "nano-price-unavailable": "No se pudo obtener el precio más reciente de Nano. Comprueba tu conexión a Internet o la configuración del bloqueador de anuncios y vuelve a cargar la página para mostrar importes actualizados en moneda fiduciaria.",
     "refresh-balance-failed": "No se pudieron actualizar los saldos. Comprueba la conexión.",
     "refresh-balance-server": "No se pudieron actualizar los saldos. Comprueba la conexión o elige otro servidor.",
     "qr-unrecognized": "No se reconoce este código QR.",
