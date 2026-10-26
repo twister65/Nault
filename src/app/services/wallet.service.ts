@@ -596,6 +596,65 @@ export class WalletService {
     return this.wallet.seed;
   }
 
+  /**
+   * Discover accounts on a newly connected Ledger without touching the
+   * currently configured wallet. Switching USB/Bluetooth is NOT a wallet
+   * replacement, and failed discovery must leave the old wallet intact.
+   */
+  async prepareLedgerReplacementAccounts(): Promise<WalletAccount[]> {
+    const usedIndices: number[] = [];
+    const accountIds = new Map<number, string>();
+    const accountsPerRequest = 10;
+    const accountsLimit = 20;
+
+    for (let offset = 0; offset < accountsLimit; offset += accountsPerRequest) {
+      const accountMetadata: Record<string, {index: number; publicKey: string}> = {};
+      const accountAddresses: string[] = [];
+      for (let index = offset; index < offset + accountsPerRequest; index++) {
+        const account = await this.ledgerService.getLedgerAccount(index);
+        const address: string = account.address.replace('xrb_', 'nano_');
+        accountMetadata[address] = { index, publicKey: account.publicKey.toUpperCase() };
+        accountIds.set(index, address);
+        accountAddresses.push(address);
+      }
+
+      // Fail closed when the RPC is offline: an empty/unverified scan must not
+      // replace the stored wallet or silently hide its existing accounts.
+      const result = await this.api.accountsFrontiers(accountAddresses);
+      if (!result || !result.frontiers) throw new Error('Ledger account scan requires a working Nano RPC connection.');
+      for (const [address, frontier] of Object.entries(result.frontiers)) {
+        const metadata = accountMetadata[address];
+        if (metadata && typeof frontier === 'string' && this.util.nano.isValidHash(frontier) &&
+            frontier !== metadata.publicKey) {
+          usedIndices.push(metadata.index);
+        }
+      }
+    }
+
+    const indices = usedIndices.length ? usedIndices : [0];
+    const candidates: WalletAccount[] = [];
+    for (const index of indices) {
+      const account = await this.createLedgerAccount(index);
+      // Reject a device swap halfway through the scan.
+      if (account.id !== accountIds.get(index)) throw new Error('Ledger changed during account discovery. Please retry.');
+      candidates.push(account);
+    }
+    return candidates;
+  }
+
+  /** Activate only a fully prepared set of accounts, after user confirmation. */
+  activatePreparedLedgerWallet(accounts: WalletAccount[]): void {
+    if (!accounts.length) throw new Error('Ledger account list is empty.');
+    this.resetWallet();
+    this.wallet.type = 'ledger';
+    this.wallet.accounts = accounts;
+    this.websocket.subscribeAccounts(accounts.map(account => account.id));
+    this.saveWalletExport();
+    this.informNewWallet();
+    void this.reloadBalances().catch(() =>
+      this.notifications.sendWarning('Unable to refresh balances. Check your connection.'));
+  }
+
   async createLedgerWallet() {
     // this.resetWallet(); Now done earlier to ensure user not sending to wrong account
 
