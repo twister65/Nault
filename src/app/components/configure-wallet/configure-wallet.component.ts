@@ -2,7 +2,8 @@ import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {WalletService, NotificationService, RepresentativeService} from '../../services';
 import {ActivatedRoute, Router} from '@angular/router';
 import * as bip39 from 'bip39';
-import {LedgerService, LedgerStatus} from '../../services/ledger.service';
+import {LedgerService, LedgerStatus, getLedgerReadinessIssue} from '../../services/ledger.service';
+import {localizeNotificationMessage} from '../../services/notification-message';
 import { QrModalService } from '../../services/qr-modal.service';
 import type { QRType } from '../qr-modal/qr-modal.component';
 import {UtilService} from '../../services/util.service';
@@ -144,15 +145,24 @@ export class ConfigureWalletComponent implements OnInit {
 
   async connectLedgerByUsb() {
     if (this.ledgerService.isAndroidWeb) return; // Android web uses Bluetooth only.
+    const switchingFromBluetooth = this.ledgerService.transportMode === 'Bluetooth';
     this.ledgerService.enableBluetoothMode(false);
-    // Explicit setup must not silently reuse a previously opened WebUSB/HID session.
-    // Let the browser select the physically attached Ledger for this new wallet.
+    // Switching modes already discards the previous transport. When already
+    // using USB, explicitly release the old session to select a new Ledger.
+    // Avoid two consecutive asynchronous closes when switching Bluetooth → USB.
     if (!this.ledgerService.isDesktop) {
-      this.ledgerService.resetLedger();
+      if (!switchingFromBluetooth) this.ledgerService.resetLedger();
       this.ledger.status = LedgerStatus.NOT_CONNECTED;
       this.ledgerService.ledgerStatus$.next({ status: LedgerStatus.NOT_CONNECTED, statusText: '' });
     }
     await this.importLedgerWallet();
+  }
+
+  get bluetoothConnectionHint(): string {
+    return localizeNotificationMessage(
+      this.ledgerService.bluetoothErrorMessage,
+      key => this.translocoService.translate(key)
+    );
   }
 
   async refreshLedgerStatus() {
@@ -208,7 +218,13 @@ export class ConfigureWalletComponent implements OnInit {
         else localStorage.setItem(this.walletService.storeKey, storedWallet);
         await this.walletService.loadStoredWallet();
       }
-      this.notifications.sendWarning(this.translocoService.translate('ui-notifications.ledger-replace-failed'));
+      const readinessIssue = getLedgerReadinessIssue(error);
+      const key = readinessIssue === 'app-not-open'
+        ? 'ui-notifications.ledger-nano-app-not-open'
+        : readinessIssue === 'locked'
+          ? 'ui-notifications.ledger-locked-reconnect'
+          : 'ui-notifications.ledger-replace-failed';
+      this.notifications.sendWarning(this.translocoService.translate(key));
     } finally {
       this.ledgerService.configuringWallet = false;
       this.notifications.removeNotification('ledger-status');
