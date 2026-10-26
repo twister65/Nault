@@ -12,6 +12,7 @@ describe('localizeNotificationMessage', () => {
     'ui-notifications.tracked-representative': 'L’adresse suivie {{account}} a changé de représentant : {{representative}}.',
     'ui-notifications.bluetooth-unavailable': 'Bluetooth indisponible. Vérifiez le Bluetooth de votre ordinateur et de votre Ledger, ou reconnectez-vous en USB.',
     'ui-notifications.ledger-confirmation-waiting': 'En attente de confirmation sur la Ledger…',
+    'ui-notifications.ledger-wallet-mismatch': 'La Ledger connectée ne correspond pas au portefeuille configuré. Pour utiliser cette clé, sélectionnez « Configurer un nouveau portefeuille » → « Utiliser Ledger ».',
     'ui-notifications.ledger-nano-app-not-open': 'L’application Nano n’est pas ouverte sur votre Ledger. Ouvrez-la, puis cliquez sur « Reconnecter ».',
     'ui-notifications.ledger-locked-reconnect': 'Ledger verrouillée. Déverrouillez-la, ouvrez l’application Nano, puis cliquez sur « Reconnecter ».','
     'ui-notifications.ledger-hid-read-timeout': 'délai de lecture HID de la Ledger dépassé',
@@ -48,6 +49,11 @@ describe('localizeNotificationMessage', () => {
     expect(localizeNotificationMessage(
       'Ledger locked. Unlock your Ledger, open the Nano app, then click Reconnect.', translate
     )).toBe('Ledger verrouillée. Déverrouillez-la, ouvrez l’application Nano, puis cliquez sur « Reconnecter ».');
+  });
+
+  it('localizes the mismatched Ledger error during reconnect', () => {
+    expect(localizeNotificationMessage('Ledger does not match the configured wallet.', translate))
+      .toContain('ne correspond pas au portefeuille configuré');
   });
 
   it('localizes the Ledger incoming-XNO reconnection guidance', () => {
