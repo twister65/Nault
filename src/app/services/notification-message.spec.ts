@@ -4,6 +4,7 @@ describe('localizeNotificationMessage', () => {
   const messages: Record<string, string> = {
     'ui-notifications.node-offline': 'Impossible de se connecter au nœud Nano. Les soldes affichés peuvent être inexacts !',
     'ui-notifications.refresh-balance-failed': 'Impossible d’actualiser les soldes. Vérifiez votre connexion.',
+    'ui-notifications.nano-price-unavailable': 'Impossible de récupérer le dernier cours du Nano. Vérifiez votre connexion Internet ou les paramètres de votre bloqueur de publicités, puis actualisez la page pour afficher des montants en monnaie fiduciaire à jour.',
     'ui-notifications.ledger-pending-reconnect': 'Des XNO sont en attente de réception. Déverrouillez votre Ledger, ouvrez l’application Nano, puis cliquez sur « Reconnecter » pour les recevoir.',
     'ui-notifications.tracked-receivable': 'L’adresse suivie {{account}} peut maintenant recevoir {{amount}} XNO.',
     'ui-notifications.tracked-sent': 'L’adresse suivie {{account}} a envoyé {{amount}} XNO.',
@@ -30,6 +31,12 @@ describe('localizeNotificationMessage', () => {
     expect(localizeNotificationMessage(
       'Unable to refresh balances. Check your connection.', translate
     )).toBe('Impossible d’actualiser les soldes. Vérifiez votre connexion.');
+  });
+
+  it('localizes the persistent Nano price error emitted during offline startup', () => {
+    expect(localizeNotificationMessage(
+      'There was an issue retrieving latest nano price.  Ensure your AdBlocker is disabled on this page then reload to see accurate FIAT values.', translate
+    )).toBe('Impossible de récupérer le dernier cours du Nano. Vérifiez votre connexion Internet ou les paramètres de votre bloqueur de publicités, puis actualisez la page pour afficher des montants en monnaie fiduciaire à jour.');
   });
 
   it('localizes the Ledger incoming-XNO reconnection guidance', () => {
