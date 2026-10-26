@@ -611,6 +611,7 @@ export class WalletService {
   async prepareLedgerReplacementAccounts(): Promise<WalletAccount[]> {
     const usedIndices: number[] = [];
     const accountIds = new Map<number, string>();
+    let scanOnline = true;
     const accountsPerRequest = 10;
     const accountsLimit = 20;
 
@@ -625,10 +626,13 @@ export class WalletService {
         accountAddresses.push(address);
       }
 
-      // Fail closed when the RPC is offline: an empty/unverified scan must not
-      // replace the stored wallet or silently hide its existing accounts.
-      const result = await this.api.accountsFrontiers(accountAddresses);
-      if (!result || !result.frontiers) throw new Error('Ledger account scan requires a working Nano RPC connection.');
+      // Hardware account #0 is available offline. RPC is only necessary to
+      // discover which *additional* indices have been used previously.
+      const result = await this.api.accountsFrontiers(accountAddresses).catch(() => null);
+      if (!result || !result.frontiers) {
+        scanOnline = false;
+        break;
+      }
       for (const [address, frontier] of Object.entries(result.frontiers)) {
         const metadata = accountMetadata[address];
         if (metadata && typeof frontier === 'string' && this.util.nano.isValidHash(frontier) &&
@@ -644,7 +648,9 @@ export class WalletService {
       throw new Error('Ledger changed during account discovery. Please retry.');
     }
 
-    const indices = usedIndices.length ? usedIndices : [0];
+    // Without RPC, show only the device's real account #0; never reuse
+    // addresses belonging to a previously stored hardware wallet.
+    const indices = scanOnline && usedIndices.length ? usedIndices : [0];
     const candidates: WalletAccount[] = [];
     for (const index of indices) {
       const account = await this.createLedgerAccount(index);
