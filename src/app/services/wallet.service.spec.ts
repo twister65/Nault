@@ -175,3 +175,87 @@ describe('WalletService successful incoming-block coalescing', () => {
     }
   });
 });
+
+
+describe('WalletService staged Ledger replacement', () => {
+  it('keeps existing accounts and storage untouched if the Nano RPC scan fails', async () => {
+    const service = Object.create(WalletService.prototype) as any;
+    const previous = [{ id: 'nano_old', index: 0 }];
+    service.wallet = { type: 'ledger', accounts: previous };
+    service.ledgerService = {
+      getLedgerAccount: jasmine.createSpy('getLedgerAccount')
+        .and.callFake(async (index: number) => ({ address: 'nano_' + index, publicKey: 'A' }))
+    };
+    service.api = { accountsFrontiers: jasmine.createSpy('accountsFrontiers')
+      .and.returnValue(Promise.reject(new Error('RPC offline'))) };
+    const reset = spyOn(service, 'resetWallet').and.stub();
+
+    await expectAsync(service.prepareLedgerReplacementAccounts()).toBeRejectedWithError('RPC offline');
+
+    expect(service.wallet.accounts).toBe(previous);
+    expect(reset).not.toHaveBeenCalled();
+  });
+
+  it('returns a prepared list without modifying the existing wallet', async () => {
+    const service = Object.create(WalletService.prototype) as any;
+    const previous = [{ id: 'nano_old', index: 0 }];
+    service.wallet = { type: 'ledger', accounts: previous };
+    service.ledgerService = {
+      getLedgerAccount: jasmine.createSpy('getLedgerAccount')
+        .and.callFake(async (index: number) => ({ address: 'nano_' + index, publicKey: 'AAAA' }))
+    };
+    service.api = { accountsFrontiers: jasmine.createSpy('accountsFrontiers')
+      .and.callFake(async () => ({ frontiers: { nano_2: 'BBBB' } })) };
+    service.util = { nano: { isValidHash: () => true } };
+    spyOn(service, 'createLedgerAccount')
+      .and.callFake(async (index: number) => ({ id: 'nano_' + index, index }));
+    const reset = spyOn(service, 'resetWallet').and.stub();
+
+    const prepared = await service.prepareLedgerReplacementAccounts();
+
+    expect(prepared).toEqual([{ id: 'nano_2', index: 2 }]);
+    expect(service.wallet.accounts).toBe(previous);
+    expect(reset).not.toHaveBeenCalled();
+  });
+
+  it('refuses to mix accounts if the connected Ledger changes during discovery', async () => {
+    const service = Object.create(WalletService.prototype) as any;
+    const previous = [{ id: 'nano_old', index: 0 }];
+    service.wallet = { type: 'ledger', accounts: previous };
+    let firstAccountReads = 0;
+    service.ledgerService = {
+      getLedgerAccount: jasmine.createSpy('getLedgerAccount').and.callFake(async (index: number) => {
+        if (index === 0 && ++firstAccountReads > 1) return { address: 'nano_swapped', publicKey: 'AAAA' };
+        return { address: 'nano_' + index, publicKey: 'AAAA' };
+      })
+    };
+    service.api = { accountsFrontiers: jasmine.createSpy('accountsFrontiers')
+      .and.callFake(async () => ({ frontiers: {} })) };
+    service.util = { nano: { isValidHash: () => true } };
+
+    await expectAsync(service.prepareLedgerReplacementAccounts())
+      .toBeRejectedWithError('Ledger changed during account discovery. Please retry.');
+    expect(service.wallet.accounts).toBe(previous);
+  });
+
+  it('publishes new accounts only after an explicit activation', () => {
+    const service = Object.create(WalletService.prototype) as any;
+    service.wallet = { type: 'ledger', accounts: [{ id: 'nano_old', index: 0 }] };
+    service.resetWallet = jasmine.createSpy('resetWallet').and.callFake(() => {
+      service.wallet.accounts = [];
+      service.wallet.type = 'seed';
+    });
+    service.websocket = { subscribeAccounts: jasmine.createSpy('subscribeAccounts') };
+    service.saveWalletExport = jasmine.createSpy('saveWalletExport');
+    service.informNewWallet = jasmine.createSpy('informNewWallet');
+    service.reloadBalances = jasmine.createSpy('reloadBalances').and.resolveTo();
+
+    service.activatePreparedLedgerWallet([{ id: 'nano_new', index: 0 }]);
+
+    expect(service.resetWallet).toHaveBeenCalled();
+    expect(service.wallet.type).toBe('ledger');
+    expect(service.wallet.accounts).toEqual([{ id: 'nano_new', index: 0 }]);
+    expect(service.websocket.subscribeAccounts).toHaveBeenCalledWith(['nano_new']);
+    expect(service.saveWalletExport).toHaveBeenCalled();
+  });
+});
