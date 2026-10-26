@@ -814,7 +814,7 @@ export class WalletService {
 
     if (!accounts) {
       this.resetBalances();
-        this.wallet.balanceInitialized = true;
+      this.wallet.balanceInitialized = true;
       return;
     }
 
@@ -951,7 +951,13 @@ export class WalletService {
     this.wallet.balanceInitialized = true;
 
     if (this.wallet.pendingBlocks.length) {
-      await this.processPendingBlocks();
+      // Receiving a block calls reloadBalances(): do not await it from inside
+      // the current balance-refresh promise (that would deadlock).
+      setTimeout(() => {
+        void this.processPendingBlocks().catch(error => {
+          console.warn('Unable to process pending blocks after balance refresh.', error);
+        });
+      }, 0);
     }
     this.informBalanceRefresh();
   }
