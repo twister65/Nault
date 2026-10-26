@@ -635,9 +635,9 @@
     "pro-tip": "Conseil :",
     "tip-password": "Si vous oubliez votre mot de passe, vous pouvez restaurer le portefeuille avec votre seed ou phrase de récupération sauvegardée.",
     "tip-ledger": "Cliquez sur l'état de la Ledger à gauche pour l'actualiser après une connexion ou une déconnexion.",
-    "overwrite-ledger-before": "Vous allez configurer un nouveau portefeuille, ce qui va",
-    "overwrite-ledger-strong": "déconnecter votre Ledger de Nault",
-    "overwrite-ledger-after": "Pour réutiliser votre portefeuille Ledger, importez simplement l'appareil à nouveau.",
+    "overwrite-ledger-before": "Un portefeuille Ledger est déjà configuré dans Nault. Cette opération va",
+    "overwrite-ledger-strong": "remplacer ses comptes enregistrés par ceux de la Ledger connectée",
+    "overwrite-ledger-after": "Vos fonds et vos appareils Ledger ne seront pas modifiés. Annulez pour conserver le portefeuille actuel.",
     "overwrite-software-strong": "remplacer votre portefeuille actuel",
     "import-wallet": "Importer le portefeuille"
   },
