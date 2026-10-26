@@ -85,6 +85,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
   routerSub: Subscription | null = null;
   priceSub: Subscription | null = null;
+  balanceRefreshSub: Subscription | null = null;
 
   initialLoadDone = false;
   manualRefreshAllowed = true;
@@ -189,6 +190,10 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
     await this.loadAccountDetails();
     this.initialLoadDone = true;
+    // A recovered wallet RPC snapshot must also update the visible account history.
+    this.balanceRefreshSub = this.wallet.wallet.refresh$.subscribe(refreshed => {
+      if (refreshed && this.initialLoadDone) this.loadAccountDetailsThrottled();
+    });
     this.addressBook.loadAddressBook();
 
     this.populateRepresentativeList();
@@ -465,12 +470,17 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   }
 
   async loadAccountDetails() {
+    if (this.loadingAccountDetails) {
+      this.shouldQueueAutoRefresh = true;
+      return;
+    }
     this.onAccountDetailsLoadStart();
 
     this.pendingBlocks = [];
 
     this.clearAccountVars();
     this.loadingAccountDetails = true;
+    try {
 
     const accountID = this.router.snapshot.params.account;
     this.accountID = accountID;
@@ -484,13 +494,11 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
     if (accountID !== this.accountID) {
       // Navigated to a different account while account info was loading
-      this.onAccountDetailsLoadDone();
       return;
     }
 
     if (!this.account) {
       this.loadingAccountDetails = false;
-      this.onAccountDetailsLoadDone();
       return;
     }
 
@@ -514,8 +522,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
       if (accountID !== this.accountID) {
         // Navigated to a different account while incoming tx were loading
-        this.onAccountDetailsLoadDone();
-        return;
+          return;
       }
 
       this.loadingIncomingTxList = false;
@@ -579,12 +586,18 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
     if (accountID !== this.accountID) {
       // Navigated to a different account while account history was loading
-      this.onAccountDetailsLoadDone();
       return;
     }
 
-    this.loadingAccountDetails = false;
-    this.onAccountDetailsLoadDone();
+    } catch (error) {
+      // Offline RPC failures must not leave the account or history spinners running.
+      console.warn('Unable to load account details; retry after network recovery.', error);
+    } finally {
+      this.loadingAccountDetails = false;
+      this.loadingIncomingTxList = false;
+      this.loadingTxList = false;
+      this.onAccountDetailsLoadDone();
+    }
   }
 
   getAccountLabel(accountID: string, defaultLabel: string | null): string | null {
@@ -606,6 +619,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     if (this.priceSub) {
       this.priceSub.unsubscribe();
     }
+    this.balanceRefreshSub?.unsubscribe();
   }
 
   async generateReceiveQR(accountID: string) {
