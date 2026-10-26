@@ -1,3 +1,17 @@
+### Validation matérielle — annulation du remplacement et programme de signatures (26 octobre 2026)
+
+**Retour matériel utilisateur — annulation : OK.** Sur la PWA de test avec les Ledger Nano S Plus / Nano X, l'utilisateur confirme que **l'annulation du remplacement du portefeuille fonctionne** : l'ancien portefeuille est conservé. **Anomalie d'interface toujours visible** : le bouton de cette boîte de dialogue affiche encore « CANCEL » en anglais, même si `confirmWalletOverwrite()` fournit déjà à UIkit `i18n.cancel = translocoService.translate('general.cancel')`. Ne pas considérer la traduction validée ; analyser la version/API UIkit réellement utilisée à l'occasion d'un correctif ciblé. Ne pas mélanger ce problème mineur de libellé avec la réussite de l'annulation fonctionnelle.
+
+**Tests matériels de signature à venir — non encore validés :**
+
+1. Avec Nano S Plus USB, lancer un petit envoi vers un compte contrôlé et **refuser** la transaction sur la Ledger ; vérifier transaction non envoyée, message compréhensible, code Ledger `0x6985` éventuellement traité sans erreur technique visible, session USB toujours connectée.
+2. Sans reconnecter la clé après le refus, refaire un petit envoi et cette fois **confirmer** ; contrôler sur l'écran matériel l'adresse de destination et le montant avant signature, puis la diffusion et le solde.
+3. Recevoir sur ce portefeuille un très petit montant depuis un autre compte contrôlé ; contrôler la signature du bloc de réception et la mise à jour du solde.
+4. Répéter le refus et la confirmation d'envoi avec Nano X **en Bluetooth** quand ce portefeuille est configuré et connecté par Bluetooth ; surveiller la persistance de session.
+5. Vérifier que la signature est impossible si la Ledger physique connectée ne correspond pas aux comptes du portefeuille (contrôle d'identité déjà validé en reconnexion USB, mais pas encore en situation de signature).
+
+Les essais doivent utiliser exclusivement de petites quantités de XNO, des adresses contrôlées par l'utilisateur et aucune seed ou clé privée divulguée. Les résultats de réception et d'envoi ne sont **pas** déduits des validations de configuration et de reconnexion précédentes. PR #27 maintenue Draft ; aucune fusion sans accord explicite.
+
 ### Validation matérielle — reconnexion USB avec contrôle d'identité Ledger (26 octobre 2026)
 
 **Résultat utilisateur : OK.** Après configuration d'un portefeuille **Nano S Plus** dans la PWA, l'utilisateur a testé la **reconnexion via USB avec les deux clés physiques**, Nano S Plus et Nano X. La tentative avec une clé qui ne correspond pas au portefeuille enregistré a produit le message attendu : **« La Ledger connectée ne correspond pas au portefeuille connecté »**. La vérification d'identité avant de déclarer la session prête empêche ainsi une reconnexion sur une autre clé. **Il s'agit bien d'un test de reconnexion, sans remplacement du portefeuille ni importation de nouveaux comptes.**
