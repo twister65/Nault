@@ -1,4 +1,5 @@
-import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Subscription } from 'rxjs';
 import {NotificationService, NotificationType} from '../../services/notification.service';
 import { TranslocoService } from '@jsverse/transloco';
 import { localizeNotificationMessage } from '../../services/notification-message';
@@ -10,21 +11,33 @@ import { localizeNotificationMessage } from '../../services/notification-message
     changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
-export class NotificationsComponent implements OnInit {
+export class NotificationsComponent implements OnInit, OnDestroy {
 
   notificationLength = 5000;
 
   notifications: Array<{
     type: NotificationType;
     message: string;
+    source: string;
     cssClass: string;
     identifier: string | null;
     length: number;
   }> = [];
+  private readonly subscriptions = new Subscription();
+
   constructor(private notificationService: NotificationService, private translocoService: TranslocoService) { }
 
   ngOnInit() {
-    this.notificationService.notifications$.subscribe(notification => {
+    // Offline startup can emit an RPC error before the lazy language chunk resolves.
+    // Retranslate visible notices once Transloco has actually loaded the language.
+    this.subscriptions.add(this.translocoService.selectTranslation().subscribe(() => {
+      for (const notification of this.notifications) {
+        notification.message = localizeNotificationMessage(
+          notification.source, (key, params) => this.translocoService.translate(key, params)
+        );
+      }
+    }));
+    this.subscriptions.add(this.notificationService.notifications$.subscribe(notification => {
       if (!notification) {
         return; // Default value
       }
@@ -44,6 +57,7 @@ export class NotificationsComponent implements OnInit {
       const newNotification = {
         type: notification.type,
         message: localizeNotificationMessage(notification.message, (key, params) => this.translocoService.translate(key, params)),
+        source: notification.message,
         cssClass: this.getCssClass(notification.type),
         identifier: identifier,
         length: length,
@@ -53,9 +67,9 @@ export class NotificationsComponent implements OnInit {
       if (length) {
         setTimeout(() => this.removeNotification(newNotification), length);
       }
-    });
+    }));
 
-    this.notificationService.removeNotification$.subscribe(identifier => {
+    this.subscriptions.add(this.notificationService.removeNotification$.subscribe(identifier => {
       if (!identifier) {
         return;
       }
@@ -64,7 +78,11 @@ export class NotificationsComponent implements OnInit {
       if (existingNotification) {
         this.removeNotification(existingNotification);
       }
-    });
+    }));
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
   }
 
   private removeNotification(notification: (typeof this.notifications)[number]): void {
