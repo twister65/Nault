@@ -228,8 +228,8 @@ describe('Use Ledger explicitly configures the attached device', () => {
         'ui-wallet-setup.overwrite-ledger-before': 'A Ledger wallet is already configured in Nault. This will',
         'ui-wallet-setup.overwrite-ledger-strong': 'replace its saved accounts with those of the connected Ledger',
         'ui-wallet-setup.overwrite-ledger-after': 'Your funds and Ledger devices will not be changed.',
-        'ui-wallet-setup.confirm-overwrite': 'Confirm replacement',
-        'general.cancel': 'Cancel'
+        'ui-wallet-setup.confirm-overwrite': 'Confirmer le remplacement',
+        'general.cancel': 'Annuler'
       } as Record<string, string>)[key] || key },
       notifications: { sendInfo: jasmine.createSpy('sendInfo') }
     };
@@ -240,7 +240,7 @@ describe('Use Ledger explicitly configures the attached device', () => {
       expect(message).toContain('replace its saved accounts');
       expect(message).toContain('Your funds and Ledger devices will not be changed');
       expect(modalConfirm.calls.mostRecent().args[1]).toEqual({
-        labels: { ok: 'Confirm replacement', cancel: 'Cancel' }
+        labels: { ok: 'Confirmer le remplacement', cancel: 'Annuler' }
       });
     } finally { (window as any).UIkit = original; }
   });
