@@ -1,3 +1,9 @@
+### Statuts Ledger contradictoires dans la PWA ChromeOS (26 octobre 2026, 19 h 41)
+
+**Capture utilisateur sur `nault-android-test.vercel.app` (commit `c9c855f`) :** la barre latérale indiquait en vert « Ledger prête » alors que l'écran « Configurer le portefeuille → Utiliser Ledger » affichait en orange « Ledger non connectée », avec l'ancien solde de 19 XNO encore visible. **Cause identifiée dans le code :** le composant de configuration lit `ledgerService.ledger.status` directement, tandis que `WalletWidgetComponent` utilisait sa copie du dernier événement `ledgerStatus$`. Certains chemins (notamment `connectLedgerByUsb` et l'abandon d'une configuration) changent l'état partagé vers `NOT_CONNECTED` sans émettre cet événement, laissant la barre latérale afficher une valeur READY obsolète.
+
+**Correctif isolé dans la PR #27, non encore déployé :** la barre latérale déduit son statut de la propriété vivante `ledgerService.ledger.status`, et n'affiche la description de l'événement que lorsqu'elle correspond encore à cet état. Les transitions USB de configuration et l'échec/l'annulation de l'import émettent désormais explicitement `ledgerStatus$` avec l'état non connecté. Tests Jasmine pour les événements obsolètes dans les deux sens, le reset USB et l'annulation. Ces changements ne modifient pas les routines de signature, ne configurent pas automatiquement un autre portefeuille et ne prouvent pas la disponibilité d'une Ledger physique. Contrôler la CI et tester la Nano S Plus sur Chromebook avant toute fusion. Préserver le domaine Vercel existant jusqu'à demande explicite de nouveau déploiement.
+
 # Nault — Audit des dépendances dépréciées et préparation Angular 22
 
 **Document de référence initial :** 21 octobre 2026 — **dernière mise à jour : 26 octobre 2026**
