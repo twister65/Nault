@@ -1,3 +1,11 @@
+### Annulation de la sélection USB et traduction « CANCEL » (26 octobre 2026)
+
+**Retour utilisateur :** après « Connecter en USB », l’utilisateur a choisi « CANCEL » (encore en anglais). Deux interfaces peuvent apparaître successivement : (1) le sélecteur matériel WebUSB/WebHID de ChromeOS, dont le libellé appartient au navigateur et ne peut pas être traduit par Nault ; (2) le dialogue UIkit de Nault demandant confirmation avant de remplacer un portefeuille enregistré, dont les libellés « OK / CANCEL » étaient jusqu’ici en anglais.
+
+**Corrections candidates PR #27 :** `confirmWalletOverwrite()` fournit à `UIkit.modal.confirm` les options `i18n.ok` et `i18n.cancel` issues de Transloco (nouvelle clé `ui-wallet-setup.confirm-overwrite`, clé existante `general.cancel`), ajoutées en EN/FR/ES. Une annulation volontaire du sélecteur WebUSB/WebHID (`TransportOpenUserCancelled`) est désormais distinguée d’un véritable échec du transport : elle laisse la configuration enregistrée intacte et n’émet pas le toast générique « connexion échouée ». Les erreurs de connexion réelles continuent de générer un avertissement. Tests Jasmine couvrant les libellés, l'annulation et les erreurs réelles.
+
+**Limite importante :** Nault ne contrôle pas la langue des boutons natifs du navigateur ; si « CANCEL » est dans la fenêtre de sélection USB ChromeOS, sa traduction dépend de ChromeOS/Chrome. Vérifier sur matériel quelle interface a été présentée. Ce correctif n'est pas déployé ; ne fusionner ni déployer sans confirmation.
+
 ### Statuts Ledger contradictoires dans la PWA ChromeOS (26 octobre 2026, 19 h 41)
 
 **Capture utilisateur sur `nault-android-test.vercel.app` (commit `c9c855f`) :** la barre latérale indiquait en vert « Ledger prête » alors que l'écran « Configurer le portefeuille → Utiliser Ledger » affichait en orange « Ledger non connectée », avec l'ancien solde de 19 XNO encore visible. **Cause identifiée dans le code :** le composant de configuration lit `ledgerService.ledger.status` directement, tandis que `WalletWidgetComponent` utilisait sa copie du dernier événement `ledgerStatus$`. Certains chemins (notamment `connectLedgerByUsb` et l'abandon d'une configuration) changent l'état partagé vers `NOT_CONNECTED` sans émettre cet événement, laissant la barre latérale afficher une valeur READY obsolète.
