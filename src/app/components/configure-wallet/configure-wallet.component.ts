@@ -150,6 +150,7 @@ export class ConfigureWalletComponent implements OnInit {
     if (!this.ledgerService.isDesktop) {
       this.ledgerService.resetLedger();
       this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      this.ledgerService.ledgerStatus$.next({ status: LedgerStatus.NOT_CONNECTED, statusText: '' });
     }
     await this.importLedgerWallet();
   }
@@ -214,6 +215,7 @@ export class ConfigureWalletComponent implements OnInit {
         // Never leave the previous wallet marked READY against a failed setup.
         this.ledgerService.resetLedger();
         this.ledger.status = LedgerStatus.NOT_CONNECTED;
+        this.ledgerService.ledgerStatus$.next({ status: LedgerStatus.NOT_CONNECTED, statusText: '' });
       }
     }
   }
