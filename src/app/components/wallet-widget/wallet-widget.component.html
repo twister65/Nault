@@ -13,24 +13,21 @@
                 ledgerStatus.statusText.includes('Nano app is not open'))) {
             <div class="label secondary uk-text-warning">{{ ledgerStatus.statusText }}</div>
           }
-          @if (ledgerService.isDesktop && ledgerService.transportMode === 'Bluetooth') {
-            <div class="label secondary">
-              <a (click)="reconnectUsb()">{{ 'ui-ledger.reconnect-via-usb' | transloco }}</a> {{ 'ui-shell.or' | transloco }}
-              <a (click)="reloadLedger()">{{ 'ui-ledger.reconnect-via-bluetooth' | transloco }}</a> {{ 'ui-shell.or' | transloco }}
-              <a href="https://docs.nault.cc/2020/08/04/ledger-guide.html#troubleshooting" target="_blank" rel="noopener noreferrer">{{ 'ui-ledger.troubleshooting' | transloco }}</a>
-            </div>
-          }
-          @if (!ledgerService.isDesktop || ledgerService.transportMode !== 'Bluetooth') {
-            <div class="label secondary">
-              <a (click)="reloadLedger()">{{ reconnectTransportTranslationKey | transloco }}</a> {{ 'ui-shell.or' | transloco }}
-              <a href="https://docs.nault.cc/2020/08/04/ledger-guide.html#troubleshooting" target="_blank" rel="noopener noreferrer">{{ 'ui-ledger.troubleshooting' | transloco }}</a>
-            </div>
-          }
-          @if (ledgerService.isDesktop && ledgerService.supportsBluetooth && ledgerService.transportMode !== 'Bluetooth') {
-            <div class="label secondary">
-              <a (click)="reconnectBluetooth()">{{ 'ui-ledger.reconnect-via-bluetooth' | transloco }}</a> {{ 'ui-ledger.no-wallet-change' | transloco }}
-            </div>
-          }
+          <div class="label secondary">
+            @if (canReconnectUsb) {
+              <a (click)="reconnectUsb()">{{ 'ui-ledger.reconnect-via-usb' | transloco }}</a>
+            }
+            @if (canReconnectUsb && canReconnectBluetooth) {
+              {{ 'ui-shell.or' | transloco }}
+            }
+            @if (canReconnectBluetooth) {
+              <a (click)="reconnectBluetooth()">{{ 'ui-ledger.reconnect-via-bluetooth' | transloco }}</a>
+            }
+            @if (canReconnectUsb || canReconnectBluetooth) {
+              {{ 'ui-shell.or' | transloco }}
+            }
+            <a href="https://docs.nault.cc/2020/08/04/ledger-guide.html#troubleshooting" target="_blank" rel="noopener noreferrer">{{ 'ui-ledger.troubleshooting' | transloco }}</a>
+          </div>
           @if (canResetBluetoothSession) {
             <div class="label secondary">
               {{ 'ui-ledger.ble-notifications-lost' | transloco }} <a (click)="resetBluetoothSession()">{{ 'ui-ledger.reset-bluetooth' | transloco }}</a>
@@ -47,17 +44,18 @@
         </div>
         <div class="status-labels">
           <div class="label primary uk-text-warning">{{ 'ui-ledger.locked' | transloco }}</div>
-          @if (ledgerService.isDesktop && ledgerService.transportMode === 'Bluetooth') {
-            <div class="label secondary">
-              {{ 'ui-ledger.unlock-device-then' | transloco }} <a (click)="reconnectUsb()">{{ 'ui-ledger.reconnect-via-usb' | transloco }}</a>
-              {{ 'ui-shell.or' | transloco }} <a (click)="reloadLedger()">{{ 'ui-ledger.reconnect-via-bluetooth' | transloco }}</a>.
-            </div>
-          }
-          @if (!ledgerService.isDesktop || ledgerService.transportMode !== 'Bluetooth') {
-            <div class="label secondary">
-              {{ 'ui-ledger.unlock-device-then' | transloco }} <a (click)="reloadLedger()">{{ reconnectTransportTranslationKey | transloco }}</a>.
-            </div>
-          }
+          <div class="label secondary">
+            {{ 'ui-ledger.unlock-device-then' | transloco }}
+            @if (canReconnectUsb) {
+              <a (click)="reconnectUsb()">{{ 'ui-ledger.reconnect-via-usb' | transloco }}</a>
+            }
+            @if (canReconnectUsb && canReconnectBluetooth) {
+              {{ 'ui-shell.or' | transloco }}
+            }
+            @if (canReconnectBluetooth) {
+              <a (click)="reconnectBluetooth()">{{ 'ui-ledger.reconnect-via-bluetooth' | transloco }}</a>
+            }.
+          </div>
         </div>
       </div>
     }
