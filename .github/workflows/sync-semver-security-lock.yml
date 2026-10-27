@@ -27,6 +27,8 @@ jobs:
         run: npm install --package-lock-only --lockfile-version=2 --legacy-peer-deps --ignore-scripts --no-audit --no-fund
       - name: Update transitive semver versions inside declared compatible ranges
         run: npm update semver --package-lock-only --lockfile-version=2 --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Upgrade residual hoisted semver 5.x without saving a new direct dependency
+        run: npm install semver@5.7.2 --no-save --package-lock-only --lockfile-version=2 --legacy-peer-deps --ignore-scripts --no-audit --no-fund
       - name: Assert all resolved semver versions patched
         run: npm run test:semver-security
       - name: Commit lockfile to isolated branch
