@@ -24,8 +24,8 @@ jobs:
           node-version: '22'
       - name: Regenerate lockfile from npm registry with lodash 4.18.0
         run: npm install --package-lock-only --lockfile-version=2 --legacy-peer-deps --ignore-scripts --no-audit --no-fund
-      - name: Install dependency tree reproducibly
-        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Install dependency tree reproducibly (without native HID postinstall)
+        run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
       - name: Verify lodash version and basic API compatibility
         run: npm run test:lodash-security
       - name: Commit regenerated npm lockfile to isolated branch only
