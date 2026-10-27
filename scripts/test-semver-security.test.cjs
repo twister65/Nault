@@ -47,16 +47,17 @@ test('all installed semver copies are outside all three vulnerable major ranges'
 });
 test('Ledger devices and legacy native build chain remain on compatible patched majors', () => {
   assert.equal(manifest.overrides['@ledgerhq/devices'].semver, '7.8.5');
-  for (const name of ['node-abi', 'make-dir', 'tiny-async-pool']) {
+  for (const name of ['node-abi', 'tiny-async-pool']) {
     assert.equal(manifest.overrides[name].semver, '5.7.2');
   }
-  assert.equal(manifest.overrides['istanbul-lib-report'].semver, '6.3.1');
+  assert.equal(manifest.overrides['make-dir@2.1.0'].semver, '5.7.2');
+  assert.equal(manifest.overrides['make-dir@3.1.0'].semver, '6.3.1');
   const versions = [
     ['node_modules/@ledgerhq/devices', '7.8.5'],
     ['node_modules/node-abi', '5.7.2'],
     ['node_modules/make-dir', '5.7.2'],
     ['node_modules/tiny-async-pool', '5.7.2'],
-    ['node_modules/istanbul-lib-report', '6.3.1']
+    ['node_modules/istanbul-lib-report/node_modules/make-dir', '6.3.1']
   ];
   for (const [parent, expected] of versions) {
     assert.ok(lock.packages[parent], parent + ' missing from lockfile');
