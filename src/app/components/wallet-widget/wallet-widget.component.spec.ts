@@ -88,6 +88,44 @@ describe('WalletWidgetComponent', () => {
     expect(component.canReconnectBluetooth).toBeTrue();
   });
 
+  it('only offers USB reconnect when a saved Nano S Plus has no Bluetooth hardware', () => {
+    const oldModel = component.walletService.wallet.ledgerDeviceModel;
+    const oldUsb = component.ledgerService.supportsUSB;
+    const oldBluetooth = component.ledgerService.supportsBluetooth;
+    try {
+      component.ledgerService.supportsUSB = true;
+      component.ledgerService.supportsBluetooth = true; // browser supports it, device does not
+      component.walletService.wallet.ledgerDeviceModel = 'nanoSPlus';
+      expect(component.canReconnectUsb).toBeTrue();
+      expect(component.canReconnectBluetooth).toBeFalse();
+      component.walletService.wallet.ledgerDeviceModel = 'nanoX';
+      expect(component.canReconnectBluetooth).toBeTrue();
+      component.walletService.wallet.ledgerDeviceModel = null; // legacy exports
+      expect(component.canReconnectBluetooth).toBeTrue();
+    } finally {
+      component.walletService.wallet.ledgerDeviceModel = oldModel;
+      component.ledgerService.supportsUSB = oldUsb;
+      component.ledgerService.supportsBluetooth = oldBluetooth;
+    }
+  });
+
+  it('does not change transport after a blocked Nano S Plus Bluetooth reconnect', async () => {
+    const model = component.walletService.wallet.ledgerDeviceModel;
+    const bluetooth = component.ledgerService.supportsBluetooth;
+    try {
+      component.walletService.wallet.ledgerDeviceModel = 'nanoSPlus';
+      component.ledgerService.supportsBluetooth = true;
+      const mode = spyOn(component.ledgerService, 'enableBluetoothMode');
+      const load = spyOn(component.ledgerService, 'loadLedger');
+      await component.reconnectBluetooth();
+      expect(mode).not.toHaveBeenCalled();
+      expect(load).not.toHaveBeenCalled();
+    } finally {
+      component.walletService.wallet.ledgerDeviceModel = model;
+      component.ledgerService.supportsBluetooth = bluetooth;
+    }
+  });
+
   it('switches an existing ChromeOS USB Ledger wallet to Web Bluetooth reconnect without wallet setup', async () => {
     component.ledgerService.isDesktop = false;
     component.ledgerService.supportsUSB = true;
