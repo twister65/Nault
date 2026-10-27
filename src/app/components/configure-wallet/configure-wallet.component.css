@@ -55,6 +55,9 @@ pre.mnemonic span.mnemonic-word::before {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
+  /* The single 'New wallet' tile must not stretch to the height of the grid row. */
+  align-items: flex-start;
+  align-content: flex-start;
   padding-top: 30px;
   padding-bottom: 30px;
 }
@@ -62,7 +65,10 @@ pre.mnemonic span.mnemonic-word::before {
 .landing-container > div > .wallet-option {
   display: flex;
   width: 200px;
-  height: 300px;
+  min-height: 300px;
+  height: auto;
+  box-sizing: border-box;
+  min-width: 0;
   border-radius: 10px;
   padding: 15px 20px;
   margin: 20px;
@@ -86,7 +92,8 @@ pre.mnemonic span.mnemonic-word::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 155px;
+  width: 100%;
+  min-height: 120px;
   height: 120px;
   margin-bottom: 10px;
   transition: transform 200ms ease-in-out;
@@ -143,8 +150,10 @@ pre.mnemonic span.mnemonic-word::before {
   margin: 0;
   font-weight: 400;
   line-height: 1.2;
-  font-size: 28px;
-  margin-bottom: 15px;
+  font-size: 22px;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  margin-bottom: 12px;
 }
 .landing-container > div > .wallet-option > h2.long-header {
   margin-top: 3px;
@@ -156,7 +165,9 @@ pre.mnemonic span.mnemonic-word::before {
   font-family: 'Montserrat', Arial, Helvetica, sans-serif;
   margin: 0;
   line-height: 1.2;
-  font-size: 17px;
+  font-size: 16px;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 
 .import-panel-navigation {

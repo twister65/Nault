@@ -1,17 +1,17 @@
 import { Injectable } from '@angular/core';
-import {BehaviorSubject} from 'rxjs';
+import {BehaviorSubject, Subscription} from 'rxjs';
 import {UtilService} from './util.service';
 import {ApiService} from './api.service';
 import {BigNumber} from 'bignumber.js';
 import {AddressBookService} from './address-book.service';
 import * as CryptoJS from 'crypto-js';
 import {WorkPoolService} from './work-pool.service';
-import {WebsocketService} from './websocket.service';
+import {WebsocketService, NanoConfirmation} from './websocket.service';
 import {NanoBlockService} from './nano-block.service';
 import {NotificationService} from './notification.service';
 import {AppSettingsService} from './app-settings.service';
 import {PriceService} from './price.service';
-import {LedgerService, LedgerStatus} from './ledger.service';
+import {LedgerService, LedgerStatus, LedgerUsbModel} from './ledger.service';
 import { NoPaddingZerosPipe } from 'app/pipes/no-padding-zeros.pipe';
 
 export type WalletType = 'seed' | 'ledger' | 'privateKey' | 'expandedKey';
@@ -35,7 +35,7 @@ export interface WalletAccount {
 export interface Block {
   account: string;
   hash: string;
-  amount: string;
+  amount: string | BigNumber;
   source: string;
 }
 
@@ -48,6 +48,8 @@ export interface ReceivableBlockUpdate {
 
 export interface FullWallet {
   type: WalletType;
+  // Optional non-secret model hint; does not replace account/seed verification.
+  ledgerDeviceModel: LedgerUsbModel | null;
   seedBytes: any;
   seed: string|null;
   balance: BigNumber;
@@ -98,6 +100,7 @@ export class WalletService {
 
   wallet: FullWallet = {
     type: 'seed',
+    ledgerDeviceModel: null,
     seedBytes: null,
     seed: '',
     balance: new BigNumber(0),
@@ -112,22 +115,23 @@ export class WalletService {
     accounts: [],
     selectedAccountId: null,
     selectedAccount: null,
-    selectedAccount$: new BehaviorSubject(null),
+    selectedAccount$: new BehaviorSubject<WalletAccount | null>(null),
     locked: false,
     locked$: new BehaviorSubject(false),
     unlockModalRequested$: new BehaviorSubject(false),
     password: '',
     pendingBlocks: [],
-    pendingBlocksUpdate$: new BehaviorSubject(null),
+    pendingBlocksUpdate$: new BehaviorSubject<ReceivableBlockUpdate | null>(null),
     newWallet$: new BehaviorSubject(false),
     refresh$: new BehaviorSubject(false),
   };
 
   processingPending = false;
-  successfulBlocks = [];
-  trackedHashes = [];
+  successfulBlocks: string[] = [];
+  trackedHashes: string[] = [];
   // Coalesce confirmations arriving while a previous balance RPC is still running.
   private balanceRefreshQueued = false;
+  private balanceRefreshPromise: Promise<void> | null = null;
 
   constructor(
     private util: UtilService,
@@ -141,6 +145,21 @@ export class WalletService {
     private ledgerService: LedgerService,
     private noZerosPipe: NoPaddingZerosPipe,
     private notifications: NotificationService) {
+    // A reconnect must verify the actual Ledger against this wallet, even
+    // after restart or when switching between USB and Bluetooth.
+    this.ledgerService.configuredWalletAccount = () => {
+      if (!this.isLedgerWallet()) return null;
+      const account = this.wallet.accounts[0];
+      return account ? { index: account.index, id: account.id } : null;
+    };
+    // A different device can share the same recovery seed. If it passes the
+    // account check, update the capability hint for the last verified model.
+    this.ledgerService.onVerifiedDeviceModel = (model: LedgerUsbModel) => {
+      if (!this.isLedgerWallet() || !this.wallet.accounts.length ||
+          this.wallet.ledgerDeviceModel === model) return;
+      this.wallet.ledgerDeviceModel = model;
+      this.saveWalletExport();
+    };
     this.websocket.newTransactions$.subscribe(async (transaction) => {
       if (!transaction) return; // Not really a new transaction
       console.log('New Transaction', transaction);
@@ -272,7 +291,7 @@ export class WalletService {
     });
 
     this.ledgerService.ledgerStatus$.subscribe(({ status }) => {
-      if (status !== LedgerStatus.READY) return;
+      if (status !== LedgerStatus.READY || this.ledgerService.configuringWallet) return;
       this.ledgerService.clearPendingReconnect();
       if (this.isLedgerWallet() && this.wallet.pendingBlocks.length) {
         this.processPendingBlocks();
@@ -284,7 +303,7 @@ export class WalletService {
     });
   }
 
-  async processStateBlock(transaction) {
+  async processStateBlock(transaction: NanoConfirmation) {
     // If we have a minimum receive,  once we know the account... add the amount to wallet pending? set pending to true
     if (transaction.block.subtype === 'send' && transaction.block.link_as_account) {
       // This is an incoming send block, we want to perform a receive
@@ -324,7 +343,7 @@ export class WalletService {
     });
   }
 
-  getWalletAccount(accountID) {
+  getWalletAccount(accountID: string): WalletAccount | undefined {
     return this.wallet.accounts.find(a => a.id === accountID);
   }
 
@@ -337,7 +356,7 @@ export class WalletService {
     const walletJson = JSON.parse(walletData);
 
     if (walletJson.accounts) {
-      const newAccounts = walletJson.accounts.map(account => {
+      const newAccounts = walletJson.accounts.map((account: { id: string; index: number }) => {
         if (account.id.indexOf('xrb_') !== -1) {
           account.id = account.id.replace('xrb_', 'nano_');
         }
@@ -368,11 +387,14 @@ export class WalletService {
       this.wallet.locked$.next(true);
     }
     if (walletType === 'ledger') {
-      // Check ledger status?
+      // Old wallet exports have no model metadata: do not assume a Nano S Plus.
+      const model: unknown = walletJson.ledgerDeviceModel;
+      this.wallet.ledgerDeviceModel =
+        model === 'nanoS' || model === 'nanoSPlus' || model === 'nanoX' ? model : null;
     }
 
     if (walletJson.accounts && walletJson.accounts.length) {
-      walletJson.accounts.forEach(account => this.loadWalletAccount(account.index, account.id));
+      walletJson.accounts.forEach((account: { id: string; index: number }) => this.loadWalletAccount(account.index, account.id));
     }
 
     this.wallet.selectedAccountId = walletJson.selectedAccountId || null;
@@ -420,11 +442,13 @@ export class WalletService {
     const exportData: any = {
       indexes: this.wallet.accounts.map(a => a.index),
     };
+    // Ledger exports have no seed; never encrypt a nullable secret.
     let secret = '';
-    if (this.wallet.locked) {
-      secret = this.wallet.seed;
-    } else {
-      secret = CryptoJS.AES.encrypt(this.wallet.seed, this.wallet.password).toString();
+    if (this.wallet.type !== 'ledger') {
+      if (this.wallet.seed === null) throw new Error('Wallet seed unavailable for export');
+      secret = this.wallet.locked
+        ? this.wallet.seed
+        : CryptoJS.AES.encrypt(this.wallet.seed, this.wallet.password).toString();
     }
 
     if (this.wallet.type === 'seed') {
@@ -468,6 +492,7 @@ export class WalletService {
     return true;
   }
   unlockWallet(password: string) {
+    if (this.wallet.seed === null) return false;
     try {
       const decryptedBytes = CryptoJS.AES.decrypt(this.wallet.seed, password);
       const decryptedSeed = decryptedBytes.toString(CryptoJS.enc.Utf8);
@@ -520,7 +545,7 @@ export class WalletService {
 
     // Getting accounts...
     for (let batchIdx = 0; batchIdx < batchesCount; batchIdx++) {
-      const batchAccounts = {};
+      const batchAccounts: Record<string, {index: number; publicKey: string}> = {};
       const batchAccountsArray = [];
       for (let i = 0; i < ACCOUNTS_PER_API_REQUEST; i++) {
         const index = batchIdx * ACCOUNTS_PER_API_REQUEST + i;
@@ -592,10 +617,85 @@ export class WalletService {
     return this.wallet.seed;
   }
 
+  /**
+   * Discover accounts on a newly connected Ledger without touching the
+   * currently configured wallet. Switching USB/Bluetooth is NOT a wallet
+   * replacement, and failed discovery must leave the old wallet intact.
+   */
+  async prepareLedgerReplacementAccounts(): Promise<WalletAccount[]> {
+    const usedIndices: number[] = [];
+    const accountIds = new Map<number, string>();
+    let scanOnline = true;
+    const accountsPerRequest = 10;
+    const accountsLimit = 20;
+
+    for (let offset = 0; offset < accountsLimit; offset += accountsPerRequest) {
+      const accountMetadata: Record<string, {index: number; publicKey: string}> = {};
+      const accountAddresses: string[] = [];
+      for (let index = offset; index < offset + accountsPerRequest; index++) {
+        const account = await this.ledgerService.getLedgerAccount(index);
+        const address: string = account.address.replace('xrb_', 'nano_');
+        accountMetadata[address] = { index, publicKey: account.publicKey.toUpperCase() };
+        accountIds.set(index, address);
+        accountAddresses.push(address);
+      }
+
+      // Hardware account #0 is available offline. RPC is only necessary to
+      // discover which *additional* indices have been used previously.
+      const result = await this.api.accountsFrontiers(accountAddresses).catch(() => null);
+      if (!result || !result.frontiers) {
+        scanOnline = false;
+        break;
+      }
+      for (const [address, frontier] of Object.entries(result.frontiers)) {
+        const metadata = accountMetadata[address];
+        if (metadata && typeof frontier === 'string' && this.util.nano.isValidHash(frontier) &&
+            frontier !== metadata.publicKey) {
+          usedIndices.push(metadata.index);
+        }
+      }
+    }
+
+    // A hardware swap during the 20-index scan must never create a mixed wallet.
+    const deviceCheck = await this.ledgerService.getLedgerAccount(0);
+    if (deviceCheck.address.replace('xrb_', 'nano_') !== accountIds.get(0)) {
+      throw new Error('Ledger changed during account discovery. Please retry.');
+    }
+
+    // Without RPC, show only the device's real account #0; never reuse
+    // addresses belonging to a previously stored hardware wallet.
+    const indices = scanOnline && usedIndices.length ? usedIndices : [0];
+    const candidates: WalletAccount[] = [];
+    for (const index of indices) {
+      const account = await this.createLedgerAccount(index);
+      // Reject a device swap halfway through the scan.
+      if (account.id !== accountIds.get(index)) throw new Error('Ledger changed during account discovery. Please retry.');
+      candidates.push(account);
+    }
+    return candidates;
+  }
+
+  /** Activate the hardware accounts prepared by the explicit setup flow. */
+  activatePreparedLedgerWallet(accounts: WalletAccount[]): void {
+    if (!accounts.length) throw new Error('Ledger account list is empty.');
+    this.resetWallet();
+    this.wallet.type = 'ledger';
+    // Save only the model that was actually read from the connected hardware.
+    // The cryptographic account check remains independent of this hint.
+    this.wallet.ledgerDeviceModel = this.ledgerService.connectedDeviceModel;
+    this.wallet.accounts = accounts;
+    this.websocket.subscribeAccounts(accounts.map(account => account.id));
+    this.saveWalletExport();
+    this.informNewWallet();
+    void this.reloadBalances().catch(() =>
+      this.notifications.sendWarning('Unable to refresh balances. Check your connection.'));
+  }
+
   async createLedgerWallet() {
     // this.resetWallet(); Now done earlier to ensure user not sending to wrong account
 
     this.wallet.type = 'ledger';
+    this.wallet.ledgerDeviceModel = this.ledgerService.connectedDeviceModel;
 
     await this.scanAccounts();
 
@@ -614,7 +714,7 @@ export class WalletService {
     this.saveWalletExport();
   }
 
-  async createLedgerAccount(index) {
+  async createLedgerAccount(index: number): Promise<WalletAccount> {
     const account: any = await this.ledgerService.getLedgerAccount(index);
 
     const accountID = account.address;
@@ -640,7 +740,7 @@ export class WalletService {
     return newAccount;
   }
 
-  createKeyedAccount(index, accountBytes, accountKeyPair) {
+  createKeyedAccount(index: number, accountBytes: Uint8Array, accountKeyPair: {publicKey: Uint8Array; secretKey: Uint8Array}): WalletAccount {
     const accountName = this.util.account.getPublicAccountID(accountKeyPair.publicKey);
     const addressBookName = this.addressBook.getAccountName(accountName);
 
@@ -663,7 +763,7 @@ export class WalletService {
     return newAccount;
   }
 
-  async createSeedAccount(index) {
+  async createSeedAccount(index: number): Promise<WalletAccount> {
     const accountBytes = this.util.account.generateAccountSecretKeyBytes(this.wallet.seedBytes, index);
     const accountKeyPair = this.util.account.generateAccountKeyPair(accountBytes);
     return this.createKeyedAccount(index, accountBytes, accountKeyPair);
@@ -683,6 +783,7 @@ export class WalletService {
       this.websocket.unsubscribeAccounts(this.wallet.accounts.map(a => a.id)); // Unsubscribe from old accounts
     }
     this.wallet.type = 'seed';
+    this.wallet.ledgerDeviceModel = null;
     this.wallet.password = '';
     this.wallet.locked = false;
     this.wallet.locked$.next(false);
@@ -759,32 +860,38 @@ export class WalletService {
     this.wallet.hasPending = false;
   }
 
-  async reloadBalances() {
-    // A WebSocket confirmation must not be lost during another balance refresh.
-    // Queue one additional RPC refresh rather than running concurrent requests.
-    if (this.wallet.updatingBalance) {
+  reloadBalances(): Promise<void> {
+    // All callers must wait for a real RPC refresh, even if one is in flight.
+    // Queue one follow-up refresh for WebSocket events or network recovery.
+    if (this.balanceRefreshPromise) {
       this.balanceRefreshQueued = true;
-      return;
+      return this.balanceRefreshPromise;
     }
 
     this.wallet.updatingBalance = true;
-    try {
-      await this.refreshBalances();
-    } catch (error) {
-      // A failed RPC must not leave the balance spinner running forever.
-      this.wallet.updatingBalance = false;
-      throw error;
-    } finally {
-      if (this.balanceRefreshQueued) {
-        this.balanceRefreshQueued = false;
-        // Allow a confirmed receive block to become visible to the RPC backend.
-        setTimeout(() => {
-          this.reloadBalances().catch(() => {
-            this.notifications.sendWarning('Unable to refresh balances. Check your connection.');
-          });
-        }, 350);
+    // Start the RPC attempt synchronously so an immediate second caller cannot
+    // have its queued refresh cleared before the first request has started.
+    this.balanceRefreshPromise = (async () => {
+      try {
+        do {
+          this.balanceRefreshQueued = false;
+          try {
+            await this.refreshBalances();
+          } catch (error) {
+            // The network may have returned during a failed in-flight request.
+            // Retry only if another caller requested a fresh snapshot.
+            if (!this.balanceRefreshQueued) throw error;
+          }
+          if (this.balanceRefreshQueued) {
+            await new Promise<void>(resolve => setTimeout(resolve, 350));
+          }
+        } while (this.balanceRefreshQueued);
+      } finally {
+        this.wallet.updatingBalance = false;
+        this.balanceRefreshPromise = null;
       }
-    }
+    })();
+    return this.balanceRefreshPromise;
   }
 
   private async refreshBalances() {
@@ -805,7 +912,6 @@ export class WalletService {
 
     if (!accounts) {
       this.resetBalances();
-      this.wallet.updatingBalance = false;
       this.wallet.balanceInitialized = true;
       return;
     }
@@ -856,6 +962,9 @@ export class WalletService {
           }
 
           const walletAccount = this.wallet.accounts.find(a => a.id === block);
+          // Nodes may include addresses outside this wallet; never attach
+          // receivable work to an unknown wallet account.
+          if (!walletAccount) continue;
 
           if (pending.blocks[block]) {
             let accountPending = new BigNumber(0);
@@ -937,16 +1046,21 @@ export class WalletService {
     // eslint-disable-next-line
     this.wallet.hasPending = walletPendingAboveThresholdConfirmed.gt(0);
 
-    this.wallet.updatingBalance = false;
     this.wallet.balanceInitialized = true;
 
     if (this.wallet.pendingBlocks.length) {
-      await this.processPendingBlocks();
+      // Receiving a block calls reloadBalances(): do not await it from inside
+      // the current balance-refresh promise (that would deadlock).
+      setTimeout(() => {
+        void this.processPendingBlocks().catch(error => {
+          console.warn('Unable to process pending blocks after balance refresh.', error);
+        });
+      }, 0);
     }
     this.informBalanceRefresh();
   }
 
-  async loadWalletAccount(accountIndex, accountID) {
+  async loadWalletAccount(accountIndex: number, accountID: string): Promise<WalletAccount> {
     const index = accountIndex;
     const addressBookName = this.addressBook.getAccountName(accountID);
 
@@ -982,7 +1096,7 @@ export class WalletService {
       while (this.wallet.accounts.find(a => a.index === index)) index++;
     }
 
-    let newAccount: WalletAccount|null;
+    let newAccount: WalletAccount;
 
     if (this.isSingleKeyWallet()) {
       throw new Error(`Wallet consists of a single private key.`);
@@ -995,7 +1109,8 @@ export class WalletService {
         // this.notifications.sendWarning(`Unable to load account from ledger.  Make sure it is connected`);
         throw err;
       }
-
+    } else {
+      throw new Error('Unsupported wallet type for adding another account.');
     }
 
     this.wallet.accounts.push(newAccount);
@@ -1037,7 +1152,7 @@ export class WalletService {
     console.log('Stopped tracking transactions on ' + address);
   }
 
-  addPendingBlock(accountID, blockHash, amount, source) {
+  addPendingBlock(accountID: string, blockHash: string, amount: string | BigNumber, source: string): boolean {
     if (this.successfulBlocks.indexOf(blockHash) !== -1) return false; // Already successful with this block
 
     const existingHash = this.wallet.pendingBlocks.find(b => b.hash === blockHash);
@@ -1056,7 +1171,7 @@ export class WalletService {
   }
 
   // Remove a pending account from the pending list
-  async removePendingBlock(blockHash) {
+  async removePendingBlock(blockHash: string) {
     const index = this.wallet.pendingBlocks.findIndex(b => b.hash === blockHash);
     this.wallet.pendingBlocks.splice(index, 1);
   }
@@ -1066,10 +1181,10 @@ export class WalletService {
     this.wallet.pendingBlocks.splice(0, this.wallet.pendingBlocks.length);
   }
 
-  sortByAmount(a, b) {
+  sortByAmount(a: Block, b: Block): number {
     const x = new BigNumber(a.amount);
     const y = new BigNumber(b.amount);
-    return y.comparedTo(x);
+    return y.comparedTo(x) ?? 0;
   }
 
   async processPendingBlocks() {
@@ -1088,7 +1203,7 @@ export class WalletService {
     this.processingPending = true;
 
     const nextBlock = this.wallet.pendingBlocks[0];
-    if (this.successfulBlocks.find(b => b.hash === nextBlock.hash)) {
+    if (this.successfulBlocks.includes(nextBlock.hash)) {
       return setTimeout(() => this.processPendingBlocks(), 1500); // Block has already been processed
     }
     const walletAccount = this.getWalletAccount(nextBlock.account);
@@ -1157,7 +1272,9 @@ export class WalletService {
     };
 
     if (this.wallet.type === 'ledger') {
+      if (this.wallet.ledgerDeviceModel) data.ledgerDeviceModel = this.wallet.ledgerDeviceModel;
     } else {
+      if (this.wallet.seed === null) throw new Error('Wallet seed unavailable for storage');
       // Forcefully encrypt the seed so an unlocked wallet is never saved
       if (!this.wallet.locked) {
         const encryptedSeed = CryptoJS.AES.encrypt(this.wallet.seed, this.wallet.password || '');
@@ -1203,10 +1320,10 @@ export class WalletService {
   requestWalletUnlock() {
     this.wallet.unlockModalRequested$.next(true);
 
-    return new Promise(
+    return new Promise<boolean>(
       (resolve, reject) => {
-        let subscriptionForUnlock;
-        let subscriptionForCancel;
+        let subscriptionForUnlock: Subscription | undefined;
+        let subscriptionForCancel: Subscription | undefined;
 
         const removeSubscriptions = () => {
           if (subscriptionForUnlock != null) {

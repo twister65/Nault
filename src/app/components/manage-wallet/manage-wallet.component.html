@@ -1,32 +1,32 @@
 <div class="uk-animation-slide-left-small" uk-grid>
   <div class="uk-width-1-1">
 
-    <h2 class="uk-heading-divider">Manage Wallet</h2>
+    <h2 class="uk-heading-divider">{{ 'ui-manage-wallet.title' | transloco }}</h2>
 
     @if (!walletService.isLedgerWallet()) {
       <div class="uk-card uk-card-default uk-margin">
         <div class="uk-card-header">
-          <h3 class="uk-card-title">Change Wallet Password</h3>
+          <h3 class="uk-card-title">{{ 'ui-manage-wallet.password-title' | transloco }}</h3>
         </div>
         <div class="uk-card-body">
           <div uk-grid>
             <div class="uk-width-1-2@s">
-              <input class="uk-input" [(ngModel)]="newPassword" placeholder="New Password" type="password">
+              <input class="uk-input" [(ngModel)]="newPassword" [placeholder]="'ui-manage-wallet.password-new' | transloco" type="password">
               <!-- <password-strength-meter *ngIf="newPassword.length > 0" [password]="newPassword" [enableFeedback]="true" [minPasswordLength]="6"></password-strength-meter> -->
               @if (newPassword.length > 0 && newPassword.length < 6) {
-                <span class="password-helper">Password must be at least 6 characters long</span>
+                <span class="password-helper">{{ 'ui-manage-wallet.password-min' | transloco }}</span>
               }
               @if (confirmPassword.length >= 6 && newPassword !== confirmPassword) {
-                <span class="password-helper">Passwords do not match!</span>
+                <span class="password-helper">{{ 'ui-manage-wallet.password-mismatch' | transloco }}</span>
               }
             </div>
             <div class="uk-width-1-2@s">
-              <input class="uk-input" [(ngModel)]="confirmPassword" placeholder="Confirm New Password" type="password">
+              <input class="uk-input" [(ngModel)]="confirmPassword" [placeholder]="'ui-manage-wallet.password-confirm' | transloco" type="password">
             </div>
           </div>
         </div>
         <div class="uk-card-footer uk-text-right@s uk-text-center nlt-button-group">
-          <button [disabled]="newPassword.length < 6 || (newPassword !== confirmPassword)" (click)="changePassword()" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1">Update Password</button>
+          <button [disabled]="newPassword.length < 6 || (newPassword !== confirmPassword)" (click)="changePassword()" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1">{{ 'ui-manage-wallet.password-update' | transloco }}</button>
         </div>
       </div>
     }
@@ -34,32 +34,32 @@
     @if (!walletService.isLedgerWallet()) {
       <div class="uk-card uk-card-default uk-margin">
         <div class="uk-card-header">
-          <h3 class="uk-card-title">Backup Wallet</h3>
+          <h3 class="uk-card-title">{{ 'ui-manage-wallet.backup-title' | transloco }}</h3>
         </div>
         <div class="uk-card-body">
           @if (wallet.locked && wallet.type === 'seed') {
             <p>
-              <span uk-icon="icon: lock;"></span> Unlock wallet to access the secret recovery seed/mnemonic.
+              <span uk-icon="icon: lock;"></span> {{ 'ui-manage-wallet.unlock-seed' | transloco }}
             </p>
           }
           @if (wallet.locked && (wallet.type === 'privateKey' || wallet.type === 'expandedKey')) {
             <p>
-              <span uk-icon="icon: lock;"></span> Unlock wallet to access the private key.
+              <span uk-icon="icon: lock;"></span> {{ 'ui-manage-wallet.unlock-key' | transloco }}
             </p>
           }
           @if (!wallet.locked && wallet.type === 'seed') {
             <p>
-              To backup your wallet's secret recovery mnemonic, <a [title]="('configure-wallet.new-wallet.copy-secret-recovery-mnemonic' | transloco)" ngxClipboard [cbContent]="seedMnemonic()" (cbOnSuccess)="notifications.sendSuccess('Wallet mnemonic copied to clipboard!')" uk-tooltip>click here</a> to copy it to your clipboard.
+              {{ 'ui-manage-wallet.backup-mnemonic' | transloco }} <a [title]="('configure-wallet.new-wallet.copy-secret-recovery-mnemonic' | transloco)" ngxClipboard [cbContent]="seedMnemonic()" (cbOnSuccess)="notifications.sendSuccess('Wallet mnemonic copied to clipboard!')" uk-tooltip>{{ 'ui-manage-wallet.click' | transloco }}</a> {{ 'ui-manage-wallet.copy-suffix' | transloco }}
             </p>
           }
           @if (!wallet.locked && wallet.type === 'seed') {
             <p>
-              To backup your wallet's secret recovery seed, <a [title]="( 'configure-wallet.new-wallet.copy-secret-recovery-seed' | transloco )" ngxClipboard [cbContent]="wallet.seed" (cbOnSuccess)="notifications.sendSuccess('Wallet seed copied to clipboard!')" uk-tooltip>click here</a> to copy it to your clipboard.<br>
+              {{ 'ui-manage-wallet.backup-seed' | transloco }} <a [title]="( 'configure-wallet.new-wallet.copy-secret-recovery-seed' | transloco )" ngxClipboard [cbContent]="wallet.seed" (cbOnSuccess)="notifications.sendSuccess('Wallet seed copied to clipboard!')" uk-tooltip>{{ 'ui-manage-wallet.click' | transloco }}</a> {{ 'ui-manage-wallet.copy-suffix' | transloco }}<br>
             </p>
           }
           @if (!wallet.locked && (wallet.type === 'privateKey' || wallet.type === 'expandedKey')) {
             <p>
-              To backup your wallet account's private key, <a title="Copy Private Key" ngxClipboard [cbContent]="wallet.seed" (cbOnSuccess)="notifications.sendSuccess('Private Key copied to clipboard!')" uk-tooltip>click here</a> to copy it to your clipboard.<br>
+              {{ 'ui-manage-wallet.backup-key' | transloco }} <a [title]="'ui-wallet-setup.import-private-key' | transloco" ngxClipboard [cbContent]="wallet.seed" (cbOnSuccess)="notifications.sendSuccess('Private Key copied to clipboard!')" uk-tooltip>{{ 'ui-manage-wallet.click' | transloco }}</a> {{ 'ui-manage-wallet.copy-suffix' | transloco }}<br>
             </p>
           }
         </div>
@@ -69,20 +69,20 @@
     @if (!walletService.isLedgerWallet()) {
       <div class="uk-card uk-card-default uk-margin">
         <div class="uk-card-header">
-          <h3 class="uk-card-title">Export Nault Wallet</h3>
+          <h3 class="uk-card-title">{{ 'ui-manage-wallet.export-title' | transloco }}</h3>
         </div>
         @if (wallet.locked) {
           <div class="uk-card-body">
-            <span uk-icon="icon: lock;"></span> Unlock wallet to access the export tool.
+            <span uk-icon="icon: lock;"></span> {{ 'ui-manage-wallet.unlock-export' | transloco }}
           </div>
         } @else {
           @if (wallet.password) {
             <div class="uk-card-body">
-              Use this export tool to simplify wallet transfer to other devices.
+              {{ 'ui-manage-wallet.export-intro' | transloco }}
               <br>
-                Your data will be encrypted with your wallet's password, and then can be imported into Nault on any device!
+                {{ 'ui-manage-wallet.export-encrypted' | transloco }}
                 <br><br>
-                Note: The export does not contain your address book.<br>
+                {{ 'ui-manage-wallet.export-no-book' | transloco }}<br>
                 @if (showQRExport) {
                   <div uk-grid>
                     <div class="uk-width-1-1">
@@ -92,9 +92,9 @@
                           <div uk-icon="icon: warning; ratio: 2;"></div>
                         </div>
                         <p>
-                          <b>If you forget the wallet password used at the time of this export, you will NOT be able to restore your wallet.</b>
+                          <b>{{ 'ui-manage-wallet.export-warning' | transloco }}</b>
                           <br><br>
-                          For backup purposes, <b>always store the secret recovery seed and/or mnemonic</b> from the "Backup Wallet" section above.
+                          {{ 'ui-manage-wallet.export-backup-before' | transloco }} <b>{{ 'ui-manage-wallet.export-backup-strong' | transloco }}</b> {{ 'ui-manage-wallet.export-backup-after' | transloco }}
                         </p>
                       </div>
                     </div>
@@ -103,14 +103,14 @@
                     </div>
                     <div class="uk-width-1-1@s uk-width-1-2@m uk-width-2-3@l">
                       <br>
-                        Scan the QR code on any device to import your Nault wallet!<br>
+                        {{ 'ui-manage-wallet.export-scan' | transloco }}<br>
                         <br>
-                          You can also import your wallet by using the URL below.
+                          {{ 'ui-manage-wallet.export-url' | transloco }}
                           <br><br>
                           <input type="text" class="uk-input" style="max-width: 750px;" value="{{ QRExportUrl }}">
                           <div class="nlt-button-group uk-margin-small-top">
-                            <button ngxClipboard [cbContent]="QRExportUrl" (cbOnSuccess)="notifications.sendSuccess('Wallet export copied to clipboard!')" class="uk-button uk-button-secondary" style="margin-left: 0;">Copy To Clipboard</button>
-                            <button (click)="exportToFile()" class="uk-button uk-button-primary">Export As File</button>
+                            <button ngxClipboard [cbContent]="QRExportUrl" (cbOnSuccess)="notifications.sendSuccess('Wallet export copied to clipboard!')" class="uk-button uk-button-secondary" style="margin-left: 0;">{{ 'ui-manage-wallet.copy' | transloco }}</button>
+                            <button (click)="exportToFile()" class="uk-button uk-button-primary">{{ 'ui-manage-wallet.export-file' | transloco }}</button>
                           </div>
                         </div>
                       </div>
@@ -118,12 +118,12 @@
                   </div>
                   @if (!showQRExport) {
                     <div class="uk-card-footer uk-text-right@s uk-text-center nlt-button-group">
-                      <button (click)="exportWallet()" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1">Export Wallet</button>
+                      <button (click)="exportWallet()" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1">{{ 'ui-manage-wallet.export' | transloco }}</button>
                     </div>
                   }
                 } @else {
                   <div class="uk-card-body">
-                    You need to set a secure wallet password before you can use this export tool.
+                    {{ 'ui-manage-wallet.need-password' | transloco }}
                   </div>
                 }
               }
@@ -132,26 +132,26 @@
 
           <div class="uk-card uk-card-default uk-margin">
             <div class="uk-card-header">
-              <h3 class="uk-card-title">Export Transaction History</h3>
+              <h3 class="uk-card-title">{{ 'ui-manage-wallet.history-title' | transloco }}</h3>
             </div>
             @if (!csvExportStarted) {
               <div class="uk-card-body">
                 <p>
-                  Use this tool to export the transaction history of a specific account as a CSV file.
+                  {{ 'ui-manage-wallet.history-intro' | transloco }}
                 </p>
               </div>
             }
             @if (csvExportStarted) {
               <div class="uk-card-body">
                 <p>
-                  Due to limitations in backend servers, you can only request {{transactionHistoryLimit}} transactions per export.<br>
-                  However, you can use an offset of X to continue exporting from (X + 1). Another way is connecting Nault to a <a routerLink="/configure-app" routerLinkActive="active">custom server</a> for unlimited history.<br>
+                  {{ 'ui-manage-wallet.history-limit' | transloco: { limit: transactionHistoryLimit } }}<br>
+                  {{ 'ui-manage-wallet.history-offset-before' | transloco }} <a routerLink="/configure-app" routerLinkActive="active">{{ 'ui-manage-wallet.history-custom-server' | transloco }}</a> {{ 'ui-manage-wallet.history-offset-after' | transloco }}<br>
                 </p>
                 <div uk-grid>
                   <div class="uk-width-1-1 narrow-div">
                     <div class="uk-form-horizontal">
                       <div class="uk-margin">
-                        <label class="uk-form-label" for="account">Account</label>
+                        <label class="uk-form-label" for="account">{{ 'general.account' | transloco }}</label>
                         <div class="uk-form-controls">
                           <select class="uk-select" id="account" [(ngModel)]="csvAccount">
                             @for (account of accounts; track account) {
@@ -165,7 +165,7 @@
                   <div class="uk-width-1-1 narrow-div">
                     <div class="uk-form-horizontal">
                       <div class="uk-margin">
-                        <label class="uk-form-label" for="tx-count">Transaction Limit <span uk-icon="icon: info;" uk-tooltip title="Maximum number of transactions to export. Blank or 0 equals unlimited but only effective if using a custom server."></span></label>
+                        <label class="uk-form-label" for="tx-count">{{ 'ui-manage-wallet.limit-label' | transloco }} <span uk-icon="icon: info;" uk-tooltip [title]="'ui-manage-wallet.limit-tip' | transloco"></span></label>
                         <div class="uk-form-controls">
                           <div class="uk-inline uk-width-1-1">
                             <input [(ngModel)]="csvCount" class="uk-input uk-margin-small-bottom {{invalidCsvCount ? 'uk-form-danger':''}}" id="tx-count" type="text" (ngModelChange)="csvCountChange(csvCount)" placeholder="" autocomplete="off">
@@ -177,12 +177,12 @@
                   <div class="uk-width-1-1 narrow-div">
                     <div class="uk-form-horizontal">
                       <div class="uk-margin">
-                        <label class="uk-form-label" for="tx-order">Transaction Order</label>
+                        <label class="uk-form-label" for="tx-order">{{ 'ui-manage-wallet.order-label' | transloco }}</label>
                         <div class="uk-form-controls">
                           <div class="uk-inline uk-width-1-1">
                             <select class="uk-select" [(ngModel)]="selectedOrder" id="tx-order">
                               @for (option of orderOptions; track option) {
-                                <option [ngValue]="option.value">{{ option.name }}</option>
+                                <option [ngValue]="option.value">{{ (option.value ? 'ui-manage-wallet.order-oldest' : 'ui-manage-wallet.order-newest') | transloco }}</option>
                               }
                             </select>
                           </div>
@@ -193,7 +193,7 @@
                   <div class="uk-width-1-1 narrow-div">
                     <div class="uk-form-horizontal">
                       <div class="uk-margin">
-                        <label class="uk-form-label" for="tx-offset">Offset (optional) <span uk-icon="icon: info;" uk-tooltip title="Start the export after this index. 10 means starting at transaction 11. Blank or 0 equals no offset."></span></label>
+                        <label class="uk-form-label" for="tx-offset">{{ 'ui-manage-wallet.offset-label' | transloco }} <span uk-icon="icon: info;" uk-tooltip [title]="'ui-manage-wallet.offset-tip' | transloco"></span></label>
                         <div class="uk-form-controls">
                           <div class="uk-inline uk-width-1-1">
                             <input [(ngModel)]="csvOffset" class="uk-input uk-margin-small-bottom {{invalidCsvOffset ? 'uk-form-danger':''}}" id="tx-offset" type="text" (ngModelChange)="csvOffsetChange(csvOffset)" placeholder="" autocomplete="off">
@@ -208,13 +208,13 @@
 
             <div class="uk-card-footer uk-text-right@s uk-text-center nlt-button-group">
               @if (!csvExportStarted) {
-                <button class="uk-button uk-button-primary uk-width-1-1@s uk-width-auto@m uk-float-right" type="button" [disabled]="!settings.settings.serverAPI" (click)="csvInit()">{{settings.settings.serverAPI ? 'GET STARTED':'NOT AVAILABLE IN OFFLINE MODE'}}</button>
+                <button class="uk-button uk-button-primary uk-width-1-1@s uk-width-auto@m uk-float-right" type="button" [disabled]="!settings.settings.serverAPI" (click)="csvInit()">{{ (settings.settings.serverAPI ? 'ui-manage-wallet.start' : 'ui-manage-wallet.offline') | transloco }}</button>
               }
               @if (csvExportStarted && !exportingCsv) {
-                <button class="uk-button uk-button-primary uk-width-1-1@s uk-width-auto@m uk-float-right" type="button" [disabled]="!exportEnabled" (click)="exportToCsv()">{{exportEnabled ? 'EXPORT HISTORY':'COOLDOWN'}}</button>
+                <button class="uk-button uk-button-primary uk-width-1-1@s uk-width-auto@m uk-float-right" type="button" [disabled]="!exportEnabled" (click)="exportToCsv()">{{ (exportEnabled ? 'ui-manage-wallet.export-history' : 'ui-manage-wallet.cooldown') | transloco }}</button>
               }
               @if (csvExportStarted && exportingCsv) {
-                <button class="uk-button uk-button-secondary uk-disabled uk-width-1-1@s uk-width-auto@m uk-float-right nlt-icon-button nlt-icon-button-inline" type="button"><span class="uk-margin-right" uk-spinner="ratio: 0.5;"></span> FETCHING HISTORY...</button>
+                <button class="uk-button uk-button-secondary uk-disabled uk-width-1-1@s uk-width-auto@m uk-float-right nlt-icon-button nlt-icon-button-inline" type="button"><span class="uk-margin-right" uk-spinner="ratio: 0.5;"></span> {{ 'ui-manage-wallet.fetching' | transloco }}</button>
               }
             </div>
           </div>

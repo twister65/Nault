@@ -1,0 +1,20 @@
+<div class="uk-animation-slide-left-small" *transloco="let t">
+  <h2 class="uk-heading-divider">{{ 'about-nault.title' | transloco }}</h2>
+  <div class="uk-card uk-card-default uk-margin">
+    <div class="uk-card-body">
+      <div class="uk-form-horizontal">
+        <div class="uk-margin">
+          <div class="uk-form-label">{{ 'about-nault.commit' | transloco }}</div>
+          <div class="uk-form-controls">
+            @if (commitUrl) {
+              <a [href]="commitUrl" target="_blank" rel="noopener noreferrer"><code>{{ commitShort }}</code></a>
+            } @else {
+              <span>{{ 'about-nault.unknown' | transloco }}</span>
+            }
+          </div>
+        </div>
+      </div>
+      <p class="uk-text-meta">{{ 'about-nault.description' | transloco }}</p>
+    </div>
+  </div>
+</div>

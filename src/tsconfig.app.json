@@ -2,11 +2,11 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "outDir": "../out-tsc/app",
-    "baseUrl": "./",
     "allowJs": false,
     "types": [
       "custom"
-    ]
+    ],
+    "skipLibCheck": true
   },
   "files": [
     "main.ts",
@@ -18,5 +18,8 @@
   ],
   "exclude": [
     "**/node_modules/**"
-  ]
+  ],
+  "angularCompilerOptions": {
+    "strictTemplates": false
+  }
 }

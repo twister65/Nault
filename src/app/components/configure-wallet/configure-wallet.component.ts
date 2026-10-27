@@ -1,12 +1,14 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {WalletService, NotificationService, RepresentativeService} from '../../services';
 import {ActivatedRoute, Router} from '@angular/router';
 import * as bip39 from 'bip39';
-import {LedgerService, LedgerStatus} from '../../services/ledger.service';
+import {LedgerService, LedgerStatus, getLedgerReadinessIssue} from '../../services/ledger.service';
+import {localizeNotificationMessage} from '../../services/notification-message';
 import { QrModalService } from '../../services/qr-modal.service';
+import type { QRType } from '../qr-modal/qr-modal.component';
 import {UtilService} from '../../services/util.service';
 import { wallet } from 'nanocurrency-web';
-import { TranslocoService } from '@ngneat/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 
 enum panels {
   'landing',
@@ -23,6 +25,7 @@ const INDEX_MAX = 4294967295; // seed index
     selector: 'app-configure-wallet',
     templateUrl: './configure-wallet.component.html',
     styleUrls: ['./configure-wallet.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class ConfigureWalletComponent implements OnInit {
@@ -39,12 +42,12 @@ export class ConfigureWalletComponent implements OnInit {
   exampleSeed = '';
   examplePrivateKey = '';
   exampleExpandedPrivateKey = '';
-  exampleMnemonicWords = [];
+  exampleMnemonicWords: string[] = [];
   showMoreImportOptions = false;
 
   newWalletSeed = '';
   newWalletMnemonic = '';
-  newWalletMnemonicLines = [];
+  newWalletMnemonicLines: string[][] = [];
   newPassword = '';
   importSeedModel = '';
   importPrivateKeyModel = '';
@@ -62,6 +65,7 @@ export class ConfigureWalletComponent implements OnInit {
 
   ledgerStatus = LedgerStatus;
   ledger = this.ledgerService.ledger;
+  ledgerSetupInProgress = false;
 
   constructor(
     private router: ActivatedRoute,
@@ -72,13 +76,14 @@ export class ConfigureWalletComponent implements OnInit {
     private ledgerService: LedgerService,
     private util: UtilService,
     private translocoService: TranslocoService) {
-    if (this.route.getCurrentNavigation().extras.state && this.route.getCurrentNavigation().extras.state.seed) {
+    const navigationState = this.route.getCurrentNavigation()?.extras.state;
+    if (navigationState?.seed) {
       this.activePanel = panels.import;
-      this.importSeedModel = this.route.getCurrentNavigation().extras.state.seed;
+      this.importSeedModel = navigationState.seed;
       this.isNewWallet = false;
-    } else if (this.route.getCurrentNavigation().extras.state && this.route.getCurrentNavigation().extras.state.key) {
+    } else if (navigationState?.key) {
       this.activePanel = panels.import;
-      this.importPrivateKeyModel = this.route.getCurrentNavigation().extras.state.key;
+      this.importPrivateKeyModel = navigationState.key;
       this.selectedImportOption = 'privateKey';
       this.isNewWallet = false;
     }
@@ -110,13 +115,13 @@ export class ConfigureWalletComponent implements OnInit {
   }
 
   async importExistingWallet() {
-    this.notifications.sendInfo(`Starting to scan the first 20 accounts and importing them if they have been used...`, {length: 7000});
+    this.notifications.sendInfo(this.translocoService.translate('ui-notifications.wallet-scanning'), {length: 7000});
     this.route.navigate(['accounts']); // load accounts and watch them update in real-time
     await this.walletService.createWalletFromSeed(this.importSeed);
     this.importSeed = '';
     this.storePassword();
 
-    this.notifications.sendSuccess(`Successfully imported wallet!`, {length: 10000});
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-imported'), {length: 10000});
 
     // this.repService.detectChangeableReps(); // this is now called from change-rep-widget.component when new wallet
     this.walletService.informNewWallet();
@@ -128,85 +133,141 @@ export class ConfigureWalletComponent implements OnInit {
     this.route.navigate(['accounts']); // load accounts and watch them update in real-time
     this.keyString = '';
 
-    this.notifications.sendSuccess(`Successfully imported wallet from a private key!`);
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-key-imported'));
     this.walletService.informNewWallet();
   }
 
+  // "Use Ledger" always configures the attached hardware wallet. Reconnect
+  // elsewhere in Nault only validates the identity of the stored wallet.
   async connectLedgerByBluetooth() {
-    this.ledgerService.enableBluetoothMode(true);
-    // A configured Ledger wallet is independent of USB vs Bluetooth.
-    // Never ask to overwrite it merely to change transports: that confirmation
-    // also loses the user gesture required by Web Bluetooth's device chooser.
-    await this.importLedgerWallet(this.walletService.isLedgerWallet());
+    if (this.ledgerSetupInProgress) return;
+    this.ledgerService.enableBluetoothMode(true); // Keep browser user activation.
+    await this.importLedgerWallet();
   }
 
   async connectLedgerByUsb() {
-    if (this.ledgerService.isAndroidWeb) return; // The Android browser uses Ledger Bluetooth only.
+    if (this.ledgerSetupInProgress) return;
+    if (this.ledgerService.isAndroidWeb) return; // Android web uses Bluetooth only.
+    const switchingFromBluetooth = this.ledgerService.transportMode === 'Bluetooth';
     this.ledgerService.enableBluetoothMode(false);
-    await this.importLedgerWallet(this.walletService.isLedgerWallet());
+    // Switching modes already discards the previous transport. When already
+    // using USB, explicitly release the old session to select a new Ledger.
+    // Avoid two consecutive asynchronous closes when switching Bluetooth → USB.
+    if (!this.ledgerService.isDesktop) {
+      if (!switchingFromBluetooth) this.ledgerService.resetLedger();
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      this.ledgerService.ledgerStatus$.next({ status: LedgerStatus.NOT_CONNECTED, statusText: '' });
+    }
+    await this.importLedgerWallet();
   }
 
-  async importLedgerWallet(refreshOnly = false) {
-     // If a wallet exists already, make sure they know they are overwriting it
-     if (!refreshOnly && this.isConfigured()) {
-      const confirmed = await this.confirmWalletOverwrite();
-      if (!confirmed) {
+  get bluetoothConnectionHint(): string {
+    return localizeNotificationMessage(
+      this.ledgerService.bluetoothErrorMessage,
+      key => this.translocoService.translate(key)
+    );
+  }
+
+  async refreshLedgerStatus() {
+    if (this.ledgerSetupInProgress) return;
+    this.notifications.sendInfo(this.translocoService.translate('ui-notifications.ledger-checking'),
+      { identifier: 'ledger-status', length: 0 });
+    try {
+      await this.ledgerService.loadLedger(true, this.ledgerService.transportMode === 'Bluetooth');
+    } finally {
+      this.notifications.removeNotification('ledger-status');
+    }
+  }
+
+  async importLedgerWallet() {
+    // An explicit setup must be singular: overlapping clicks could otherwise
+    // close a transport while it is reading or replace the wallet out of order.
+    if (this.ledgerSetupInProgress) return;
+    this.ledgerSetupInProgress = true;
+    // The old configuration stays untouched until the connected hardware has
+    // been read and its account list is ready to save.
+    const previouslyConfigured = this.isConfigured();
+    const storedWallet = localStorage.getItem(this.walletService.storeKey);
+    let activating = false;
+    let completed = false;
+
+    this.ledgerService.configuringWallet = true;
+    this.notifications.sendInfo(this.translocoService.translate('ui-notifications.ledger-checking'),
+      { identifier: 'ledger-status', length: 0 });
+    try {
+      const connected = await this.ledgerService.loadLedger(true, this.ledgerService.transportMode === 'Bluetooth');
+      if (!connected || this.ledger.status !== LedgerStatus.READY) {
+        if (!this.ledgerService.lastUsbSelectionCancelled && !this.ledgerService.lastBluetoothSelectionCancelled) {
+          this.notifications.sendWarning(this.translocoService.translate(
+            this.ledger.status === LedgerStatus.LOCKED
+              ? 'ui-notifications.ledger-unlock' : 'ui-notifications.ledger-connect-failed'));
+        }
         return;
       }
-      this.walletService.resetWallet();
+
+      // Replacing any configured wallet (Ledger or software) requires an
+      // explicit confirmation. Keep the Web Bluetooth device chooser before
+      // this dialog to preserve the browser user gesture.
+      if (previouslyConfigured && !await this.confirmWalletOverwrite()) return;
+
+      this.notifications.sendInfo(this.translocoService.translate('ui-notifications.wallet-scanning'),
+        { identifier: 'ledger-setup-scan', length: 0 });
+      const accounts = await this.walletService.prepareLedgerReplacementAccounts();
+      if (this.ledger.status !== LedgerStatus.READY) throw new Error('Ledger disconnected during setup.');
+      activating = true;
+      this.walletService.activatePreparedLedgerWallet(accounts);
+      completed = true;
+      this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.ledger-loaded'));
+      await this.route.navigate(['accounts']);
+    } catch (error) {
+      console.warn('Ledger wallet setup failed', error);
+      if (activating && !completed) {
+        if (storedWallet === null) localStorage.removeItem(this.walletService.storeKey);
+        else localStorage.setItem(this.walletService.storeKey, storedWallet);
+        await this.walletService.loadStoredWallet();
+      }
+      const readinessIssue = getLedgerReadinessIssue(error);
+      const key = readinessIssue === 'app-not-open'
+        ? 'ui-notifications.ledger-nano-app-not-open'
+        : readinessIssue === 'locked'
+          ? 'ui-notifications.ledger-locked-reconnect'
+          : 'ui-notifications.ledger-replace-failed';
+      this.notifications.sendWarning(this.translocoService.translate(key));
+    } finally {
+      this.ledgerService.configuringWallet = false;
+      this.ledgerSetupInProgress = false;
+      this.notifications.removeNotification('ledger-status');
+      this.notifications.removeNotification('ledger-setup-scan');
+      if (!completed) {
+        // Never leave the previous wallet marked READY against a failed setup.
+        this.ledgerService.resetLedger();
+        this.ledger.status = LedgerStatus.NOT_CONNECTED;
+        this.ledgerService.ledgerStatus$.next({ status: LedgerStatus.NOT_CONNECTED, statusText: '' });
+      }
     }
-
-    // Determine status of ledger device using ledger service
-    this.notifications.sendInfo(`Checking for Ledger device...`, { identifier: 'ledger-status', length: 0 });
-    await this.ledgerService.loadLedger(true);
-    this.notifications.removeNotification('ledger-status');
-    this.notifications.removeNotification('ledger-error');
-
-    if (this.ledger.status === LedgerStatus.NOT_CONNECTED) {
-      this.ledgerService.resetLedger();
-      const pairingAdvice = this.ledgerService.bluetoothErrorMessage;
-      return this.notifications.sendWarning(
-        pairingAdvice || `Failed to connect the Ledger device. Make sure the nano app is running on the Ledger. If the error persists: Check the <a href="https://docs.nault.cc/2020/08/04/ledger-guide.html#troubleshooting" target="_blank" rel="noopener noreferrer">troubleshooting guide</a>`,
-        { identifier: 'ledger-error', length: 0 }
-      );
-    }
-
-    if (this.ledger.status === LedgerStatus.LOCKED) {
-      return this.notifications.sendWarning(`Unlock your Ledger device and open the nano app to continue`);
-    }
-
-    if (this.ledger.status === LedgerStatus.READY) {
-      this.notifications.sendSuccess(`Successfully connected to Ledger device`);
-    }
-
-    if (refreshOnly) {
-      return;
-    }
-
-    // We skip the password panel
-    this.route.navigate(['accounts']); // load accounts and watch them update in real-time
-
-    // Create new ledger wallet
-    const newWallet = await this.walletService.createLedgerWallet();
-    this.notifications.sendSuccess(`Successfully loaded ledger device!`);
-
-    this.walletService.informNewWallet();
   }
 
   // Send a confirmation dialog to the user if they already have a wallet configured
   async confirmWalletOverwrite() {
     if (!this.isConfigured()) return true;
 
-    const UIkit = window['UIkit'];
+    const UIkit = (window as unknown as { UIkit: { modal: {
+      confirm(message: string, options?: { labels: { ok: string; cancel: string } }): Promise<unknown>
+    } } }).UIkit;
     try {
       const msg = this.walletService.isLedgerWallet()
-        ? '<p class="uk-alert uk-alert-info"><br><span class="uk-flex"><span uk-icon="icon: info; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">You are about to configure a new wallet, which will <b>disconnect your Ledger device from Nault</b>.</span><br><br>If you need to use the Ledger wallet, simply import your device again.</p><br>'
-        : '<p class="uk-alert uk-alert-danger"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">You are about to configure a new wallet, which will <b>replace your currently configured wallet</b>.</span><br><br><b style="font-size: 18px;">' + this.translocoService.translate('reset-wallet.before-continuing-make-sure-you-have-saved-the-nano-seed') + '</b><br><br><b style="font-size: 18px;">' + this.translocoService.translate('reset-wallet.you-will-not-be-able-to-recover-the-funds-without-a-backup') + '</b></p><br>';
-      await UIkit.modal.confirm(msg);
+        ? '<p class="uk-alert uk-alert-info"><br><span class="uk-flex"><span uk-icon="icon: info; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">' + this.translocoService.translate('ui-wallet-setup.overwrite-ledger-before') + ' <b>' + this.translocoService.translate('ui-wallet-setup.overwrite-ledger-strong') + '</b>.</span><br><br>' + this.translocoService.translate('ui-wallet-setup.overwrite-ledger-after') + '</p><br>'
+        : '<p class="uk-alert uk-alert-danger"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">' + this.translocoService.translate('ui-wallet-setup.overwrite-ledger-before') + ' <b>' + this.translocoService.translate('ui-wallet-setup.overwrite-software-strong') + '</b>.</span><br><br><b style="font-size: 18px;">' + this.translocoService.translate('reset-wallet.before-continuing-make-sure-you-have-saved-the-nano-seed') + '</b><br><br><b style="font-size: 18px;">' + this.translocoService.translate('reset-wallet.you-will-not-be-able-to-recover-the-funds-without-a-backup') + '</b></p><br>';
+      await UIkit.modal.confirm(msg, {
+        labels: {
+          ok: this.translocoService.translate('ui-wallet-setup.confirm-overwrite'),
+          cancel: this.translocoService.translate('general.cancel'),
+        },
+      });
       return true;
     } catch (err) {
       if (!this.walletService.isLedgerWallet()) {
-        this.notifications.sendInfo(`You can use the 'Manage Wallet' page to backup your wallet's secret recovery seed and/or mnemonic`);
+        this.notifications.sendInfo(this.translocoService.translate('ui-notifications.wallet-backup-tip'));
       }
       return false;
     }
@@ -218,25 +279,25 @@ export class ConfigureWalletComponent implements OnInit {
       if (this.selectedImportOption === 'mnemonic' || this.selectedImportOption === 'seed') {
         if (this.selectedImportOption === 'seed') {
           const existingSeed = this.importSeedModel.trim();
-          if (existingSeed.length !== 64 || !this.util.nano.isValidSeed(existingSeed)) return this.notifications.sendError(`Seed is invalid, double check it!`);
+          if (existingSeed.length !== 64 || !this.util.nano.isValidSeed(existingSeed)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.seed-invalid'));
           this.importSeed = existingSeed;
         } else if (this.selectedImportOption === 'mnemonic') {
           // Clean the value by trimming it and removing newlines
           const mnemonic = this.importSeedMnemonicModel.toLowerCase().trim().replace(/\n/g, ``);
 
           const words = mnemonic.split(' ');
-          if (words.length < 20) return this.notifications.sendError(`Mnemonic is too short, double check it!`);
+          if (words.length < 20) return this.notifications.sendError(this.translocoService.translate('ui-notifications.mnemonic-short'));
 
           // Try and decode the mnemonic
           try {
             const newSeed = bip39.mnemonicToEntropy(mnemonic);
-            if (!newSeed || newSeed.length !== 64 || !this.util.nano.isValidSeed(newSeed)) return this.notifications.sendError(`Mnemonic is invalid, double check it!`);
+            if (!newSeed || newSeed.length !== 64 || !this.util.nano.isValidSeed(newSeed)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.mnemonic-invalid'));
             this.importSeed = newSeed.toUpperCase(); // Force uppercase, for consistency
           } catch (err) {
-            return this.notifications.sendError(`Unable to decode mnemonic, double check it!`);
+            return this.notifications.sendError(this.translocoService.translate('ui-notifications.mnemonic-decode-failed'));
           }
         } else {
-          return this.notifications.sendError(`Invalid import option`);
+          return this.notifications.sendError(this.translocoService.translate('ui-notifications.import-option-invalid'));
         }
       } else if (this.selectedImportOption === 'privateKey' || this.selectedImportOption === 'expandedKey') {
         if (this.selectedImportOption === 'privateKey') {
@@ -244,7 +305,7 @@ export class ConfigureWalletComponent implements OnInit {
         } else if (this.selectedImportOption === 'expandedKey') {
           this.isExpanded = true;
         } else {
-          return this.notifications.sendError(`Invalid import option`);
+          return this.notifications.sendError(this.translocoService.translate('ui-notifications.import-option-invalid'));
         }
 
         this.keyString = this.isExpanded ? this.importExpandedKeyModel : this.importPrivateKeyModel;
@@ -253,18 +314,18 @@ export class ConfigureWalletComponent implements OnInit {
           // includes deterministic R value material which we ignore
           this.keyString = this.keyString.substring(0, 64);
           if (!this.util.nano.isValidSeed(this.keyString)) {
-            return this.notifications.sendError(`Private key is invalid, double check it!`);
+            return this.notifications.sendError(this.translocoService.translate('ui-notifications.private-key-invalid'));
           }
         } else if (this.keyString.length !== 64 || !this.util.nano.isValidSeed(this.keyString)) {
-          return this.notifications.sendError(`Private key is invalid, double check it!`);
+          return this.notifications.sendError(this.translocoService.translate('ui-notifications.private-key-invalid'));
         }
       } else if (this.selectedImportOption === 'bip39-mnemonic') {
         // If bip39, import wallet as a single private key
         if (!bip39.validateMnemonic(this.importSeedBip39MnemonicModel)) {
-          return this.notifications.sendError(`Mnemonic is invalid, double check it!`);
+          return this.notifications.sendError(this.translocoService.translate('ui-notifications.mnemonic-invalid'));
         }
         if (!this.validIndex) {
-          return this.notifications.sendError(`The account index is invalid, double check it!`);
+          return this.notifications.sendError(this.translocoService.translate('ui-notifications.account-index-invalid'));
         }
 
         // convert mnemonic to bip39 seed
@@ -308,7 +369,7 @@ export class ConfigureWalletComponent implements OnInit {
 
   confirmNewSeed() {
     if (!this.hasConfirmedBackup) {
-      return this.notifications.sendWarning(`Please confirm you have saved a wallet backup!`);
+      return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.confirm-wallet-backup'));
     }
     this.walletService.createNewWallet(this.newWalletSeed);
     this.storePassword();
@@ -321,10 +382,10 @@ export class ConfigureWalletComponent implements OnInit {
 
   saveWalletPassword() {
     if (this.walletPasswordConfirmModel !== this.walletPasswordModel) {
-      return this.notifications.sendError(`Password confirmation does not match, try again!`);
+      return this.notifications.sendError(this.translocoService.translate('ui-notifications.password-confirm-invalid'));
     }
     if (this.walletPasswordModel.length < 6) {
-      return this.notifications.sendWarning(`Password length must be at least 6`);
+      return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.password-minimum'));
     }
     this.newPassword = this.walletPasswordModel;
     this.walletPasswordModel = '';
@@ -349,10 +410,10 @@ export class ConfigureWalletComponent implements OnInit {
     this.walletService.saveWalletExport();
     this.walletService.informNewWallet();
 
-    this.notifications.sendSuccess(`Successfully created new wallet! Do not lose the secret recovery seed/mnemonic!`);
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-created'));
   }
 
-  setPanel(panel) {
+  setPanel(panel: panels) {
     this.activePanel = panel;
     if (panel === panels.landing) {
       this.isNewWallet = true;
@@ -377,24 +438,27 @@ export class ConfigureWalletComponent implements OnInit {
     );
   }
 
-  importFromFile(files) {
-    if (!files.length) return;
+  importFromFile(files: FileList | null) {
+    if (!files?.length) return;
 
     const file = files[0];
     const reader = new FileReader();
     reader.onload = (event) => {
-      const fileData = event.target['result'] as string;
+      const fileData = reader.result;
+      if (typeof fileData !== 'string') {
+        return this.notifications.sendError(this.translocoService.translate('ui-notifications.import-file-invalid'));
+      }
       try {
         const importData = JSON.parse(fileData);
         if ((!importData.seed && !importData.privateKey && !importData.expandedKey) ||
         (!importData.hasOwnProperty('accountsIndex') && !importData.hasOwnProperty('indexes'))) {
-          return this.notifications.sendError(`Bad import data `);
+          return this.notifications.sendError(this.translocoService.translate('ui-notifications.import-data-bad'));
         }
 
         const walletEncrypted = btoa(JSON.stringify(importData));
         this.route.navigate(['import-wallet'], { fragment: walletEncrypted });
       } catch (err) {
-        this.notifications.sendError(`Unable to parse import data, make sure you selected the right file!`);
+        this.notifications.sendError(this.translocoService.translate('ui-notifications.import-file-invalid'));
       }
     };
 
@@ -402,7 +466,7 @@ export class ConfigureWalletComponent implements OnInit {
   }
 
   // open qr reader modal
-  openQR(reference, type) {
+  openQR(reference: string, type: QRType) {
     const qrResult = this.qrModalService.openQR(reference, type);
     qrResult.then((data) => {
       switch (data.reference) {
@@ -426,14 +490,14 @@ export class ConfigureWalletComponent implements OnInit {
     );
   }
 
-  accountIndexChange(index) {
+  accountIndexChange(index: string) {
     let invalid = false;
-    if (this.util.string.isNumeric(index) && index % 1 === 0) {
-      index = parseInt(index, 10);
-      if (!this.util.nano.isValidIndex(index)) {
+    if (this.util.string.isNumeric(index) && Number(index) % 1 === 0) {
+      const parsedIndex = parseInt(index, 10);
+      if (!this.util.nano.isValidIndex(parsedIndex)) {
         invalid = true;
       }
-      if (index > INDEX_MAX) {
+      if (parsedIndex > INDEX_MAX) {
         invalid = true;
       }
     } else {

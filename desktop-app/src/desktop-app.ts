@@ -23,7 +23,7 @@ process.on('uncaughtExceptionMonitor', (error, origin) => {
 // Too annoying if there would be long-term problems with the source
 // Error would pop up on every launch
 let showUpdateErrors = false;
-let saveTimeout = null;
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 let isDownloading = false;
 const nano_schemes = ['nano', 'nanorep', 'nanoseed', 'nanokey', 'nanosign', 'nanoprocess'];
 
@@ -52,60 +52,59 @@ switch (process.platform) {
 
 // Keep track of window size and position
 function windowStateKeeper() {
-  let window, windowState;
+  type WindowState = {
+    x?: number;
+    y?: number;
+    width: number;
+    height: number;
+    isMaximized?: boolean;
+  };
+  let trackedWindow: BrowserWindow | null = null;
+  let windowState: WindowState = { width: 1000, height: 600 };
   let newWidth = 1000;
   let newHeight = 600;
   try {
-    const mainScreen = screen.getPrimaryDisplay();
-    const dimensions = mainScreen.size;
+    const dimensions = screen.getPrimaryDisplay().size;
     newWidth = Math.max(newWidth, Math.round(dimensions.width * 0.8));
     newHeight = Math.max(newHeight, Math.round(dimensions.height * 0.85));
-  } catch {log.warn('Could not calculate default screen size')}
+  } catch {
+    log.warn('Could not calculate default screen size');
+  }
 
-  async function setBounds() {
-    // Restore from appConfig
-    if (settings.hasSync(`windowState.${'main'}`)) {
-      windowState = settings.getSync(`windowState.${'main'}`);
-      return;
-    }
-    // Default
-    windowState = {
-      x: undefined,
-      y: undefined,
-      width: newWidth,
-      height: newHeight,
-    };
-  }
-  function saveState() {
-    if (saveTimeout !== null) {
-      clearTimeout(saveTimeout);
-    }
-    saveTimeout = setTimeout(
-      () => {
-        if (!windowState.isMaximized) {
-          windowState = window.getBounds();
+  function setBounds(): void {
+    const key = 'windowState.main';
+    if (settings.hasSync(key)) {
+      const candidate = settings.getSync(key);
+      if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+        const saved = candidate as Partial<WindowState>;
+        if (typeof saved.width === 'number' && typeof saved.height === 'number') {
+          windowState = { ...saved, width: saved.width, height: saved.height };
+          return;
         }
-        windowState.isMaximized = window.isMaximized();
-        settings.setSync(`windowState.${'main'}`, windowState);
-      },
-      100
-    );
+      }
+    }
+    windowState = { width: newWidth, height: newHeight };
   }
-  function track(win) {
-    window = win;
-    ['resize', 'move'].forEach(event => {
-      win.on(event, saveState);
-    });
+
+  function saveState(): void {
+    if (saveTimeout !== null) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+      if (!trackedWindow || trackedWindow.isDestroyed()) return;
+      if (!trackedWindow.isMaximized()) {
+        windowState = { ...windowState, ...trackedWindow.getBounds() };
+      }
+      windowState.isMaximized = trackedWindow.isMaximized();
+      settings.setSync('windowState.main', windowState);
+    }, 100);
+  }
+
+  function track(win: BrowserWindow): void {
+    trackedWindow = win;
+    win.on('resize', saveState);
+    win.on('move', saveState);
   }
   setBounds();
-  return({
-    x: windowState.x,
-    y: windowState.y,
-    width: windowState.width,
-    height: windowState.height,
-    isMaximized: windowState.isMaximized,
-    track,
-  });
+  return { ...windowState, track };
 }
 
 class AppUpdater {
@@ -151,7 +150,7 @@ class AppUpdater {
       if (!showUpdateErrors) {
         return;
       }
-      mainWindow.setTitle(`Nault - ${autoUpdater.currentVersion}`); // reset title
+      mainWindow?.setTitle(`Nault - ${autoUpdater.currentVersion}`); // reset title
       showUpdateErrors = false; // disable errors
       const dialogOpts = {
         type: 'error' as const,
@@ -175,7 +174,7 @@ if (process.platform === 'darwin') {
   nano_schemes.forEach((scheme) => app.setAsDefaultProtocolClient(scheme, process.execPath, args));
 }
 
-let mainWindow: BrowserWindow;
+let mainWindow: BrowserWindow | null = null;
 
 // The desktop UI is bundled locally. Reject navigation and privileged IPC
 // from any page other than this exact file (fragment routes are allowed).
@@ -212,7 +211,7 @@ function createWindow () {
   const mainWindowStateKeeper = windowStateKeeper();
 
   // Create the browser window.
-  mainWindow = new BrowserWindow({
+  const currentWindow = new BrowserWindow({
     x: mainWindowStateKeeper.x,
     y: mainWindowStateKeeper.y,
     width: mainWindowStateKeeper.width,
@@ -229,6 +228,7 @@ function createWindow () {
       preload: path.join(__dirname, 'preload.js')
     }
   });
+  mainWindow = currentWindow;
 
   // Block navigation in every frame, not just the top-level document.
   // Electron 44 documents will-frame-navigate, but some generated Electron
@@ -240,7 +240,7 @@ function createWindow () {
     isMainFrame: boolean;
     preventDefault(): void;
   };
-  const frameNavigationEvents = mainWindow.webContents as unknown as {
+  const frameNavigationEvents = currentWindow.webContents as unknown as {
     on(event: 'will-frame-navigate', listener: (event: FrameNavigationEvent) => void): void;
   };
   frameNavigationEvents.on('will-frame-navigate', event => {
@@ -254,10 +254,10 @@ function createWindow () {
   // connection uses a native HID worker; Chromium has no reason to receive
   // permission to open a hardware device. Future WebHID support must
   // explicitly authorize trusted main-frame requests and Ledger vendor IDs.
-  const walletSession = mainWindow.webContents.session;
+  const walletSession = currentWindow.webContents.session;
   const permittedWebFeatures = new Set(['media', 'clipboard-read', 'clipboard-sanitized-write']);
   const isTrustedWebContents = (contents: Electron.WebContents | null): boolean =>
-    !!contents && contents === mainWindow.webContents &&
+    !!contents && contents === currentWindow.webContents &&
     isTrustedWalletURL(contents.getURL());
 
   walletSession.setPermissionRequestHandler((contents, permission, callback) => {
@@ -272,22 +272,22 @@ function createWindow () {
     callback();
   });
 
-  configureWebBluetooth(mainWindow, isTrustedWalletURL);
+  configureWebBluetooth(currentWindow, isTrustedWalletURL);
 
   // Track window state
-  mainWindowStateKeeper.track(mainWindow);
+  mainWindowStateKeeper.track(currentWindow);
 
   // Use only the local bundled index.html, never a remote wallet site.
-  mainWindow.loadURL(url.pathToFileURL(trustedIndexPath).toString());
+  currentWindow.loadURL(url.pathToFileURL(trustedIndexPath).toString());
 
   // Emitted when the window is closed.
-  mainWindow.on('closed', function () {
+  currentWindow.on('closed', function () {
     mainWindow = null;
   });
 
   // The legacy 'new-window' event was removed in Electron 22.
   // Never create a second Electron window for external web links; use the OS browser.
-  mainWindow.webContents.setWindowOpenHandler(({ url: externalUrl }) => {
+  currentWindow.webContents.setWindowOpenHandler(({ url: externalUrl }) => {
     try {
       // Do not pass arbitrary protocols (e.g. file:, javascript:) to the OS.
       const parsed = new URL(externalUrl);
@@ -304,8 +304,8 @@ function createWindow () {
     return { action: 'deny' };
   });
 
-  mainWindow.webContents.on('did-finish-load', function () {
-    mainWindow.setTitle(`Nault - ${autoUpdater.currentVersion}`);
+  currentWindow.webContents.on('did-finish-load', function () {
+    currentWindow.setTitle(`Nault - ${autoUpdater.currentVersion}`);
   });
 
   const menuTemplate = getApplicationMenu();
@@ -314,7 +314,7 @@ function createWindow () {
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate));
 }
 
-function sendStatusToWindow(progressObj) {
+function sendStatusToWindow(progressObj: { bytesPerSecond: number; percent: number; transferred: number; total: number }) {
   let log_message = "Download speed: " + progressObj.bytesPerSecond;
   log_message = log_message + ' - Downloaded ' + Math.round(progressObj.percent) + '%';
   log_message = log_message + ' (' + progressObj.transferred + "/" + progressObj.total + ')';
@@ -323,7 +323,7 @@ function sendStatusToWindow(progressObj) {
   // sending message to ipcRenderer can be done as well but not sure where and how to display it
   // using the title bar instead
   // mainWindow.webContents.send('downloading', Math.round(progressObj.percent));
-  mainWindow.setTitle(`Nault - ${autoUpdater.currentVersion} - Downloading Update: ${Math.round(progressObj.percent)} %`);
+  mainWindow?.setTitle(`Nault - ${autoUpdater.currentVersion} - Downloading Update: ${Math.round(progressObj.percent)} %`);
 }
 
 // run only one app
@@ -475,7 +475,7 @@ function getApplicationMenu() {
         {
           label: `Check for Updates`,
           enabled: app.isPackaged,
-          click (menuItem, browserWindow) {
+          click () {
             checkForUpdates();
           }
         },
@@ -492,7 +492,7 @@ function getApplicationMenu() {
         {
           label: `Check for Updates`,
           enabled: app.isPackaged,
-          click (menuItem, browserWindow) {
+          click () {
             checkForUpdates();
           }
         },
@@ -541,10 +541,10 @@ ipcMain.once('deeplink-ready', () => deeplinkReady = true);
 function handleDeeplink(deeplink: string) {
   if (!deeplinkReady) {
     ipcMain.once('deeplink-ready', (e) => {
-      mainWindow.webContents.send('deeplink', deeplink);
+      mainWindow?.webContents.send('deeplink', deeplink);
     });
   } else {
-    mainWindow.webContents.send('deeplink', deeplink);
+    mainWindow?.webContents.send('deeplink', deeplink);
   }
 }
 

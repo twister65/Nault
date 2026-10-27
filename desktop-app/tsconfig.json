@@ -4,13 +4,13 @@
     "outDir": "dist",
     "sourceMap": true,
     "declaration": false,
-    "moduleResolution": "node",
+    "skipLibCheck": true,
+    "moduleResolution": "Node16",
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
     "target": "es2017",
-    "module": "commonjs",
-    "baseUrl": ".",
+    "module": "Node16",
     "typeRoots": [
       "../node_modules/@types"
     ],
@@ -20,7 +20,8 @@
     ],
     "types": [
       "node"
-    ]
+    ],
+    "rootDir": "src"
   },
   "include": [
     "src/**/*"

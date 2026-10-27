@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { NotificationService } from 'app/services/notification.service';
 
 interface InstallEvent extends Event {
@@ -10,11 +10,12 @@ interface InstallEvent extends Event {
     selector: 'app-install-widget',
     templateUrl: './install-widget.component.html',
     styleUrls: ['./install-widget.component.less'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class InstallWidgetComponent implements OnInit {
 
-  installEvent: InstallEvent;
+  installEvent: InstallEvent | null = null;
   showInstallPromotion = false;
   platform = this.getPlatform();
   promotablePlatforms = ['Android', 'iOS', 'iPadOS', 'Chrome OS'];
@@ -29,11 +30,12 @@ export class InstallWidgetComponent implements OnInit {
     }
 
     // Show clickable installation banner (Chrome / Edge only)
-    window.addEventListener('beforeinstallprompt', (event: InstallEvent) => {
+    window.addEventListener('beforeinstallprompt', (event: Event) => {
+      if (!('prompt' in event) || !('userChoice' in event)) return;
       // Prevent the mini-infobar from appearing on mobile
       event.preventDefault();
 
-      this.installEvent = event;
+      this.installEvent = event as InstallEvent;
       this.showInstallPromotion = true;
     });
 
@@ -95,7 +97,7 @@ export class InstallWidgetComponent implements OnInit {
     if (this.isInstalled()) {
       return false;
     }
-    return this.promotablePlatforms.includes(this.platform);
+    return this.promotablePlatforms.includes(this.platform ?? '');
   }
 
   isInstalled() {

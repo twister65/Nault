@@ -1,27 +1,44 @@
-import {Component, OnDestroy, OnInit} from '@angular/core';
+import {Component, OnDestroy, OnInit, ChangeDetectionStrategy} from '@angular/core';
 import {ActivatedRoute, ChildActivationEnd, Router, NavigationEnd} from '@angular/router';
 import {formatDate} from '@angular/common';
-import {AddressBookService} from '../../services/address-book.service';
+import {AddressBookService, AddressBookEntry} from '../../services/address-book.service';
 import {ApiService} from '../../services/api.service';
 import {NotificationService} from '../../services/notification.service';
-import {WalletService} from '../../services/wallet.service';
+import {WalletService, WalletAccount, ReceivableBlockUpdate} from '../../services/wallet.service';
+import {LedgerService, LedgerStatus} from '../../services/ledger.service';
 import {NanoBlockService} from '../../services/nano-block.service';
 import {AppSettingsService} from '../../services/app-settings.service';
 import {PriceService} from '../../services/price.service';
 import {UtilService} from '../../services/util.service';
 import * as QRCode from 'qrcode';
 import BigNumber from 'bignumber.js';
-import {RepresentativeService} from '../../services/representative.service';
-import {BehaviorSubject} from 'rxjs';
+import {RepresentativeService, FullRepresentativeOverview, StoredRepresentative} from '../../services/representative.service';
+import {BehaviorSubject, Subscription} from 'rxjs';
 import * as nanocurrency from 'nanocurrency';
 import {NinjaService} from '../../services/ninja.service';
 import { QrModalService } from '../../services/qr-modal.service';
-import { TranslocoService } from '@ngneat/transloco';
+import type {QRType} from '../qr-modal/qr-modal.component';
+import { TranslocoService } from '@jsverse/transloco';
+
+interface ReceivableHistoryItem {
+  account: string;
+  amount: string;
+  amountRaw: BigNumber;
+  local_timestamp: number | null;
+  local_date_string: string;
+  local_time_string: string;
+  addressBookName: string | null;
+  hash: string;
+  loading: boolean;
+  received: boolean;
+  isReceivable: boolean;
+}
 
 @Component({
     selector: 'app-account-details',
     templateUrl: './account-details.component.html',
     styleUrls: ['./account-details.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class AccountDetailsComponent implements OnInit, OnDestroy {
@@ -29,19 +46,19 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   zeroHash = '0000000000000000000000000000000000000000000000000000000000000000';
 
   accountHistory: any[] = [];
-  pendingBlocks = [];
+  pendingBlocks: ReceivableHistoryItem[] = [];
   pageSize = 25;
   maxPageSize = 200;
 
   repLabel: any = '';
-  repVotingWeight: BigNumber;
+  repVotingWeight = new BigNumber(0);
   repDonationAddress: any = '';
 
   addressBookEntry: any = null;
   account: any = {};
   accountID = '';
 
-  walletAccount = null;
+  walletAccount: WalletAccount | null | undefined = null;
 
   timeoutIdAllowingManualRefresh: any = null;
   timeoutIdAllowingInstantAutoRefresh: any = null;
@@ -59,26 +76,27 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   showEditAddressBook = false;
   addressBookModel = '';
   representativeModel = '';
-  representativeResults$ = new BehaviorSubject([]);
+  representativeResults$ = new BehaviorSubject<StoredRepresentative[]>([]);
   showRepresentatives = false;
   representativeListMatch = '';
   isNaN = isNaN;
 
   qrCodeImage = null;
 
-  routerSub = null;
-  priceSub = null;
+  routerSub: Subscription | null = null;
+  priceSub: Subscription | null = null;
+  balanceRefreshSub: Subscription | null = null;
 
   initialLoadDone = false;
   manualRefreshAllowed = true;
   instantAutoRefreshAllowed = true;
   shouldQueueAutoRefresh = false;
-  autoRefreshReasonBlockUpdate = null;
+  autoRefreshReasonBlockUpdate: ReceivableBlockUpdate | null = null;
   dateStringToday = '';
   dateStringYesterday = '';
 
   // Remote signing
-  addressBookResults$ = new BehaviorSubject([]);
+  addressBookResults$ = new BehaviorSubject<AddressBookEntry[]>([]);
   showAddressBook = false;
   addressBookMatch = '';
   amounts = [
@@ -88,7 +106,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   ];
   selectedAmount = this.amounts[0];
 
-  amount = null;
+  amount: string | number | null = null;
   amountRaw: BigNumber = new BigNumber(0);
   amountFiat: number|null = null;
   rawAmount: BigNumber = new BigNumber(0);
@@ -96,19 +114,19 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   toAccount: any = false;
   toAccountID = '';
   toAddressBook = '';
-  toAccountStatus = null;
-  amountStatus = null;
-  repStatus = null;
-  qrString = null;
-  qrCodeImageBlock = null;
-  qrCodeImageBlockReceive = null;
-  blockHash = null;
-  blockHashReceive = null;
+  toAccountStatus: number | null = null;
+  amountStatus: number | null = null;
+  repStatus: number | null = null;
+  qrString: string | null = null;
+  qrCodeImageBlock: string | null = null;
+  qrCodeImageBlockReceive: string | null = null;
+  blockHash: string | null = null;
+  blockHashReceive: string | null = null;
   remoteVisible = false;
   blockTypes: string[] = ['Send Nano', 'Change Representative'];
   blockTypeSelected: string = this.blockTypes[0];
-  representativeList = [];
-  representativesOverview = [];
+  representativeList: StoredRepresentative[] = [];
+  representativesOverview: FullRepresentativeOverview[] = [];
   // End remote signing
 
   constructor(
@@ -120,6 +138,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     private repService: RepresentativeService,
     private notifications: NotificationService,
     private wallet: WalletService,
+    private ledger: LedgerService,
     private util: UtilService,
     public settings: AppSettingsService,
     private nanoBlock: NanoBlockService,
@@ -159,7 +178,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       this.onReceivableBlockUpdate(receivableBlockUpdate);
     });
 
-    const UIkit = window['UIkit'];
+    const UIkit = (window as unknown as {UIkit: {modal: (selector: string) => {show(): void; hide(): void}}}).UIkit;
     const qrModal = UIkit.modal('#qr-code-modal');
     this.qrModal = qrModal;
 
@@ -169,19 +188,28 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     const mobileTransactionMenuModal = UIkit.modal('#mobile-transaction-menu-modal');
     this.mobileTransactionMenuModal = mobileTransactionMenuModal;
 
-    await this.loadAccountDetails();
+    // Recover account history when a wallet RPC reconciliation succeeds after reconnect.
+    this.balanceRefreshSub = this.wallet.wallet.refresh$.subscribe(refreshed => {
+      if (refreshed && this.initialLoadDone) this.loadAccountDetailsThrottled();
+    });
+
+    try {
+      await this.loadAccountDetails();
+    } catch (_) {
+      // First launch may be offline; the next successful wallet refresh retries it.
+    }
     this.initialLoadDone = true;
     this.addressBook.loadAddressBook();
 
     this.populateRepresentativeList();
 
     this.repService.walletReps$.subscribe(async reps => {
-      if ( reps[0] === null ) {
+      if (reps[0] === null) {
         // initial state from new BehaviorSubject([null])
         return;
       }
 
-      this.representativesOverview = reps;
+      this.representativesOverview = reps.filter((rep): rep is FullRepresentativeOverview => rep !== null);
       this.updateRepresentativeInfo();
     });
   }
@@ -280,7 +308,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     this.loadAccountDetails();
   }
 
-  isReceivableBlockUpdateRelevant(receivableBlockUpdate) {
+  isReceivableBlockUpdateRelevant(receivableBlockUpdate: ReceivableBlockUpdate): boolean {
     let isRelevant = true;
 
     if (receivableBlockUpdate.account !== this.accountID) {
@@ -322,7 +350,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     return isRelevant;
   }
 
-  onReceivableBlockUpdate(receivableBlockUpdate) {
+  onReceivableBlockUpdate(receivableBlockUpdate: ReceivableBlockUpdate | null): void {
     if (receivableBlockUpdate === null) {
       return;
     }
@@ -337,7 +365,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     this.loadAccountDetailsThrottled({ receivableBlockUpdate });
   }
 
-  loadAccountDetailsThrottled(params) {
+  loadAccountDetailsThrottled(params: {receivableBlockUpdate?: ReceivableBlockUpdate} = {}): void {
     this.autoRefreshReasonBlockUpdate = (
         (params.receivableBlockUpdate != null)
       ? params.receivableBlockUpdate
@@ -362,7 +390,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     }
   }
 
-  enableManualRefreshDelayed(delayMS) {
+  enableManualRefreshDelayed(delayMS: number): void {
     if (this.timeoutIdAllowingManualRefresh != null) {
       clearTimeout(this.timeoutIdAllowingManualRefresh);
     }
@@ -376,7 +404,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       );
   }
 
-  enableInstantAutoRefreshDelayed(delayMS) {
+  enableInstantAutoRefreshDelayed(delayMS: number): void {
     if (this.timeoutIdAllowingInstantAutoRefresh != null) {
       clearTimeout(this.timeoutIdAllowingInstantAutoRefresh);
     }
@@ -390,7 +418,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       );
   }
 
-  loadAccountDetailsDelayed(delayMS) {
+  loadAccountDetailsDelayed(delayMS: number): void {
     if (this.timeoutIdQueuedAutoRefresh != null) {
       clearTimeout(this.timeoutIdQueuedAutoRefresh);
     }
@@ -447,12 +475,17 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   }
 
   async loadAccountDetails() {
+    if (this.loadingAccountDetails) {
+      this.shouldQueueAutoRefresh = true;
+      return;
+    }
     this.onAccountDetailsLoadStart();
 
     this.pendingBlocks = [];
 
     this.clearAccountVars();
     this.loadingAccountDetails = true;
+    try {
 
     const accountID = this.router.snapshot.params.account;
     this.accountID = accountID;
@@ -466,13 +499,11 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
     if (accountID !== this.accountID) {
       // Navigated to a different account while account info was loading
-      this.onAccountDetailsLoadDone();
       return;
     }
 
     if (!this.account) {
       this.loadingAccountDetails = false;
-      this.onAccountDetailsLoadDone();
       return;
     }
 
@@ -496,8 +527,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
       if (accountID !== this.accountID) {
         // Navigated to a different account while incoming tx were loading
-        this.onAccountDetailsLoadDone();
-        return;
+          return;
       }
 
       this.loadingIncomingTxList = false;
@@ -561,15 +591,21 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
     if (accountID !== this.accountID) {
       // Navigated to a different account while account history was loading
-      this.onAccountDetailsLoadDone();
       return;
     }
 
-    this.loadingAccountDetails = false;
-    this.onAccountDetailsLoadDone();
+    } catch (error) {
+      // Offline RPC failures must not leave the account or history spinners running.
+      console.warn('Unable to load account details; retry after network recovery.', error);
+    } finally {
+      this.loadingAccountDetails = false;
+      this.loadingIncomingTxList = false;
+      this.loadingTxList = false;
+      this.onAccountDetailsLoadDone();
+    }
   }
 
-  getAccountLabel(accountID, defaultLabel) {
+  getAccountLabel(accountID: string, defaultLabel: string | null): string | null {
     const walletAccount = this.wallet.wallet.accounts.find(a => a.id === accountID);
 
     if (walletAccount == null) {
@@ -588,9 +624,10 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     if (this.priceSub) {
       this.priceSub.unsubscribe();
     }
+    this.balanceRefreshSub?.unsubscribe();
   }
 
-  async generateReceiveQR(accountID) {
+  async generateReceiveQR(accountID: string) {
     const qrCode = await QRCode.toDataURL(`${accountID}`, { errorCorrectionLevel: 'M', scale: 16 });
     this.qrCodeImage = qrCode;
   }
@@ -602,13 +639,14 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     this.dateStringYesterday = formatDate( unixTimeNow - 86400000, 'MMM d, y', 'en-US' );
   }
 
-  async getAccountHistory(accountID, resetPage = true) {
+  async getAccountHistory(accountID: string, resetPage = true) {
     if (resetPage) {
       this.accountHistory = [];
       this.pageSize = 25;
     }
 
     this.loadingTxList = true;
+    try {
     this.updateTodayYesterdayDateStrings();
 
     const history = await this.api.accountHistory(accountID, this.pageSize, true);
@@ -618,7 +656,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const additionalBlocksInfo = [];
+    const additionalBlocksInfo: Array<{hash: string; link: string}> = [];
 
     const accountConfirmationHeight = (
         this.account.confirmation_height
@@ -717,7 +755,9 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       this.accountHistory = [];
     }
 
-    this.loadingTxList = false;
+    } finally {
+      this.loadingTxList = false;
+    }
   }
 
   async loadMore() {
@@ -735,7 +775,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       // Check for deleting an entry in the address book
       if (this.addressBookEntry) {
         this.addressBook.deleteAddress(this.accountID);
-        this.notifications.sendSuccess(`Successfully removed address book entry!`);
+        this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.addressbook-entry-removed'));
         this.addressBookEntry = null;
       }
 
@@ -764,7 +804,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       const currentTransactionTracking = this.addressBook.getTransactionTrackingById(this.accountID);
       await this.addressBook.saveAddress(this.accountID, this.addressBookModel, currentBalanceTracking, currentTransactionTracking);
     } catch (err) {
-      this.notifications.sendError(this.translocoService.translate('address-book.unable-to-save-entry', { message: err.message }));
+      this.notifications.sendError(this.translocoService.translate('address-book.unable-to-save-entry', { message: err instanceof Error ? err.message : String(err) }));
       return;
     }
 
@@ -790,7 +830,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     this.representativeResults$.next(matches);
   }
 
-  selectRepresentative(rep) {
+  selectRepresentative(rep: string) {
     this.showRepresentatives = false;
     this.representativeModel = rep;
     this.searchRepresentatives();
@@ -820,7 +860,33 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
   copied() {
     this.notifications.removeNotification('success-copied');
-    this.notifications.sendSuccess(`Successfully copied to clipboard!`, { identifier: 'success-copied' });
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.clipboard-copied'), { identifier: 'success-copied' });
+  }
+
+  get isLedgerWallet(): boolean {
+    return this.wallet.isLedgerWallet();
+  }
+
+  // Also expose the hardware address confirmation from Account Details.
+  async showLedgerAddress(account: WalletAccount): Promise<void> {
+    if (this.ledger.ledger.status !== LedgerStatus.READY) {
+      this.notifications.sendWarning(this.translocoService.translate('accounts.ledger-device-must-be-ready'));
+      return;
+    }
+
+    this.notifications.sendInfo(
+      this.translocoService.translate('accounts.confirming-account-address-on-ledger-device'),
+      { identifier: 'ledger-account', length: 0 }
+    );
+    try {
+      // showOnScreen=true asks the Ledger to display the address for verification.
+      await this.ledger.getLedgerAccount(account.index, true);
+      this.notifications.sendSuccess(this.translocoService.translate('accounts.account-address-confirmed-on-ledger'));
+    } catch (error) {
+      this.notifications.sendError(this.translocoService.translate('accounts.account-address-denied-if-it-is-wrong-do-not-use-the-wallet'));
+    } finally {
+      this.notifications.removeNotification('ledger-account');
+    }
   }
 
   // Remote signing methods
@@ -871,7 +937,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     this.addressBookResults$.next(matches);
   }
 
-  selectBookEntry(account) {
+  selectBookEntry(account: string) {
     this.showAddressBook = false;
     this.toAccountID = account;
     this.searchAddressBook();
@@ -888,6 +954,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     this.addressBookMatch = (
         this.addressBook.getAccountName(this.toAccountID)
       || this.getAccountLabel(this.toAccountID, null)
+      || ''
     );
 
     // const accountInfo = await this.walletService.walletApi.accountInfo(this.toAccountID);
@@ -908,7 +975,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   }
 
   validateAmount() {
-    if (this.util.account.isValidNanoAmount(this.amount)) {
+    if (this.amount !== null && this.util.account.isValidNanoAmount(String(this.amount))) {
       this.amountStatus = 1;
       return true;
     } else {
@@ -925,7 +992,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     this.syncFiatPrice();
   }
 
-  getAmountBaseValue(value) {
+  getAmountBaseValue(value: string | number | BigNumber) {
 
     switch (this.selectedAmount.value) {
       default:
@@ -935,7 +1002,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     }
   }
 
-  getAmountValueFromBase(value) {
+  getAmountValueFromBase(value: string | number | BigNumber) {
     switch (this.selectedAmount.value) {
       default:
       case 'nano': return this.util.nano.rawToNano(value);
@@ -944,14 +1011,14 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     }
   }
 
-  showMobileMenuForTransaction(transaction) {
+  showMobileMenuForTransaction(transaction: ReceivableHistoryItem | Record<string, unknown>) {
     this.notifications.removeNotification('success-copied');
 
     this.mobileTransactionData = transaction;
     this.mobileTransactionMenuModal.show();
   }
 
-  onReceiveFundsPress(receivableTransaction) {
+  onReceiveFundsPress(receivableTransaction: ReceivableHistoryItem) {
     if (receivableTransaction.loading || receivableTransaction.received) {
       return;
     }
@@ -959,7 +1026,12 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     this.receiveReceivableBlock(receivableTransaction);
   }
 
-  async receiveReceivableBlock(receivableBlock) {
+  async receiveReceivableBlock(receivableBlock: ReceivableHistoryItem) {
+    const walletAccount = this.walletAccount;
+    if (!walletAccount) {
+      this.notifications.sendWarning(this.translocoService.translate('ui-notifications.account-select-receive'));
+      return;
+    }
     const sourceBlock = receivableBlock.hash;
 
     if (this.wallet.isLocked()) {
@@ -977,9 +1049,9 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
     try {
       createdReceiveBlockHash =
-        await this.nanoBlock.generateReceive(this.walletAccount, sourceBlock, this.wallet.isLedgerWallet());
+        await this.nanoBlock.generateReceive(walletAccount, sourceBlock, this.wallet.isLedgerWallet());
     } catch (err) {
-      this.notifications.sendError('Error receiving transaction: ' + err.message);
+      this.notifications.sendError(this.translocoService.translate('ui-notifications.receive-failed-detail', { error: err instanceof Error ? err.message : String(err) }));
       hasShownErrorNotification = true;
     }
 
@@ -987,13 +1059,13 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       receivableBlock.received = true;
       this.mobileTransactionMenuModal.hide();
       this.notifications.removeNotification('success-receive');
-      this.notifications.sendSuccess(`Successfully received nano!`, { identifier: 'success-receive' });
+      this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.receive-success'), { identifier: 'success-receive' });
       // clear the list of pending blocks. Updated again with reloadBalances()
       this.wallet.clearPendingBlocks();
     } else {
       if (hasShownErrorNotification === false) {
         if (!this.wallet.isLedgerWallet()) {
-          this.notifications.sendError(`Error receiving transaction, please try again`, {length: 10000});
+          this.notifications.sendError(this.translocoService.translate('ui-notifications.receive-failed'), {length: 10000});
         }
       }
     }
@@ -1007,15 +1079,15 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
   async generateSend() {
     const isValid = this.util.account.isValidAccount(this.toAccountID);
-    if (!isValid) return this.notifications.sendWarning(`To account address is not valid`);
-    if (!this.accountID || !this.toAccountID) return this.notifications.sendWarning(`From and to account are required`);
-    if (!this.validateAmount()) return this.notifications.sendWarning(`Invalid XNO Amount`);
+    if (!isValid) return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.send-address-invalid'));
+    if (!this.accountID || !this.toAccountID) return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.send-addresses-required'));
+    if (!this.validateAmount()) return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.send-amount-invalid'));
 
     this.qrCodeImageBlock = null;
 
     const from = await this.api.accountInfo(this.accountID);
     const to = await this.api.accountInfo(this.toAccountID);
-    if (!from) return this.notifications.sendError(`From account not found`);
+    if (!from) return this.notifications.sendError(this.translocoService.translate('ui-notifications.send-from-not-found'));
 
     from.balanceBN = new BigNumber(from.balance || 0);
     to.balanceBN = new BigNumber(to.balance || 0);
@@ -1028,8 +1100,8 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
     const nanoAmount = this.rawAmount.div(this.nano);
 
-    if (this.amount < 0 || rawAmount.lessThan(0)) return this.notifications.sendWarning(`Amount is invalid`);
-    if (from.balanceBN.minus(rawAmount).lessThan(0)) return this.notifications.sendError(`From account does not have enough XNO`);
+    if (Number(this.amount ?? 0) < 0 || rawAmount.lessThan(0)) return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.send-amount-invalid'));
+    if (from.balanceBN.minus(rawAmount).lessThan(0)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.send-balance-insufficient'));
 
     // Determine a proper raw amount to show in the UI, if a decimal was entered
     this.amountRaw = this.rawAmount.mod(this.nano);
@@ -1061,7 +1133,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
     // Previous block info
     const previousBlockInfo = await this.api.blockInfo(blockData.previous);
-    if (!('contents' in previousBlockInfo)) return this.notifications.sendError(`Previous block not found`);
+    if (!('contents' in previousBlockInfo)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.previous-block-missing'));
     const jsonBlock = JSON.parse(previousBlockInfo.contents);
     const blockDataPrevious = {
       account: jsonBlock.account.replace('xrb_', 'nano_').toLowerCase(),
@@ -1078,12 +1150,12 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     this.qrCodeImageBlock = qrCode;
   }
 
-  async generateReceive(pendingHash) {
+  async generateReceive(pendingHash: string) {
     this.qrCodeImageBlockReceive = null;
     this.qrString = null;
     this.blockHashReceive = null;
 
-    const UIkit = window['UIkit'];
+    const UIkit = (window as unknown as {UIkit: {modal: (selector: string) => {show(): void; hide(): void}}}).UIkit;
     const modal = UIkit.modal('#receive-modal');
     modal.show();
 
@@ -1122,7 +1194,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     let blockDataPrevious = null;
     if (!openEquiv) {
       const previousBlockInfo = await this.api.blockInfo(blockData.previous);
-      if (!('contents' in previousBlockInfo)) return this.notifications.sendError(`Previous block not found`);
+      if (!('contents' in previousBlockInfo)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.previous-block-missing'));
       const jsonBlock = JSON.parse(previousBlockInfo.contents);
       blockDataPrevious = {
         account: jsonBlock.account.replace('xrb_', 'nano_').toLowerCase(),
@@ -1154,14 +1226,14 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   }
 
   async generateChange() {
-    if (!this.util.account.isValidAccount(this.representativeModel)) return this.notifications.sendError(`Not a valid representative account`);
+    if (!this.util.account.isValidAccount(this.representativeModel)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-invalid'));
     this.qrCodeImageBlock = null;
     this.blockHash = null;
     this.qrString = null;
 
     const account = await this.api.accountInfo(this.accountID);
 
-    if (!account || !('frontier' in account)) return this.notifications.sendError(`Account must be opened first!`);
+    if (!account || !('frontier' in account)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-account-unopened'));
 
     const balance = new BigNumber(account.balance);
     const balanceDecimal = balance.toString(10);
@@ -1186,7 +1258,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
     // Previous block info
     const previousBlockInfo = await this.api.blockInfo(blockData.previous);
-    if (!('contents' in previousBlockInfo)) return this.notifications.sendError(`Previous block not found`);
+    if (!('contents' in previousBlockInfo)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.previous-block-missing'));
     const jsonBlock = JSON.parse(previousBlockInfo.contents);
     const blockDataPrevious = {
       account: jsonBlock.account.replace('xrb_', 'nano_').toLowerCase(),
@@ -1208,14 +1280,14 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   }
 
   showRemoteModal() {
-    const UIkit = window['UIkit'];
+    const UIkit = (window as unknown as {UIkit: {modal: (selector: string) => {show(): void; hide(): void}}}).UIkit;
     const modal = UIkit.modal('#block-modal');
     modal.show();
     this.clearRemoteVars();
   }
 
   // open qr reader modal
-  openQR(reference, type) {
+  openQR(reference: string, type: QRType) {
     const qrResult = this.qrModalService.openQR(reference, type);
     qrResult.then((data) => {
       switch (data.reference) {

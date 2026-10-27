@@ -36,7 +36,7 @@
                 <div class="uk-form-controls">
                   <select class="uk-select" [(ngModel)]="selectedCurrency" id="form-horizontal-select">
                     @for (currency of currencies; track currency) {
-                      <option [value]="currency.value">{{ currency.name }}</option>
+                      <option [value]="currency.value">{{ currency.value === '' ? t(currency.name) : currency.name }}</option>
                     }
                   </select>
                 </div>
@@ -53,7 +53,7 @@
                 <div class="uk-form-controls">
                   <select class="uk-select" [(ngModel)]="selectedNightModeOption" id="form-horizontal-select">
                     @for (nightModeOption of nightModeOptions; track nightModeOption) {
-                      <option [value]="nightModeOption.value">{{ nightModeOption.name }}</option>
+                      <option [value]="nightModeOption.value">{{ t(nightModeOption.name) }}</option>
                     }
                   </select>
                 </div>
@@ -70,7 +70,7 @@
                 <div class="uk-form-controls">
                   <select class="uk-select" [(ngModel)]="selectedIdenticonOption" id="form-horizontal-select">
                     @for (identiconOption of identiconOptions; track identiconOption) {
-                      <option [value]="identiconOption.value">{{ identiconOption.name }}</option>
+                      <option [value]="identiconOption.value">{{ t(identiconOption.name) }}</option>
                     }
                   </select>
                 </div>
@@ -104,7 +104,7 @@
                   <div class="uk-inline uk-width-1-1">
                     <select class="uk-select" [(ngModel)]="selectedInactivityMinutes">
                       @for (option of inactivityOptions; track option) {
-                        <option [value]="option.value">{{ option.name }}</option>
+                        <option [value]="option.value">{{ t(option.name, option.params) }}</option>
                       }
                     </select>
                   </div>
@@ -123,7 +123,7 @@
                   <div class="uk-inline uk-width-1-1">
                     <select class="uk-select" [(ngModel)]="selectedStorage">
                       @for (storage of storageOptions; track storage) {
-                        <option [value]="storage.value">{{ storage.name }}</option>
+                        <option [value]="storage.value">{{ t(storage.name) }}</option>
                       }
                     </select>
                   </div>
@@ -147,7 +147,7 @@
                             <ng-element>{{ getRemotePoWOptionName() }}</ng-element>
                           }
                           @if (pow.value !== 'server') {
-                            <ng-element>{{ pow.name }}</ng-element>
+                            <ng-element>{{ t(pow.name) }}</ng-element>
                           }
                         </option>
                       }
@@ -173,7 +173,7 @@
                     <div class="uk-inline uk-width-1-1">
                       <select class="uk-select" [(ngModel)]="selectedMultiplierOption">
                         @for (multiplier of multiplierOptions; track multiplier) {
-                          <option [value]="multiplier.value">{{ multiplier.name }}</option>
+                          <option [value]="multiplier.value">{{ multiplier.value === 1 ? t(multiplier.name) : multiplier.name }}</option>
                         }
                       </select>
                     </div>
@@ -193,7 +193,7 @@
                   <div class="uk-inline uk-width-1-1">
                     <select class="uk-select" [(ngModel)]="selectedPendingOption">
                       @for (pending of pendingOptions; track pending) {
-                        <option [value]="pending.value">{{ pending.name }}</option>
+                        <option [value]="pending.value">{{ t(pending.name) }}</option>
                       }
                     </select>
                   </div>
@@ -232,7 +232,7 @@
                   <div class="uk-inline uk-width-1-1">
                     <select class="uk-select" [(ngModel)]="selectedDecentralizedAliasesOption">
                       @for (decentralizedAliasesOption of decentralizedAliasesOptions; track decentralizedAliasesOption) {
-                        <option [value]="decentralizedAliasesOption.value">{{ decentralizedAliasesOption.name }}</option>
+                        <option [value]="decentralizedAliasesOption.value">{{ t(decentralizedAliasesOption.name) }}</option>
                       }
                     </select>
                   </div>

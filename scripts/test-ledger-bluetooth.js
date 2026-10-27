@@ -141,6 +141,67 @@ async function main() {
     assert.equal(closes, 1, 'USB HID must finish closing before acknowledgement');
   });
 
+  await check('USB rejection 0x6985 preserves session and a subsequent signature succeeds', async () => {
+    const { LedgerService: NativeLedgerService, isLedgerUserRejection } = load(
+      fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8'), {
+        './ledger-hid-worker-transport': {}, 'hw-app-nano': {},
+        rxjs: require('rxjs'), electron: {}
+      }
+    );
+    assert.equal(isLedgerUserRejection({ statusCode: 0x6985, message: 'Conditions not satisfied' }), true);
+    assert.equal(isLedgerUserRejection(new Error('Ledger device: Condition of use not satisfied (0x6985)')), true);
+    assert.equal(isLedgerUserRejection(new Error('Ledger HID read timed out')), false);
+    assert.equal(isLedgerUserRejection({ statusCode: 0x6982, message: 'Locked' }), false);
+
+    const service = new NativeLedgerService();
+    let closes = 0;
+    const transport = { async close() { closes++; } };
+    const events = [];
+    const statuses = [];
+    service.ledger = {
+      transport, status: 'ready',
+      nano: {
+        signBlock: async () => {
+          throw Object.assign(new Error('Ledger device: Condition of use not satisfied (denied by the user?) (0x6985)'), { statusCode: 0x6985 });
+        },
+        cacheBlock: async () => { throw new Error('Ledger device: Condition of use not satisfied (0x6985)'); }
+      }
+    };
+    service.ledgerMessage$.subscribe(event => events.push(event));
+    service.ledgerStatus$.subscribe(status => statuses.push(status));
+
+    await service.signBlock(0, {});
+    assert.equal(events.at(-1).event, 'sign-block');
+    assert.equal(events.at(-1).data.error, true, 'the refused signature must still notify the renderer');
+    assert.match(events.at(-1).data.errorMessage, /0x6985/);
+    assert.strictEqual(service.ledger.transport, transport);
+    assert.equal(service.ledger.status, 'ready');
+    assert.equal(closes, 0);
+    assert.equal(statuses.length, 0, 'refusal must not notify disconnect');
+
+    await service.cacheBlock(0, {}, '');
+    assert.equal(events.at(-1).event, 'cache-block');
+    assert.equal(events.at(-1).data.error, true);
+    assert.strictEqual(service.ledger.transport, transport);
+    assert.equal(service.ledger.status, 'ready');
+    assert.equal(closes, 0);
+
+    service.ledger.nano.signBlock = async () => ({ signature: 'mock-signature' });
+    await service.signBlock(0, {});
+    assert.equal(events.at(-1).data.signature, 'mock-signature',
+      'the next signature succeeds on the original USB session');
+    assert.strictEqual(service.ledger.transport, transport);
+    assert.equal(closes, 0);
+
+    service.ledger.nano.signBlock = async () => { throw new Error('Ledger HID read timed out'); };
+    await service.signBlock(0, {});
+    assert.equal(events.at(-1).data.error, true);
+    await service.usbClosing;
+    assert.equal(closes, 1, 'a genuine HID failure still releases the transport');
+    assert.equal(service.ledger.status, 'not-connected');
+    assert.equal(statuses.at(-1).status, 'not-connected');
+  });
+
   await check('BLE switch cancels a USB worker that is still opening', async () => {
     let finishOpen;
     let closes = 0;
@@ -176,10 +237,10 @@ async function main() {
   const controlCode = ts.transpileModule(fs.readFileSync(path.join(root, 'src/app/services/ledger-ble-control.ts'), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017 }
   }).outputText;
-  const control = load(controlCode, { 'rxjs/operators': require('rxjs/operators') });
+  const control = load(controlCode, { 'rxjs-ledger/operators': require('rxjs-ledger/operators') });
   await check('real BLE exchange tolerates repeated MTU replies and returns the signature bytes', async () => {
     const RealBLE = require('@ledgerhq/hw-transport-web-ble').default;
-    const frames = new (require('rxjs').Subject)();
+    const frames = new (require('rxjs-ledger').Subject)();
     let disconnected = false;
     const transport = new RealBLE({ id: 'test', gatt: { disconnect() { disconnected = true; } } }, {}, frames, {});
     transport.mtuSize = 153;
@@ -204,7 +265,7 @@ async function main() {
   }).outputText;
   const SessionBLE = load(sessionCode, {
     '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
-    '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+    '@ledgerhq/devices': require('@ledgerhq/devices'), 'rxjs-ledger': require('rxjs-ledger'), buffer: require('buffer')
   }).default;
   function gattHarness(shouldReplyToMtu = () => true) {
     const device = new EventEmitter();
@@ -249,7 +310,7 @@ async function main() {
     const pendingRelease = new Promise(resolve => { finishRelease = resolve; });
     const BridgeBLE = load(sessionCode, {
       '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
-      '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+      '@ledgerhq/devices': require('@ledgerhq/devices'), 'rxjs-ledger': require('rxjs-ledger'), buffer: require('buffer')
     }, {
       window: { naultDesktop: { releaseLedgerUsb() {
         requests++;
@@ -275,7 +336,7 @@ async function main() {
   await check('failed USB release prevents GATT discovery', async () => {
     const BridgeBLE = load(sessionCode, {
       '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
-      '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+      '@ledgerhq/devices': require('@ledgerhq/devices'), 'rxjs-ledger': require('rxjs-ledger'), buffer: require('buffer')
     }, { window: { naultDesktop: { releaseLedgerUsb: async () => false } } }).default;
     const h = gattHarness();
     await assert.rejects(BridgeBLE.open(h.device, 1000), /USB transport could not be released/);
@@ -286,7 +347,7 @@ async function main() {
     const messages = [];
     const DiagnosticBLE = load(sessionCode, {
       '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
-      '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+      '@ledgerhq/devices': require('@ledgerhq/devices'), 'rxjs-ledger': require('rxjs-ledger'), buffer: require('buffer')
     }, { console: {
       info(message, detail) { messages.push({ level: 'info', message, detail }); },
       warn(message, detail) { messages.push({ level: 'warn', message, detail }); },
@@ -326,7 +387,7 @@ async function main() {
     const messages = [];
     const DiagnosticBLE = load(sessionCode, {
       '@ledgerhq/hw-transport-web-ble': require('@ledgerhq/hw-transport-web-ble'),
-      '@ledgerhq/devices': require('@ledgerhq/devices'), rxjs: require('rxjs'), buffer: require('buffer')
+      '@ledgerhq/devices': require('@ledgerhq/devices'), 'rxjs-ledger': require('rxjs-ledger'), buffer: require('buffer')
     }, { console: {
       info(message, detail) { messages.push({ message, detail }); },
       warn(message, detail) { messages.push({ message, detail }); },
@@ -440,7 +501,7 @@ async function main() {
   });
   const calls = [];
   class BLE extends EventEmitter {
-    constructor() { super(); this.notifyObservable = new (require('rxjs').Subject)(); this.device = { gatt: { disconnect: () => calls.push('disconnect') } }; }
+    constructor() { super(); this.notifyObservable = new (require('rxjs-ledger').Subject)(); this.device = { gatt: { disconnect: () => calls.push('disconnect') } }; }
     static isSupported() { return Promise.resolve(true); }
     static async create() { calls.push('create'); if (BLE.fail) throw BLE.fail instanceof Error ? BLE.fail : Error('GATT failed'); return new BLE(); }
     async close() { this.device.gatt.disconnect(); }
@@ -456,17 +517,19 @@ async function main() {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, experimentalDecorators: true }
   }).outputText;
   const { LedgerService } = load(code, {
-    './ledger-web-ble': { default: BLE },
+    './ledger-web-ble': { __esModule: true, default: BLE },
     './ledger-ble-control': control,
-    '@angular/core': { Injectable: () => value => value }, 'hw-app-nano': { default: Nano },
-    '@ledgerhq/hw-transport-webusb': { default: BLE },
-    '@ledgerhq/hw-transport-webhid': { default: BLE }, '@ledgerhq/hw-transport-web-ble': { default: BLE },
+    '@angular/core': { Injectable: () => value => value }, 'hw-app-nano': { __esModule: true, default: Nano },
+    '@ledgerhq/hw-transport-webusb': { __esModule: true, default: BLE },
+    '@ledgerhq/hw-transport-webhid': { __esModule: true, default: BLE }, '@ledgerhq/hw-transport-web-ble': { __esModule: true, default: BLE },
     rxjs: require('rxjs'), '../../environments/environment': { environment: { desktop: true } }
   }, { navigator });
   const sends = []; let listener;
   const preferences = {};
+  const removedNotifications = [];
   const service = new LedgerService({}, { connect() {}, on(_channel, fn) { listener = fn; }, send(_channel, data) { sends.push(data); return true; } },
-    { sendWarning() {} }, { getAppSetting(key) { return preferences[key]; }, setAppSetting(key, value) { preferences[key] = value; } });
+    { sendWarning() {}, removeNotification(identifier) { removedNotifications.push(identifier); } },
+    { getAppSetting(key) { return preferences[key]; }, setAppSetting(key, value) { preferences[key] = value; } });
   service.pollLedgerStatus = () => {};
   await flush();
   await check('browser USB selects only WebUSB or WebHID, never legacy U2F', async () => {
@@ -537,6 +600,8 @@ async function main() {
   await check('desktop Bluetooth connects through renderer, not native IPC', async () => {
     service.enableBluetoothMode(true); sends.length = 0;
     assert.equal(await service.loadLedger(), true); assert.equal(service.ledger.status, 'ready'); assert.equal(sends.length, 0);
+    assert(removedNotifications.includes('ledger-connection-help'),
+      'successful reconnect must clear any previous Ledger readiness warning');
   });
   await check('address, cached block and signature use Web Bluetooth', async () => {
     calls.length = 0; await service.getLedgerAccount(0, true);
@@ -614,6 +679,51 @@ async function main() {
   await check('GATT opening failure returns disconnected, not ready', async () => {
     BLE.fail = true; assert.equal(await service.loadLedger(), false); assert.equal(service.ledger.status, 'not-connected'); BLE.fail = false;
   });
+  await check('cancelled Bluetooth chooser is silent and preserves the saved wallet', async () => {
+    const cancelled = Error('User cancelled the requestDevice selection');
+    cancelled.name = 'TransportOpenUserCancelled';
+    BLE.fail = cancelled;
+    const previousMode = service.transportMode;
+
+    let status;
+    let warnings = 0;
+    const oldWarning = service.notifications.sendWarning;
+    service.notifications.sendWarning = () => { warnings++; };
+    const sub = service.ledgerStatus$.subscribe(value => { status = value; });
+    try {
+      assert.equal(await service.loadLedger(), false);
+      assert.equal(status.status, 'not-connected');
+      assert.equal(status.statusText, '');
+      assert.equal(warnings, 0, 'cancelled chooser must not create an error toast');
+      assert.equal(service.lastBluetoothSelectionCancelled, true);
+      assert.equal(service.transportMode, previousMode);
+    } finally {
+      BLE.fail = false;
+      service.notifications.sendWarning = oldWarning;
+      sub.unsubscribe();
+    }
+  });
+  await check('Ledger WebUSB descriptors distinguish Nano S Plus from Nano X', async () => {
+    const source = ts.transpileModule(
+      fs.readFileSync(path.join(root, 'src/app/services/ledger.service.ts'), 'utf8'),
+      { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, experimentalDecorators: true } }
+    ).outputText;
+    const { identifyLedgerUsbModel } = load(source, {
+      './ledger-web-ble': { __esModule: true, default: BLE },
+      './ledger-ble-control': control,
+      '@angular/core': { Injectable: () => value => value },
+      'hw-app-nano': { __esModule: true, default: Nano },
+      '@ledgerhq/hw-transport-webusb': { __esModule: true, default: BLE },
+      '@ledgerhq/hw-transport-webhid': { __esModule: true, default: BLE },
+      rxjs: require('rxjs'), '../../environments/environment': { environment: { desktop: true } }
+    }, { navigator });
+    assert.equal(identifyLedgerUsbModel({deviceModel: {id: 'nanoSP'}}), 'nanoSPlus');
+    assert.equal(identifyLedgerUsbModel({device: {productId: 0x5011}}), 'nanoSPlus');
+    assert.equal(identifyLedgerUsbModel({deviceModel: {id: 'nanoX'}}), 'nanoX');
+    assert.equal(identifyLedgerUsbModel({device: {productId: 0x4011}}), 'nanoX');
+    assert.equal(identifyLedgerUsbModel({device: {productId: 0x0005}}), null);
+    assert.equal(identifyLedgerUsbModel(null), null);
+  });
   await check('Bluetooth adapter unavailable is not reported as device selection cancelled', async () => {
     const radioError = Error('Bluetooth adapter not available.');
     radioError.name = 'TransportOpenUserCancelled';
@@ -630,22 +740,54 @@ async function main() {
       BLE.fail = false;
     }
   });
+  await check('setup keeps alternate USB and Bluetooth choices visible when another Ledger is READY', async () => {
+    const template = fs.readFileSync(path.join(root,
+      'src/app/components/configure-wallet/configure-wallet.component.html'), 'utf8');
+    // These must not require NOT_CONNECTED: a Nano S Plus already READY via
+    // USB must not hide the option to explicitly import a Nano X via Bluetooth.
+    assert.match(template,
+      /@if \(selectedImportOption === 'ledger' && !ledgerService\.isAndroidWeb\) \{[\s\S]*?<button[^>]*\(click\)="connectLedgerByUsb\(\)"/);
+    assert.match(template,
+      /@if \(selectedImportOption === 'ledger'\) \{\s*<button[^>]*\(click\)="connectLedgerByBluetooth\(\)"/);
+    assert.match(template,
+      /@if \(selectedImportOption === 'ledger' && ledger\.status !== ledgerStatus\.NOT_CONNECTED\) \{\s*<button[^>]*\(click\)="refreshLedgerStatus\(\)"/);
+    assert.match(template, /switch-ledger-guide/);
+    assert.match(template, /\[disabled\]="ledgerSetupInProgress \|\| !ledgerService\.supportsBluetooth"/);
+    assert.match(template, /\[disabled\]="ledgerSetupInProgress \|\| !ledgerService\.supportsUSB"/);
+  });
+
+  await check('ChromeOS PWA sidebar offers both reconnect transports without overwriting wallet', async () => {
+    const template = fs.readFileSync(path.join(root,
+      'src/app/components/wallet-widget/wallet-widget.component.html'), 'utf8');
+    const component = fs.readFileSync(path.join(root,
+      'src/app/components/wallet-widget/wallet-widget.component.ts'), 'utf8');
+    // A Nano X configured over USB must be reconnectable via Bluetooth on ChromeOS.
+    assert.match(template, /@if \(canReconnectUsb\) \{\s*<a \(click\)="reconnectUsb\(\)"/);
+    assert.match(template, /@if \(canReconnectBluetooth\) \{\s*<a \(click\)="reconnectBluetooth\(\)"/);
+    assert.match(component, /return !this\.ledgerService\.isAndroidWeb && this\.ledgerService\.supportsUSB/);
+    assert.match(component, /return this\.ledgerService\.supportsBluetooth/);
+    assert.doesNotMatch(component, /async reconnectBluetooth\(\) \{\s*if \(!this\.ledgerService\.isDesktop/);
+    assert.doesNotMatch(component, /async reconnectUsb\(\) \{\s*if \(!this\.ledgerService\.isDesktop/);
+  });
+
   await check('wallet widget switches Bluetooth to native USB only on explicit click', async () => {
     const widgetCode = ts.transpileModule(
       fs.readFileSync(path.join(root, 'src/app/components/wallet-widget/wallet-widget.component.ts'), 'utf8'),
       { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, experimentalDecorators: true } }
     ).outputText;
     const { WalletWidgetComponent } = load(widgetCode, {
-      '@angular/core': { Component: () => value => value, ViewChild: () => () => {} },
+      '@angular/core': { Component: () => value => value, ChangeDetectionStrategy: { Eager: 1 }, ViewChild: () => () => {}, inject: () => ({ translate: key => key }) },
       '../../services/wallet.service': {},
       '../../services/notification.service': {},
       '../../services/ledger.service': { LedgerStatus: { READY: 'ready', NOT_CONNECTED: 'not-connected' } },
       '../../services/app-settings.service': {},
-      '../../services/pow.service': {}
+      '../../services/pow.service': {},
+       '@jsverse/transloco': { TranslocoService: class {} }
     });
     const operations = [];
     const ledger = {
-      isDesktop: true, supportsBluetooth: true, transportMode: 'Bluetooth',
+      ledger: {status: 'ready'},
+      isDesktop: true, isAndroidWeb: false, supportsUSB: true, supportsBluetooth: true, transportMode: 'Bluetooth',
       enableBluetoothMode(enabled) {
         operations.push(['mode', enabled]);
         this.transportMode = enabled ? 'Bluetooth' : 'USB';
@@ -656,7 +798,7 @@ async function main() {
       sendInfo() {}, removeNotification() {}, sendSuccess() {}
     };
     const widget = new WalletWidgetComponent({ wallet: {} }, notifications, ledger, {}, {});
-    widget.ledgerStatus = { status: 'ready', statusText: '' };
+    widget.lastReportedLedgerStatus = { status: 'ready', statusText: '' };
     await widget.reconnectUsb();
     assert.equal(ledger.transportMode, 'USB');
     assert.deepEqual(operations, [['mode', false], ['load', false, false]]);
@@ -674,28 +816,30 @@ async function main() {
       { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, experimentalDecorators: true } }
     ).outputText;
     const { WalletWidgetComponent } = load(widgetCode, {
-      '@angular/core': { Component: () => value => value, ViewChild: () => () => {} },
+      '@angular/core': { Component: () => value => value, ChangeDetectionStrategy: { Eager: 1 }, ViewChild: () => () => {}, inject: () => ({ translate: key => key }) },
       '../../services/wallet.service': {},
       '../../services/notification.service': {},
       '../../services/ledger.service': { LedgerStatus: { READY: 'ready', NOT_CONNECTED: 'not-connected' } },
       '../../services/app-settings.service': {},
-      '../../services/pow.service': {}
+      '../../services/pow.service': {},
+       '@jsverse/transloco': { TranslocoService: class {} }
     }, { window: { location: { reload() { reloads++; } } } });
-    const ledger = { isDesktop: true, transportMode: 'Bluetooth' };
+    const ledger = { ledger: {status: 'ready'}, isDesktop: true, transportMode: 'Bluetooth' };
     const widget = new WalletWidgetComponent({ wallet: {} }, {}, ledger, {}, {});
-    widget.ledgerStatus = { status: 'ready', statusText: 'MTU negotiation timed out' };
+    widget.lastReportedLedgerStatus = { status: 'ready', statusText: 'MTU negotiation timed out' };
     assert.equal(widget.canResetBluetoothSession, false);
     widget.resetBluetoothSession();
     ledger.transportMode = 'USB';
-    widget.ledgerStatus.status = 'not-connected';
+    ledger.ledger.status = 'not-connected';
+    widget.lastReportedLedgerStatus = { status: 'not-connected', statusText: 'MTU negotiation timed out' };
     assert.equal(widget.canResetBluetoothSession, false);
     widget.resetBluetoothSession();
     ledger.transportMode = 'Bluetooth';
-    widget.ledgerStatus.statusText = 'Ledger disconnected';
+    widget.lastReportedLedgerStatus.statusText = 'Ledger disconnected';
     assert.equal(widget.canResetBluetoothSession, false);
     widget.resetBluetoothSession();
     assert.equal(reloads, 0);
-    widget.ledgerStatus.statusText = 'Bluetooth connection failed: Ledger Bluetooth MTU negotiation timed out';
+    widget.lastReportedLedgerStatus.statusText = 'Bluetooth connection failed: Ledger Bluetooth MTU negotiation timed out';
     assert.equal(widget.canResetBluetoothSession, true);
     widget.resetBluetoothSession();
     assert.equal(reloads, 1);

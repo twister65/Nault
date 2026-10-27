@@ -6,33 +6,32 @@
           <span class="uk-text-warning" uk-icon="icon: warning; ratio: 1.2;"></span>
         </div>
         <div class="status-labels">
-          <div class="label primary uk-text-warning">Ledger disconnected</div>
+          <div class="label primary uk-text-warning">{{ 'ui-ledger.disconnected' | transloco }}</div>
           @if (ledgerService.transportMode === 'Bluetooth' && ledgerStatus.statusText &&
-               (ledgerStatus.statusText.includes('pairing') || ledgerStatus.statusText.includes('authentication'))) {
+               (ledgerStatus.statusText.includes('pairing') ||
+                ledgerStatus.statusText.includes('authentication') ||
+                ledgerStatus.statusText.includes('Nano app is not open'))) {
             <div class="label secondary uk-text-warning">{{ ledgerStatus.statusText }}</div>
           }
-          @if (ledgerService.isDesktop && ledgerService.transportMode === 'Bluetooth') {
-            <div class="label secondary">
-              <a (click)="reconnectUsb()">Reconnect via USB</a> or
-              <a (click)="reloadLedger()">Reconnect via Bluetooth</a> or
-              <a href="https://docs.nault.cc/2020/08/04/ledger-guide.html#troubleshooting" target="_blank" rel="noopener noreferrer">view Troubleshooting Guide</a>
-            </div>
-          }
-          @if (!ledgerService.isDesktop || ledgerService.transportMode !== 'Bluetooth') {
-            <div class="label secondary">
-              <a (click)="reloadLedger()">{{ ledgerService.isDesktop ? 'Reconnect via USB' : 'Reconnect' }}</a> or
-              <a href="https://docs.nault.cc/2020/08/04/ledger-guide.html#troubleshooting" target="_blank" rel="noopener noreferrer">view Troubleshooting Guide</a>
-            </div>
-          }
-          @if (ledgerService.isDesktop && ledgerService.supportsBluetooth && ledgerService.transportMode !== 'Bluetooth') {
-            <div class="label secondary">
-              <a (click)="reconnectBluetooth()">Reconnect via Bluetooth</a> (instead of USB; keeps the current wallet configuration).
-            </div>
-          }
+          <div class="label secondary">
+            @if (canReconnectUsb) {
+              <a (click)="reconnectUsb()">{{ 'ui-ledger.reconnect-via-usb' | transloco }}</a>
+            }
+            @if (canReconnectUsb && canReconnectBluetooth) {
+              {{ 'ui-shell.or' | transloco }}
+            }
+            @if (canReconnectBluetooth) {
+              <a (click)="reconnectBluetooth()">{{ 'ui-ledger.reconnect-via-bluetooth' | transloco }}</a>
+            }
+            @if (canReconnectUsb || canReconnectBluetooth) {
+              {{ 'ui-shell.or' | transloco }}
+            }
+            <a href="https://docs.nault.cc/2020/08/04/ledger-guide.html#troubleshooting" target="_blank" rel="noopener noreferrer">{{ 'ui-ledger.troubleshooting' | transloco }}</a>
+          </div>
           @if (canResetBluetoothSession) {
             <div class="label secondary">
-              Web Bluetooth stopped receiving notifications. <a (click)="resetBluetoothSession()">Reset Bluetooth session</a>
-              (reloads Nault's window; unsaved form changes will be lost).
+              {{ 'ui-ledger.ble-notifications-lost' | transloco }} <a (click)="resetBluetoothSession()">{{ 'ui-ledger.reset-bluetooth' | transloco }}</a>
+              {{ 'ui-ledger.reset-warning' | transloco }}
             </div>
           }
         </div>
@@ -44,18 +43,19 @@
           <span class="uk-text-warning" uk-icon="icon: warning; ratio: 1.2;"></span>
         </div>
         <div class="status-labels">
-          <div class="label primary uk-text-warning">Ledger locked</div>
-          @if (ledgerService.isDesktop && ledgerService.transportMode === 'Bluetooth') {
-            <div class="label secondary">
-              Unlock the device, then <a (click)="reconnectUsb()">reconnect via USB</a>
-              or <a (click)="reloadLedger()">reconnect via Bluetooth</a>.
-            </div>
-          }
-          @if (!ledgerService.isDesktop || ledgerService.transportMode !== 'Bluetooth') {
-            <div class="label secondary">
-              Unlock the device, then <a (click)="reloadLedger()">{{ ledgerService.isDesktop ? 'reconnect via USB' : 'click here' }}</a> to reconnect.
-            </div>
-          }
+          <div class="label primary uk-text-warning">{{ 'ui-ledger.locked' | transloco }}</div>
+          <div class="label secondary">
+            {{ 'ui-ledger.unlock-device-then' | transloco }}
+            @if (canReconnectUsb) {
+              <a (click)="reconnectUsb()">{{ 'ui-ledger.reconnect-via-usb' | transloco }}</a>
+            }
+            @if (canReconnectUsb && canReconnectBluetooth) {
+              {{ 'ui-shell.or' | transloco }}
+            }
+            @if (canReconnectBluetooth) {
+              <a (click)="reconnectBluetooth()">{{ 'ui-ledger.reconnect-via-bluetooth' | transloco }}</a>
+            }.
+          </div>
         </div>
       </div>
     }
@@ -65,7 +65,7 @@
           <span class="uk-text-success" uk-icon="icon: bolt; ratio: 1.2;"></span>
         </div>
         <div class="status-labels">
-          <div class="label primary uk-text-success">Ledger Ready</div>
+          <div class="label primary uk-text-success">{{ 'ui-ledger.ready' | transloco }}</div>
         </div>
       </div>
     }
@@ -78,8 +78,8 @@
       <span class="uk-text-warning" uk-icon="icon: warning; ratio: 1.2;"></span>
     </div>
     <div class="status-labels">
-      <div class="label primary uk-text-warning">Proof of Work is taking a while...</div>
-      <div class="label secondary"><a routerLink="/configure-app" routerLinkActive="active">Change PoW method</a> or <a (click)="cancelPow()">cancel PoW</a></div>
+      <div class="label primary uk-text-warning">{{ 'ui-ledger.pow-slow' | transloco }}</div>
+      <div class="label secondary"><a routerLink="/configure-app" routerLinkActive="active">{{ 'ui-ledger.change-pow' | transloco }}</a> {{ 'ui-shell.or' | transloco }} <a (click)="cancelPow()">{{ 'ui-ledger.cancel-pow' | transloco }}</a></div>
     </div>
   </div>
 }
@@ -91,7 +91,7 @@
         <span uk-icon="icon: lock; ratio: 1.2;" class="uk-text-top"></span>
       </div>
       <div class="status-labels">
-        <div class="label primary half-muted">Wallet Locked</div>
+        <div class="label primary half-muted">{{ 'ui-ledger.wallet-locked' | transloco }}</div>
       </div>
     </div>
   }
@@ -101,7 +101,7 @@
         <span uk-icon="icon: unlock; ratio: 1.2;" class="uk-text-top"></span>
       </div>
       <div class="status-labels">
-        <div class="label primary half-muted">Wallet Unlocked</div>
+        <div class="label primary half-muted">{{ 'ui-ledger.wallet-unlocked' | transloco }}</div>
       </div>
     </div>
   }
@@ -113,7 +113,7 @@
       <span class="uk-text-warning" uk-icon="icon: warning; ratio: 1.2;"></span>
     </div>
     <div class="status-labels">
-      <div class="label primary uk-text-warning">Configure Wallet</div>
+      <div class="label primary uk-text-warning">{{ 'ui-ledger.configure-wallet' | transloco }}</div>
     </div>
   </a>
 }
@@ -122,7 +122,7 @@
   <div class="uk-modal-dialog">
     <button class="uk-modal-close-default" type="button" uk-close></button>
     <div class="uk-modal-header">
-      <h2 class="uk-modal-title">Unlock Wallet</h2>
+      <h2 class="uk-modal-title">{{ 'ui-ledger.unlock-wallet' | transloco }}</h2>
     </div>
     <div class="uk-modal-body">
       <input #passwordInput autofocus type="password" [(ngModel)]="unlockPassword" (keyup.enter)="unlockWallet()"
@@ -132,8 +132,8 @@
         >
     </div>
     <div class="uk-modal-footer uk-text-right nlt-button-group">
-      <button class="uk-button uk-button-default uk-modal-close" type="button">Cancel</button>
-      <button class="uk-button uk-button-primary" type="button" (click)="unlockWallet()" [disabled]="!mayAttemptUnlock">Unlock</button>
+      <button class="uk-button uk-button-default uk-modal-close" type="button">{{ 'general.cancel' | transloco }}</button>
+      <button class="uk-button uk-button-primary" type="button" (click)="unlockWallet()" [disabled]="!mayAttemptUnlock">{{ 'ui-ledger.unlock' | transloco }}</button>
     </div>
   </div>
 </div>

@@ -1,17 +1,18 @@
-import { Component, Input, OnInit, OnChanges } from '@angular/core';
+import { Component, Input, OnInit, OnChanges, ChangeDetectionStrategy } from '@angular/core';
 
 @Component({
     selector: 'app-nano-transaction-mobile',
     templateUrl: './nano-transaction-mobile.component.html',
     styleUrls: ['./nano-transaction-mobile.component.less'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class NanoTransactionMobileComponent implements OnInit, OnChanges {
 
   @Input() transaction: any;
   @Input() isInteractable = true;
-  @Input() isHidden: boolean;
-  @Input() settingIdenticonsStyle: string;
+  @Input() isHidden = false;
+  @Input() settingIdenticonsStyle = '';
 
   isNaN = isNaN;
   isReceivableTransaction = false;

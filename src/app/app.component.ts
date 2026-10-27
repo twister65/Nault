@@ -1,5 +1,5 @@
-import {Component, ElementRef, HostListener, OnInit, ViewChild, Renderer2} from '@angular/core';
-import {WalletService} from './services/wallet.service';
+import {Component, ElementRef, HostListener, OnInit, ViewChild, Renderer2, ChangeDetectionStrategy} from '@angular/core';
+import {WalletService, WalletAccount} from './services/wallet.service';
 import {AddressBookService} from './services/address-book.service';
 import {AppSettingsService} from './services/app-settings.service';
 import {WebsocketService} from './services/websocket.service';
@@ -11,16 +11,18 @@ import {Router} from '@angular/router';
 import {SwUpdate} from '@angular/service-worker';
 import {RepresentativeService} from './services/representative.service';
 import {NodeService} from './services/node.service';
+import {ApiService} from './services/api.service';
 import { DesktopService, LedgerService } from './services';
 import { environment } from 'environments/environment';
 import { DeeplinkService } from './services/deeplink.service';
-import { TranslocoService } from '@ngneat/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 
 
 @Component({
     selector: 'app-root',
     templateUrl: './app.component.html',
     styleUrls: ['./app.component.less'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class AppComponent implements OnInit {
@@ -30,6 +32,7 @@ export class AppComponent implements OnInit {
     private addressBook: AddressBookService,
     public settings: AppSettingsService,
     private websocket: WebsocketService,
+    private api: ApiService,
     private notifications: NotificationService,
     public nodeService: NodeService,
     private representative: RepresentativeService,
@@ -48,8 +51,8 @@ export class AppComponent implements OnInit {
       });
     }
 
-  @ViewChild('selectButton') selectButton: ElementRef;
-  @ViewChild('accountsDropdown') accountsDropdown: ElementRef;
+  @ViewChild('selectButton') selectButton!: ElementRef<HTMLElement>;
+  @ViewChild('accountsDropdown') accountsDropdown!: ElementRef<HTMLElement>;
 
   wallet = this.walletService.wallet;
   node = this.nodeService.node;
@@ -64,17 +67,44 @@ export class AppComponent implements OnInit {
   showAccountsDropdown = false;
   canToggleLightMode = true;
   searchData = '';
+  // Android PWAs can stay alive while airplane mode suspends RPC and WebSocket.
+  private networkRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
+  private networkRecoveryInProgress = false;
+  private networkRecoveryAttempts = 0;
+  private readonly maxNetworkRecoveryAttempts = 5;
   isConfigured = this.walletService.isConfigured;
   donationAccount = environment.donationAddress;
 
-  @HostListener('window:resize', ['$event']) onResize (e) {
-    this.onWindowResize(e.target);
+  @HostListener('window:resize') onResize(): void {
+    this.onWindowResize(window);
   }
 
-  @HostListener('document:mousedown', ['$event']) onGlobalClick(event): void {
+  @HostListener('window:offline') onNetworkOffline(): void {
+    this.cancelNetworkRecovery();
+    if (this.settings.settings.serverAPI) this.nodeService.setOffline();
+  }
+
+  @HostListener('window:online') onNetworkOnline(): void {
+    this.networkRecoveryAttempts = 0;
+    this.scheduleNetworkRecovery(0);
+  }
+
+  // Android does not always dispatch 'online' while the PWA is suspended.
+  @HostListener('document:visibilitychange') onNetworkVisibilityChange(): void {
+    if (document.visibilityState !== 'visible' || !navigator.onLine) return;
+    if (this.nodeService.node.status !== true ||
+        (this.settings.settings.serverWS && !this.websocket.socket.connected)) {
+      this.networkRecoveryAttempts = 0;
+      this.scheduleNetworkRecovery(0);
+    }
+  }
+
+  @HostListener('document:mousedown', ['$event']) onGlobalClick(event: MouseEvent): void {
+    const target = event.target;
+    if (!(target instanceof Node)) return;
     if (
-            ( this.selectButton.nativeElement.contains(event.target) === false )
-          && ( this.accountsDropdown.nativeElement.contains(event.target) === false )
+            ( this.selectButton.nativeElement.contains(target) === false )
+          && ( this.accountsDropdown.nativeElement.contains(target) === false )
       ) {
         this.showAccountsDropdown = false;
     }
@@ -132,7 +162,7 @@ export class AppComponent implements OnInit {
       localStorage.removeItem('fragment');
 
       if (search && search.length) {
-        const queryParams = {};
+        const queryParams: Record<string, string> = {};
         const urlSearch = new URLSearchParams(search);
         urlSearch.forEach(function(value, key) {
           queryParams[key] = value;
@@ -168,7 +198,7 @@ export class AppComponent implements OnInit {
     });
 
     // handle deeplinks
-    this.desktop.on('deeplink', (e, deeplink) => {
+    this.desktop.on('deeplink', (_event: unknown, deeplink: string) => {
       if (!this.deeplinkService.navigate(deeplink)) this.notifications.sendWarning('This URI has an invalid address.', { length: 5000 });
     });
     this.desktop.send('deeplink-ready');
@@ -207,7 +237,7 @@ export class AppComponent implements OnInit {
     }
   }
 
-  onWindowResize(windowObject) {
+  onWindowResize(windowObject: Pick<Window, 'innerWidth' | 'innerHeight'>): void {
     this.innerWidth = windowObject.innerWidth;
     this.innerHeight = windowObject.innerHeight;
 
@@ -226,7 +256,7 @@ export class AppComponent implements OnInit {
    */
   async patchXrbToNanoPrefixData() {
     // If wallet is version 2, data has already been patched.  Otherwise, patch all data
-    if (this.settings.settings.walletVersion >= 2) return;
+    if ((this.settings.settings.walletVersion ?? 0) >= 2) return;
 
     await this.walletService.patchOldSavedData(); // Change saved xrb_ addresses to nano_
     this.addressBook.patchXrbPrefixData();
@@ -290,7 +320,7 @@ export class AppComponent implements OnInit {
     this.accountsDropdown.nativeElement.scrollTop = 0;
   }
 
-  selectAccount(account) {
+  selectAccount(account: WalletAccount | null): void {
     // note: account is null when user is switching to 'Total Balance'
     this.wallet.selectedAccountId = account ? account.id : null;
     this.wallet.selectedAccount = account;
@@ -328,6 +358,56 @@ export class AppComponent implements OnInit {
 
   updateIdleTime() {
     this.inactiveSeconds = 0; // Action has happened, reset the inactivity timer
+  }
+
+  private cancelNetworkRecovery(): void {
+    if (this.networkRecoveryTimer !== null) {
+      clearTimeout(this.networkRecoveryTimer);
+      this.networkRecoveryTimer = null;
+    }
+    this.networkRecoveryAttempts = 0;
+  }
+
+  private scheduleNetworkRecovery(delayMs: number): void {
+    if (!this.settings.settings.serverAPI || !navigator.onLine || this.networkRecoveryInProgress) return;
+    if (this.networkRecoveryTimer !== null) clearTimeout(this.networkRecoveryTimer);
+    this.networkRecoveryTimer = setTimeout(() => {
+      this.networkRecoveryTimer = null;
+      void this.recoverAfterNetworkReturn();
+    }, delayMs);
+  }
+
+  private async recoverAfterNetworkReturn(): Promise<void> {
+    if (this.networkRecoveryInProgress || !this.settings.settings.serverAPI || !navigator.onLine) return;
+    this.networkRecoveryInProgress = true;
+    const endpoint = this.settings.settings.serverAPI;
+    try {
+      // Prefer normal wallet reads: not every public RPC allows node statistics.
+      if (this.wallet.accounts.length) await this.walletService.reloadBalances();
+      // Check connectivity with the normal wallet RPC whitelist, not block_count,
+      // which privacy-preserving public nodes may intentionally deny.
+      if (this.nodeService.node.status !== true) await this.api.accountsBalances([]);
+
+      if (!navigator.onLine || this.settings.settings.serverAPI !== endpoint) return;
+
+      // A WebSocket may have exhausted its retry budget while Android was offline.
+      // Restoring it only follows successful RPC reads and never replays transactions.
+      if (this.settings.settings.serverWS) this.websocket.forceReconnect();
+      this.networkRecoveryAttempts = 0;
+    } catch (_) {
+      // Keep the node-offline notification until an RPC read succeeds.
+      if (!navigator.onLine || this.settings.settings.serverAPI !== endpoint) return;
+      this.networkRecoveryAttempts++;
+      if (this.networkRecoveryAttempts < this.maxNetworkRecoveryAttempts) {
+        const delayMs = Math.min(30000, 1000 * Math.pow(2, this.networkRecoveryAttempts - 1));
+        this.networkRecoveryTimer = setTimeout(() => {
+          this.networkRecoveryTimer = null;
+          void this.recoverAfterNetworkReturn();
+        }, delayMs);
+      }
+    } finally {
+      this.networkRecoveryInProgress = false;
+    }
   }
 
   retryConnection() {

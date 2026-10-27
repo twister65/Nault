@@ -1,4 +1,6 @@
-import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
+import { Component, ElementRef, OnInit, ViewChild, ChangeDetectionStrategy } from '@angular/core';
+import { inject } from '@angular/core';
+import { TranslocoService } from '@jsverse/transloco';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {LedgerService, LedgerStatus} from '../../services/ledger.service';
@@ -9,15 +11,31 @@ import {PowService} from '../../services/pow.service';
     selector: 'app-wallet-widget',
     templateUrl: './wallet-widget.component.html',
     styleUrls: ['./wallet-widget.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class WalletWidgetComponent implements OnInit {
+  private readonly translocoService = inject(TranslocoService);
+
   wallet = this.walletService.wallet;
 
-  ledgerStatus = {
+  // The service owns the current connection status. The event stream adds
+  // diagnostic text, but can lag a synchronous transport reset made by the
+  // wallet setup screen; never render a stale READY status from that stream.
+  private lastReportedLedgerStatus = {
     status: 'not-connected',
     statusText: '',
   };
+
+  get ledgerStatus(): { status: string; statusText: string } {
+    const status = this.ledgerService.ledger.status;
+    return {
+      status,
+      statusText: this.lastReportedLedgerStatus.status === status
+        ? this.lastReportedLedgerStatus.statusText
+        : '',
+    };
+  }
   powAlert = false;
 
   unlockPassword = '';
@@ -33,7 +51,16 @@ export class WalletWidgetComponent implements OnInit {
     public settings: AppSettingsService,
     private powService: PowService) { }
 
-  @ViewChild('passwordInput') passwordInput: ElementRef;
+  // The PWA is not Electron: choose its reconnect label from the transport,
+  // not from isDesktop. In particular, ChromeOS PWAs can use WebUSB/WebHID
+  // with a Nano S Plus, which has no Bluetooth radio.
+  get reconnectTransportTranslationKey(): string {
+    return this.ledgerService.transportMode === 'Bluetooth'
+      ? 'ui-ledger.reconnect-via-bluetooth'
+      : 'ui-ledger.reconnect-via-usb';
+  }
+
+  @ViewChild('passwordInput') passwordInput!: ElementRef<HTMLInputElement>;
 
   ngOnInit() {
     const UIkit = (window as any).UIkit;
@@ -44,7 +71,7 @@ export class WalletWidgetComponent implements OnInit {
     this.modal = modal;
 
     this.ledgerService.ledgerStatus$.subscribe((ledgerStatus) => {
-      this.ledgerStatus = ledgerStatus;
+      this.lastReportedLedgerStatus = ledgerStatus;
     });
 
     // Detect if a PoW is taking too long and alert
@@ -78,43 +105,54 @@ export class WalletWidgetComponent implements OnInit {
       return; // No need to lock a ledger wallet, no password saved
     }
     if (!this.wallet.password) {
-      return this.notificationService.sendWarning(`You must set a password on your wallet - it is currently blank!`);
+      return this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.wallet-password-required'));
     }
     const locked = await this.walletService.lockWallet();
     if (locked) {
-      this.notificationService.sendSuccess(`Wallet locked`);
+      this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.wallet-locked'));
     } else {
-      this.notificationService.sendError(`Unable to lock wallet`);
+      this.notificationService.sendError(this.translocoService.translate('ui-notifications.wallet-lock-failed'));
     }
   }
 
+  // Reconnect the existing wallet using either available transport on Electron
+  // or a Chromium PWA. This is not a request to import another hardware wallet.
+  get canReconnectUsb(): boolean {
+    return !this.ledgerService.isAndroidWeb && this.ledgerService.supportsUSB;
+  }
+
+  get canReconnectBluetooth(): boolean {
+    // The browser's Bluetooth support does not mean that the saved Ledger has
+    // a radio. Unknown/legacy wallet models retain a choice of transports.
+    const model = this.walletService.wallet.ledgerDeviceModel;
+    return this.ledgerService.supportsBluetooth &&
+      model !== 'nanoSPlus' && model !== 'nanoS';
+  }
+
   async reconnectUsb() {
-    if (!this.ledgerService.isDesktop) return;
-    // Transport choice is explicit. Disabling Bluetooth on the hardware
-    // does not reset Nault's persisted Bluetooth preference.
-    // Keep the existing wallet and switch only the Ledger transport.
+    if (!this.canReconnectUsb) return;
+    // Switching transports keeps the current wallet and its account identities.
     this.ledgerService.enableBluetoothMode(false);
     await this.reloadLedger();
   }
 
   async reconnectBluetooth() {
-    if (!this.ledgerService.isDesktop || !this.ledgerService.supportsBluetooth) return;
-    // Switch transport without going through "Configure Wallet", which can
-    // overwrite an existing wallet configuration. Keep the user gesture for
-    // navigator.bluetooth.requestDevice().
+    if (!this.canReconnectBluetooth) return;
+    // The click handler must invoke Web Bluetooth without an intervening await:
+    // navigator.bluetooth.requestDevice() requires a user gesture in PWAs.
     this.ledgerService.enableBluetoothMode(true);
     await this.reloadLedger();
   }
 
   async reloadLedger() {
-    this.notificationService.sendInfo(`Checking Ledger Status...`, { identifier: 'ledger-status', length: 0 });
+    this.notificationService.sendInfo(this.translocoService.translate('ui-notifications.ledger-checking'), { identifier: 'ledger-status', length: 0 });
     try {
       // A manual status click is an explicit reconnect request for Bluetooth.
       // Do not reuse a transport whose radio session might be stale.
       await this.ledgerService.loadLedger(false, this.ledgerService.transportMode === 'Bluetooth');
       this.notificationService.removeNotification('ledger-status');
       if (this.ledgerStatus.status === LedgerStatus.READY) {
-        this.notificationService.sendSuccess(`Successfully connected to Ledger device`);
+        this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.ledger-connected'));
       }
     } catch (err) {
       console.log(`Got error when loading ledger! `, err);
@@ -174,11 +212,11 @@ export class WalletWidgetComponent implements OnInit {
     const unlocked = await this.walletService.unlockWallet(this.unlockPassword);
 
     if (unlocked) {
-      this.notificationService.sendSuccess(`Wallet unlocked`);
+      this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.wallet-unlocked'));
       this.modal.hide();
       if (this.unlockPassword.length < 6) {
         // eslint-disable-next-line max-len
-        this.notificationService.sendWarning(`You are using an insecure password and encouraged to change it from settings > manage wallet`);
+        this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.wallet-password-weak'));
       }
 
       if (this.timeoutIdAllowingUnlock !== null) {
@@ -188,7 +226,7 @@ export class WalletWidgetComponent implements OnInit {
 
       this.allowUnlock({ focusInputElement: false });
     } else {
-      this.notificationService.sendError(`Incorrect password, please try again!`);
+      this.notificationService.sendError(this.translocoService.translate('ui-notifications.wallet-password-incorrect'));
     }
   }
 

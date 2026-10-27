@@ -3,7 +3,7 @@ import { NgModule } from '@angular/core';
 
 
 import { AppComponent } from './app.component';
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
 import {FormsModule, ReactiveFormsModule} from '@angular/forms';
 import {WelcomeComponent} from './welcome/welcome.component';
 import {AppRoutingModule} from './app-routing.module';
@@ -71,6 +71,7 @@ import { KeygeneratorComponent } from './components/keygenerator/keygenerator.co
 import { NanoTransactionMobileComponent } from './components/helpers/nano-transaction-mobile/nano-transaction-mobile.component';
 import { TranslocoRootModule } from './transloco/transloco-root.module';
 import { NoPaddingZerosPipe } from './pipes/no-padding-zeros.pipe';
+import { AboutNaultComponent } from './components/about-nault/about-nault.component';
 
 @NgModule({ declarations: [
         AppComponent,
@@ -86,6 +87,7 @@ import { NoPaddingZerosPipe } from './pipes/no-padding-zeros.pipe';
         WalletWidgetComponent,
         ManageWalletComponent,
         ConfigureAppComponent,
+        AboutNaultComponent,
         AccountDetailsComponent,
         TransactionDetailsComponent,
         FiatPipe,
@@ -144,6 +146,6 @@ import { NoPaddingZerosPipe } from './pipes/no-padding-zeros.pipe';
         DeeplinkService,
         MusigService,
         NoPaddingZerosPipe,
-        provideHttpClient(withInterceptorsFromDi())
+        provideHttpClient(withXhr(), withInterceptorsFromDi())
     ] })
 export class AppModule { }

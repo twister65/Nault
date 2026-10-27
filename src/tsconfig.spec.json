@@ -2,11 +2,11 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "outDir": "../out-tsc/spec",
-    "baseUrl": "./",
     "types": [
       "jasmine",
       "node"
-    ]
+    ],
+    "skipLibCheck": true
   },
   "files": [
     "polyfills.ts"
@@ -17,5 +17,8 @@
   ],
   "exclude": [
     "node_modules"
-  ]
+  ],
+  "angularCompilerOptions": {
+    "strictTemplates": false
+  }
 }

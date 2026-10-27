@@ -16,7 +16,9 @@ async function main() {
     const archive = path.join(root, 'test.tgz');
     await require('tar').c({ gzip: true, file: archive, cwd: root }, ['source']);
     for (const consumer of ['node-gyp', '@electron/rebuild', 'app-builder-lib']) {
-      const consumerRequire = createRequire(require.resolve(consumer + '/package.json'));
+      // Resolve the public entry point: modern packages such as @electron/rebuild
+      // block package.json via exports, but module resolution still locates their deps.
+      const consumerRequire = createRequire(require.resolve(consumer));
       const tar = consumerRequire('tar');
       const destination = path.join(root, consumer.replace('/', '-'));
       await fs.mkdir(destination);

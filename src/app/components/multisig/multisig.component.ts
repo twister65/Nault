@@ -1,27 +1,29 @@
-import { Component, OnInit, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, ViewChild, ElementRef, ChangeDetectionStrategy } from '@angular/core';
 import { UtilService } from '../../services/util.service';
 import { Router } from '@angular/router';
 import { NotificationService } from '../../services/notification.service';
 import { RemoteSignService } from '../../services/remote-sign.service';
 import { QrModalService } from '../../services/qr-modal.service';
+import type { QRType } from '../qr-modal/qr-modal.component';
 import { MusigService } from '../../services/musig.service';
 
 @Component({
     selector: 'app-multisig',
     templateUrl: './multisig.component.html',
     styleUrls: ['./multisig.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class MultisigComponent implements OnInit {
   accountAdd = '';
   showAddBox = false;
-  storedAccounts = [];
-  accountAddStatus: number = null;
+  storedAccounts: string[] = [];
+  accountAddStatus: number | null = null;
   createdMultisig = '';
   multisigAccount = '';
-  multisigAccountStatus: number = null;
+  multisigAccountStatus: number | null = null;
   unsignedBlock = '';
-  unsignedStatus: number = null;
+  unsignedStatus: number | null = null;
   showAdvancedOptions = false; // if displaying more info
   wasmErrors = ['No error', 'Internal error', 'Invalid parameter(s)', 'Invalid Participant Input'];
 
@@ -34,7 +36,7 @@ export class MultisigComponent implements OnInit {
     private musigService: MusigService,
   ) { }
 
-  @ViewChild('accountAddFocus') _el: ElementRef;
+  @ViewChild('accountAddFocus') _el?: ElementRef<HTMLInputElement>;
 
   async ngOnInit() {
   }
@@ -47,7 +49,7 @@ export class MultisigComponent implements OnInit {
   setFocus() {
     this.showAddBox = true;
     // Auto set focus to the box (but must be rendered first!)
-    setTimeout(() => { this._el.nativeElement.focus(); }, 200);
+    setTimeout(() => { this._el?.nativeElement.focus(); }, 200);
   }
 
   addAccount() {
@@ -68,13 +70,13 @@ export class MultisigComponent implements OnInit {
     this.createdMultisig = ''; // invalidate previous multisig to avoid mistakes
   }
 
-  removeSelectedAccount(account) {
+  removeSelectedAccount(account: string) {
     this.storedAccounts.splice(this.storedAccounts.indexOf(account), 1);
     this.createdMultisig = ''; // invalidate previous multisig to avoid mistakes
   }
 
   generateMultisig() {
-    this.createdMultisig = this.musigService.runAggregate(this.storedAccounts, null)?.multisig;
+    this.createdMultisig = this.musigService.runAggregate(this.storedAccounts, null)?.multisig ?? '';
   }
 
   reset() {
@@ -114,7 +116,7 @@ export class MultisigComponent implements OnInit {
     }
   }
 
-  validateUnsigned(string) {
+  validateUnsigned(string: string) {
     if (string === '') {
       this.unsignedStatus = null;
       return false;
@@ -138,7 +140,7 @@ export class MultisigComponent implements OnInit {
     }
   }
 
-  navigateBlock(block) {
+  navigateBlock(block: string) {
     let badScheme = false;
 
     if (block.startsWith('nanosign:') || block.startsWith('nanoprocess:')) {
@@ -159,7 +161,7 @@ export class MultisigComponent implements OnInit {
   }
 
   // open qr reader modal
-  openQR(reference, type) {
+  openQR(reference: string, type: QRType) {
     const qrResult = this.qrModalService.openQR(reference, type);
     qrResult.then((data) => {
       switch (data.reference) {

@@ -1,34 +1,39 @@
 import { Injectable } from '@angular/core';
-import {PowService, baseThreshold, workState} from './pow.service';
+import {PowService, PowResult, baseThreshold, workState} from './pow.service';
 import {NotificationService} from './notification.service';
 import {UtilService} from './util.service';
+
+interface CachedWork {
+  hash: string;
+  work: string;
+}
 
 @Injectable()
 export class WorkPoolService {
   storeKey = `nanovault-workcache`;
 
   cacheLength = 25;
-  workCache = [];
+  workCache: CachedWork[] = [];
 
-  currentlyProcessingHashes = {};
+  currentlyProcessingHashes: Record<string, boolean> = {};
 
   constructor(private pow: PowService, private notifications: NotificationService, private util: UtilService) { }
 
-  sleep(ms) {
+  sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  public workExists(hash) {
+  public workExists(hash: string): boolean {
     return !!this.workCache.find(p => p.hash === hash);
   }
 
   // A simple helper, which doesn't wait for a response (Used for pre-loading work)
-  public addWorkToCache(hash, multiplier = 1) {
+  public addWorkToCache(hash: string, multiplier = 1): void {
     this.getWork(hash, multiplier);
   }
 
   // Remove a hash from from the cache
-  public removeFromCache(hash) {
+  public removeFromCache(hash: string): void {
     const cachedIndex = this.workCache.findIndex(p => p.hash === hash);
     if (cachedIndex === -1) return;
 
@@ -49,7 +54,7 @@ export class WorkPoolService {
   }
 
   // Get work for a hash.  Uses the cache, or the current setting for generating it.
-  public async getWork(hash, multiplier = 1) {
+  public async getWork(hash: string, multiplier = 1): Promise<string | null> {
     this.pow.shouldContinueQueue = true; // new pow should never be blocked
     // additional pow for the same hash will have to wait
     while ( this.currentlyProcessingHashes[hash] === true ) {
@@ -73,16 +78,23 @@ export class WorkPoolService {
 
     this.currentlyProcessingHashes[hash] = true;
 
-    let work;
+    let work: PowResult;
     try {
       work = await this.pow.getPow(hash, multiplier);
-    } catch (workState) {
-      work = workState;
+    } catch (failure) {
+      // The PoW queue rejects with its status object, but other errors must
+      // also be treated as failed work rather than as a generated nonce.
+      if (failure && typeof failure === 'object' &&
+          'state' in failure && (failure.state === workState.error || failure.state === workState.cancelled)) {
+        work = {state: failure.state, work: ''};
+      } else {
+        work = {state: workState.error, work: ''};
+      }
     }
 
-    if (work.state === workState.error || work.state === workState.cancelled) {
+    if (!work || work.state === workState.error || work.state === workState.cancelled) {
       // Only display notification on error
-      if (work.state === workState.error) {
+      if (work?.state === workState.error) {
         this.notifications.sendWarning(
           `Failed to retrieve proof of work for ${hash}. Try a different PoW method from the app settings.`, {length: 5000}
           );
@@ -119,7 +131,7 @@ export class WorkPoolService {
    * Load the work cache from localStorage
    */
   public loadWorkCache() {
-    let workCache = [];
+    let workCache: CachedWork[] = [];
     const workCacheStore = localStorage.getItem(this.storeKey);
     if (workCacheStore) {
       workCache = JSON.parse(workCacheStore);
@@ -134,7 +146,7 @@ export class WorkPoolService {
    * @param a array
    * @param key it => it.hash
    */
-  private uniqByKeepLast(a, key) {
+  private uniqByKeepLast(a: CachedWork[], key: (item: CachedWork) => string): CachedWork[] {
     return [
         ...new Map(
             a.map(x => [key(x), x])

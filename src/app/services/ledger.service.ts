@@ -14,6 +14,8 @@ import { AppSettingsService } from './app-settings.service';
 
 export const STATUS_CODES = {
   SECURITY_STATUS_NOT_SATISFIED: 0x6982,
+  DEVICE_LOCKED: 0x5515,
+  NANO_APP_NOT_OPEN: 0x6e01,
   CONDITIONS_OF_USE_NOT_SATISFIED: 0x6985,
   INVALID_SIGNATURE: 0x6a81,
   CACHE_MISS: 0x6a82
@@ -24,6 +26,32 @@ export const LedgerStatus = {
   LOCKED: 'locked',
   READY: 'ready',
 };
+
+// A device's USB descriptor can identify its model *after* the user authorizes
+// it. It cannot identify an unselected device, nor prove the Nano account seed.
+export type LedgerUsbModel = 'nanoS' | 'nanoSPlus' | 'nanoX';
+
+export function identifyLedgerUsbModel(transport: unknown): LedgerUsbModel | null {
+  if (!transport || typeof transport !== 'object') return null;
+  const details = transport as {
+    deviceModel?: {id?: string} | null;
+    device?: {productId?: number} | null;
+  };
+  const modelId = details.deviceModel?.id;
+  if (modelId === 'nanoSP') return 'nanoSPlus';
+  if (modelId === 'nanoX') return 'nanoX';
+  if (modelId === 'nanoS') return 'nanoS';
+  const productId = details.device?.productId;
+  if (typeof productId !== 'number') return null;
+  // Ledger's WebUSB/WebHID IDs encode the model in the high byte in
+  // modern firmware, but some descriptors expose the short model ID.
+  const modelCode = productId > 0xff ? ((productId >> 8) & 0xff) : productId;
+  if (modelCode === 0x50) return 'nanoSPlus';
+  if (modelCode === 0x40) return 'nanoX';
+  if (modelCode === 0x10) return 'nanoS';
+  return null; // Do not guess capabilities for other Ledger models.
+}
+
 
 // Not a rejected transaction: the device cannot currently sign a receive block.
 export class LedgerNotReadyError extends Error {
@@ -48,6 +76,36 @@ export interface LedgerLog {
   date: Date;
 }
 
+// Preserve the legacy Ledger status/error codes while narrowing unknown values
+// from native transports and browser APIs. This helper never calls the device.
+function ledgerErrorFields(error: unknown): {
+  name?: unknown;
+  message?: unknown;
+  id?: unknown;
+  statusCode?: unknown;
+  statusText?: unknown;
+} {
+  return error !== null && typeof error === 'object'
+    ? error as {name?: unknown; message?: unknown; id?: unknown; statusCode?: unknown; statusText?: unknown}
+    : {};
+}
+
+// Only these known APDU responses identify an unavailable device/app.
+// Preserve other transport errors, including user-denied signatures, unchanged.
+export function getLedgerReadinessIssue(error: unknown): 'locked' | 'app-not-open' | null {
+  const detail = ledgerErrorFields(error);
+  const message = String(detail.message || '');
+  if (detail.statusCode === STATUS_CODES.DEVICE_LOCKED || /0x5515\b/i.test(message)) return 'locked';
+  if (detail.statusCode === STATUS_CODES.NANO_APP_NOT_OPEN || /0x6e01\b/i.test(message)) return 'app-not-open';
+  return null;
+}
+
+function ledgerReadinessMessage(issue: 'locked' | 'app-not-open'): string {
+  return issue === 'locked'
+    ? 'Ledger locked. Unlock your Ledger, open the Nano app, then click Reconnect.'
+    : 'Nano app is not open on your Ledger. Open the Nano app, then click Reconnect.';
+}
+
 // This app uses Web Bluetooth, rather than experimental WebUSB, on Android browsers.
 export function isAndroidBrowser(userAgent: string): boolean {
   return /\bAndroid\b/i.test(userAgent || '');
@@ -70,9 +128,47 @@ export class LedgerService {
     transport: null,
   };
 
+  get connectedDeviceModel(): LedgerUsbModel | null {
+    if (this.transportMode === 'Bluetooth') return 'nanoX';
+    return identifyLedgerUsbModel(this.ledger?.transport);
+  }
+
   // isDesktop = true;
   isDesktop = environment.desktop;
   readonly isAndroidWeb = !this.isDesktop && typeof navigator !== 'undefined' && isAndroidBrowser(navigator.userAgent);
+  // WalletService supplies the expected account without injecting it here (avoids a service cycle).
+  configuredWalletAccount: (() => { index: number; id: string } | null) | null = null;
+  // The wallet layer may remember the model of the device that has *passed*
+  // account verification; a different-seed Ledger must never update this hint.
+  onVerifiedDeviceModel: ((model: LedgerUsbModel) => void) | null = null;
+  // The explicit setup screen may select a different physical device.
+  configuringWallet = false;
+
+  async verifyConnectedWallet(): Promise<void> {
+    if (this.configuringWallet) return;
+    const expected = this.configuredWalletAccount?.();
+    if (!expected) return;
+    const account = await this.getLedgerAccount(expected.index);
+    if (account.address.replace(/^xrb_/, 'nano_') !== expected.id) {
+      throw new Error('Ledger does not match the configured wallet.');
+    }
+    const deviceModel = this.connectedDeviceModel;
+    if (deviceModel) this.onVerifiedDeviceModel?.(deviceModel);
+  }
+
+  private reportWalletMismatch(): void {
+    const message = 'Ledger does not match the configured wallet.';
+    this.resetLedger();
+    this.ledger.status = LedgerStatus.NOT_CONNECTED;
+    this.ledgerStatus$.next({ status: this.ledger.status, statusText: message });
+    this.notifications.sendWarning(message, { identifier: 'ledger-wallet-mismatch', length: 10000 });
+  }
+
+  // Browser USB/HID selection can be dismissed by the user without a
+  // transport error. Setup must not show a misleading connection failure.
+  lastUsbSelectionCancelled = false;
+  lastBluetoothSelectionCancelled = false;
+
   queryingDesktopLedger = false;
   private bluetoothConnecting = false;
   private bluetoothGeneration = 0;
@@ -101,7 +197,8 @@ export class LedgerService {
   isUnavailableError(err: any): boolean {
     if (this.ledger.status !== LedgerStatus.READY || err instanceof LedgerNotReadyError) return true;
     const message = String((err && err.message) || err || '');
-    return /0x6e01|Cannot read properties of null \(reading '(?:cacheBlock|signBlock)'\)/i.test(message);
+    return getLedgerReadinessIssue(err) !== null ||
+      /Cannot read properties of null \(reading '(?:cacheBlock|signBlock)'\)/i.test(message);
   }
 
   handleUnavailableReceive(): void {
@@ -116,6 +213,7 @@ export class LedgerService {
   }
 
   private async requireReadyForSigning(): Promise<void> {
+    if (this.configuringWallet) throw new LedgerNotReadyError();
     if (this.ledger.status !== LedgerStatus.READY) {
       await this.loadLedger(true);
     }
@@ -175,8 +273,24 @@ export class LedgerService {
       if (!message || !message.event || !this.usesDesktopUsb) return;
       switch (message.event) {
         case 'ledger-status':
-          this.ledger.status = message.data.status;
-          this.ledgerStatus$.next({ status: message.data.status, statusText: message.data.statusText });
+          if (message.data.status === LedgerStatus.READY && !this.configuringWallet) {
+            // Desktop USB also requires device/account matching before exposing READY.
+            this.ledger.status = LedgerStatus.NOT_CONNECTED;
+            void this.verifyConnectedWallet().then(() => {
+              this.ledger.status = LedgerStatus.READY;
+              this.ledgerStatus$.next({ status: LedgerStatus.READY, statusText: message.data.statusText });
+            }).catch((error) => {
+              if ((error as Error)?.message === 'Ledger does not match the configured wallet.') {
+                this.reportWalletMismatch();
+              } else {
+                this.ledger.status = LedgerStatus.NOT_CONNECTED;
+                this.ledgerStatus$.next({ status: this.ledger.status, statusText: String(error) });
+              }
+            });
+          } else {
+            this.ledger.status = message.data.status;
+            this.ledgerStatus$.next({ status: message.data.status, statusText: message.data.statusText });
+          }
           break;
 
         case 'account-details':
@@ -234,6 +348,9 @@ export class LedgerService {
   enableBluetoothMode(enabled: boolean) {
     // Disallow accidental USB selection from old wallet state or indirect UI paths.
     if (this.isAndroidWeb && !enabled) return;
+    // A Bluetooth app/pairing error belongs to that transport session only.
+    // Never show it after the user explicitly switches back to USB.
+    this.bluetoothErrorMessage = '';
     if ((this.transportMode === 'Bluetooth') !== enabled) {
       this.resetLedger();
       this.ledger.status = LedgerStatus.NOT_CONNECTED;
@@ -259,7 +376,7 @@ export class LedgerService {
    * @param {any} filterFn
    * @returns {Promise<any>}
    */
-  async getDesktopResponse(eventType, filterFn?) {
+  async getDesktopResponse(eventType: string, filterFn?: (data: {accountIndex: number}) => boolean): Promise<any> {
     return new Promise((resolve, reject) => {
       const sub = this.desktopMessage$
         .subscribe((response: any) => {
@@ -290,7 +407,7 @@ export class LedgerService {
 
 
 
-  async getLedgerAccountDesktop(accountIndex, showOnScreen) {
+  async getLedgerAccountDesktop(accountIndex: number, showOnScreen: boolean) {
     if (this.queryingDesktopLedger) {
       throw new Error(`Already querying desktop device, please wait`);
     }
@@ -309,7 +426,7 @@ export class LedgerService {
     }
   }
 
-  async updateCacheDesktop(accountIndex, cacheData, signature) {
+  async updateCacheDesktop(accountIndex: number, cacheData: unknown, signature: string) {
     if (this.queryingDesktopLedger) {
       throw new Error(`Already querying desktop device, please wait`);
     }
@@ -324,11 +441,11 @@ export class LedgerService {
       return details;
     } catch (err) {
       this.queryingDesktopLedger = false;
-      throw new Error(`Error caching block: ${err.message}`);
+      throw new Error(`Error caching block: ${ledgerErrorFields(err).message ?? err}`);
     }
   }
 
-  async signBlockDesktop(accountIndex, blockData) {
+  async signBlockDesktop(accountIndex: number, blockData: unknown) {
     if (this.queryingDesktopLedger) {
       throw new Error(`Already querying desktop device, please wait`);
     }
@@ -343,7 +460,7 @@ export class LedgerService {
       return details;
     } catch (err) {
       this.queryingDesktopLedger = false;
-      throw new Error(`Error signing block: ${err.message}`);
+      throw new Error(`Error signing block: ${ledgerErrorFields(err).message ?? err}`);
     }
   }
 
@@ -367,6 +484,8 @@ export class LedgerService {
    * @returns {Promise<any>}
    */
   async loadLedger(hideNotifications = false, forceBluetoothReconnect = false) {
+    this.lastUsbSelectionCancelled = false;
+    this.lastBluetoothSelectionCancelled = false;
     if (this.isAndroidWeb && this.transportMode !== 'Bluetooth') {
       this.ledger.status = LedgerStatus.NOT_CONNECTED;
       this.ledgerStatus$.next({
@@ -421,10 +540,13 @@ export class LedgerService {
         try {
           await this.loadTransport();
         } catch (err) {
-          if (err.name !== 'TransportOpenUserCancelled') {
+          const detail = ledgerErrorFields(err);
+          // Ledger WebUSB/WebHID wraps a dismissed browser picker in this error.
+          this.lastUsbSelectionCancelled = detail.name === 'TransportOpenUserCancelled';
+          if (!this.lastUsbSelectionCancelled) {
             console.log(`Error loading ${this.transportMode} transport `, err);
             this.ledger.status = LedgerStatus.NOT_CONNECTED;
-            this.ledgerStatus$.next({ status: this.ledger.status, statusText: `Unable to load Ledger transport: ${err.message || err}` });
+            this.ledgerStatus$.next({ status: this.ledger.status, statusText: `Unable to load Ledger transport: ${detail.message || err}` });
             if (!hideNotifications) {
               this.notifications.sendWarning(`Ledger connection failed. Make sure your Ledger is unlocked.  Restart the nano app on your Ledger if the error persists`);
             }
@@ -460,10 +582,11 @@ export class LedgerService {
 
         if (!ledgerConfig) return resolve(false);
       } catch (err) {
+        const detail = ledgerErrorFields(err);
         console.log(`App config error: `, err);
         this.ledger.status = LedgerStatus.NOT_CONNECTED;
-        this.ledgerStatus$.next({ status: this.ledger.status, statusText: `Unable to load Nano App configuration: ${err.message || err}` });
-        if (err.statusText === 'HALTED') {
+        this.ledgerStatus$.next({ status: this.ledger.status, statusText: `Unable to load Nano App configuration: ${detail.message || err}` });
+        if (detail.statusText === 'HALTED') {
           this.resetLedger();
         }
         if (!hideNotifications && !resolved) {
@@ -476,6 +599,7 @@ export class LedgerService {
       // Attempt to load account 0 - which confirms the app is unlocked and ready
       try {
         const accountDetails = await this.getLedgerAccount(0);
+        await this.verifyConnectedWallet();
         this.ledger.status = LedgerStatus.READY;
         this.ledgerStatus$.next({ status: this.ledger.status, statusText: `Nano Ledger application connected` });
 
@@ -484,13 +608,25 @@ export class LedgerService {
           this.pollLedgerStatus();
         }
       } catch (err) {
-        console.log(`Error on account details: `, err);
-        if (err.statusCode === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
-          this.ledger.status = LedgerStatus.LOCKED;
-          if (!hideNotifications) {
-            this.notifications.sendWarning(`Ledger device locked.  Unlock and open the nano application`);
-          }
+        if ((err as Error)?.message === 'Ledger does not match the configured wallet.') {
+          this.reportWalletMismatch();
+          return resolve(false);
         }
+        // Reading the first account is the actual USB readiness check. A
+        // failed address read must not resolve successfully or start scanning
+        // accounts on a transport that isn't ready yet.
+        console.log('Error on account details: ', err);
+        const readinessIssue = getLedgerReadinessIssue(err);
+        this.ledger.status = readinessIssue === 'locked'
+          ? LedgerStatus.LOCKED : LedgerStatus.NOT_CONNECTED;
+        const message = readinessIssue
+          ? ledgerReadinessMessage(readinessIssue)
+          : 'Unable to read Ledger account. Check the Nano app and retry the connection.';
+        this.ledgerStatus$.next({ status: this.ledger.status, statusText: message });
+        if (!hideNotifications) {
+          this.notifications.sendWarning(message);
+        }
+        return resolve(false);
       }
 
       resolve(true);
@@ -574,6 +710,7 @@ export class LedgerService {
       await this.ledger.nano.getAppConfiguration();
       console.info('[Ledger BLE] reading account address');
       await this.ledger.nano.getAddress(this.ledgerPath(0), false);
+      await this.verifyConnectedWallet();
       console.info('[Ledger BLE] account address read successfully');
     };
     try {
@@ -584,6 +721,7 @@ export class LedgerService {
       if (generation !== this.bluetoothGeneration) return false;
       console.info('[Ledger BLE] reconnect successful');
       this.bluetoothErrorMessage = '';
+      this.notifications.removeNotification('ledger-connection-help');
       this.appSettings.setAppSetting('ledgerReconnect', 'bluetooth');
       this.ledger.status = LedgerStatus.READY;
       this.ledgerStatus$.next({ status: this.ledger.status, statusText: 'Nano Ledger application connected via Bluetooth' });
@@ -594,27 +732,44 @@ export class LedgerService {
       return true;
     } catch (error) {
       console.error('[Ledger BLE] reconnect failed', error);
+      const failure = ledgerErrorFields(error);
       if (generation !== this.bluetoothGeneration) return false;
+      if ((error as Error)?.message === 'Ledger does not match the configured wallet.') {
+        this.reportWalletMismatch();
+        return false;
+      }
       this.resetLedger();
-      this.ledger.status = LedgerStatus.NOT_CONNECTED;
-      const detail = String(error && (error.message || error) || '');
-      const adapterUnavailable = error && error.name === 'TransportOpenUserCancelled' &&
+      const readinessIssue = getLedgerReadinessIssue(error);
+      this.ledger.status = readinessIssue === 'locked' ? LedgerStatus.LOCKED : LedgerStatus.NOT_CONNECTED;
+      const detail = String(failure.message || error || '');
+      const adapterUnavailable = failure.name === 'TransportOpenUserCancelled' &&
         /bluetooth adapter not available|adapter not available|bluetooth unavailable|bluetooth is disabled/i.test(detail);
+      // Closing the browser's Bluetooth chooser is not a connection failure.
+      // Do not show a warning, and do not confuse it with a disabled adapter.
+      const chooserCancelled = failure.name === 'TransportOpenUserCancelled' && !adapterUnavailable;
+      if (chooserCancelled) {
+        this.lastBluetoothSelectionCancelled = true;
+        this.ledgerStatus$.next({ status: this.ledger.status, statusText: '' });
+        return false;
+      }
       const pairingAdvice = 'Ledger Nano X Bluetooth authentication failed. Your device may not be paired correctly. ' +
         'Re-pair it in your computer Bluetooth settings (Linux: bluetoothctl), then click Reconnect.';
-      const authenticationFailed = error && error.name === 'LedgerBluetoothAuthenticationError' ||
+      const authenticationFailed = failure.name === 'LedgerBluetoothAuthenticationError' ||
         /pin or key missing|authentication failed/i.test(detail);
-      const possiblePairing = error && error.name === 'DisconnectedDevice' &&
+      const possiblePairing = failure.name === 'DisconnectedDevice' &&
         /pairing may be missing or invalid/i.test(detail);
-      if (authenticationFailed) this.bluetoothErrorMessage = pairingAdvice;
+      if (readinessIssue) this.bluetoothErrorMessage = ledgerReadinessMessage(readinessIssue);
+      else if (authenticationFailed) this.bluetoothErrorMessage = pairingAdvice;
       else if (possiblePairing) this.bluetoothErrorMessage = detail;
       const message = adapterUnavailable
         ? 'Bluetooth unavailable. Check Bluetooth on your computer and Ledger, or choose Reconnect via USB.'
-        : error && error.name === 'TransportOpenUserCancelled'
-          ? 'Bluetooth selection cancelled'
-          : this.bluetoothErrorMessage || `Bluetooth connection failed: ${detail}`;
+        : this.bluetoothErrorMessage || `Bluetooth connection failed: ${detail}`;
       this.ledgerStatus$.next({ status: this.ledger.status, statusText: message });
-      if (!hideNotifications) this.notifications.sendWarning(message);
+      if (!hideNotifications) {
+        this.notifications.sendWarning(message, readinessIssue
+          ? { identifier: 'ledger-connection-help', length: 10000 }
+          : undefined);
+      }
       return false;
     } finally {
       active = false;
@@ -623,7 +778,7 @@ export class LedgerService {
     }
   }
 
-  async updateCache(accountIndex, blockHash) {
+  async updateCache(accountIndex: number, blockHash: string) {
     await this.requireReadyForSigning();
     const blockResponse = await this.api.blocksInfo([blockHash]);
     const blockData = blockResponse.blocks[blockHash];
@@ -644,7 +799,7 @@ export class LedgerService {
     }
   }
 
-  async updateCacheOffline(accountIndex, blockData) {
+  async updateCacheOffline(accountIndex: number, blockData: {representative: string; balance: string; previous: string; link: string; signature: string}) {
     await this.requireReadyForSigning();
 
     const cacheData = {
@@ -707,28 +862,41 @@ export class LedgerService {
     }
 
     const generation = this.bluetoothGeneration;
+    let statusText = '';
     try {
       const accountDetails = await this.getLedgerAccount(0);
+      if (this.configuringWallet) return;
+      await this.verifyConnectedWallet();
       if (generation !== this.bluetoothGeneration) return;
       this.ledger.status = LedgerStatus.READY;
     } catch (err) {
       if (generation !== this.bluetoothGeneration) return;
+      const failure = ledgerErrorFields(err);
       // App methods hold TransportLocked throughout device confirmation;
       // exchange-level contention uses TransportRaceCondition. Neither means
       // the device disconnected: resetting here interrupts the pending signature.
-      if (err.name === 'TransportRaceCondition' || err.id === 'TransportRaceCondition' ||
-          err.id === 'TransportLocked') return;
+      if (failure.name === 'TransportRaceCondition' || failure.id === 'TransportRaceCondition' ||
+          failure.id === 'TransportLocked') return;
+      if ((err as Error)?.message === 'Ledger does not match the configured wallet.') {
+        this.reportWalletMismatch();
+        return;
+      }
       console.log('Check ledger status failed ', JSON.stringify(err));
-      if (err.statusCode === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
+      const readinessIssue = getLedgerReadinessIssue(err);
+      if (failure.statusCode === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED || readinessIssue === 'locked') {
         this.ledger.status = LedgerStatus.LOCKED;
       } else {
         this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      }
+      if (readinessIssue) {
+        statusText = ledgerReadinessMessage(readinessIssue);
+        this.notifications.sendWarning(statusText, { identifier: 'ledger-connection-help', length: 10000 });
       }
       this.pollingLedger = false;
       this.resetLedger();
     }
 
-    this.ledgerStatus$.next({ status: this.ledger.status, statusText: `` });
+    this.ledgerStatus$.next({ status: this.ledger.status, statusText });
   }
 
 

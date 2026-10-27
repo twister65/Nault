@@ -1,4 +1,6 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { inject } from '@angular/core';
+import { TranslocoService } from '@jsverse/transloco';
 import {NotificationService} from '../../services/notification.service';
 import {ActivatedRoute} from '@angular/router';
 import {AddressBookService} from '../../services/address-book.service';
@@ -8,9 +10,12 @@ import {Router} from '@angular/router';
     selector: 'app-import-address-book',
     templateUrl: './import-address-book.component.html',
     styleUrls: ['./import-address-book.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class ImportAddressBookComponent implements OnInit {
+  private readonly translocoService = inject(TranslocoService);
+
   activePanel = 'error';
 
   validImportData = false;
@@ -31,7 +36,7 @@ export class ImportAddressBookComponent implements OnInit {
     const importData = this.route.snapshot.fragment;
     const queryData = this.route.snapshot.queryParams;
     if (!importData || !importData.length) {
-      return this.importDataError(`No import data found.  Check your link and try again.`);
+      return this.importDataError(this.translocoService.translate('ui-notifications.import-data-missing'));
     }
 
     if ('hostname' in queryData) this.hostname = queryData.hostname;
@@ -47,12 +52,13 @@ export class ImportAddressBookComponent implements OnInit {
       }
 
       if (!importBlob || !importBlob.length) {
-        return this.importDataError(`Bad import data.  Check your link and try again.`);
+        return this.importDataError(this.translocoService.translate('ui-notifications.import-data-link-bad'));
       }
       this.validImportData = true;
       this.activePanel = 'import';
 
-      let importDataAddress = {};
+      // A null-prototype dictionary prevents inherited property names from shadowing addresses.
+      const importDataAddress: Record<string, boolean> = Object.create(null);
       let importData = [];
 
       for (const entry of importBlob) {
@@ -100,12 +106,12 @@ export class ImportAddressBookComponent implements OnInit {
       this.importData = importData;
     } catch (err) {
       console.log(err);
-      return this.importDataError(`Unable to decode import data.  Check your link and try again.`);
+      return this.importDataError(this.translocoService.translate('ui-notifications.import-data-decode'));
     }
   }
 
   // converts back to string from binary
-  fromBinary(binary) {
+  fromBinary(binary: string): string | null {
     try {
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < bytes.length; i++) {
@@ -131,10 +137,10 @@ export class ImportAddressBookComponent implements OnInit {
     }
 
     this.router.navigate(['address-book']);
-    this.notifications.sendSuccess(`Successfully imported ${importedCount} address book entries`);
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.addressbook-imported', { count: importedCount }));
   }
 
-  importDataError(message) {
+  importDataError(message: string) {
     this.activePanel = 'error';
     return this.notifications.sendError(message);
   }

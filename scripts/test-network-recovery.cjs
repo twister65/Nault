@@ -27,7 +27,11 @@ function load(file, name) {
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, experimentalDecorators: true }
   }).outputText, {
-    exports, require: n => n === '@angular/core' ? { Injectable: () => x => x, Component: () => x => x }
+    exports, require: n => n === '@angular/core' ? {
+      Injectable: () => x => x, Component: () => x => x,
+      // Angular 22's component decorator reads this enum at module evaluation.
+      ChangeDetectionStrategy: { Eager: 0, Default: 0, OnPush: 1 }
+    }
       : n === 'rxjs' ? { BehaviorSubject, Subject }
       : n.endsWith('/endpoint-policy') ? { secureEndpoint: u => u } : {},
     setTimeout: schedule, clearTimeout: x => timers.delete(x), WebSocket: FakeSocket,

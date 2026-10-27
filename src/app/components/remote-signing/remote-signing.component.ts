@@ -1,26 +1,28 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {UtilService} from '../../services/util.service';
 import { Router } from '@angular/router';
 import { NotificationService } from '../../services/notification.service';
 import { RemoteSignService } from '../../services/remote-sign.service';
 import { QrModalService } from '../../services/qr-modal.service';
-import { AddressBookService } from 'app/services/address-book.service';
+import { AddressBookService, AddressBookEntry } from 'app/services/address-book.service';
+import type {QRType} from '../qr-modal/qr-modal.component';
 import {BehaviorSubject} from 'rxjs';
 
 @Component({
     selector: 'app-send',
     templateUrl: './remote-signing.component.html',
     styleUrls: ['./remote-signing.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RemoteSigningComponent implements OnInit {
   toAccountID = '';
-  toAccountStatus: number = null;
+  toAccountStatus: number | null = null;
   unsignedBlock = '';
   signedBlock = '';
-  unsignedStatus: number = null;
-  signedStatus: number = null;
-  addressBookResults$ = new BehaviorSubject([]);
+  unsignedStatus: number | null = null;
+  signedStatus: number | null = null;
+  addressBookResults$ = new BehaviorSubject<AddressBookEntry[]>([]);
   showAddressBook = false;
   addressBookMatch = '';
 
@@ -66,14 +68,14 @@ export class RemoteSigningComponent implements OnInit {
     this.addressBookResults$.next(matches);
   }
 
-  selectBookEntry(account) {
+  selectBookEntry(account: string) {
     this.showAddressBook = false;
     this.toAccountID = account;
     this.searchAddressBook();
     this.validateDestination();
   }
 
-  validateUnsigned(string) {
+  validateUnsigned(string: string) {
     if (string === '') {
       this.unsignedStatus = null;
       return false;
@@ -89,7 +91,7 @@ export class RemoteSigningComponent implements OnInit {
     }
   }
 
-  validateSigned(string) {
+  validateSigned(string: string) {
     if (string === '') {
       this.signedStatus = null;
       return false;
@@ -113,7 +115,7 @@ export class RemoteSigningComponent implements OnInit {
     }
   }
 
-  navigateBlock(block) {
+  navigateBlock(block: string) {
     let badScheme = false;
 
     if (block.startsWith('nanosign:') || block.startsWith('nanoprocess:')) {
@@ -134,7 +136,7 @@ export class RemoteSigningComponent implements OnInit {
   }
 
   // open qr reader modal
-  openQR(reference, type) {
+  openQR(reference: string, type: QRType) {
     const qrResult = this.qrModalService.openQR(reference, type);
     qrResult.then((data) => {
       switch (data.reference) {

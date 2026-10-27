@@ -1,8 +1,11 @@
-import {Component, OnInit, ViewChild} from '@angular/core';
+import {Component, OnInit, ViewChild, ElementRef, ChangeDetectionStrategy} from '@angular/core';
 import {ActivatedRoute} from '@angular/router';
 import BigNumber from 'bignumber.js';
 import {BehaviorSubject} from 'rxjs';
 import { QrModalService } from '../../services/qr-modal.service';
+import type {QRType} from '../qr-modal/qr-modal.component';
+import type {WalletApiAccount} from '../../services/wallet.service';
+import type {StoredRepresentative} from '../../services/representative.service';
 
 import {
   ApiService,
@@ -15,34 +18,44 @@ import {
   WalletService,
   NinjaService
 } from '../../services';
-import { TranslocoService } from '@ngneat/transloco';
+import { TranslocoService } from '@jsverse/transloco';
+
+interface RecommendedRepresentative {
+  account: string;
+  alias: string;
+  votingweight: number | string;
+  weight?: BigNumber;
+  percent?: string;
+  [field: string]: unknown;
+}
 
 @Component({
     selector: 'app-representatives',
     templateUrl: './representatives.component.html',
     styleUrls: ['./representatives.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RepresentativesComponent implements OnInit {
-  @ViewChild('repInput') repInput;
+  @ViewChild('repInput') repInput!: ElementRef<HTMLElement>;
 
-  changeAccountID: any = null;
+  changeAccountID: string | null = null;
   toRepresentativeID = '';
 
-  representativeResults$ = new BehaviorSubject([]);
+  representativeResults$ = new BehaviorSubject<StoredRepresentative[]>([]);
   showRepresentatives = false;
   representativeListMatch = '';
 
-  representativeOverview = [];
+  representativeOverview: FullRepresentativeOverview[] = [];
   changingRepresentatives = false;
 
-  selectedAccounts = [];
-  fullAccounts = [];
+  selectedAccounts: Array<{id: string}> = [];
+  fullAccounts: Array<WalletApiAccount & {error?: string}> = [];
 
-  recommendedReps = [];
-  recommendedRepsPaginated = [];
+  recommendedReps: RecommendedRepresentative[] = [];
+  recommendedRepsPaginated: RecommendedRepresentative[] = [];
   recommendedRepsLoading = false;
-  selectedRecommendedRep = null;
+  selectedRecommendedRep: RecommendedRepresentative | null = null;
   showRecommendedReps = false;
   loadingRepresentatives = false;
 
@@ -51,7 +64,7 @@ export class RepresentativesComponent implements OnInit {
 
   hideOverview = false;
 
-  representativeList = [];
+  representativeList: StoredRepresentative[] = [];
 
   constructor(
     private router: ActivatedRoute,
@@ -124,7 +137,7 @@ export class RepresentativesComponent implements OnInit {
     this.representativeList.push( ...localReps.filter(rep => (rep.warn)) );
   }
 
-  getAccountLabel(account) {
+  getAccountLabel(account: WalletApiAccount) {
     const addressBookName = account.addressBookName;
 
     if (addressBookName != null) {
@@ -140,7 +153,7 @@ export class RepresentativesComponent implements OnInit {
     return (this.translocoService.translate('general.account') + ' #' + walletAccount.index);
   }
 
-  addSelectedAccounts(accounts) {
+  addSelectedAccounts(accounts: Array<{id: string}>) {
     for (const account of accounts) {
       this.newAccountID(account.id);
     }
@@ -149,7 +162,7 @@ export class RepresentativesComponent implements OnInit {
     setTimeout(() => this.repInput.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   }
 
-  newAccountID(accountID) {
+  newAccountID(accountID: string | null) {
     const newAccount = accountID || this.changeAccountID;
     if (!newAccount) {
       return; // Didn't select anything
@@ -174,13 +187,13 @@ export class RepresentativesComponent implements OnInit {
       }
     } else {
       const walletAccount = this.walletService.getWalletAccount(newAccount);
-      this.selectedAccounts.push(walletAccount);
+      if (walletAccount) this.selectedAccounts.push(walletAccount);
     }
 
     setTimeout(() => this.changeAccountID = null, 10);
   }
 
-  removeSelectedAccount(account) {
+  removeSelectedAccount(account: {id: string}) {
     this.selectedAccounts.splice(this.selectedAccounts.indexOf(account), 1); // Remove all from the list
   }
 
@@ -197,7 +210,7 @@ export class RepresentativesComponent implements OnInit {
     this.representativeResults$.next(matches);
   }
 
-  selectRepresentative(rep) {
+  selectRepresentative(rep: string) {
     this.showRepresentatives = false;
     this.toRepresentativeID = rep;
     this.searchRepresentatives();
@@ -228,7 +241,7 @@ export class RepresentativesComponent implements OnInit {
   async loadRecommendedReps() {
     this.recommendedRepsLoading = true;
     try {
-      const scores = await this.ninja.recommended() as any[];
+      const scores = await this.ninja.recommended() as RecommendedRepresentative[];
       const totalSupply = new BigNumber(133248289);
 
       const reps = scores.map(rep => {
@@ -247,7 +260,7 @@ export class RepresentativesComponent implements OnInit {
       this.calculatePage();
       this.recommendedRepsLoading = false;
     } catch (err) {
-      this.recommendedRepsLoading = null;
+      this.recommendedRepsLoading = false;
     }
 
   }
@@ -274,7 +287,7 @@ export class RepresentativesComponent implements OnInit {
     );
   }
 
-  selectRecommendedRep(rep) {
+  selectRecommendedRep(rep: RecommendedRepresentative) {
     this.selectedRecommendedRep = rep;
     this.toRepresentativeID = rep.account;
     this.showRecommendedReps = false;
@@ -296,7 +309,7 @@ export class RepresentativesComponent implements OnInit {
       }
     }
     if (!accounts || !accounts.length) {
-      return this.notifications.sendWarning(`You must select at least one account to change`);
+      return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.rep-select-account'));
     }
 
     this.changingRepresentatives = true;
@@ -304,7 +317,7 @@ export class RepresentativesComponent implements OnInit {
     const valid = this.util.account.isValidAccount(newRep);
     if (!valid) {
       this.changingRepresentatives = false;
-      return this.notifications.sendWarning(`Representative is not a valid account`);
+      return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.rep-invalid'));
     }
 
     const allAccounts = accounts.find(a => a.id === 'All Current Accounts');
@@ -326,7 +339,7 @@ export class RepresentativesComponent implements OnInit {
 
     if (!accountsNeedingChange.length) {
       this.changingRepresentatives = false;
-      return this.notifications.sendInfo(`None of the accounts selected need to be updated`);
+      return this.notifications.sendInfo(this.translocoService.translate('ui-notifications.rep-no-change'));
     }
 
     // Now loop and change them
@@ -339,10 +352,10 @@ export class RepresentativesComponent implements OnInit {
       try {
         const changed = await this.nanoBlock.generateChange(walletAccount, newRep, this.walletService.isLedgerWallet());
         if (!changed) {
-          this.notifications.sendError(`Error changing representative for ${account.id}, please try again`);
+          this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-change-failed-account', { account: account.id }));
         }
       } catch (err) {
-        this.notifications.sendError('Error changing representative: ' + err.message);
+        this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-change-failed', { error: err instanceof Error ? err.message : String(err) }));
       }
     }
 
@@ -358,7 +371,7 @@ export class RepresentativesComponent implements OnInit {
     this.changingRepresentatives = false;
     this.selectedRecommendedRep = null;
 
-    this.notifications.sendSuccess(`Successfully updated representatives!`);
+    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.rep-updated'));
 
     let useCachedReps = false;
 
@@ -371,11 +384,11 @@ export class RepresentativesComponent implements OnInit {
     }
 
     // Detect if any new reps should be changed
-    await this.representativeService.detectChangeableReps(useCachedReps ? this.representativeOverview : null);
+    await this.representativeService.detectChangeableReps(useCachedReps ? this.representativeOverview : undefined);
   }
 
   // open qr reader modal
-  openQR(reference, type) {
+  openQR(reference: string, type: QRType) {
     const qrResult = this.qrModalService.openQR(reference, type);
     qrResult.then((data) => {
       switch (data.reference) {

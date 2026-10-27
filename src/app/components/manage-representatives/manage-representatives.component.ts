@@ -1,22 +1,27 @@
 
 import {map} from 'rxjs/operators';
-import {AfterViewInit, Component, OnInit} from '@angular/core';
+import {AfterViewInit, Component, OnInit, ChangeDetectionStrategy} from '@angular/core';
+import { inject } from '@angular/core';
+import { TranslocoService } from '@jsverse/transloco';
 import {AddressBookService} from '../../services/address-book.service';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {ModalService} from '../../services/modal.service';
 import {ApiService} from '../../services/api.service';
 import {Router} from '@angular/router';
-import {RepresentativeService} from '../../services/representative.service';
+import {RepresentativeService, StoredRepresentative} from '../../services/representative.service';
 import {UtilService} from '../../services/util.service';
 
 @Component({
     selector: 'app-manage-representatives',
     templateUrl: './manage-representatives.component.html',
     styleUrls: ['./manage-representatives.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
+  private readonly translocoService = inject(TranslocoService);
+
 
   activePanel = 0;
   creatingNewEntry = false;
@@ -35,7 +40,7 @@ export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
   newRepTrusted = false;
   newRepWarn = false;
 
-  onlineReps = [];
+  onlineReps: string[] = [];
 
   constructor(
     private api: ApiService,
@@ -59,7 +64,7 @@ export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
     this.activePanel = 1;
   }
 
-  editEntry(representative) {
+  editEntry(representative: StoredRepresentative) {
     this.newRepAccount = representative.id;
     this.previousRepName = representative.name;
     this.newRepName = representative.name;
@@ -68,35 +73,35 @@ export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
     this.creatingNewEntry = false;
     this.activePanel = 1;
     setTimeout(() => {
-      document.getElementById('new-address-name').focus();
+      document.getElementById('new-address-name')?.focus();
     }, 150);
   }
 
   async saveNewRepresentative() {
     if (!this.newRepAccount || !this.newRepName) {
-      return this.notificationService.sendError(`Account and name are required`);
+      return this.notificationService.sendError(this.translocoService.translate('ui-notifications.rep-name-required'));
     }
 
     this.newRepAccount = this.newRepAccount.replace(/ /g, ''); // Remove spaces
 
     // If the name has been changed, make sure no other entries are using that name
     if ( (this.newRepName !== this.previousRepName) && this.repService.nameExists(this.newRepName) ) {
-      return this.notificationService.sendError(`This name is already in use! Please use a unique name`);
+      return this.notificationService.sendError(this.translocoService.translate('ui-notifications.rep-name-duplicate'));
     }
 
     // Make sure the address is valid
     const valid = this.util.account.isValidAccount(this.newRepAccount);
     if (!valid) {
-      return this.notificationService.sendWarning(`Account ID is not a valid account`);
+      return this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.rep-id-invalid'));
     }
 
     try {
       await this.repService.saveRepresentative(this.newRepAccount, this.newRepName, this.newRepTrusted, this.newRepWarn);
-      this.notificationService.sendSuccess(`Representative entry saved successfully!`);
+      this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.rep-entry-saved'));
 
       this.cancelNewRep();
     } catch (err) {
-      this.notificationService.sendError(`Unable to save entry: ${err.message}`);
+      this.notificationService.sendError(this.translocoService.translate('ui-notifications.rep-entry-save-failed', { error: err instanceof Error ? err.message : String(err) }));
     }
   }
 
@@ -110,13 +115,14 @@ export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
 
   copied() {
     this.notificationService.removeNotification('success-copied');
-    this.notificationService.sendSuccess(`Account address copied to clipboard!`, { identifier: 'success-copied' });
+    this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.clipboard-copied'), { identifier: 'success-copied' });
   }
 
-  async getOnlineRepresentatives() {
-    const representatives = [];
+  async getOnlineRepresentatives(): Promise<string[]> {
+    const representatives: string[] = [];
     try {
       const reps = await this.api.representativesOnline();
+      if (!reps || reps.error || !reps.representatives) return representatives;
       for (const representative in reps.representatives) {
         if (!reps.representatives.hasOwnProperty(representative)) {
           continue;
@@ -124,18 +130,18 @@ export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
         representatives.push(reps.representatives[representative]);
       }
     } catch (err) {
-      this.notificationService.sendWarning(`Unable to determine online status of representatives`);
+      this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.rep-online-unknown'));
     }
 
     return representatives;
   }
 
-  async deleteRepresentative(accountID) {
+  async deleteRepresentative(accountID: string) {
     try {
       this.repService.deleteRepresentative(accountID);
-      this.notificationService.sendSuccess(`Successfully deleted representative`);
+      this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.rep-deleted'));
     } catch (err) {
-      this.notificationService.sendError(`Unable to delete representative: ${err.message}`);
+      this.notificationService.sendError(this.translocoService.translate('ui-notifications.rep-delete-failed', { error: err instanceof Error ? err.message : String(err) }));
     }
   }
 
