@@ -196,8 +196,7 @@
     },
     "node-abi@2.30.1": {
       "semver": "5.7.2"
-    },
-    "semver@5.7.1": "5.7.2"
+    }
   },
   "browser": {
     "stream": "stream-browserify"
