@@ -27,6 +27,32 @@ export const LedgerStatus = {
   READY: 'ready',
 };
 
+// A device's USB descriptor can identify its model *after* the user authorizes
+// it. It cannot identify an unselected device, nor prove the Nano account seed.
+export type LedgerUsbModel = 'nanoS' | 'nanoSPlus' | 'nanoX';
+
+export function identifyLedgerUsbModel(transport: unknown): LedgerUsbModel | null {
+  if (!transport || typeof transport !== 'object') return null;
+  const details = transport as {
+    deviceModel?: {id?: string} | null;
+    device?: {productId?: number} | null;
+  };
+  const modelId = details.deviceModel?.id;
+  if (modelId === 'nanoSP') return 'nanoSPlus';
+  if (modelId === 'nanoX') return 'nanoX';
+  if (modelId === 'nanoS') return 'nanoS';
+  const productId = details.device?.productId;
+  if (typeof productId !== 'number') return null;
+  // Ledger's WebUSB/WebHID IDs encode the model in the high byte in
+  // modern firmware, but some descriptors expose the short model ID.
+  const modelCode = productId > 0xff ? ((productId >> 8) & 0xff) : productId;
+  if (modelCode === 0x50) return 'nanoSPlus';
+  if (modelCode === 0x40) return 'nanoX';
+  if (modelCode === 0x10) return 'nanoS';
+  return null; // Do not guess capabilities for other Ledger models.
+}
+
+
 // Not a rejected transaction: the device cannot currently sign a receive block.
 export class LedgerNotReadyError extends Error {
   constructor() {
@@ -101,6 +127,11 @@ export class LedgerService {
     nano: null,
     transport: null,
   };
+
+  get connectedDeviceModel(): LedgerUsbModel | null {
+    if (this.transportMode === 'Bluetooth') return 'nanoX';
+    return identifyLedgerUsbModel(this.ledger.transport);
+  }
 
   // isDesktop = true;
   isDesktop = environment.desktop;
@@ -706,6 +737,13 @@ export class LedgerService {
       const detail = String(failure.message || error || '');
       const adapterUnavailable = failure.name === 'TransportOpenUserCancelled' &&
         /bluetooth adapter not available|adapter not available|bluetooth unavailable|bluetooth is disabled/i.test(detail);
+      // Closing the browser's Bluetooth chooser is not a connection failure.
+      // Do not show a warning, and do not confuse it with a disabled adapter.
+      const chooserCancelled = failure.name === 'TransportOpenUserCancelled' && !adapterUnavailable;
+      if (chooserCancelled) {
+        this.ledgerStatus$.next({ status: this.ledger.status, statusText: '' });
+        return false;
+      }
       const pairingAdvice = 'Ledger Nano X Bluetooth authentication failed. Your device may not be paired correctly. ' +
         'Re-pair it in your computer Bluetooth settings (Linux: bluetoothctl), then click Reconnect.';
       const authenticationFailed = failure.name === 'LedgerBluetoothAuthenticationError' ||
@@ -717,9 +755,7 @@ export class LedgerService {
       else if (possiblePairing) this.bluetoothErrorMessage = detail;
       const message = adapterUnavailable
         ? 'Bluetooth unavailable. Check Bluetooth on your computer and Ledger, or choose Reconnect via USB.'
-        : failure.name === 'TransportOpenUserCancelled'
-          ? 'Bluetooth selection cancelled'
-          : this.bluetoothErrorMessage || `Bluetooth connection failed: ${detail}`;
+        : this.bluetoothErrorMessage || `Bluetooth connection failed: ${detail}`;
       this.ledgerStatus$.next({ status: this.ledger.status, statusText: message });
       if (!hideNotifications) {
         this.notifications.sendWarning(message, readinessIssue
