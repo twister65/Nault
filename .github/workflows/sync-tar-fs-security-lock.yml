@@ -1,4 +1,5 @@
 name: Temporary tar-fs security lockfile synchronization
+# Keep tar-stream within major 2; tar-fs 2.1.4 itself now requires ^2.1.4
 on:
   push:
     branches: [fix/tar-fs-2.1.4-ledger-security]
