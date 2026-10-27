@@ -130,7 +130,7 @@ export class LedgerService {
 
   get connectedDeviceModel(): LedgerUsbModel | null {
     if (this.transportMode === 'Bluetooth') return 'nanoX';
-    return identifyLedgerUsbModel(this.ledger.transport);
+    return identifyLedgerUsbModel(this.ledger?.transport);
   }
 
   // isDesktop = true;
@@ -138,6 +138,9 @@ export class LedgerService {
   readonly isAndroidWeb = !this.isDesktop && typeof navigator !== 'undefined' && isAndroidBrowser(navigator.userAgent);
   // WalletService supplies the expected account without injecting it here (avoids a service cycle).
   configuredWalletAccount: (() => { index: number; id: string } | null) | null = null;
+  // The wallet layer may remember the model of the device that has *passed*
+  // account verification; a different-seed Ledger must never update this hint.
+  onVerifiedDeviceModel: ((model: LedgerUsbModel) => void) | null = null;
   // The explicit setup screen may select a different physical device.
   configuringWallet = false;
 
@@ -149,6 +152,8 @@ export class LedgerService {
     if (account.address.replace(/^xrb_/, 'nano_') !== expected.id) {
       throw new Error('Ledger does not match the configured wallet.');
     }
+    const deviceModel = this.connectedDeviceModel;
+    if (deviceModel) this.onVerifiedDeviceModel?.(deviceModel);
   }
 
   private reportWalletMismatch(): void {
