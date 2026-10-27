@@ -18,6 +18,29 @@ describe('WalletService', () => {
 });
 
 
+describe('WalletService verified hardware model updates', () => {
+  it('updates the saved model when a Nano X with the same seed is verified after Nano S Plus', () => {
+    const ledgerService: any = { ledgerStatus$: new Subject() };
+    const service = new WalletService(
+      null as any, null as any, null as any,
+      { addressBook$: of(null) } as any,
+      null as any, null as any,
+      { newTransactions$: of(null), connected$: new Subject<void>() } as any,
+      null as any, ledgerService, null as any, null as any
+    );
+    service.wallet.type = 'ledger';
+    service.wallet.accounts = [{id: 'nano_same', index: 0}] as any;
+    service.wallet.ledgerDeviceModel = 'nanoSPlus';
+    const saved = spyOn(service, 'saveWalletExport');
+    expect(ledgerService.onVerifiedDeviceModel).toEqual(jasmine.any(Function));
+    ledgerService.onVerifiedDeviceModel('nanoX');
+    expect(service.wallet.ledgerDeviceModel).toBe('nanoX');
+    expect(saved).toHaveBeenCalledTimes(1);
+    ledgerService.onVerifiedDeviceModel('nanoX');
+    expect(saved).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('WalletService saved Ledger device transport capability', () => {
   it('exports the detected Ledger model as non-secret metadata and restores it', async () => {
     const service = Object.create(WalletService.prototype) as any;
