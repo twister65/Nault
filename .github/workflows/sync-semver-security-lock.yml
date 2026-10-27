@@ -1,0 +1,41 @@
+name: Temporary semver security lockfile sync
+on:
+  push:
+    branches: [fix/semver-redos-ledger-native-2026-10]
+    paths:
+      - package.json
+      - .github/workflows/sync-semver-security-lock.yml
+permissions:
+  contents: write
+jobs:
+  sync:
+    if: github.repository == 'twister65/Nault'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Regenerate npm lockfile via registry with targeted semver overrides
+        run: npm install --package-lock-only --lockfile-version=2 --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Assert all resolved semver versions patched
+        run: npm run test:semver-security
+      - name: Commit lockfile to isolated branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add package-lock.json
+          if git diff --cached --quiet; then
+            echo 'Lockfile already synchronized'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'build(security): lock patched semver majors for Ledger and native dependencies'
+          git push origin HEAD:refs/heads/fix/semver-redos-ledger-native-2026-10
