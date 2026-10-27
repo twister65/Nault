@@ -28,7 +28,8 @@
     "lint:flat": "eslint \"src/**/*.{ts,html}\"",
     "test:nano-crypto-compat": "node --test scripts/test-nanocurrency-web-compat.test.cjs",
     "test:build-info": "node --test scripts/test-build-info.test.cjs",
-    "test:electron-updater-security": "node --test scripts/test-electron-updater-security.test.cjs"
+    "test:electron-updater-security": "node --test scripts/test-electron-updater-security.test.cjs",
+    "test:semver-security": "node --test scripts/test-semver-security.test.cjs"
   },
   "private": true,
   "dependencies": {
@@ -180,6 +181,21 @@
     },
     "ajv": {
       "fast-uri": "3.1.9"
+    },
+    "@ledgerhq/devices": {
+      "semver": "7.8.5"
+    },
+    "tiny-async-pool": {
+      "semver": "5.7.2"
+    },
+    "make-dir@2.1.0": {
+      "semver": "5.7.2"
+    },
+    "make-dir@3.1.0": {
+      "semver": "6.3.1"
+    },
+    "node-abi@2.30.1": {
+      "semver": "5.7.2"
     }
   },
   "browser": {
