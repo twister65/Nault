@@ -188,13 +188,13 @@
     "node-abi": {
       "semver": "5.7.2"
     },
-    "make-dir": {
-      "semver": "5.7.2"
-    },
     "tiny-async-pool": {
       "semver": "5.7.2"
     },
-    "istanbul-lib-report": {
+    "make-dir@2.1.0": {
+      "semver": "5.7.2"
+    },
+    "make-dir@3.1.0": {
       "semver": "6.3.1"
     }
   },
