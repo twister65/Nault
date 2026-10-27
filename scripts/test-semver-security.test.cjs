@@ -10,7 +10,7 @@ const lock = require('../package-lock.json');
 
 const minPatched = { 5: [5, 7, 2], 6: [6, 3, 1], 7: [7, 5, 2] };
 function triplet(text) {
-  assert.match(text, /^\\d+\\.\\d+\\.\\d+$/, 'expected stable semver release: ' + text);
+  assert.ok(/^[0-9]+[.][0-9]+[.][0-9]+$/.test(text), 'expected stable semver release: ' + text);
   return text.split('.').map(Number);
 }
 function atLeast(a, b) {
