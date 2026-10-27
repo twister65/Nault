@@ -18,6 +18,57 @@ describe('WalletService', () => {
 });
 
 
+describe('WalletService saved Ledger device transport capability', () => {
+  it('exports the detected Ledger model as non-secret metadata and restores it', async () => {
+    const service = Object.create(WalletService.prototype) as any;
+    service.storeKey = 'nault-model-test-wallet';
+    service.wallet = {
+      type: 'ledger', accounts: [{id: 'nano_account', index: 0}],
+      selectedAccount: null, selectedAccountId: null,
+      ledgerDeviceModel: 'nanoSPlus'
+    };
+    const exported = service.generateWalletExport();
+    expect(exported.ledgerDeviceModel).toBe('nanoSPlus');
+    expect(exported.accounts).toEqual([{id:'nano_account', index:0}]);
+    const prev = localStorage.getItem(service.storeKey);
+    try {
+      localStorage.setItem(service.storeKey, JSON.stringify(exported));
+      service.resetWallet = jasmine.createSpy('resetWallet').and.callFake(() => {
+        service.wallet = {type: 'seed', accounts: [], ledgerDeviceModel: null};
+      });
+      service.loadWalletAccount = jasmine.createSpy('loadWalletAccount')
+        .and.callFake((index: number, id: string) => service.wallet.accounts.push({index, id}));
+      await service.loadStoredWallet();
+      expect(service.wallet.ledgerDeviceModel).toBe('nanoSPlus');
+      expect(service.wallet.accounts).toEqual([{index: 0, id: 'nano_account'}]);
+    } finally {
+      if (prev === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, prev);
+    }
+  });
+
+  it('does not infer a hardware model from old or untrusted wallet exports', async () => {
+    const service = Object.create(WalletService.prototype) as any;
+    service.storeKey = 'nault-model-legacy-test';
+    service.resetWallet = jasmine.createSpy('resetWallet').and.callFake(() => {
+      service.wallet = {type: 'seed', accounts: [], ledgerDeviceModel: null};
+    });
+    service.loadWalletAccount = jasmine.createSpy('loadWalletAccount');
+    const prior = localStorage.getItem(service.storeKey);
+    try {
+      for (const value of [undefined, 'custom-invented', 'nanoX']) {
+        const data = {type: 'ledger', ...(value ? {ledgerDeviceModel: value} : {})};
+        localStorage.setItem(service.storeKey, JSON.stringify(data));
+        await service.loadStoredWallet();
+        expect(service.wallet.ledgerDeviceModel).toBe(value === 'nanoX' ? 'nanoX' : null);
+      }
+    } finally {
+      if (prior === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, prior);
+    }
+  });
+});
+
 describe('WalletService.reloadBalances errors', () => {
   it('clears the loading indicator if the RPC refresh rejects', async () => {
     // Avoid unrelated Angular dependencies: exercise the error boundary directly.
