@@ -262,6 +262,19 @@ describe('Use Ledger explicitly configures the attached device', () => {
     } finally { c.cleanup(); }
   });
 
+  it('does not report a connection error when new-wallet Bluetooth selection is cancelled', async () => {
+    const c = setup({ ready: false });
+    c.ledgerService.lastBluetoothSelectionCancelled = true;
+    const saved = localStorage.getItem(c.walletService.storeKey);
+    try {
+      await ConfigureWalletComponent.prototype.importLedgerWallet.call(c.component);
+      expect(c.walletService.prepareLedgerReplacementAccounts).not.toHaveBeenCalled();
+      expect(c.walletService.activatePreparedLedgerWallet).not.toHaveBeenCalled();
+      expect(c.notifications.sendWarning).not.toHaveBeenCalled();
+      expect(localStorage.getItem(c.walletService.storeKey)).toBe(saved);
+    } finally { c.cleanup(); }
+  });
+
   it('keeps the previous wallet while the Ledger account scan is in progress', async () => {
     let finishScan!: (v: any[]) => void;
     const pending = new Promise<any[]>(resolve => { finishScan = resolve; });
