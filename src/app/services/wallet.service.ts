@@ -152,6 +152,14 @@ export class WalletService {
       const account = this.wallet.accounts[0];
       return account ? { index: account.index, id: account.id } : null;
     };
+    // A different device can share the same recovery seed. If it passes the
+    // account check, update the capability hint for the last verified model.
+    this.ledgerService.onVerifiedDeviceModel = (model: LedgerUsbModel) => {
+      if (!this.isLedgerWallet() || !this.wallet.accounts.length ||
+          this.wallet.ledgerDeviceModel === model) return;
+      this.wallet.ledgerDeviceModel = model;
+      this.saveWalletExport();
+    };
     this.websocket.newTransactions$.subscribe(async (transaction) => {
       if (!transaction) return; // Not really a new transaction
       console.log('New Transaction', transaction);
