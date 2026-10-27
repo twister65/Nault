@@ -122,7 +122,11 @@ export class WalletWidgetComponent implements OnInit {
   }
 
   get canReconnectBluetooth(): boolean {
-    return this.ledgerService.supportsBluetooth;
+    // The browser's Bluetooth support does not mean that the saved Ledger has
+    // a radio. Unknown/legacy wallet models retain a choice of transports.
+    const model = this.walletService.wallet.ledgerDeviceModel;
+    return this.ledgerService.supportsBluetooth &&
+      model !== 'nanoSPlus' && model !== 'nanoS';
   }
 
   async reconnectUsb() {
