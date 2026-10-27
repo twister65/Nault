@@ -244,6 +244,23 @@ describe('Ledger wallet identity guard and Android USB policy', () => {
     expect(getAccount).toHaveBeenCalledWith(4);
   });
 
+  it('updates a model hint only after the new hardware passes the same-seed address check', async () => {
+    const service = Object.create(LedgerService.prototype) as any;
+    service.configuringWallet = false;
+    service.transportMode = 'USB';
+    service.ledger = {transport: {deviceModel: {id: 'nanoX'}}};
+    service.configuredWalletAccount = () => ({ id: 'nano_saved', index: 0 });
+    service.getLedgerAccount = jasmine.createSpy('getLedgerAccount').and.resolveTo({address: 'nano_saved'});
+    service.onVerifiedDeviceModel = jasmine.createSpy('onVerifiedDeviceModel');
+    await service.verifyConnectedWallet();
+    expect(service.onVerifiedDeviceModel).toHaveBeenCalledWith('nanoX');
+
+    service.getLedgerAccount.and.resolveTo({address: 'nano_other_seed'});
+    await expectAsync(service.verifyConnectedWallet())
+      .toBeRejectedWithError('Ledger does not match the configured wallet.');
+    expect(service.onVerifiedDeviceModel).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects a Ledger whose account is different from the configured wallet', async () => {
     const service = Object.create(LedgerService.prototype) as any;
     service.configuringWallet = false;
