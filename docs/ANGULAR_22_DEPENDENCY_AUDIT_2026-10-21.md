@@ -1656,3 +1656,12 @@ uuid@8.3.2
 - After merge, user checks refreshed GitHub Dependabot inventory; pre-existing S-01 and unrelated `lodash`, `tar-fs` and development-tool advisories are separate PRs.
 
 - Important pre-CI correction: a broad `node-abi` override incorrectly assigned semver 5.x to `node-abi` 3.x/4.x, whose declared dependency is semver 7.x. Scope the override to `node-abi@2.30.1` and validate the **declared semver major of every consumer**. Initial temporary lockfile sync/test run was rejected by the new tests; later lockfile revisions require a fresh all-green CI before merge.
+
+## Dependabot #37, #40, #52 — tar-fs 2.1.4 / Ledger HID native install (27 October 2026)
+
+- Three HIGH advisories in `tar-fs@2.1.0`: extraction outside the intended directory (crafted tarball), link-following/path traversal, and bypass of symlink validation for a predictable destination; see [#37](https://github.com/twister65/Nault/security/dependabot/37), [#40](https://github.com/twister65/Nault/security/dependabot/40) and [#52](https://github.com/twister65/Nault/security/dependabot/52). `tar-fs@2.1.4` addresses the entire trio.
+- Verified paths in `master`: `@ledgerhq/hw-transport-node-hid@6.27.5` and `...-noevents@6.27.5` → `prebuild-install@6.1.4` → `tar-fs@2.1.0`; `node-hid` → `prebuild-install@7.1.2` → same tar-fs. This is an **installation / package distribution threat**, not a claim that a Nano X Bluetooth connection can send crafted tar archives to Nault.
+- Isolated fix: `overrides: { "tar-fs": "2.1.4" }` retaining tar-fs major 2 and `tar-stream` 2. No Ledger transport version, Electron 44, Angular 22, runtime RPC, WebHID or Bluetooth changes.
+- Generate published, integrity-protected `package-lock.json` via temporary CI npm registry workflow; remove the temporary workflow after success. Do **not** invent tarball hashes or use `npm audit fix --force`.
+- `npm run test:tar-fs-security` asserts the pinned patch, every lockfile copy and registry integrity, compatibility with the existing `prebuild-install` 6/7 packages, and preservation of Ledger native transport versions. CI gate: npm ci, CodeQL, Karma/Jasmine, RPC, mocked Ledger USB/BLE, and Electron packaging Linux/Windows/macOS Intel.
+- Merge only with explicit owner approval; after merge user verifies Dependabot counts on default branch. `lodash` and development-only advisories remain separate; S-01 hot-wallet encryption audit is not changed.

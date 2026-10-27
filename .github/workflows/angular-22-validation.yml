@@ -73,6 +73,9 @@ jobs:
       - name: Reject all vulnerable semver dependencies (Ledger / native builds)
         run: npm run test:semver-security
 
+      - name: Verify patched tar-fs extraction dependency for Ledger HID installation
+        run: npm run test:tar-fs-security
+
       - name: Check Nano BIP39 derivation, signatures and patched CryptoJS dependency tree
         run: npm run test:nano-crypto-compat
       - name: Verify French and Spanish translation dictionaries
