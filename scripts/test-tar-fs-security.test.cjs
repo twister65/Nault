@@ -52,5 +52,6 @@ test('both Ledger HID transports and node-hid native installer resolve patched t
       path + ' resolves insecure tar-fs at ' + resolved.path);
   }
   assert.equal(manifest.devDependencies.electron, '44.9.3');
-  assert.equal(manifest.dependencies['@ledgerhq/hw-transport-node-hid'], '6.27.5');
+  assert.equal(manifest.dependencies['@ledgerhq/hw-transport-node-hid'], '^6.27.1');
+  assert.equal(packages['node_modules/@ledgerhq/hw-transport-node-hid']?.version, '6.27.5');
 });
