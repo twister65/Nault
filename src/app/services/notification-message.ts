@@ -9,12 +9,24 @@ export function localizeNotificationMessage(message: string, translate: Notifica
       return translate('ui-notifications.node-offline');
     case 'Unable to refresh balances. Check your connection.':
       return translate('ui-notifications.refresh-balance-failed');
+    case 'There was an issue retrieving latest nano price.  Ensure your AdBlocker is disabled on this page then reload to see accurate FIAT values.':
+      return translate('ui-notifications.nano-price-unavailable');
     case 'Incoming XNO is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.':
       return translate('ui-notifications.ledger-pending-reconnect');
     case 'Bluetooth unavailable. Check Bluetooth on your computer and Ledger, or choose Reconnect via USB.':
       return translate('ui-notifications.bluetooth-unavailable');
     case 'Waiting for confirmation on Ledger Device...':
       return translate('ui-notifications.ledger-confirmation-waiting');
+    case 'Ledger does not match the configured wallet.':
+      return translate('ui-notifications.ledger-wallet-mismatch');
+    case 'Ledger is not ready. Unlock your Ledger, open the Nano app, then click Reconnect.':
+    case 'Ledger is not ready. Unlock it, open the Nano app and reconnect.':
+    case 'Ledger unavailable. Unlock your Ledger, open the Nano app, then click Reconnect.':
+      return translate('ui-notifications.ledger-not-ready');
+    case 'Nano app is not open on your Ledger. Open the Nano app, then click Reconnect.':
+      return translate('ui-notifications.ledger-nano-app-not-open');
+    case 'Ledger locked. Unlock your Ledger, open the Nano app, then click Reconnect.':
+      return translate('ui-notifications.ledger-locked-reconnect');
   }
 
   // A declined Ledger transaction (APDU 0x6985) is a user action, not

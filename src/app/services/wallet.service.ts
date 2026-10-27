@@ -11,7 +11,7 @@ import {NanoBlockService} from './nano-block.service';
 import {NotificationService} from './notification.service';
 import {AppSettingsService} from './app-settings.service';
 import {PriceService} from './price.service';
-import {LedgerService, LedgerStatus} from './ledger.service';
+import {LedgerService, LedgerStatus, LedgerUsbModel} from './ledger.service';
 import { NoPaddingZerosPipe } from 'app/pipes/no-padding-zeros.pipe';
 
 export type WalletType = 'seed' | 'ledger' | 'privateKey' | 'expandedKey';
@@ -48,6 +48,8 @@ export interface ReceivableBlockUpdate {
 
 export interface FullWallet {
   type: WalletType;
+  // Optional non-secret model hint; does not replace account/seed verification.
+  ledgerDeviceModel: LedgerUsbModel | null;
   seedBytes: any;
   seed: string|null;
   balance: BigNumber;
@@ -98,6 +100,7 @@ export class WalletService {
 
   wallet: FullWallet = {
     type: 'seed',
+    ledgerDeviceModel: null,
     seedBytes: null,
     seed: '',
     balance: new BigNumber(0),
@@ -142,6 +145,21 @@ export class WalletService {
     private ledgerService: LedgerService,
     private noZerosPipe: NoPaddingZerosPipe,
     private notifications: NotificationService) {
+    // A reconnect must verify the actual Ledger against this wallet, even
+    // after restart or when switching between USB and Bluetooth.
+    this.ledgerService.configuredWalletAccount = () => {
+      if (!this.isLedgerWallet()) return null;
+      const account = this.wallet.accounts[0];
+      return account ? { index: account.index, id: account.id } : null;
+    };
+    // A different device can share the same recovery seed. If it passes the
+    // account check, update the capability hint for the last verified model.
+    this.ledgerService.onVerifiedDeviceModel = (model: LedgerUsbModel) => {
+      if (!this.isLedgerWallet() || !this.wallet.accounts.length ||
+          this.wallet.ledgerDeviceModel === model) return;
+      this.wallet.ledgerDeviceModel = model;
+      this.saveWalletExport();
+    };
     this.websocket.newTransactions$.subscribe(async (transaction) => {
       if (!transaction) return; // Not really a new transaction
       console.log('New Transaction', transaction);
@@ -273,7 +291,7 @@ export class WalletService {
     });
 
     this.ledgerService.ledgerStatus$.subscribe(({ status }) => {
-      if (status !== LedgerStatus.READY) return;
+      if (status !== LedgerStatus.READY || this.ledgerService.configuringWallet) return;
       this.ledgerService.clearPendingReconnect();
       if (this.isLedgerWallet() && this.wallet.pendingBlocks.length) {
         this.processPendingBlocks();
@@ -369,7 +387,10 @@ export class WalletService {
       this.wallet.locked$.next(true);
     }
     if (walletType === 'ledger') {
-      // Check ledger status?
+      // Old wallet exports have no model metadata: do not assume a Nano S Plus.
+      const model: unknown = walletJson.ledgerDeviceModel;
+      this.wallet.ledgerDeviceModel =
+        model === 'nanoS' || model === 'nanoSPlus' || model === 'nanoX' ? model : null;
     }
 
     if (walletJson.accounts && walletJson.accounts.length) {
@@ -596,10 +617,85 @@ export class WalletService {
     return this.wallet.seed;
   }
 
+  /**
+   * Discover accounts on a newly connected Ledger without touching the
+   * currently configured wallet. Switching USB/Bluetooth is NOT a wallet
+   * replacement, and failed discovery must leave the old wallet intact.
+   */
+  async prepareLedgerReplacementAccounts(): Promise<WalletAccount[]> {
+    const usedIndices: number[] = [];
+    const accountIds = new Map<number, string>();
+    let scanOnline = true;
+    const accountsPerRequest = 10;
+    const accountsLimit = 20;
+
+    for (let offset = 0; offset < accountsLimit; offset += accountsPerRequest) {
+      const accountMetadata: Record<string, {index: number; publicKey: string}> = {};
+      const accountAddresses: string[] = [];
+      for (let index = offset; index < offset + accountsPerRequest; index++) {
+        const account = await this.ledgerService.getLedgerAccount(index);
+        const address: string = account.address.replace('xrb_', 'nano_');
+        accountMetadata[address] = { index, publicKey: account.publicKey.toUpperCase() };
+        accountIds.set(index, address);
+        accountAddresses.push(address);
+      }
+
+      // Hardware account #0 is available offline. RPC is only necessary to
+      // discover which *additional* indices have been used previously.
+      const result = await this.api.accountsFrontiers(accountAddresses).catch(() => null);
+      if (!result || !result.frontiers) {
+        scanOnline = false;
+        break;
+      }
+      for (const [address, frontier] of Object.entries(result.frontiers)) {
+        const metadata = accountMetadata[address];
+        if (metadata && typeof frontier === 'string' && this.util.nano.isValidHash(frontier) &&
+            frontier !== metadata.publicKey) {
+          usedIndices.push(metadata.index);
+        }
+      }
+    }
+
+    // A hardware swap during the 20-index scan must never create a mixed wallet.
+    const deviceCheck = await this.ledgerService.getLedgerAccount(0);
+    if (deviceCheck.address.replace('xrb_', 'nano_') !== accountIds.get(0)) {
+      throw new Error('Ledger changed during account discovery. Please retry.');
+    }
+
+    // Without RPC, show only the device's real account #0; never reuse
+    // addresses belonging to a previously stored hardware wallet.
+    const indices = scanOnline && usedIndices.length ? usedIndices : [0];
+    const candidates: WalletAccount[] = [];
+    for (const index of indices) {
+      const account = await this.createLedgerAccount(index);
+      // Reject a device swap halfway through the scan.
+      if (account.id !== accountIds.get(index)) throw new Error('Ledger changed during account discovery. Please retry.');
+      candidates.push(account);
+    }
+    return candidates;
+  }
+
+  /** Activate the hardware accounts prepared by the explicit setup flow. */
+  activatePreparedLedgerWallet(accounts: WalletAccount[]): void {
+    if (!accounts.length) throw new Error('Ledger account list is empty.');
+    this.resetWallet();
+    this.wallet.type = 'ledger';
+    // Save only the model that was actually read from the connected hardware.
+    // The cryptographic account check remains independent of this hint.
+    this.wallet.ledgerDeviceModel = this.ledgerService.connectedDeviceModel;
+    this.wallet.accounts = accounts;
+    this.websocket.subscribeAccounts(accounts.map(account => account.id));
+    this.saveWalletExport();
+    this.informNewWallet();
+    void this.reloadBalances().catch(() =>
+      this.notifications.sendWarning('Unable to refresh balances. Check your connection.'));
+  }
+
   async createLedgerWallet() {
     // this.resetWallet(); Now done earlier to ensure user not sending to wrong account
 
     this.wallet.type = 'ledger';
+    this.wallet.ledgerDeviceModel = this.ledgerService.connectedDeviceModel;
 
     await this.scanAccounts();
 
@@ -687,6 +783,7 @@ export class WalletService {
       this.websocket.unsubscribeAccounts(this.wallet.accounts.map(a => a.id)); // Unsubscribe from old accounts
     }
     this.wallet.type = 'seed';
+    this.wallet.ledgerDeviceModel = null;
     this.wallet.password = '';
     this.wallet.locked = false;
     this.wallet.locked$.next(false);
@@ -1175,6 +1272,7 @@ export class WalletService {
     };
 
     if (this.wallet.type === 'ledger') {
+      if (this.wallet.ledgerDeviceModel) data.ledgerDeviceModel = this.wallet.ledgerDeviceModel;
     } else {
       if (this.wallet.seed === null) throw new Error('Wallet seed unavailable for storage');
       // Forcefully encrypt the seed so an unlocked wallet is never saved

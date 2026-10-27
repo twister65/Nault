@@ -43,3 +43,7 @@ declare module 'hw-app-nano' {
     signBlock(path: string, blockData: NanoLedgerBlockData): Promise<{blockHash: string; signature: string}>;
   }
 }
+
+// Replaced with a full SHA by Angular's --define in npm build scripts.
+// Uncustomized ng serve / isolated tests use null from angular.json.
+declare const __NAULT_BUILD_COMMIT__: string | null;

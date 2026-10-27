@@ -1,5 +1,8 @@
 # See http://help.github.com/ignore-files/ for more about ignoring files.
 
+# generated build revision metadata (written by npm prebuild hooks)
+/src/assets/build-info.json
+
 # compiled output
 /dist
 /dist-desktop

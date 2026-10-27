@@ -679,6 +679,51 @@ async function main() {
   await check('GATT opening failure returns disconnected, not ready', async () => {
     BLE.fail = true; assert.equal(await service.loadLedger(), false); assert.equal(service.ledger.status, 'not-connected'); BLE.fail = false;
   });
+  await check('cancelled Bluetooth chooser is silent and preserves the saved wallet', async () => {
+    const cancelled = Error('User cancelled the requestDevice selection');
+    cancelled.name = 'TransportOpenUserCancelled';
+    BLE.fail = cancelled;
+    const previousMode = service.transportMode;
+
+    let status;
+    let warnings = 0;
+    const oldWarning = service.notifications.sendWarning;
+    service.notifications.sendWarning = () => { warnings++; };
+    const sub = service.ledgerStatus$.subscribe(value => { status = value; });
+    try {
+      assert.equal(await service.loadLedger(), false);
+      assert.equal(status.status, 'not-connected');
+      assert.equal(status.statusText, '');
+      assert.equal(warnings, 0, 'cancelled chooser must not create an error toast');
+      assert.equal(service.lastBluetoothSelectionCancelled, true);
+      assert.equal(service.transportMode, previousMode);
+    } finally {
+      BLE.fail = false;
+      service.notifications.sendWarning = oldWarning;
+      sub.unsubscribe();
+    }
+  });
+  await check('Ledger WebUSB descriptors distinguish Nano S Plus from Nano X', async () => {
+    const source = ts.transpileModule(
+      fs.readFileSync(path.join(root, 'src/app/services/ledger.service.ts'), 'utf8'),
+      { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, experimentalDecorators: true } }
+    ).outputText;
+    const { identifyLedgerUsbModel } = load(source, {
+      './ledger-web-ble': { __esModule: true, default: BLE },
+      './ledger-ble-control': control,
+      '@angular/core': { Injectable: () => value => value },
+      'hw-app-nano': { __esModule: true, default: Nano },
+      '@ledgerhq/hw-transport-webusb': { __esModule: true, default: BLE },
+      '@ledgerhq/hw-transport-webhid': { __esModule: true, default: BLE },
+      rxjs: require('rxjs'), '../../environments/environment': { environment: { desktop: true } }
+    }, { navigator });
+    assert.equal(identifyLedgerUsbModel({deviceModel: {id: 'nanoSP'}}), 'nanoSPlus');
+    assert.equal(identifyLedgerUsbModel({device: {productId: 0x5011}}), 'nanoSPlus');
+    assert.equal(identifyLedgerUsbModel({deviceModel: {id: 'nanoX'}}), 'nanoX');
+    assert.equal(identifyLedgerUsbModel({device: {productId: 0x4011}}), 'nanoX');
+    assert.equal(identifyLedgerUsbModel({device: {productId: 0x0005}}), null);
+    assert.equal(identifyLedgerUsbModel(null), null);
+  });
   await check('Bluetooth adapter unavailable is not reported as device selection cancelled', async () => {
     const radioError = Error('Bluetooth adapter not available.');
     radioError.name = 'TransportOpenUserCancelled';
@@ -695,6 +740,36 @@ async function main() {
       BLE.fail = false;
     }
   });
+  await check('setup keeps alternate USB and Bluetooth choices visible when another Ledger is READY', async () => {
+    const template = fs.readFileSync(path.join(root,
+      'src/app/components/configure-wallet/configure-wallet.component.html'), 'utf8');
+    // These must not require NOT_CONNECTED: a Nano S Plus already READY via
+    // USB must not hide the option to explicitly import a Nano X via Bluetooth.
+    assert.match(template,
+      /@if \(selectedImportOption === 'ledger' && !ledgerService\.isAndroidWeb\) \{[\s\S]*?<button[^>]*\(click\)="connectLedgerByUsb\(\)"/);
+    assert.match(template,
+      /@if \(selectedImportOption === 'ledger'\) \{\s*<button[^>]*\(click\)="connectLedgerByBluetooth\(\)"/);
+    assert.match(template,
+      /@if \(selectedImportOption === 'ledger' && ledger\.status !== ledgerStatus\.NOT_CONNECTED\) \{\s*<button[^>]*\(click\)="refreshLedgerStatus\(\)"/);
+    assert.match(template, /switch-ledger-guide/);
+    assert.match(template, /\[disabled\]="ledgerSetupInProgress \|\| !ledgerService\.supportsBluetooth"/);
+    assert.match(template, /\[disabled\]="ledgerSetupInProgress \|\| !ledgerService\.supportsUSB"/);
+  });
+
+  await check('ChromeOS PWA sidebar offers both reconnect transports without overwriting wallet', async () => {
+    const template = fs.readFileSync(path.join(root,
+      'src/app/components/wallet-widget/wallet-widget.component.html'), 'utf8');
+    const component = fs.readFileSync(path.join(root,
+      'src/app/components/wallet-widget/wallet-widget.component.ts'), 'utf8');
+    // A Nano X configured over USB must be reconnectable via Bluetooth on ChromeOS.
+    assert.match(template, /@if \(canReconnectUsb\) \{\s*<a \(click\)="reconnectUsb\(\)"/);
+    assert.match(template, /@if \(canReconnectBluetooth\) \{\s*<a \(click\)="reconnectBluetooth\(\)"/);
+    assert.match(component, /return !this\.ledgerService\.isAndroidWeb && this\.ledgerService\.supportsUSB/);
+    assert.match(component, /return this\.ledgerService\.supportsBluetooth/);
+    assert.doesNotMatch(component, /async reconnectBluetooth\(\) \{\s*if \(!this\.ledgerService\.isDesktop/);
+    assert.doesNotMatch(component, /async reconnectUsb\(\) \{\s*if \(!this\.ledgerService\.isDesktop/);
+  });
+
   await check('wallet widget switches Bluetooth to native USB only on explicit click', async () => {
     const widgetCode = ts.transpileModule(
       fs.readFileSync(path.join(root, 'src/app/components/wallet-widget/wallet-widget.component.ts'), 'utf8'),
@@ -711,7 +786,8 @@ async function main() {
     });
     const operations = [];
     const ledger = {
-      isDesktop: true, supportsBluetooth: true, transportMode: 'Bluetooth',
+      ledger: {status: 'ready'},
+      isDesktop: true, isAndroidWeb: false, supportsUSB: true, supportsBluetooth: true, transportMode: 'Bluetooth',
       enableBluetoothMode(enabled) {
         operations.push(['mode', enabled]);
         this.transportMode = enabled ? 'Bluetooth' : 'USB';
@@ -722,7 +798,7 @@ async function main() {
       sendInfo() {}, removeNotification() {}, sendSuccess() {}
     };
     const widget = new WalletWidgetComponent({ wallet: {} }, notifications, ledger, {}, {});
-    widget.ledgerStatus = { status: 'ready', statusText: '' };
+    widget.lastReportedLedgerStatus = { status: 'ready', statusText: '' };
     await widget.reconnectUsb();
     assert.equal(ledger.transportMode, 'USB');
     assert.deepEqual(operations, [['mode', false], ['load', false, false]]);
@@ -748,21 +824,22 @@ async function main() {
       '../../services/pow.service': {},
        '@jsverse/transloco': { TranslocoService: class {} }
     }, { window: { location: { reload() { reloads++; } } } });
-    const ledger = { isDesktop: true, transportMode: 'Bluetooth' };
+    const ledger = { ledger: {status: 'ready'}, isDesktop: true, transportMode: 'Bluetooth' };
     const widget = new WalletWidgetComponent({ wallet: {} }, {}, ledger, {}, {});
-    widget.ledgerStatus = { status: 'ready', statusText: 'MTU negotiation timed out' };
+    widget.lastReportedLedgerStatus = { status: 'ready', statusText: 'MTU negotiation timed out' };
     assert.equal(widget.canResetBluetoothSession, false);
     widget.resetBluetoothSession();
     ledger.transportMode = 'USB';
-    widget.ledgerStatus.status = 'not-connected';
+    ledger.ledger.status = 'not-connected';
+    widget.lastReportedLedgerStatus = { status: 'not-connected', statusText: 'MTU negotiation timed out' };
     assert.equal(widget.canResetBluetoothSession, false);
     widget.resetBluetoothSession();
     ledger.transportMode = 'Bluetooth';
-    widget.ledgerStatus.statusText = 'Ledger disconnected';
+    widget.lastReportedLedgerStatus.statusText = 'Ledger disconnected';
     assert.equal(widget.canResetBluetoothSession, false);
     widget.resetBluetoothSession();
     assert.equal(reloads, 0);
-    widget.ledgerStatus.statusText = 'Bluetooth connection failed: Ledger Bluetooth MTU negotiation timed out';
+    widget.lastReportedLedgerStatus.statusText = 'Bluetooth connection failed: Ledger Bluetooth MTU negotiation timed out';
     assert.equal(widget.canResetBluetoothSession, true);
     widget.resetBluetoothSession();
     assert.equal(reloads, 1);

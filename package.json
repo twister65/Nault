@@ -8,7 +8,7 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "build": "ng build",
+    "build": "node scripts/build-with-revision.cjs",
     "test": "ng test",
     "lint": "ng lint",
     "e2e": "playwright test",
@@ -16,8 +16,8 @@
     "release": "npm run desktop:build && electron-builder",
     "wallet:dev": "ng serve --open",
     "wallet:dev-ssl": "ng serve --ssl --open",
-    "wallet:build": "ng build --configuration production",
-    "wallet:build-desktop": "ng build --configuration=desktop --base-href ",
+    "wallet:build": "node scripts/build-with-revision.cjs production",
+    "wallet:build-desktop": "node scripts/build-with-revision.cjs desktop",
     "desktop:compile": "cd desktop-app && tsc && cd ..",
     "desktop:build": "npm run wallet:build-desktop && npm run desktop:compile",
     "desktop:build-local": "npm run desktop:build && npm run desktop:local",
@@ -26,7 +26,8 @@
     "test:ledger-bluetooth": "npm run desktop:compile && node scripts/test-ledger-bluetooth.js",
     "test:i18n": "node scripts/check-i18n.cjs",
     "lint:flat": "eslint \"src/**/*.{ts,html}\"",
-    "test:nano-crypto-compat": "node --test scripts/test-nanocurrency-web-compat.test.cjs"
+    "test:nano-crypto-compat": "node --test scripts/test-nanocurrency-web-compat.test.cjs",
+    "test:build-info": "node --test scripts/test-build-info.test.cjs"
   },
   "private": true,
   "dependencies": {

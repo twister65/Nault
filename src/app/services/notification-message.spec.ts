@@ -4,6 +4,7 @@ describe('localizeNotificationMessage', () => {
   const messages: Record<string, string> = {
     'ui-notifications.node-offline': 'Impossible de se connecter au nœud Nano. Les soldes affichés peuvent être inexacts !',
     'ui-notifications.refresh-balance-failed': 'Impossible d’actualiser les soldes. Vérifiez votre connexion.',
+    'ui-notifications.nano-price-unavailable': 'Impossible de récupérer le dernier cours du Nano. Vérifiez votre connexion Internet ou les paramètres de votre bloqueur de publicités, puis actualisez la page pour afficher des montants en monnaie fiduciaire à jour.',
     'ui-notifications.ledger-pending-reconnect': 'Des XNO sont en attente de réception. Déverrouillez votre Ledger, ouvrez l’application Nano, puis cliquez sur « Reconnecter » pour les recevoir.',
     'ui-notifications.tracked-receivable': 'L’adresse suivie {{account}} peut maintenant recevoir {{amount}} XNO.',
     'ui-notifications.tracked-sent': 'L’adresse suivie {{account}} a envoyé {{amount}} XNO.',
@@ -11,6 +12,10 @@ describe('localizeNotificationMessage', () => {
     'ui-notifications.tracked-representative': 'L’adresse suivie {{account}} a changé de représentant : {{representative}}.',
     'ui-notifications.bluetooth-unavailable': 'Bluetooth indisponible. Vérifiez le Bluetooth de votre ordinateur et de votre Ledger, ou reconnectez-vous en USB.',
     'ui-notifications.ledger-confirmation-waiting': 'En attente de confirmation sur la Ledger…',
+    'ui-notifications.ledger-wallet-mismatch': 'La Ledger connectée ne correspond pas au portefeuille configuré. Pour utiliser cette clé, sélectionnez « Configurer un nouveau portefeuille » → « Utiliser Ledger ».',
+    'ui-notifications.ledger-not-ready': 'La Ledger n’est pas prête. Déverrouillez-la, ouvrez l’application Nano, puis cliquez sur « Reconnecter ».',
+    'ui-notifications.ledger-nano-app-not-open': 'L’application Nano n’est pas ouverte sur votre Ledger. Ouvrez-la, puis cliquez sur « Reconnecter ».',
+    'ui-notifications.ledger-locked-reconnect': 'Ledger verrouillée. Déverrouillez-la, ouvrez l’application Nano, puis cliquez sur « Reconnecter ».',
     'ui-notifications.ledger-hid-read-timeout': 'délai de lecture HID de la Ledger dépassé',
     'ui-notifications.ledger-signing-error': 'Erreur lors de la signature du bloc : {{error}}',
     'ui-notifications.ledger-user-rejected': 'Transaction refusée sur la Ledger (0x6985).',
@@ -30,6 +35,40 @@ describe('localizeNotificationMessage', () => {
     expect(localizeNotificationMessage(
       'Unable to refresh balances. Check your connection.', translate
     )).toBe('Impossible d’actualiser les soldes. Vérifiez votre connexion.');
+  });
+
+  it('localizes the persistent Nano price error emitted during offline startup', () => {
+    expect(localizeNotificationMessage(
+      'There was an issue retrieving latest nano price.  Ensure your AdBlocker is disabled on this page then reload to see accurate FIAT values.', translate
+    )).toBe('Impossible de récupérer le dernier cours du Nano. Vérifiez votre connexion Internet ou les paramètres de votre bloqueur de publicités, puis actualisez la page pour afficher des montants en monnaie fiduciaire à jour.');
+  });
+
+  it('localizes Ledger Nano app and locked reconnect warnings', () => {
+    expect(localizeNotificationMessage(
+      'Nano app is not open on your Ledger. Open the Nano app, then click Reconnect.', translate
+    )).toBe('L’application Nano n’est pas ouverte sur votre Ledger. Ouvrez-la, puis cliquez sur « Reconnecter ».');
+    expect(localizeNotificationMessage(
+      'Ledger locked. Unlock your Ledger, open the Nano app, then click Reconnect.', translate
+    )).toBe('Ledger verrouillée. Déverrouillez-la, ouvrez l’application Nano, puis cliquez sur « Reconnecter ».');
+  });
+
+  it('localizes the mismatched Ledger error during reconnect', () => {
+    expect(localizeNotificationMessage('Ledger does not match the configured wallet.', translate))
+      .toContain('ne correspond pas au portefeuille configuré');
+  });
+
+  it('localizes all known Ledger-not-ready messages without confusing a mismatched wallet with a locked Nano app', () => {
+    const cases = [
+      'Ledger is not ready. Unlock your Ledger, open the Nano app, then click Reconnect.',
+      'Ledger is not ready. Unlock it, open the Nano app and reconnect.',
+      'Ledger unavailable. Unlock your Ledger, open the Nano app, then click Reconnect.',
+    ];
+    for (const raw of cases) {
+      expect(localizeNotificationMessage(raw, translate))
+        .toBe('La Ledger n’est pas prête. Déverrouillez-la, ouvrez l’application Nano, puis cliquez sur « Reconnecter ».');
+    }
+    expect(localizeNotificationMessage('Ledger does not match the configured wallet.', translate))
+      .toContain('ne correspond pas au portefeuille configuré');
   });
 
   it('localizes the Ledger incoming-XNO reconnection guidance', () => {

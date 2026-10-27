@@ -2,7 +2,8 @@ import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {WalletService, NotificationService, RepresentativeService} from '../../services';
 import {ActivatedRoute, Router} from '@angular/router';
 import * as bip39 from 'bip39';
-import {LedgerService, LedgerStatus} from '../../services/ledger.service';
+import {LedgerService, LedgerStatus, getLedgerReadinessIssue} from '../../services/ledger.service';
+import {localizeNotificationMessage} from '../../services/notification-message';
 import { QrModalService } from '../../services/qr-modal.service';
 import type { QRType } from '../qr-modal/qr-modal.component';
 import {UtilService} from '../../services/util.service';
@@ -64,6 +65,7 @@ export class ConfigureWalletComponent implements OnInit {
 
   ledgerStatus = LedgerStatus;
   ledger = this.ledgerService.ledger;
+  ledgerSetupInProgress = false;
 
   constructor(
     private router: ActivatedRoute,
@@ -135,77 +137,133 @@ export class ConfigureWalletComponent implements OnInit {
     this.walletService.informNewWallet();
   }
 
+  // "Use Ledger" always configures the attached hardware wallet. Reconnect
+  // elsewhere in Nault only validates the identity of the stored wallet.
   async connectLedgerByBluetooth() {
-    this.ledgerService.enableBluetoothMode(true);
-    // A configured Ledger wallet is independent of USB vs Bluetooth.
-    // Never ask to overwrite it merely to change transports: that confirmation
-    // also loses the user gesture required by Web Bluetooth's device chooser.
-    await this.importLedgerWallet(this.walletService.isLedgerWallet());
+    if (this.ledgerSetupInProgress) return;
+    this.ledgerService.enableBluetoothMode(true); // Keep browser user activation.
+    await this.importLedgerWallet();
   }
 
   async connectLedgerByUsb() {
-    if (this.ledgerService.isAndroidWeb) return; // The Android browser uses Ledger Bluetooth only.
+    if (this.ledgerSetupInProgress) return;
+    if (this.ledgerService.isAndroidWeb) return; // Android web uses Bluetooth only.
+    const switchingFromBluetooth = this.ledgerService.transportMode === 'Bluetooth';
     this.ledgerService.enableBluetoothMode(false);
-    await this.importLedgerWallet(this.walletService.isLedgerWallet());
+    // Switching modes already discards the previous transport. When already
+    // using USB, explicitly release the old session to select a new Ledger.
+    // Avoid two consecutive asynchronous closes when switching Bluetooth → USB.
+    if (!this.ledgerService.isDesktop) {
+      if (!switchingFromBluetooth) this.ledgerService.resetLedger();
+      this.ledger.status = LedgerStatus.NOT_CONNECTED;
+      this.ledgerService.ledgerStatus$.next({ status: LedgerStatus.NOT_CONNECTED, statusText: '' });
+    }
+    await this.importLedgerWallet();
   }
 
-  async importLedgerWallet(refreshOnly = false) {
-     // If a wallet exists already, make sure they know they are overwriting it
-     if (!refreshOnly && this.isConfigured()) {
-      const confirmed = await this.confirmWalletOverwrite();
-      if (!confirmed) {
+  get bluetoothConnectionHint(): string {
+    return localizeNotificationMessage(
+      this.ledgerService.bluetoothErrorMessage,
+      key => this.translocoService.translate(key)
+    );
+  }
+
+  async refreshLedgerStatus() {
+    if (this.ledgerSetupInProgress) return;
+    this.notifications.sendInfo(this.translocoService.translate('ui-notifications.ledger-checking'),
+      { identifier: 'ledger-status', length: 0 });
+    try {
+      await this.ledgerService.loadLedger(true, this.ledgerService.transportMode === 'Bluetooth');
+    } finally {
+      this.notifications.removeNotification('ledger-status');
+    }
+  }
+
+  async importLedgerWallet() {
+    // An explicit setup must be singular: overlapping clicks could otherwise
+    // close a transport while it is reading or replace the wallet out of order.
+    if (this.ledgerSetupInProgress) return;
+    this.ledgerSetupInProgress = true;
+    // The old configuration stays untouched until the connected hardware has
+    // been read and its account list is ready to save.
+    const previouslyConfigured = this.isConfigured();
+    const storedWallet = localStorage.getItem(this.walletService.storeKey);
+    let activating = false;
+    let completed = false;
+
+    this.ledgerService.configuringWallet = true;
+    this.notifications.sendInfo(this.translocoService.translate('ui-notifications.ledger-checking'),
+      { identifier: 'ledger-status', length: 0 });
+    try {
+      const connected = await this.ledgerService.loadLedger(true, this.ledgerService.transportMode === 'Bluetooth');
+      if (!connected || this.ledger.status !== LedgerStatus.READY) {
+        if (!this.ledgerService.lastUsbSelectionCancelled && !this.ledgerService.lastBluetoothSelectionCancelled) {
+          this.notifications.sendWarning(this.translocoService.translate(
+            this.ledger.status === LedgerStatus.LOCKED
+              ? 'ui-notifications.ledger-unlock' : 'ui-notifications.ledger-connect-failed'));
+        }
         return;
       }
-      this.walletService.resetWallet();
+
+      // Replacing any configured wallet (Ledger or software) requires an
+      // explicit confirmation. Keep the Web Bluetooth device chooser before
+      // this dialog to preserve the browser user gesture.
+      if (previouslyConfigured && !await this.confirmWalletOverwrite()) return;
+
+      this.notifications.sendInfo(this.translocoService.translate('ui-notifications.wallet-scanning'),
+        { identifier: 'ledger-setup-scan', length: 0 });
+      const accounts = await this.walletService.prepareLedgerReplacementAccounts();
+      if (this.ledger.status !== LedgerStatus.READY) throw new Error('Ledger disconnected during setup.');
+      activating = true;
+      this.walletService.activatePreparedLedgerWallet(accounts);
+      completed = true;
+      this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.ledger-loaded'));
+      await this.route.navigate(['accounts']);
+    } catch (error) {
+      console.warn('Ledger wallet setup failed', error);
+      if (activating && !completed) {
+        if (storedWallet === null) localStorage.removeItem(this.walletService.storeKey);
+        else localStorage.setItem(this.walletService.storeKey, storedWallet);
+        await this.walletService.loadStoredWallet();
+      }
+      const readinessIssue = getLedgerReadinessIssue(error);
+      const key = readinessIssue === 'app-not-open'
+        ? 'ui-notifications.ledger-nano-app-not-open'
+        : readinessIssue === 'locked'
+          ? 'ui-notifications.ledger-locked-reconnect'
+          : 'ui-notifications.ledger-replace-failed';
+      this.notifications.sendWarning(this.translocoService.translate(key));
+    } finally {
+      this.ledgerService.configuringWallet = false;
+      this.ledgerSetupInProgress = false;
+      this.notifications.removeNotification('ledger-status');
+      this.notifications.removeNotification('ledger-setup-scan');
+      if (!completed) {
+        // Never leave the previous wallet marked READY against a failed setup.
+        this.ledgerService.resetLedger();
+        this.ledger.status = LedgerStatus.NOT_CONNECTED;
+        this.ledgerService.ledgerStatus$.next({ status: LedgerStatus.NOT_CONNECTED, statusText: '' });
+      }
     }
-
-    // Determine status of ledger device using ledger service
-    this.notifications.sendInfo(this.translocoService.translate('ui-notifications.ledger-checking'), { identifier: 'ledger-status', length: 0 });
-    await this.ledgerService.loadLedger(true);
-    this.notifications.removeNotification('ledger-status');
-    this.notifications.removeNotification('ledger-error');
-
-    if (this.ledger.status === LedgerStatus.NOT_CONNECTED) {
-      this.ledgerService.resetLedger();
-      const pairingAdvice = this.ledgerService.bluetoothErrorMessage;
-      return this.notifications.sendWarning(
-        pairingAdvice || this.translocoService.translate('ui-notifications.ledger-connect-failed'),
-        { identifier: 'ledger-error', length: 0 }
-      );
-    }
-
-    if (this.ledger.status === LedgerStatus.LOCKED) {
-      return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.ledger-unlock'));
-    }
-
-    if (this.ledger.status === LedgerStatus.READY) {
-      this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.ledger-connected'));
-    }
-
-    if (refreshOnly) {
-      return;
-    }
-
-    // We skip the password panel
-    this.route.navigate(['accounts']); // load accounts and watch them update in real-time
-
-    // Create new ledger wallet
-    const newWallet = await this.walletService.createLedgerWallet();
-    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.ledger-loaded'));
-
-    this.walletService.informNewWallet();
   }
 
   // Send a confirmation dialog to the user if they already have a wallet configured
   async confirmWalletOverwrite() {
     if (!this.isConfigured()) return true;
 
-    const UIkit = (window as unknown as { UIkit: { modal: { confirm(message: string): Promise<unknown> } } }).UIkit;
+    const UIkit = (window as unknown as { UIkit: { modal: {
+      confirm(message: string, options?: { labels: { ok: string; cancel: string } }): Promise<unknown>
+    } } }).UIkit;
     try {
       const msg = this.walletService.isLedgerWallet()
         ? '<p class="uk-alert uk-alert-info"><br><span class="uk-flex"><span uk-icon="icon: info; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">' + this.translocoService.translate('ui-wallet-setup.overwrite-ledger-before') + ' <b>' + this.translocoService.translate('ui-wallet-setup.overwrite-ledger-strong') + '</b>.</span><br><br>' + this.translocoService.translate('ui-wallet-setup.overwrite-ledger-after') + '</p><br>'
         : '<p class="uk-alert uk-alert-danger"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">' + this.translocoService.translate('ui-wallet-setup.overwrite-ledger-before') + ' <b>' + this.translocoService.translate('ui-wallet-setup.overwrite-software-strong') + '</b>.</span><br><br><b style="font-size: 18px;">' + this.translocoService.translate('reset-wallet.before-continuing-make-sure-you-have-saved-the-nano-seed') + '</b><br><br><b style="font-size: 18px;">' + this.translocoService.translate('reset-wallet.you-will-not-be-able-to-recover-the-funds-without-a-backup') + '</b></p><br>';
-      await UIkit.modal.confirm(msg);
+      await UIkit.modal.confirm(msg, {
+        labels: {
+          ok: this.translocoService.translate('ui-wallet-setup.confirm-overwrite'),
+          cancel: this.translocoService.translate('general.cancel'),
+        },
+      });
       return true;
     } catch (err) {
       if (!this.walletService.isLedgerWallet()) {

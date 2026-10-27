@@ -19,10 +19,23 @@ export class WalletWidgetComponent implements OnInit {
 
   wallet = this.walletService.wallet;
 
-  ledgerStatus = {
+  // The service owns the current connection status. The event stream adds
+  // diagnostic text, but can lag a synchronous transport reset made by the
+  // wallet setup screen; never render a stale READY status from that stream.
+  private lastReportedLedgerStatus = {
     status: 'not-connected',
     statusText: '',
   };
+
+  get ledgerStatus(): { status: string; statusText: string } {
+    const status = this.ledgerService.ledger.status;
+    return {
+      status,
+      statusText: this.lastReportedLedgerStatus.status === status
+        ? this.lastReportedLedgerStatus.statusText
+        : '',
+    };
+  }
   powAlert = false;
 
   unlockPassword = '';
@@ -38,6 +51,15 @@ export class WalletWidgetComponent implements OnInit {
     public settings: AppSettingsService,
     private powService: PowService) { }
 
+  // The PWA is not Electron: choose its reconnect label from the transport,
+  // not from isDesktop. In particular, ChromeOS PWAs can use WebUSB/WebHID
+  // with a Nano S Plus, which has no Bluetooth radio.
+  get reconnectTransportTranslationKey(): string {
+    return this.ledgerService.transportMode === 'Bluetooth'
+      ? 'ui-ledger.reconnect-via-bluetooth'
+      : 'ui-ledger.reconnect-via-usb';
+  }
+
   @ViewChild('passwordInput') passwordInput!: ElementRef<HTMLInputElement>;
 
   ngOnInit() {
@@ -49,7 +71,7 @@ export class WalletWidgetComponent implements OnInit {
     this.modal = modal;
 
     this.ledgerService.ledgerStatus$.subscribe((ledgerStatus) => {
-      this.ledgerStatus = ledgerStatus;
+      this.lastReportedLedgerStatus = ledgerStatus;
     });
 
     // Detect if a PoW is taking too long and alert
@@ -93,20 +115,31 @@ export class WalletWidgetComponent implements OnInit {
     }
   }
 
+  // Reconnect the existing wallet using either available transport on Electron
+  // or a Chromium PWA. This is not a request to import another hardware wallet.
+  get canReconnectUsb(): boolean {
+    return !this.ledgerService.isAndroidWeb && this.ledgerService.supportsUSB;
+  }
+
+  get canReconnectBluetooth(): boolean {
+    // The browser's Bluetooth support does not mean that the saved Ledger has
+    // a radio. Unknown/legacy wallet models retain a choice of transports.
+    const model = this.walletService.wallet.ledgerDeviceModel;
+    return this.ledgerService.supportsBluetooth &&
+      model !== 'nanoSPlus' && model !== 'nanoS';
+  }
+
   async reconnectUsb() {
-    if (!this.ledgerService.isDesktop) return;
-    // Transport choice is explicit. Disabling Bluetooth on the hardware
-    // does not reset Nault's persisted Bluetooth preference.
-    // Keep the existing wallet and switch only the Ledger transport.
+    if (!this.canReconnectUsb) return;
+    // Switching transports keeps the current wallet and its account identities.
     this.ledgerService.enableBluetoothMode(false);
     await this.reloadLedger();
   }
 
   async reconnectBluetooth() {
-    if (!this.ledgerService.isDesktop || !this.ledgerService.supportsBluetooth) return;
-    // Switch transport without going through "Configure Wallet", which can
-    // overwrite an existing wallet configuration. Keep the user gesture for
-    // navigator.bluetooth.requestDevice().
+    if (!this.canReconnectBluetooth) return;
+    // The click handler must invoke Web Bluetooth without an intervening await:
+    // navigator.bluetooth.requestDevice() requires a user gesture in PWAs.
     this.ledgerService.enableBluetoothMode(true);
     await this.reloadLedger();
   }
