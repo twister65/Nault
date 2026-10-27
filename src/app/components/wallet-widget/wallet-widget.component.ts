@@ -115,20 +115,27 @@ export class WalletWidgetComponent implements OnInit {
     }
   }
 
+  // Reconnect the existing wallet using either available transport on Electron
+  // or a Chromium PWA. This is not a request to import another hardware wallet.
+  get canReconnectUsb(): boolean {
+    return !this.ledgerService.isAndroidWeb && this.ledgerService.supportsUSB;
+  }
+
+  get canReconnectBluetooth(): boolean {
+    return this.ledgerService.supportsBluetooth;
+  }
+
   async reconnectUsb() {
-    if (!this.ledgerService.isDesktop) return;
-    // Transport choice is explicit. Disabling Bluetooth on the hardware
-    // does not reset Nault's persisted Bluetooth preference.
-    // Keep the existing wallet and switch only the Ledger transport.
+    if (!this.canReconnectUsb) return;
+    // Switching transports keeps the current wallet and its account identities.
     this.ledgerService.enableBluetoothMode(false);
     await this.reloadLedger();
   }
 
   async reconnectBluetooth() {
-    if (!this.ledgerService.isDesktop || !this.ledgerService.supportsBluetooth) return;
-    // Switch transport without going through "Configure Wallet", which can
-    // overwrite an existing wallet configuration. Keep the user gesture for
-    // navigator.bluetooth.requestDevice().
+    if (!this.canReconnectBluetooth) return;
+    // The click handler must invoke Web Bluetooth without an intervening await:
+    // navigator.bluetooth.requestDevice() requires a user gesture in PWAs.
     this.ledgerService.enableBluetoothMode(true);
     await this.reloadLedger();
   }
