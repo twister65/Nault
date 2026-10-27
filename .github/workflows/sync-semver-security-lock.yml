@@ -1,4 +1,5 @@
 name: Temporary semver security lockfile sync
+# Regenerate from clean master lockfile after narrowing node-abi override
 on:
   push:
     branches: [fix/semver-redos-ledger-native-2026-10]
