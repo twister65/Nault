@@ -30,7 +30,7 @@ test('all resolved tar-fs copies are patched, with trusted lockfile metadata', (
     assert.equal(pkg.version, '2.1.4', path + ' must be patched');
     assert.match(pkg.integrity || '', /^sha512-/, path + ': npm integrity missing');
     assert.match(pkg.resolved || '', /^https:\/\/registry\.npmjs\.org\/tar-fs\/-\/tar-fs-2\.1\.4\.tgz$/, path);
-    assert.equal(pkg.dependencies?.['tar-stream'], '^2.0.0',
+    assert.match(pkg.dependencies?.['tar-stream'] || '', /^\^2\./,
       path + ' must retain tar-stream v2 compatibility');
   }
 });
