@@ -197,7 +197,7 @@ export class ConfigureWalletComponent implements OnInit {
     try {
       const connected = await this.ledgerService.loadLedger(true, this.ledgerService.transportMode === 'Bluetooth');
       if (!connected || this.ledger.status !== LedgerStatus.READY) {
-        if (!this.ledgerService.lastUsbSelectionCancelled) {
+        if (!this.ledgerService.lastUsbSelectionCancelled && !this.ledgerService.lastBluetoothSelectionCancelled) {
           this.notifications.sendWarning(this.translocoService.translate(
             this.ledger.status === LedgerStatus.LOCKED
               ? 'ui-notifications.ledger-unlock' : 'ui-notifications.ledger-connect-failed'));
