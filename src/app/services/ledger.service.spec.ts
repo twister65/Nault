@@ -1,7 +1,7 @@
 import { ComponentTestModule, isolateConstructorIO } from '../../testing/component-test.module';
 import { TestBed, inject } from '@angular/core/testing';
 
-import { LedgerService, LedgerStatus, isAndroidBrowser, LedgerNotReadyError, getLedgerReadinessIssue } from './ledger.service';
+import { LedgerService, LedgerStatus, isAndroidBrowser, LedgerNotReadyError, getLedgerReadinessIssue, identifyLedgerUsbModel } from './ledger.service';
 
 describe('LedgerService', () => {
   beforeEach(() => {
@@ -20,6 +20,37 @@ describe('LedgerService', () => {
     expect(isAndroidBrowser('Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 Chrome/120')).toBe(true);
     expect(isAndroidBrowser('Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) Chrome/154')).toBe(false);
     expect(isAndroidBrowser('Mozilla/5.0 (X11; Linux x86_64) Chrome/154')).toBe(false);
+  });
+});
+
+describe('Ledger USB model and transport capabilities', () => {
+  it('recognizes Ledger Nano S Plus and Nano X from library model descriptors', () => {
+    expect(identifyLedgerUsbModel({deviceModel: {id: 'nanoSP'}})).toBe('nanoSPlus');
+    expect(identifyLedgerUsbModel({deviceModel: {id: 'nanoX'}})).toBe('nanoX');
+    expect(identifyLedgerUsbModel({deviceModel: {id: 'nanoS'}})).toBe('nanoS');
+  });
+
+  it('recognizes official USB product IDs with interface masks', () => {
+    expect(identifyLedgerUsbModel({device: {productId: 0x50}})).toBe('nanoSPlus');
+    expect(identifyLedgerUsbModel({device: {productId: 0x5011}})).toBe('nanoSPlus');
+    expect(identifyLedgerUsbModel({device: {productId: 0x40}})).toBe('nanoX');
+    expect(identifyLedgerUsbModel({device: {productId: 0x4011}})).toBe('nanoX');
+  });
+
+  it('leaves unidentified devices unknown instead of guessing their Bluetooth support', () => {
+    expect(identifyLedgerUsbModel(null)).toBeNull();
+    expect(identifyLedgerUsbModel({})).toBeNull();
+    expect(identifyLedgerUsbModel({device: {productId: 0x9999}})).toBeNull();
+    expect(identifyLedgerUsbModel({device: {productId: 0x0005}})).toBeNull();
+  });
+
+  it('reads the USB model while connected and does not infer a disconnected device', () => {
+    const service = Object.create(LedgerService.prototype) as LedgerService;
+    service.transportMode = 'USB';
+    service.ledger = {status: LedgerStatus.READY, nano: {}, transport: {deviceModel: {id: 'nanoSP'}} as any};
+    expect(service.connectedDeviceModel).toBe('nanoSPlus');
+    service.ledger.transport = null;
+    expect(service.connectedDeviceModel).toBeNull();
   });
 });
 
