@@ -679,6 +679,51 @@ async function main() {
   await check('GATT opening failure returns disconnected, not ready', async () => {
     BLE.fail = true; assert.equal(await service.loadLedger(), false); assert.equal(service.ledger.status, 'not-connected'); BLE.fail = false;
   });
+  await check('cancelled Bluetooth chooser is silent and preserves the saved wallet', async () => {
+    const cancelled = Error('User cancelled the requestDevice selection');
+    cancelled.name = 'TransportOpenUserCancelled';
+    BLE.fail = cancelled;
+    const previousMode = service.transportMode;
+    const previousSavedWallet = {type: 'ledger', accounts: [{id: 'nano_saved'}]};
+    let status;
+    let warnings = 0;
+    const oldWarning = service.notifications.sendWarning;
+    service.notifications.sendWarning = () => { warnings++; };
+    const sub = service.ledgerStatus$.subscribe(value => { status = value; });
+    try {
+      assert.equal(await service.loadLedger(), false);
+      assert.equal(status.status, 'not-connected');
+      assert.equal(status.statusText, '');
+      assert.equal(warnings, 0, 'cancelled chooser must not create an error toast');
+      assert.equal(service.transportMode, previousMode);
+      assert.deepEqual(previousSavedWallet.accounts.map(a => a.id), ['nano_saved']);
+    } finally {
+      BLE.fail = false;
+      service.notifications.sendWarning = oldWarning;
+      sub.unsubscribe();
+    }
+  });
+  await check('Ledger WebUSB descriptors distinguish Nano S Plus from Nano X', async () => {
+    const source = ts.transpileModule(
+      fs.readFileSync(path.join(root, 'src/app/services/ledger.service.ts'), 'utf8'),
+      { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017, experimentalDecorators: true } }
+    ).outputText;
+    const { identifyLedgerUsbModel } = load(source, {
+      './ledger-web-ble': { __esModule: true, default: BLE },
+      './ledger-ble-control': control,
+      '@angular/core': { Injectable: () => value => value },
+      'hw-app-nano': { __esModule: true, default: Nano },
+      '@ledgerhq/hw-transport-webusb': { __esModule: true, default: BLE },
+      '@ledgerhq/hw-transport-webhid': { __esModule: true, default: BLE },
+      rxjs: require('rxjs'), '../../environments/environment': { environment: { desktop: true } }
+    }, { navigator });
+    assert.equal(identifyLedgerUsbModel({deviceModel: {id: 'nanoSP'}}), 'nanoSPlus');
+    assert.equal(identifyLedgerUsbModel({device: {productId: 0x5011}}), 'nanoSPlus');
+    assert.equal(identifyLedgerUsbModel({deviceModel: {id: 'nanoX'}}), 'nanoX');
+    assert.equal(identifyLedgerUsbModel({device: {productId: 0x4011}}), 'nanoX');
+    assert.equal(identifyLedgerUsbModel({device: {productId: 0x0005}}), null);
+    assert.equal(identifyLedgerUsbModel(null), null);
+  });
   await check('Bluetooth adapter unavailable is not reported as device selection cancelled', async () => {
     const radioError = Error('Bluetooth adapter not available.');
     radioError.name = 'TransportOpenUserCancelled';
