@@ -317,10 +317,17 @@ describe('WalletService staged Ledger replacement', () => {
 
   it('publishes new accounts only after an explicit activation', () => {
     const service = Object.create(WalletService.prototype) as any;
-    service.wallet = { type: 'ledger', accounts: [{ id: 'nano_old', index: 0 }] };
+    service.wallet = {
+      type: 'ledger', accounts: [{ id: 'nano_old', index: 0 }],
+      ledgerDeviceModel: 'nanoX'
+    };
+    // Activation reads the model from the detected transport. Model it in
+    // this isolated fixture instead of changing production behavior.
+    service.ledgerService = { connectedDeviceModel: 'nanoSPlus' };
     service.resetWallet = jasmine.createSpy('resetWallet').and.callFake(() => {
       service.wallet.accounts = [];
       service.wallet.type = 'seed';
+      service.wallet.ledgerDeviceModel = null;
     });
     service.websocket = { subscribeAccounts: jasmine.createSpy('subscribeAccounts') };
     service.saveWalletExport = jasmine.createSpy('saveWalletExport');
@@ -331,6 +338,7 @@ describe('WalletService staged Ledger replacement', () => {
 
     expect(service.resetWallet).toHaveBeenCalled();
     expect(service.wallet.type).toBe('ledger');
+    expect(service.wallet.ledgerDeviceModel).toBe('nanoSPlus');
     expect(service.wallet.accounts).toEqual([{ id: 'nano_new', index: 0 }]);
     expect(service.websocket.subscribeAccounts).toHaveBeenCalledWith(['nano_new']);
     expect(service.saveWalletExport).toHaveBeenCalled();
