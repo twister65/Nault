@@ -200,7 +200,7 @@
       "semver": "5.7.2"
     },
     "tar-fs": "2.1.4",
-    "lodash": "4.18.0"
+    "lodash": "4.18.1"
   },
   "browser": {
     "stream": "stream-browserify"

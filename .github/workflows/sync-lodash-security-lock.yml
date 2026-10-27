@@ -1,7 +1,7 @@
 name: Temporary lodash security lockfile synchronization
 on:
   push:
-    branches: [fix/lodash-4.18.0-security]
+    branches: [fix/lodash-4.18.1-security]
     paths:
       - package.json
       - .github/workflows/sync-lodash-security-lock.yml
@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Regenerate lockfile from npm registry with lodash 4.18.0
+      - name: Regenerate lockfile from npm registry with lodash 4.18.1
         run: npm install --package-lock-only --lockfile-version=2 --legacy-peer-deps --ignore-scripts --no-audit --no-fund
       - name: Install dependency tree reproducibly (without native HID postinstall)
         run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
@@ -39,5 +39,5 @@ jobs:
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'build(security): resolve lodash 4.18.0 and authentic npm integrity'
-          git push origin HEAD:refs/heads/fix/lodash-4.18.0-security
+          git commit -m 'build(security): resolve lodash 4.18.1 and authentic npm integrity'
+          git push origin HEAD:refs/heads/fix/lodash-4.18.1-security

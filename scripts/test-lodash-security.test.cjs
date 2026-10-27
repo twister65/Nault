@@ -2,7 +2,7 @@
 
 // Dependabot alert #111: lodash _.template imports key code injection.
 // Other alerts #109/#66: prototype pollution via _.unset/_.omit.
-// All are remediated by lodash@4.18.0 without changing Ledger transports.
+// All are remediated by lodash@4.18.1 without changing Ledger transports.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const manifest = require('../package.json');
@@ -21,13 +21,13 @@ function resolve(from, name) {
 }
 
 test('all lodash installs resolve published patched release with valid npm integrity', () => {
-  assert.equal(manifest.overrides.lodash, '4.18.0');
+  assert.equal(manifest.overrides.lodash, '4.18.1');
   const copies = Object.entries(packages).filter(([name]) =>
     name === 'node_modules/lodash' || name.endsWith('/node_modules/lodash'));
   assert.ok(copies.length > 0, 'lodash is required by Ledger HID and desktop services');
   for (const [path, pkg] of copies) {
-    assert.equal(pkg.version, '4.18.0', path);
-    assert.match(pkg.resolved || '', /^https:\/\/registry\.npmjs\.org\/lodash\/-\/lodash-4\.18\.0\.tgz$/, path);
+    assert.equal(pkg.version, '4.18.1', path);
+    assert.match(pkg.resolved || '', /^https:\/\/registry\.npmjs\.org\/lodash\/-\/lodash-4\.18\.1\.tgz$/, path);
     assert.match(pkg.integrity || '', /^sha512-/, path);
   }
 });
@@ -46,7 +46,7 @@ test('Ledger HID / Electron settings / Karma consumers preserve their dependenci
     assert.equal(consumer.dependencies?.lodash, dependency, path + ' dependency constraint');
     const resolved = resolve(path, 'lodash');
     assert.ok(resolved, path + ' cannot resolve lodash');
-    assert.equal(resolved.entry.version, '4.18.0', path);
+    assert.equal(resolved.entry.version, '4.18.1', path);
   }
   assert.equal(manifest.devDependencies.electron, '44.9.3');
   assert.equal(packages['node_modules/tar-fs']?.version, '2.1.4');
@@ -54,7 +54,7 @@ test('Ledger HID / Electron settings / Karma consumers preserve their dependenci
 
 test('safe lodash template, omit and unset behavior remains available', () => {
   const _ = require('lodash');
-  assert.equal(_.VERSION, '4.18.0');
+  assert.equal(_.VERSION, '4.18.1');
   const render = _.template('Hello <%= name %>');
   assert.equal(render({ name: 'Ledger' }), 'Hello Ledger');
   const obj = { nested: { amount: 42, enabled: true } };
