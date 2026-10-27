@@ -47,9 +47,8 @@ test('all installed semver copies are outside all three vulnerable major ranges'
 });
 test('Ledger devices and legacy native build chain remain on compatible patched majors', () => {
   assert.equal(manifest.overrides['@ledgerhq/devices'].semver, '7.8.5');
-  for (const name of ['node-abi', 'tiny-async-pool']) {
-    assert.equal(manifest.overrides[name].semver, '5.7.2');
-  }
+  assert.equal(manifest.overrides['node-abi@2.30.1'].semver, '5.7.2');
+  assert.equal(manifest.overrides['tiny-async-pool'].semver, '5.7.2');
   assert.equal(manifest.overrides['make-dir@2.1.0'].semver, '5.7.2');
   assert.equal(manifest.overrides['make-dir@3.1.0'].semver, '6.3.1');
   const versions = [
@@ -65,4 +64,20 @@ test('Ledger devices and legacy native build chain remain on compatible patched 
   }
   assert.equal(manifest.devDependencies.electron, '44.9.3');
   assert.equal(manifest.dependencies['@ledgerhq/devices'], '7.0.2');
+});
+
+test('semver major is compatible with the original dependency specification of every consumer', () => {
+  for (const [path, entry] of Object.entries(lock.packages)) {
+    const requirement = entry.dependencies?.semver;
+    if (!requirement) continue;
+    const resolved = depVersion(path, 'semver');
+    assert.ok(resolved, path + ': unable to resolve semver ' + requirement);
+    // Nault's resolved semver consumers use compatible ^ or ~ constraints.
+    const match = /^[~^]([0-9]+)[.]/.exec(requirement);
+    if (!match) continue;
+    const wantMajor = Number(match[1]);
+    const actualMajor = triplet(resolved)[0];
+    assert.equal(actualMajor, wantMajor,
+      path + ': semver ' + resolved + ' violates declared ' + requirement);
+  }
 });
