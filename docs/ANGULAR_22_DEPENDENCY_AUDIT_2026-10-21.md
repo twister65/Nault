@@ -1616,3 +1616,22 @@ uuid@8.3.2
 - Le script `scripts/build-with-revision.cjs` encadre `npm run build`, `npm run wallet:build` et `npm run wallet:build-desktop` : SHA détecté strictement sur 40 hexadécimaux via Vercel, GitHub Actions ou `git rev-parse HEAD`, passé sous forme littérale JSON à Angular. Absence de SHA vérifiable : `null` et « Non disponible », jamais de commit inventé. Valeur `null` par défaut en développement et tests unitaires.
 - Le test `npm run test:build-info` vérifie les arguments `--define` Web et desktop, y compris les guillemets, la base Electron relative et le rejet des entrées malformées. Un test Jasmine vérifie que la page À propos n'a plus besoin d'une requête HTTP.
 - Le champ enregistré du portefeuille, les clés, WebBluetooth/WebHID, RPC, PoW et le Service Worker restent inchangés. Exiger Merge gate vert, puis déploiement de test Android sans fusion dans `master`. Vérifier « À propos » avec le SHA du nouveau déploiement.
+
+### Compte rendu final des validations matérielles PR #27 — 27 octobre 2026
+
+**Version PWA testée :** `5b8be63`, déployée sur `https://nault-android-test.vercel.app` (Vercel READY). **État GitHub :** PR #27 en Draft vers `upgrade/angular-22`, aucune fusion dans `master`.
+
+**ChromeOS / PWA (validation utilisateur) :**
+- **Ledger Nano S Plus :** reconnexion USB réussie, détection/mémorisation du modèle après reconnexion d'un ancien portefeuille, option de reconnexion Bluetooth masquée après déconnexion ; aucune reconfiguration ni suppression des données nécessaire.
+- **Ledger Nano X :** reconnexions USB et Bluetooth validées, les deux modes restent proposés.
+
+**Android / tablette (validation utilisateur, déclarative, sans accès distant au matériel) :**
+- Affichage du commit exact `5b8be63` dans **Paramètres → À propos de Nault** : confirmé par l'utilisateur après remplacement du chargement JSON par une constante intégrée au bundle.
+- Ensemble des essais demandés avec la **Nano X Bluetooth** déclaré **validé** par l'utilisateur : disponibilité du transport BLE sans USB sur Android, connexion/déconnexion/reconnexion, conservation de l'identité du portefeuille (adresse/solde), annulation du sélecteur Bluetooth sans notification trompeuse.
+- Cette validation couvre la tablette de test et les interactions rapportées ; elle ne remplace pas une campagne matérielle sur tous les modèles Android, et aucun journal APDU complémentaire n'a été fourni.
+
+**CI du dernier commit applicatif `5b8be63` :**
+- **Merge gate : SUCCESS** (run GitHub Actions `40575536326`) : régressions Angular ciblées et complètes, build Web/desktop, lint, audit de dépendances, CodeQL Advanced v4 publié.
+- **Electron App Release : SUCCESS** (run `40575536322`) avec packages Linux, Windows et macOS Intel ; le workflow spécifique `macOS Web Bluetooth test build` est **skipped**, sans validation matérielle macOS.
+- **Linting : SUCCESS**, **Docker Hub : SUCCESS** ; Vercel Android Test : READY.
+- **Prochaine étape facultative :** revue de la PR #27 et décision explicite de sortie de Draft / fusion après les dernières validations demandées. Aucune fusion ni déploiement de production Nault n'est autorisé par ce compte rendu.
