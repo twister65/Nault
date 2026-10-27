@@ -1608,3 +1608,11 @@ uuid@8.3.2
 - Le fichier généré est ignoré par Git et inclus dans les assets du bundle Angular ; la PWA utilise son cache de version Angular pour les fichiers `/assets/**`. L'affichage ne dépend **pas** du HEAD courant de GitHub ni du cache de DevTools.
 - Commandes de validation : `npm run test:build-info`, `npm run wallet:build`, `npm run desktop:build`, `npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false`. Vérifier sur la PWA ChromeOS/Android et sur les packages Electron, avec un commit connu.
 - Cette fonction est **isolée dans la PR #27** ; aucune fusion dans `master` ni validation matérielle implicite.
+
+### Rectificatif « Commit GitHub non disponible » — PR #27 (27 octobre 2026)
+
+- Signalement sur la PWA Android du commit `af40133` : **À propos de Nault → Commit GitHub : Non disponible**, alors que Vercel affiche `Nault build commit: af40133`. L'échec précis de récupération du JSON distant n'a pas pu être établi côté utilisateur.
+- Correctif : **suppression du fetch runtime** vers `assets/build-info.json` ; SHA complet injecté en tant que constante `__NAULT_BUILD_COMMIT__` par `ng build --define`. Cela rend le SHA indissociable du bundle JavaScript Angular/PWA ou Electron exécuté, et évite les désaccords de cache avec les assets.
+- Le script `scripts/build-with-revision.cjs` encadre `npm run build`, `npm run wallet:build` et `npm run wallet:build-desktop` : SHA détecté strictement sur 40 hexadécimaux via Vercel, GitHub Actions ou `git rev-parse HEAD`, passé sous forme littérale JSON à Angular. Absence de SHA vérifiable : `null` et « Non disponible », jamais de commit inventé. Valeur `null` par défaut en développement et tests unitaires.
+- Le test `npm run test:build-info` vérifie les arguments `--define` Web et desktop, y compris les guillemets, la base Electron relative et le rejet des entrées malformées. Un test Jasmine vérifie que la page À propos n'a plus besoin d'une requête HTTP.
+- Le champ enregistré du portefeuille, les clés, WebBluetooth/WebHID, RPC, PoW et le Service Worker restent inchangés. Exiger Merge gate vert, puis déploiement de test Android sans fusion dans `master`. Vérifier « À propos » avec le SHA du nouveau déploiement.

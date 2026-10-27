@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 
-// Never display or link to an unchecked value from the build metadata asset.
+// Validate an embedded build-time identifier before showing or linking to it.
+// Angular's --define injects the checked-out SHA in the application bundle.
 export function readBuildCommit(metadata: unknown): string | null {
   const sha = metadata !== null && typeof metadata === 'object'
     ? (metadata as { commit?: unknown }).commit : null;
@@ -18,21 +18,14 @@ export class AboutNaultComponent implements OnInit {
   commitShort: string | null = null;
   commitUrl: string | null = null;
 
-  constructor(private readonly http: HttpClient) {}
-
   ngOnInit(): void {
-    // Use an asset packaged with this particular PWA/Electron build rather
-    // than asking GitHub for its latest branch HEAD (which may have moved).
-    this.http.get<unknown>('assets/build-info.json').subscribe({
-      next: metadata => {
-        const sha = readBuildCommit(metadata);
-        this.commitShort = sha ? sha.slice(0, 7) : null;
-        this.commitUrl = sha ? `https://github.com/twister65/Nault/commit/${sha}` : null;
-      },
-      error: () => {
-        this.commitShort = null;
-        this.commitUrl = null;
-      }
-    });
+    // This is compiled into the JavaScript served by the PWA or Electron;
+    // never fetch a separate JSON asset whose availability/cache may differ.
+    // 'typeof' also permits isolated tests without a build replacement.
+    const buildSha = typeof __NAULT_BUILD_COMMIT__ === 'undefined'
+      ? null : __NAULT_BUILD_COMMIT__;
+    const sha = readBuildCommit({ commit: buildSha });
+    this.commitShort = sha ? sha.slice(0, 7) : null;
+    this.commitUrl = sha ? `https://github.com/twister65/Nault/commit/${sha}` : null;
   }
 }
