@@ -684,7 +684,7 @@ async function main() {
     cancelled.name = 'TransportOpenUserCancelled';
     BLE.fail = cancelled;
     const previousMode = service.transportMode;
-    const previousSavedWallet = {type: 'ledger', accounts: [{id: 'nano_saved'}]};
+
     let status;
     let warnings = 0;
     const oldWarning = service.notifications.sendWarning;
@@ -695,8 +695,8 @@ async function main() {
       assert.equal(status.status, 'not-connected');
       assert.equal(status.statusText, '');
       assert.equal(warnings, 0, 'cancelled chooser must not create an error toast');
+      assert.equal(service.lastBluetoothSelectionCancelled, true);
       assert.equal(service.transportMode, previousMode);
-      assert.deepEqual(previousSavedWallet.accounts.map(a => a.id), ['nano_saved']);
     } finally {
       BLE.fail = false;
       service.notifications.sendWarning = oldWarning;
