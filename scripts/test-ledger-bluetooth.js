@@ -711,6 +711,20 @@ async function main() {
     assert.match(template, /\[disabled\]="ledgerSetupInProgress \|\| !ledgerService\.supportsUSB"/);
   });
 
+  await check('ChromeOS PWA sidebar offers both reconnect transports without overwriting wallet', async () => {
+    const template = fs.readFileSync(path.join(root,
+      'src/app/components/wallet-widget/wallet-widget.component.html'), 'utf8');
+    const component = fs.readFileSync(path.join(root,
+      'src/app/components/wallet-widget/wallet-widget.component.ts'), 'utf8');
+    // A Nano X configured over USB must be reconnectable via Bluetooth on ChromeOS.
+    assert.match(template, /@if \(canReconnectUsb\) \{\s*<a \(click\)="reconnectUsb\(\)"/);
+    assert.match(template, /@if \(canReconnectBluetooth\) \{\s*<a \(click\)="reconnectBluetooth\(\)"/);
+    assert.match(component, /return !this\.ledgerService\.isAndroidWeb && this\.ledgerService\.supportsUSB/);
+    assert.match(component, /return this\.ledgerService\.supportsBluetooth/);
+    assert.doesNotMatch(component, /async reconnectBluetooth\(\) \{\s*if \(!this\.ledgerService\.isDesktop/);
+    assert.doesNotMatch(component, /async reconnectUsb\(\) \{\s*if \(!this\.ledgerService\.isDesktop/);
+  });
+
   await check('wallet widget switches Bluetooth to native USB only on explicit click', async () => {
     const widgetCode = ts.transpileModule(
       fs.readFileSync(path.join(root, 'src/app/components/wallet-widget/wallet-widget.component.ts'), 'utf8'),
@@ -728,7 +742,7 @@ async function main() {
     const operations = [];
     const ledger = {
       ledger: {status: 'ready'},
-      isDesktop: true, supportsBluetooth: true, transportMode: 'Bluetooth',
+      isDesktop: true, isAndroidWeb: false, supportsUSB: true, supportsBluetooth: true, transportMode: 'Bluetooth',
       enableBluetoothMode(enabled) {
         operations.push(['mode', enabled]);
         this.transportMode = enabled ? 'Bluetooth' : 'USB';
