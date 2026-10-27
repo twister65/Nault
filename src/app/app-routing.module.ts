@@ -23,6 +23,7 @@ import { environment } from '../environments/environment';
 import {ManageRepresentativesComponent} from './components/manage-representatives/manage-representatives.component';
 import { MultisigComponent } from './components/multisig/multisig.component';
 import { KeygeneratorComponent } from './components/keygenerator/keygenerator.component';
+import { AboutNaultComponent } from './components/about-nault/about-nault.component';
 
 const routes: Routes = [
   { path: '', component: WelcomeComponent },
@@ -31,6 +32,7 @@ const routes: Routes = [
   { path: 'address-book', component: AddressBookComponent },
   { path: 'configure-wallet', component: ConfigureWalletComponent },
   { path: 'configure-app', component: ConfigureAppComponent },
+  { path: 'about-nault', component: AboutNaultComponent },
   { path: 'import-address-book', component: ImportAddressBookComponent },
   { path: 'import-wallet', component: ImportWalletComponent },
   { path: 'manage-wallet', component: ManageWalletComponent },

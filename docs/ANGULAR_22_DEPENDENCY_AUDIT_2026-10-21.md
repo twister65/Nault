@@ -1600,3 +1600,11 @@ uuid@8.3.2
 ```
 
 **Maintenance du document :** après chaque PR, indiquer son lien/commit, re-jouer l'inventaire, noter les dépréciations supprimées/apparues et réévaluer les risques avant de démarrer Angular 22.
+
+### Affichage du commit réellement compilé (PR #27, 27 octobre 2026)
+
+- Nouvelle entrée **Paramètres → À propos de Nault** ; affiche le SHA court (7 caractères) sous forme de lien vers `twister65/Nault/commit/<SHA complet>`, avec dictionnaires EN/FR/ES.
+- `scripts/write-build-info.cjs` écrit `src/assets/build-info.json` avant les compilations `npm run wallet:build`, `npm run wallet:build-desktop` et `npm run build`. Source : `VERCEL_GIT_COMMIT_SHA`, `GITHUB_SHA` ou `git rev-parse HEAD`, sous validation stricte d'un SHA hexadécimal à 40 caractères. Aucun identifiant fictif n'est affiché si absent.
+- Le fichier généré est ignoré par Git et inclus dans les assets du bundle Angular ; la PWA utilise son cache de version Angular pour les fichiers `/assets/**`. L'affichage ne dépend **pas** du HEAD courant de GitHub ni du cache de DevTools.
+- Commandes de validation : `npm run test:build-info`, `npm run wallet:build`, `npm run desktop:build`, `npm test -- --watch=false --browsers=ChromeHeadlessCI --progress=false`. Vérifier sur la PWA ChromeOS/Android et sur les packages Electron, avec un commit connu.
+- Cette fonction est **isolée dans la PR #27** ; aucune fusion dans `master` ni validation matérielle implicite.

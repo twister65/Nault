@@ -1,4 +1,5 @@
 {
+  "about-nault": {"title":"About Nault","commit":"GitHub commit","unknown":"Unavailable","description":"Revision embedded at build time in this application. Click the commit to view the exact source on GitHub."},
   "account-details": {
     "account-details": "Account Details",
     "address-book-name-leave-blank-to-remove": "Address Book Name (Leave blank to remove)",

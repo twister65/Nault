@@ -240,6 +240,7 @@
             <ul class="uk-nav-sub">
               <li><a routerLink="/representatives" [queryParams]="" routerLinkActive="active"><div class="label">{{ 'general.representatives' | transloco }}</div></a></li>
               <li><a routerLink="/configure-app" routerLinkActive="active"><div class="label">{{ 'general.app-settings' | transloco }}</div></a></li>
+              <li><a routerLink="/about-nault" routerLinkActive="active"><div class="label">{{ 'about-nault.title' | transloco }}</div></a></li>
               <li *ngIf="isConfigured()"><a routerLink="/manage-wallet" routerLinkActive="active"><div class="label">{{ 'ui-shell.manage-wallet' | transloco }}</div></a></li>
               <li><a routerLink="/configure-wallet" routerLinkActive="active"><div class="label">{{ 'ui-shell.configure-new-wallet' | transloco }}</div></a></li>
             </ul>
