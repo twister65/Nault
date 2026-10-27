@@ -25,6 +25,8 @@ jobs:
           node-version: '22'
       - name: Regenerate npm lockfile via registry with targeted semver overrides
         run: npm install --package-lock-only --lockfile-version=2 --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Update transitive semver versions inside declared compatible ranges
+        run: npm update semver --package-lock-only --lockfile-version=2 --legacy-peer-deps --ignore-scripts --no-audit --no-fund
       - name: Assert all resolved semver versions patched
         run: npm run test:semver-security
       - name: Commit lockfile to isolated branch
