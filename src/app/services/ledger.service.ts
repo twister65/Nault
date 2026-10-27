@@ -167,6 +167,7 @@ export class LedgerService {
   // Browser USB/HID selection can be dismissed by the user without a
   // transport error. Setup must not show a misleading connection failure.
   lastUsbSelectionCancelled = false;
+  lastBluetoothSelectionCancelled = false;
 
   queryingDesktopLedger = false;
   private bluetoothConnecting = false;
@@ -484,6 +485,7 @@ export class LedgerService {
    */
   async loadLedger(hideNotifications = false, forceBluetoothReconnect = false) {
     this.lastUsbSelectionCancelled = false;
+    this.lastBluetoothSelectionCancelled = false;
     if (this.isAndroidWeb && this.transportMode !== 'Bluetooth') {
       this.ledger.status = LedgerStatus.NOT_CONNECTED;
       this.ledgerStatus$.next({
@@ -746,6 +748,7 @@ export class LedgerService {
       // Do not show a warning, and do not confuse it with a disabled adapter.
       const chooserCancelled = failure.name === 'TransportOpenUserCancelled' && !adapterUnavailable;
       if (chooserCancelled) {
+        this.lastBluetoothSelectionCancelled = true;
         this.ledgerStatus$.next({ status: this.ledger.status, statusText: '' });
         return false;
       }
