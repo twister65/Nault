@@ -67,6 +67,9 @@ jobs:
           assert.equal(manifest.devDependencies.electron, '44.9.3');
           console.log('Security patch versions verified');
           NODE
+      - name: Verify patched electron-updater dependency chain
+        run: npm run test:electron-updater-security
+
       - name: Check Nano BIP39 derivation, signatures and patched CryptoJS dependency tree
         run: npm run test:nano-crypto-compat
       - name: Verify French and Spanish translation dictionaries
