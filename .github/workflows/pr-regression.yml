@@ -54,6 +54,9 @@ jobs:
       - name: Verify patched tar-fs extraction dependency for Ledger HID installation
         run: npm run test:tar-fs-security
 
+      - name: Verify patched lodash for Ledger HID, Electron settings and Karma
+        run: npm run test:lodash-security
+
       - name: Check Nano BIP39 derivation, signatures and patched CryptoJS dependency tree
         run: npm run test:nano-crypto-compat
       - name: Test published-security gate policy
