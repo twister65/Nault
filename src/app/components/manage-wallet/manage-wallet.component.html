@@ -47,9 +47,9 @@
               <span uk-icon="icon: lock;"></span> {{ 'ui-manage-wallet.unlock-key' | transloco }}
             </p>
           }
-          @if (!wallet.locked && wallet.type === 'seed') {
+          @if (!wallet.locked && wallet.type === 'seed' && seedMnemonicValue) {
             <p>
-              {{ 'ui-manage-wallet.backup-mnemonic' | transloco }} <a [title]="('configure-wallet.new-wallet.copy-secret-recovery-mnemonic' | transloco)" ngxClipboard [cbContent]="seedMnemonic()" (cbOnSuccess)="notifications.sendSuccess('Wallet mnemonic copied to clipboard!')" uk-tooltip>{{ 'ui-manage-wallet.click' | transloco }}</a> {{ 'ui-manage-wallet.copy-suffix' | transloco }}
+              {{ 'ui-manage-wallet.backup-mnemonic' | transloco }} <a [title]="('configure-wallet.new-wallet.copy-secret-recovery-mnemonic' | transloco)" ngxClipboard [cbContent]="seedMnemonicValue" (cbOnSuccess)="notifications.sendSuccess('Wallet mnemonic copied to clipboard!')" uk-tooltip>{{ 'ui-manage-wallet.click' | transloco }}</a> {{ 'ui-manage-wallet.copy-suffix' | transloco }}
             </p>
           }
           @if (!wallet.locked && wallet.type === 'seed') {
