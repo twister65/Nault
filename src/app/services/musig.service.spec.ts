@@ -2,7 +2,7 @@ import { ComponentTestModule, isolateConstructorIO } from '../../testing/compone
 import { TestBed } from '@angular/core/testing';
 
 import { MusigService } from './musig.service';
-import * as base32 from 'nano-base32';
+import base32 from 'nano-base32';
 
 describe('MusigService', () => {
   let service: MusigService;
