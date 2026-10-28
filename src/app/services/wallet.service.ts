@@ -4,7 +4,7 @@ import {UtilService} from './util.service';
 import {ApiService} from './api.service';
 import {BigNumber} from 'bignumber.js';
 import {AddressBookService} from './address-book.service';
-import { decryptWalletSecret, encryptWalletSecret, isLegacyWalletCiphertext } from './wallet-encryption';
+import { decryptWalletSecret, encryptWalletSecret, isLegacyWalletCiphertext, isModernWalletCiphertext } from './wallet-encryption';
 import {WorkPoolService} from './work-pool.service';
 import {WebsocketService, NanoConfirmation} from './websocket.service';
 import {NanoBlockService} from './nano-block.service';
@@ -472,15 +472,16 @@ export class WalletService {
   }
 
   isLegacySoftwareWallet(): boolean {
-    return this.wallet.type !== 'ledger' &&
-      isLegacyWalletCiphertext(this.encryptedSeed || this.wallet.seed || '');
+    return this.wallet.type !== 'ledger' && isLegacyWalletCiphertext(this.encryptedSeed || '');
   }
 
   generateExportData() {
     const exportData: any = { indexes: this.wallet.accounts.map(a => a.index) };
     if (this.wallet.type !== 'ledger') {
-      const ciphertext = this.encryptedSeed || (this.wallet.locked ? this.wallet.seed : null);
-      if (!ciphertext) throw new Error('Wallet has not been securely encrypted for export');
+      const ciphertext = this.encryptedSeed;
+      if (!ciphertext || !(isModernWalletCiphertext(ciphertext) || isLegacyWalletCiphertext(ciphertext))) {
+        throw new Error('Wallet has not been securely encrypted for export');
+      }
       if (this.wallet.type === 'seed') exportData.seed = ciphertext;
       if (this.wallet.type === 'privateKey') exportData.privateKey = ciphertext;
       if (this.wallet.type === 'expandedKey') exportData.expandedKey = ciphertext;
@@ -1293,8 +1294,10 @@ export class WalletService {
       if (this.wallet.seed === null) throw new Error('Wallet seed unavailable for storage');
       // The encrypted form was cached when the wallet was created or unlocked.
       // Persisting plaintext or encrypting with an empty-password fallback is forbidden.
-      const ciphertext = this.encryptedSeed || (this.wallet.locked ? this.wallet.seed : null);
-      if (!ciphertext) throw new Error('Wallet has not been securely encrypted for storage');
+      const ciphertext = this.encryptedSeed;
+      if (!ciphertext || !(isModernWalletCiphertext(ciphertext) || isLegacyWalletCiphertext(ciphertext))) {
+        throw new Error('Wallet has not been securely encrypted for storage');
+      }
       data.seed = ciphertext;
       data.locked = true;
     }
