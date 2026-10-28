@@ -4,7 +4,7 @@ import { NotificationService } from './notification.service';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import * as nanocurrency from 'nanocurrency';
-import * as base32 from 'nano-base32';
+import base32 from 'nano-base32';
 import { environment } from 'environments/environment';
 
 
