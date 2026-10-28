@@ -584,10 +584,10 @@
               <div class="uk-width-1-2@m">
                 <input type="password" class="uk-input" [(ngModel)]="walletPasswordModel" [placeholder]="'ui-wallet-setup.password-placeholder' | transloco">
                 <!-- <password-strength-meter *ngIf="walletPasswordModel.length > 0" [password]="walletPasswordModel" [enableFeedback]="true" [minPasswordLength]="6"></password-strength-meter> -->
-                @if (walletPasswordModel.length > 0 && walletPasswordModel.length < 6) {
-                  <span class="password-helper">{{ 'configure-wallet.set-wallet-password.errors.password-must-be-at-least-x-characters-long' | transloco: { minCharacters: 6 } }}</span>
+                @if (walletPasswordModel.length > 0 && walletPasswordModel.trim().length < minimumPasswordLength) {
+                  <span class="password-helper">{{ 'configure-wallet.set-wallet-password.errors.password-must-be-at-least-x-characters-long' | transloco: { minCharacters: minimumPasswordLength } }}</span>
                 }
-                @if (walletPasswordConfirmModel.length >= 6 && walletPasswordModel !== walletPasswordConfirmModel) {
+                @if (walletPasswordConfirmModel.length >= minimumPasswordLength && walletPasswordModel !== walletPasswordConfirmModel) {
                   <span class="password-helper">{{ 'configure-wallet.set-wallet-password.errors.passwords-do-not-match' | transloco }}</span>
                 }
               </div>
@@ -597,7 +597,7 @@
             </div>
           </div>
           <div class="uk-card-footer uk-text-right">
-            <button class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" [disabled]="walletPasswordModel.length < 6 || (walletPasswordModel !== walletPasswordConfirmModel)" (click)="saveWalletPassword()">{{ (isNewWallet ? 'ui-wallet-setup.next' : 'ui-wallet-setup.import-wallet') | transloco }}</button>
+            <button class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" [disabled]="walletPasswordModel.trim().length < minimumPasswordLength || (walletPasswordModel !== walletPasswordConfirmModel)" (click)="saveWalletPassword()">{{ (isNewWallet ? 'ui-wallet-setup.next' : 'ui-wallet-setup.import-wallet') | transloco }}</button>
           </div>
         </div>
       }
