@@ -141,6 +141,43 @@ async function main() {
     assert.equal(closes, 1, 'USB HID must finish closing before acknowledgement');
   });
 
+  await check('native USB polls keep READY stable and still report real failures', async () => {
+    const { LedgerService: NativeLedgerService } = load(
+      fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8'), {
+        './ledger-hid-worker-transport': {}, 'hw-app-nano': {},
+        rxjs: require('rxjs'), electron: {}
+      }
+    );
+    const native = new NativeLedgerService();
+    const events = [];
+    native.ledger.status = 'ready';
+    native.pollingLedger = true;
+    native.ledgerStatus$.subscribe(event => events.push(event));
+    let polls = 0;
+    native.getLedgerAccount = async () => { polls++; return { address: 'nano_mock' }; };
+    await native.checkLedgerStatus();
+    await native.checkLedgerStatus();
+    assert.equal(polls, 2, 'hardware readiness is still checked periodically');
+    assert.deepEqual(events, [], 'repeated READY must not reach the renderer');
+    assert.equal(native.ledger.status, 'ready');
+
+    native.getLedgerAccount = async () => {
+      throw Object.assign(new Error('Ledger locked'), { statusCode: 0x6982 });
+    };
+    await native.checkLedgerStatus();
+    assert.deepEqual(events.map(event => event.status), ['locked'],
+      'a locked device must still notify the renderer');
+    assert.equal(native.pollingLedger, false);
+
+    native.ledger.status = 'ready';
+    native.pollingLedger = true;
+    native.getLedgerAccount = async () => { throw new Error('HID disconnected'); };
+    await native.checkLedgerStatus();
+    assert.deepEqual(events.map(event => event.status), ['locked', 'not-connected'],
+      'a real USB disconnection must still notify the renderer');
+    assert.equal(native.pollingLedger, false);
+  });
+
   await check('USB rejection 0x6985 preserves session and a subsequent signature succeeds', async () => {
     const { LedgerService: NativeLedgerService, isLedgerUserRejection } = load(
       fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8'), {
