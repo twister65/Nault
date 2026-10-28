@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import * as blake from 'blakejs';
 import {BigNumber} from 'bignumber.js';
 import * as nanocurrency from 'nanocurrency';
+import { pbkdf2Sync } from 'pbkdf2';
 
 // The Nano signing implementation is provided by the existing browser script.
 // Describe its public API without changing the cryptographic implementation.
@@ -14,7 +15,6 @@ const nacl = (window as unknown as {
   };
 }).nacl;
 const STATE_BLOCK_PREAMBLE = '0000000000000000000000000000000000000000000000000000000000000006';
-const pbkdf2_1 = require('pbkdf2');
 
 export interface StateBlock {
   account: string;
@@ -285,7 +285,7 @@ function mnemonicToSeedSync(mnemonic: string, password: string | null = null) {
   const enc = new TextEncoder();
   const mnemonicBuffer = enc.encode(mnemonic);
   const saltBuffer = enc.encode('mnemonic' + (password || ''));
-  return pbkdf2_1.pbkdf2Sync(mnemonicBuffer, saltBuffer, 2048, 64, 'sha512');
+  return pbkdf2Sync(mnemonicBuffer, saltBuffer, 2048, 64, 'sha512');
 }
 
 
