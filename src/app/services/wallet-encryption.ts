@@ -29,7 +29,7 @@ function encode64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function decode64(value: string): Uint8Array {
+function decode64(value: string): Uint8Array<ArrayBuffer> {
   if (typeof value !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) {
     throw new Error('Invalid encrypted wallet encoding');
   }
@@ -58,7 +58,7 @@ export function isModernWalletCiphertext(value: string): boolean {
   return typeof value === 'string' && value.startsWith(PREFIX);
 }
 
-async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
+async function deriveKey(password: string, salt: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
   if (!globalThis.crypto?.subtle) throw new Error('Secure WebCrypto context required');
   const material = await crypto.subtle.importKey(
     'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']
@@ -69,7 +69,7 @@ async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey>
   );
 }
 
-function authenticatedContext(kind: SoftwareWalletKind): Uint8Array {
+function authenticatedContext(kind: SoftwareWalletKind): Uint8Array<ArrayBuffer> {
   return new TextEncoder().encode('nault-wallet:v2:' + kind);
 }
 
