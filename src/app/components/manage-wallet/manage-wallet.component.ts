@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { inject } from '@angular/core';
 import { TranslocoService } from '@jsverse/transloco';
 import { MIN_WALLET_PASSWORD_LENGTH, isStrongWalletPassword } from '../../services/wallet-encryption';
@@ -8,7 +8,8 @@ import {ApiService} from '../../services/api.service';
 import {UtilService} from '../../services/util.service';
 import {AppSettingsService} from '../../services/app-settings.service';
 import * as QRCode from 'qrcode';
-import * as bip from 'bip39';
+import { entropyToMnemonic } from '../../services/bip39-browser';
+import { Subscription } from 'rxjs';
 import {formatDate} from '@angular/common';
 
 type CsvCell = string | number | null | undefined;
@@ -29,7 +30,7 @@ interface HistoryExportEntry {
     changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
-export class ManageWalletComponent implements OnInit {
+export class ManageWalletComponent implements OnInit, OnDestroy {
   private readonly translocoService = inject(TranslocoService);
 
 
@@ -43,6 +44,9 @@ export class ManageWalletComponent implements OnInit {
   showQRExport = false;
   QRExportUrl = '';
   QRExportImg = '';
+  seedMnemonicValue = '';
+  private mnemonicSubscription: Subscription | null = null;
+  private mnemonicGeneration = 0;
 
   csvExportStarted = false;
   transactionHistoryLimit = 500; // if the backend server limit changes, change this too
@@ -70,6 +74,10 @@ export class ManageWalletComponent implements OnInit {
 
   async ngOnInit() {
     this.wallet = this.walletService.wallet;
+    // Recompute only when unlocking, never as a synchronous template expression.
+    this.mnemonicSubscription = this.wallet.locked$.subscribe(locked => {
+      void this.refreshSeedMnemonic(locked);
+    });
 
     // Update selected account if changed in the sidebar
     this.walletService.wallet.selectedAccount$.subscribe(async acc => {
@@ -145,10 +153,26 @@ export class ManageWalletComponent implements OnInit {
     this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-seed-copied'), { identifier: 'success-copied' });
   }
 
-  seedMnemonic() {
-    if (this.wallet && this.wallet.seed ) {
-      return bip.entropyToMnemonic(this.wallet.seed);
+  private async refreshSeedMnemonic(locked: boolean): Promise<void> {
+    const generation = ++this.mnemonicGeneration;
+    this.seedMnemonicValue = '';
+    if (locked || this.wallet.type !== 'seed' || !this.wallet.seed) return;
+    const seed = this.wallet.seed;
+    try {
+      const mnemonic = await entropyToMnemonic(seed);
+      // A lock, wallet replacement, or component teardown must discard this copy.
+      if (generation !== this.mnemonicGeneration || this.wallet.locked || this.wallet.seed !== seed) return;
+      this.seedMnemonicValue = mnemonic;
+    } catch {
+      this.seedMnemonicValue = '';
     }
+  }
+
+  ngOnDestroy() {
+    this.mnemonicGeneration++;
+    this.seedMnemonicValue = '';
+    this.mnemonicSubscription?.unsubscribe();
+    this.mnemonicSubscription = null;
   }
 
   triggerFileDownload(fileName: string, exportData: object, type: 'json' | 'csv') {
