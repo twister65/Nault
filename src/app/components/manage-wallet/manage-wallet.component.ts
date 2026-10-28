@@ -1,6 +1,7 @@
 import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { inject } from '@angular/core';
 import { TranslocoService } from '@jsverse/transloco';
+import { MIN_WALLET_PASSWORD_LENGTH, isStrongWalletPassword } from '../../services/wallet-encryption';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {ApiService} from '../../services/api.service';
@@ -36,6 +37,7 @@ export class ManageWalletComponent implements OnInit {
   accounts = this.walletService.wallet.accounts;
 
   newPassword = '';
+  readonly minimumPasswordLength = MIN_WALLET_PASSWORD_LENGTH;
   confirmPassword = '';
 
   showQRExport = false;
@@ -87,24 +89,39 @@ export class ManageWalletComponent implements OnInit {
     if (this.newPassword !== this.confirmPassword) {
       return this.notifications.sendError(this.translocoService.translate('ui-notifications.passwords-mismatch'));
     }
-    if (this.newPassword.length < 1) {
-      return this.notifications.sendError(this.translocoService.translate('ui-notifications.password-empty'));
+    if (!isStrongWalletPassword(this.newPassword)) {
+      return this.notifications.sendError(this.translocoService.translate('ui-notifications.password-minimum'));
     }
     if (this.walletService.isLocked()) {
       const wasUnlocked = await this.walletService.requestWalletUnlock();
+      if (!wasUnlocked) return;
+    }
 
-      if (wasUnlocked === false) {
+    // Migrating an old backup must be an explicit opt-in, never a side-effect
+    // of unlocking an old wallet. Require confirmation that a recovery backup exists.
+    if (this.walletService.isLegacySoftwareWallet()) {
+      const UIkit = (window as unknown as { UIkit: { modal: {
+        confirm(message: string, options: { labels: { ok: string; cancel: string } }): Promise<unknown>
+      } } }).UIkit;
+      try {
+        await UIkit.modal.confirm(this.translocoService.translate('ui-manage-wallet.legacy-migration-confirm'), {
+          labels: {
+            ok: this.translocoService.translate('ui-manage-wallet.password-update'),
+            cancel: this.translocoService.translate('general.cancel'),
+          }
+        });
+      } catch {
         return;
       }
     }
-
-    this.walletService.wallet.password = this.newPassword;
-    this.walletService.saveWalletExport();
-
+    try {
+      await this.walletService.setSoftwareWalletPassword(this.newPassword);
+    } catch {
+      return this.notifications.sendError(this.translocoService.translate('ui-notifications.wallet-encryption-failed'));
+    }
     this.newPassword = '';
     this.confirmPassword = '';
     this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.password-updated'));
-
     this.showQRExport = false;
   }
 
