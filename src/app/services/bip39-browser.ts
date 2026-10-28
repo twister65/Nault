@@ -85,3 +85,22 @@ export async function validateMnemonic(mnemonic: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * BIP39 mnemonic + optional passphrase -> 64-byte derivation.
+ * Preserve Nault's previous UTF-8 input handling so historical imported
+ * wallets derive the same accounts, including for non-ASCII inputs.
+ * The KDF is PBKDF2-HMAC-SHA512, 2048 rounds, exactly as before.
+ */
+export async function mnemonicToSeedHex(mnemonic: string, password = ''): Promise<string> {
+  if (!globalThis.crypto?.subtle) throw new Error('Secure WebCrypto context required');
+  const encoder = new TextEncoder();
+  const material = await crypto.subtle.importKey(
+    'raw', encoder.encode(mnemonic), 'PBKDF2', false, ['deriveBits']
+  );
+  const derived = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-512', iterations: 2048, salt: encoder.encode('mnemonic' + password) },
+    material, 512
+  );
+  return Array.from(new Uint8Array(derived), value => value.toString(16).padStart(2, '0')).join('');
+}
