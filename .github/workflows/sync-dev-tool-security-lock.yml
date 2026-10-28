@@ -1,0 +1,43 @@
+name: Temporary brace-expansion and tmp security lockfile sync
+on:
+  push:
+    branches: [fix/brace-expansion-tmp-development-security]
+    paths:
+      - package.json
+      - .github/workflows/sync-dev-tool-security-lock.yml
+permissions:
+  contents: write
+jobs:
+  sync:
+    if: github.repository == 'twister65/Nault'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Regenerate npm lockfile with compatible patched tmp and brace-expansion
+        run: npm install --package-lock-only --lockfile-version=2 --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Install development packages without unnecessary native postinstall
+        run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: Test dev package security and API compatibility
+        run: npm run test:dev-tool-security
+      - name: Commit npm lockfile only to isolated branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add package-lock.json
+          if git diff --cached --quiet; then
+            echo 'Already synchronized'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'build(security): patch brace-expansion 1.x and tmp 0.2.x'
+          git push origin HEAD:refs/heads/fix/brace-expansion-tmp-development-security

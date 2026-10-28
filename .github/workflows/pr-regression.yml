@@ -60,6 +60,9 @@ jobs:
       - name: Verify patched Socket.IO test runner dependency versions
         run: npm run test:socketio-security
 
+      - name: Verify patched tmp and brace-expansion development dependencies
+        run: npm run test:dev-tool-security
+
       - name: Check Nano BIP39 derivation, signatures and patched CryptoJS dependency tree
         run: npm run test:nano-crypto-compat
       - name: Test published-security gate policy
