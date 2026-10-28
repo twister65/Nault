@@ -1,4 +1,5 @@
 import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { MIN_WALLET_PASSWORD_LENGTH, isStrongWalletPassword } from '../../services/wallet-encryption';
 import {WalletService, NotificationService, RepresentativeService} from '../../services';
 import {ActivatedRoute, Router} from '@angular/router';
 import * as bip39 from 'bip39';
@@ -49,6 +50,7 @@ export class ConfigureWalletComponent implements OnInit {
   newWalletMnemonic = '';
   newWalletMnemonicLines: string[][] = [];
   newPassword = '';
+  readonly minimumPasswordLength = MIN_WALLET_PASSWORD_LENGTH;
   importSeedModel = '';
   importPrivateKeyModel = '';
   importExpandedKeyModel = '';
@@ -116,25 +118,30 @@ export class ConfigureWalletComponent implements OnInit {
 
   async importExistingWallet() {
     this.notifications.sendInfo(this.translocoService.translate('ui-notifications.wallet-scanning'), {length: 7000});
-    this.route.navigate(['accounts']); // load accounts and watch them update in real-time
-    await this.walletService.createWalletFromSeed(this.importSeed);
-    this.importSeed = '';
-    this.storePassword();
-
-    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-imported'), {length: 10000});
-
-    // this.repService.detectChangeableReps(); // this is now called from change-rep-widget.component when new wallet
-    this.walletService.informNewWallet();
+    try {
+      await this.walletService.createWalletFromSeed(this.importSeed);
+      // All new software-wallet data must be encrypted before reporting success.
+      await this.storePassword();
+      this.importSeed = '';
+      this.route.navigate(['accounts']);
+      this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-imported'), {length: 10000});
+      this.walletService.informNewWallet();
+    } catch {
+      this.notifications.sendError(this.translocoService.translate('ui-notifications.wallet-encryption-failed'));
+    }
   }
 
   async importSingleKeyWallet() {
-    this.walletService.createWalletFromSingleKey(this.keyString, this.isExpanded);
-    this.storePassword();
-    this.route.navigate(['accounts']); // load accounts and watch them update in real-time
-    this.keyString = '';
-
-    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-key-imported'));
-    this.walletService.informNewWallet();
+    try {
+      await this.walletService.createWalletFromSingleKey(this.keyString, this.isExpanded);
+      await this.storePassword();
+      this.route.navigate(['accounts']);
+      this.keyString = '';
+      this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-key-imported'));
+      this.walletService.informNewWallet();
+    } catch {
+      this.notifications.sendError(this.translocoService.translate('ui-notifications.wallet-encryption-failed'));
+    }
   }
 
   // "Use Ledger" always configures the attached hardware wallet. Reconnect
@@ -367,24 +374,27 @@ export class ConfigureWalletComponent implements OnInit {
     this.activePanel = panels.backup;
   }
 
-  confirmNewSeed() {
+  async confirmNewSeed() {
     if (!this.hasConfirmedBackup) {
       return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.confirm-wallet-backup'));
     }
-    this.walletService.createNewWallet(this.newWalletSeed);
-    this.storePassword();
-    this.newWalletSeed = '';
-    this.newWalletMnemonicLines = [];
-    this.saveNewWallet();
-
-    this.activePanel = panels.final;
+    try {
+      await this.walletService.createNewWallet(this.newWalletSeed);
+      await this.storePassword();
+      this.newWalletSeed = '';
+      this.newWalletMnemonicLines = [];
+      this.saveNewWallet();
+      this.activePanel = panels.final;
+    } catch {
+      this.notifications.sendError(this.translocoService.translate('ui-notifications.wallet-encryption-failed'));
+    }
   }
 
   saveWalletPassword() {
     if (this.walletPasswordConfirmModel !== this.walletPasswordModel) {
       return this.notifications.sendError(this.translocoService.translate('ui-notifications.password-confirm-invalid'));
     }
-    if (this.walletPasswordModel.length < 6) {
+    if (!isStrongWalletPassword(this.walletPasswordModel)) {
       return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.password-minimum'));
     }
     this.newPassword = this.walletPasswordModel;
@@ -401,8 +411,8 @@ export class ConfigureWalletComponent implements OnInit {
     }
   }
 
-  storePassword() {
-    this.walletService.wallet.password = this.newPassword;
+  async storePassword(): Promise<void> {
+    await this.walletService.setSoftwareWalletPassword(this.newPassword);
     this.newPassword = '';
   }
 
