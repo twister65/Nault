@@ -13,10 +13,10 @@
             <div class="uk-width-1-2@s">
               <input class="uk-input" [(ngModel)]="newPassword" [placeholder]="'ui-manage-wallet.password-new' | transloco" type="password">
               <!-- <password-strength-meter *ngIf="newPassword.length > 0" [password]="newPassword" [enableFeedback]="true" [minPasswordLength]="6"></password-strength-meter> -->
-              @if (newPassword.length > 0 && newPassword.length < 6) {
+              @if (newPassword.length > 0 && newPassword.trim().length < minimumPasswordLength) {
                 <span class="password-helper">{{ 'ui-manage-wallet.password-min' | transloco }}</span>
               }
-              @if (confirmPassword.length >= 6 && newPassword !== confirmPassword) {
+              @if (confirmPassword.length >= minimumPasswordLength && newPassword !== confirmPassword) {
                 <span class="password-helper">{{ 'ui-manage-wallet.password-mismatch' | transloco }}</span>
               }
             </div>
@@ -26,7 +26,7 @@
           </div>
         </div>
         <div class="uk-card-footer uk-text-right@s uk-text-center nlt-button-group">
-          <button [disabled]="newPassword.length < 6 || (newPassword !== confirmPassword)" (click)="changePassword()" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1">{{ 'ui-manage-wallet.password-update' | transloco }}</button>
+          <button [disabled]="newPassword.trim().length < minimumPasswordLength || (newPassword !== confirmPassword)" (click)="changePassword()" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1">{{ 'ui-manage-wallet.password-update' | transloco }}</button>
         </div>
       </div>
     }
