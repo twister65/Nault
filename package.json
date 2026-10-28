@@ -31,7 +31,8 @@
     "test:electron-updater-security": "node --test scripts/test-electron-updater-security.test.cjs",
     "test:semver-security": "node --test scripts/test-semver-security.test.cjs",
     "test:tar-fs-security": "node --test scripts/test-tar-fs-security.test.cjs",
-    "test:lodash-security": "node --test scripts/test-lodash-security.test.cjs"
+    "test:lodash-security": "node --test scripts/test-lodash-security.test.cjs",
+    "test:socketio-security": "node --test scripts/test-socketio-security.test.cjs"
   },
   "private": true,
   "dependencies": {
@@ -200,7 +201,10 @@
       "semver": "5.7.2"
     },
     "tar-fs": "2.1.4",
-    "lodash": "4.18.1"
+    "lodash": "4.18.1",
+    "engine.io": "6.6.7",
+    "socket.io-parser": "4.2.7",
+    "ws": "8.21.0"
   },
   "browser": {
     "stream": "stream-browserify"

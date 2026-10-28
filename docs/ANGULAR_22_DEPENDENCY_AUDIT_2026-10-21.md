@@ -1675,3 +1675,12 @@ uuid@8.3.2
 - Validate Linux/Windows/macOS packaging, Ledger USB/BLE mocked transports, Angular Karma/Jasmine and RPC tests, lint, CodeQL and audit before merging. No manual hardware test asserted by CI. The repository owner granted advance approval to merge this PR after all checks pass; no Vercel production deployment is authorized.
 - After merging, Dependabot default-branch analysis must independently confirm closure; continue with development-only Socket.IO, brace-expansion and tmp in separate PRs. S-01 seed encryption is out of scope.
 - Version selection: published lodash@4.18.0 was deprecated by npm with 'Bad release; use lodash@4.17.21 instead' and is unsuitable for the security fix. Upstream officially released 4.18.1 to fix a template/fromPairs ReferenceError in the modular distributions. The safe choice is **4.18.1**; do not downgrade to vulnerable 4.17.21. Official upstream: https://github.com/lodash/lodash/releases/tag/4.18.1 .
+
+## Dependabot Socket.IO / Karma development tools (28 October 2026)
+
+- Scope: fix four HIGH development-only transitive advisories without changing the Karma/Jasmine test runner or Angular22/Electron44/Ledger runtime packages.
+- [#185](https://github.com/twister65/Nault/security/dependabot/185) Engine.IO WebTransport session-ID DoS and [#156](https://github.com/twister65/Nault/security/dependabot/156) malformed polling HTTP resource exhaustion: `engine.io@6.6.2 → 6.6.7` (6.6.7 minimum patched).
+- [#177](https://github.com/twister65/Nault/security/dependabot/177) zero-attachment memory exhaustion: `socket.io-parser@4.2.4 → 4.2.7`.
+- [#128](https://github.com/twister65/Nault/security/dependabot/128) tiny WebSocket fragments memory exhaustion: `ws@8.17.1 → 8.21.0`. This crosses the old `~8.17.1` patch-only range in `engine.io` / `socket.io-adapter`; a conscious security override to a newer **same-major 8.x** is required, with Karma/Socket.IO integration tests and CI.
+- npm registry regenerated lockfile with authentic `integrity` metadata, all three patch versions tested by `npm run test:socketio-security`, and unchanged `karma@6.3.19` / `socket.io@4.8.1`.
+- Keep patch limited to developer/test dependencies; `brace-expansion` and `tmp` alerts follow separately. Run blocking Merge gate, Angular22 validation, CodeQL published results and Electron packaging Linux/Windows/macOS before owner-authorized merge. Do not deploy Vercel production.
