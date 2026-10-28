@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { MIN_WALLET_PASSWORD_LENGTH, isStrongWalletPassword } from '../../services/wallet-encryption';
 import {WalletService, NotificationService, RepresentativeService} from '../../services';
 import {ActivatedRoute, Router} from '@angular/router';
-import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '../../services/bip39-browser';
+import { entropyToMnemonic, mnemonicToEntropy, mnemonicToSeedHex, validateMnemonic } from '../../services/bip39-browser';
 import {LedgerService, LedgerStatus, getLedgerReadinessIssue} from '../../services/ledger.service';
 import {localizeNotificationMessage} from '../../services/notification-message';
 import { QrModalService } from '../../services/qr-modal.service';
@@ -335,10 +335,10 @@ export class ConfigureWalletComponent implements OnInit {
           return this.notifications.sendError(this.translocoService.translate('ui-notifications.account-index-invalid'));
         }
 
-        // convert mnemonic to bip39 seed
-        const bip39Seed = this.importSeedBip39MnemonicPasswordModel !== '' ?
-        this.util.string.mnemonicToSeedSync(this.importSeedBip39MnemonicModel, this.importSeedBip39MnemonicPasswordModel).toString('hex') :
-        this.util.string.mnemonicToSeedSync(this.importSeedBip39MnemonicModel).toString('hex');
+        // Native WebCrypto PBKDF2 retains the previous 2048-round SHA-512 derivation.
+        const bip39Seed = await mnemonicToSeedHex(
+          this.importSeedBip39MnemonicModel, this.importSeedBip39MnemonicPasswordModel
+        );
 
         // derive private key from bip39 seed using the account index provided
         const accounts = wallet.accounts(bip39Seed, Number(this.importSeedBip39MnemonicIndexModel),
