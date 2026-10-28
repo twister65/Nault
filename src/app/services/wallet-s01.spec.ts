@@ -29,11 +29,11 @@ describe('S-01 WalletService persistence', () => {
   it('stores only authenticated ciphertext after password setup', async () => {
     await service.setSoftwareWalletPassword(pass);
     const exported = service.generateWalletExport();
-    expect(isModernWalletCiphertext(exported.seed)).toBeTrue();
-    expect(exported.seed).not.toBe(sample);
-    expect(JSON.parse(localStorage.getItem(key) as string).seed).toBe(exported.seed);
+    expect(isModernWalletCiphertext(exported.encryptedSecret)).toBeTrue();
+    expect(exported.encryptedSecret).not.toBe(sample);
+    expect(JSON.parse(localStorage.getItem(key) as string).encryptedSecret).toBe(exported.encryptedSecret);
     expect(service.lockWallet()).toBeTrue();
-    expect(service.wallet.seed).toBe(exported.seed);
+    expect(service.wallet.seed).toBe(exported.encryptedSecret);
   });
 
   it('preserves the old ciphertext when the new password is weak', async () => {
