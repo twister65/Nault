@@ -4,7 +4,7 @@ import {UtilService} from './util.service';
 import {ApiService} from './api.service';
 import {BigNumber} from 'bignumber.js';
 import {AddressBookService} from './address-book.service';
-import { decryptWalletSecret, encryptWalletSecret, isLegacyWalletCiphertext, SoftwareWalletKind } from './wallet-encryption';
+import { decryptWalletSecret, encryptWalletSecret, isLegacyWalletCiphertext } from './wallet-encryption';
 import {WorkPoolService} from './work-pool.service';
 import {WebsocketService, NanoConfirmation} from './websocket.service';
 import {NanoBlockService} from './nano-block.service';
