@@ -9,6 +9,16 @@ describe('BIP39 browser SHA-256 checksum compatibility', () => {
     expect(await validateMnemonic(mnemonic)).toBeTrue();
   });
 
+  it('round-trips the 24-word Nano recovery phrase used by Natrium', async () => {
+    // Natrium's NanoMnemomics uses BIP39 entropy <-> 24 English words,
+    // then the legacy Nano seed/index derivation (not HD BIP44).
+    // Public test vector only; never use these words to hold real funds.
+    const natriumTestSeed = '00'.repeat(32).toUpperCase();
+    const natriumTestWords = Array(23).fill('abandon').concat('art').join(' ');
+    expect(await entropyToMnemonic(natriumTestSeed)).toBe(natriumTestWords);
+    expect((await mnemonicToEntropy(natriumTestWords)).toUpperCase()).toBe(natriumTestSeed);
+  });
+
   it('matches the official 256-bit zero entropy vector used for Nano seeds', async () => {
     const entropy = '00'.repeat(32);
     const mnemonic = Array(23).fill('abandon').concat('art').join(' ');
