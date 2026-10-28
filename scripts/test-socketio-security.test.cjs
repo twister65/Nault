@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const manifest = require('../package.json');
 const lock = require('../package-lock.json');
 const pk = lock.packages;
-const pinned = { 'engine.io': '6.6.7', 'socket.io-parser': '4.2.7', ws: '8.21.0' };
+const pinned = { 'engine.io': '6.6.10', 'socket.io-parser': '4.2.7', ws: '8.21.0' };
 
 function installedCopy(name) {
   return Object.entries(pk).filter(([path]) =>
@@ -48,7 +48,7 @@ test('Karma and Socket.IO dependencies still resolve with unchanged major APIs',
   assert.equal(socketio.dependencies?.['socket.io-parser'], '~4.2.4');
   assert.equal(adapter.dependencies?.ws, '~8.17.1');
   for (const [parent, name, expected] of [
-    ['node_modules/socket.io', 'engine.io', '6.6.7'],
+    ['node_modules/socket.io', 'engine.io', '6.6.10'],
     ['node_modules/socket.io', 'socket.io-parser', '4.2.7'],
     ['node_modules/socket.io-adapter', 'ws', '8.21.0'],
     ['node_modules/engine.io', 'ws', '8.21.0']
