@@ -214,7 +214,7 @@ export class WalletWidgetComponent implements OnInit {
     if (unlocked) {
       this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.wallet-unlocked'));
       this.modal.hide();
-      if (this.unlockPassword.length < 6) {
+      if (this.unlockPassword.trim().length < 12) {
         // eslint-disable-next-line max-len
         this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.wallet-password-weak'));
       }
