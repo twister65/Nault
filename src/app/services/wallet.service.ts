@@ -4,7 +4,7 @@ import {UtilService} from './util.service';
 import {ApiService} from './api.service';
 import {BigNumber} from 'bignumber.js';
 import {AddressBookService} from './address-book.service';
-import { decryptWalletSecret, encryptWalletSecret, isLegacyWalletCiphertext, isModernWalletCiphertext } from './wallet-encryption';
+import { decryptWalletSecret, encryptWalletSecret, isLegacyWalletCiphertext, isModernWalletCiphertext, requireEncryptedWalletCiphertext } from './wallet-encryption';
 import {WorkPoolService} from './work-pool.service';
 import {WebsocketService, NanoConfirmation} from './websocket.service';
 import {NanoBlockService} from './nano-block.service';
@@ -98,7 +98,7 @@ export class WalletService {
   nano = 1000000000000000000000000;
   storeKey = `nanovault-wallet`;
   // Contains only ciphertext. Never serialize the unlocked software seed.
-  private encryptedSeed: string | null = null;
+  private walletCiphertext: string | null = null;
 
   wallet: FullWallet = {
     type: 'seed',
@@ -384,10 +384,10 @@ export class WalletService {
     this.wallet.type = walletType;
     if (walletType === 'seed' || walletType === 'privateKey' || walletType === 'expandedKey') {
       // v2 writes explicitly label ciphertext; v1 stored the ciphertext under 'seed'.
-      const storedCiphertext = walletJson.encryptedSecret || walletJson.seed;
+      const storedCiphertext = requireEncryptedWalletCiphertext(walletJson.ciphertext || walletJson.seed);
       this.wallet.seed = storedCiphertext;
       this.wallet.seedBytes = null;
-      this.encryptedSeed = storedCiphertext;
+      this.walletCiphertext = storedCiphertext;
       this.wallet.locked = true;
       this.wallet.locked$.next(true);
     }
@@ -418,7 +418,7 @@ export class WalletService {
       throw new Error('Imported wallet ciphertext does not match its secret');
     }
     this.resetWallet();
-    this.encryptedSeed = encryptedSecret;
+    this.walletCiphertext = encryptedSecret;
 
     this.wallet.seed = seed;
     this.wallet.seedBytes = this.util.hex.toUint8(seed);
@@ -460,27 +460,27 @@ export class WalletService {
     // Encrypt before updating either password or stored ciphertext. A failed KDF
     // must leave the previous encrypted backup and password unchanged.
     const encrypted = await encryptWalletSecret(this.wallet.seed, password, this.wallet.type);
-    const previousEncrypted = this.encryptedSeed;
+    const previousEncrypted = this.walletCiphertext;
     const previousPassword = this.wallet.password;
-    this.encryptedSeed = encrypted;
+    this.walletCiphertext = encrypted;
     this.wallet.password = password;
     try {
       this.saveWalletExport();
     } catch (err) {
-      this.encryptedSeed = previousEncrypted;
+      this.walletCiphertext = previousEncrypted;
       this.wallet.password = previousPassword;
       throw err;
     }
   }
 
   isLegacySoftwareWallet(): boolean {
-    return this.wallet.type !== 'ledger' && isLegacyWalletCiphertext(this.encryptedSeed || '');
+    return this.wallet.type !== 'ledger' && isLegacyWalletCiphertext(this.walletCiphertext || '');
   }
 
   generateExportData() {
     const exportData: any = { indexes: this.wallet.accounts.map(a => a.index) };
     if (this.wallet.type !== 'ledger') {
-      const ciphertext = this.encryptedSeed;
+      const ciphertext = this.walletCiphertext;
       if (!ciphertext || !(isModernWalletCiphertext(ciphertext) || isLegacyWalletCiphertext(ciphertext))) {
         throw new Error('Wallet has not been securely encrypted for export');
       }
@@ -498,8 +498,8 @@ export class WalletService {
   }
 
   lockWallet() {
-    if (!this.wallet.seed || !this.wallet.password || !this.encryptedSeed || this.wallet.locked) return false;
-    this.wallet.seed = this.encryptedSeed;
+    if (!this.wallet.seed || !this.wallet.password || !this.walletCiphertext || this.wallet.locked) return false;
+    this.wallet.seed = this.walletCiphertext;
     this.wallet.seedBytes = null;
     this.wallet.accounts.forEach(a => { a.keyPair = null; a.secret = null; });
     this.wallet.locked = true;
@@ -522,7 +522,7 @@ export class WalletService {
         return { key, keyPair: this.util.account.generateAccountKeyPair(key, this.wallet.type === 'expandedKey') };
       });
       // No wallet state is changed until AEAD verification and key derivation succeed.
-      // encryptedSeed was set when the saved/imported ciphertext was loaded.
+      // walletCiphertext was set when the saved/imported ciphertext was loaded.
       // Never repopulate the persistent ciphertext cache from wallet.seed,
       // which is also used for unlocked plaintext elsewhere in the lifecycle.
       this.wallet.seed = secret;
@@ -802,7 +802,7 @@ export class WalletService {
     this.wallet.type = 'seed';
     this.wallet.ledgerDeviceModel = null;
     this.wallet.password = '';
-    this.encryptedSeed = null;
+    this.walletCiphertext = null;
     this.wallet.locked = false;
     this.wallet.locked$.next(false);
     this.wallet.seed = '';
@@ -1267,7 +1267,7 @@ export class WalletService {
   saveWalletExport() {
     // New software wallets are initially held in memory only, until their
     // password-based encryption succeeds. Do not write a plaintext fallback.
-    if (this.wallet.type !== 'ledger' && !this.encryptedSeed) return;
+    if (this.wallet.type !== 'ledger' && !this.walletCiphertext) return;
     const exportData = this.generateWalletExport();
 
     switch (this.appSettings.settings.walletStore) {
@@ -1298,11 +1298,11 @@ export class WalletService {
       // This export depends only on an independently authenticated ciphertext cache,
       // never on the wallet.seed field (which contains plaintext while unlocked).
       // Persisting plaintext or encrypting with an empty-password fallback is forbidden.
-      const ciphertext = this.encryptedSeed;
+      const ciphertext = this.walletCiphertext;
       if (!ciphertext || !(isModernWalletCiphertext(ciphertext) || isLegacyWalletCiphertext(ciphertext))) {
         throw new Error('Wallet has not been securely encrypted for storage');
       }
-      data.encryptedSecret = ciphertext;
+      data.ciphertext = requireEncryptedWalletCiphertext(ciphertext);
       data.locked = true;
     }
 
