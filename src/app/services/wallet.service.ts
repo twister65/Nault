@@ -522,7 +522,9 @@ export class WalletService {
         return { key, keyPair: this.util.account.generateAccountKeyPair(key, this.wallet.type === 'expandedKey') };
       });
       // No wallet state is changed until AEAD verification and key derivation succeed.
-      this.encryptedSeed = ciphertext;
+      // encryptedSeed was set when the saved/imported ciphertext was loaded.
+      // Never repopulate the persistent ciphertext cache from wallet.seed,
+      // which is also used for unlocked plaintext elsewhere in the lifecycle.
       this.wallet.seed = secret;
       this.wallet.seedBytes = seedBytes;
       this.wallet.accounts.forEach((account, i) => {
@@ -1293,8 +1295,8 @@ export class WalletService {
     if (this.wallet.type === 'ledger') {
       if (this.wallet.ledgerDeviceModel) data.ledgerDeviceModel = this.wallet.ledgerDeviceModel;
     } else {
-      if (this.wallet.seed === null) throw new Error('Wallet seed unavailable for storage');
-      // The encrypted form was cached when the wallet was created or unlocked.
+      // This export depends only on an independently authenticated ciphertext cache,
+      // never on the wallet.seed field (which contains plaintext while unlocked).
       // Persisting plaintext or encrypting with an empty-password fallback is forbidden.
       const ciphertext = this.encryptedSeed;
       if (!ciphertext || !(isModernWalletCiphertext(ciphertext) || isLegacyWalletCiphertext(ciphertext))) {
