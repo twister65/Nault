@@ -383,9 +383,11 @@ export class WalletService {
     const walletType = walletJson.type || 'seed';
     this.wallet.type = walletType;
     if (walletType === 'seed' || walletType === 'privateKey' || walletType === 'expandedKey') {
-      this.wallet.seed = walletJson.seed;
+      // v2 writes explicitly label ciphertext; v1 stored the ciphertext under 'seed'.
+      const storedCiphertext = walletJson.encryptedSecret || walletJson.seed;
+      this.wallet.seed = storedCiphertext;
       this.wallet.seedBytes = null;
-      this.encryptedSeed = walletJson.seed;
+      this.encryptedSeed = storedCiphertext;
       this.wallet.locked = true;
       this.wallet.locked$.next(true);
     }
@@ -1298,7 +1300,7 @@ export class WalletService {
       if (!ciphertext || !(isModernWalletCiphertext(ciphertext) || isLegacyWalletCiphertext(ciphertext))) {
         throw new Error('Wallet has not been securely encrypted for storage');
       }
-      data.seed = ciphertext;
+      data.encryptedSecret = ciphertext;
       data.locked = true;
     }
 
