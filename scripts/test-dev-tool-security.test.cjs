@@ -19,7 +19,7 @@ function resolve(from,name){
   }
 }
 test('all brace-expansion versions are patched within their respective major',()=>{
-  assert.equal(pkg.overrides['brace-expansion@1.1.11'],'1.1.21');
+  assert.equal(pkg.devDependencies['brace-expansion'],'1.1.21');
   const min={1:[1,1,21],2:[2,1,7],3:[3,0,9],5:[5,0,12]};
   const copies=Object.entries(pk).filter(([name])=>
     name==='node_modules/brace-expansion'||name.endsWith('/node_modules/brace-expansion'));
