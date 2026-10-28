@@ -59,3 +59,30 @@ test('patched API keeps ordinary brace expansions and tmp creation working',()=>
   file.removeCallback();
   assert.equal(fs.existsSync(file.name),false);
 });
+
+test('Karma body-parser and ts-node diff resolve patched development-only copies',()=>{
+  for(const [name,release,parent] of [
+    ['body-parser','1.20.9','node_modules/karma'],
+    ['diff','3.5.1','node_modules/ts-node']
+  ]){
+    assert.equal(pkg.overrides[name],release);
+    const copies=Object.entries(pk).filter(([key])=>
+      key==='node_modules/'+name||key.endsWith('/node_modules/'+name));
+    assert.ok(copies.length>0,name+' missing from lockfile');
+    for(const [key,entry] of copies){
+      assert.equal(entry.version,release,key);
+      assert.equal(entry.dev,true,key+' must remain development-only');
+      assert.match(entry.integrity||'',/^sha512-/,key);
+    }
+    assert.equal(resolve(parent,name)?.entry.version,release,parent);
+  }
+});
+
+test('patched diff preserves patch round trips used by developer tooling',()=>{
+  const diff=require('diff');
+  const before='first\nsecond\n';
+  const after='first\nupdated\nthird\n';
+  const patch=diff.createPatch('sample.txt',before,after);
+  assert.equal(diff.parsePatch(patch).length,1);
+  assert.equal(diff.applyPatch(before,patch),after);
+});
