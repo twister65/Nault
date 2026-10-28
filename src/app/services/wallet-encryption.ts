@@ -103,7 +103,9 @@ export async function decryptWalletSecret(
   stored: string, password: string, kind: SoftwareWalletKind
 ): Promise<string> {
   if (typeof stored !== 'string' || stored.length > MAX_PAYLOAD_LENGTH ||
-      typeof password !== 'string' || !password) throw new Error('Invalid encrypted wallet');
+      typeof password !== 'string' || (!password && !isLegacyWalletCiphertext(stored))) {
+    throw new Error('Invalid encrypted wallet');
+  }
 
   if (stored.startsWith(PREFIX)) {
     const json = new TextDecoder('utf-8', { fatal: true }).decode(decode64(stored.slice(PREFIX.length)));
