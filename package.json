@@ -32,7 +32,8 @@
     "test:semver-security": "node --test scripts/test-semver-security.test.cjs",
     "test:tar-fs-security": "node --test scripts/test-tar-fs-security.test.cjs",
     "test:lodash-security": "node --test scripts/test-lodash-security.test.cjs",
-    "test:socketio-security": "node --test scripts/test-socketio-security.test.cjs"
+    "test:socketio-security": "node --test scripts/test-socketio-security.test.cjs",
+    "test:dev-tool-security": "node --test scripts/test-dev-tool-security.test.cjs"
   },
   "private": true,
   "dependencies": {
@@ -125,7 +126,8 @@
     "ts-node": "~3.2.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "8.72.0",
-    "uikit": "^3.9.4"
+    "uikit": "^3.9.4",
+    "brace-expansion": "1.1.21"
   },
   "build": {
     "appId": "cc.nault",
@@ -204,7 +206,8 @@
     "lodash": "4.18.1",
     "engine.io": "6.6.7",
     "socket.io-parser": "4.2.7",
-    "ws": "8.21.0"
+    "ws": "8.21.0",
+    "tmp": "0.2.7"
   },
   "browser": {
     "stream": "stream-browserify"
