@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { MIN_WALLET_PASSWORD_LENGTH, isStrongWalletPassword } from '../../services/wallet-encryption';
 import {WalletService, NotificationService, RepresentativeService} from '../../services';
 import {ActivatedRoute, Router} from '@angular/router';
-import * as bip39 from 'bip39';
+import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '../../services/bip39-browser';
 import {LedgerService, LedgerStatus, getLedgerReadinessIssue} from '../../services/ledger.service';
 import {localizeNotificationMessage} from '../../services/notification-message';
 import { QrModalService } from '../../services/qr-modal.service';
@@ -113,7 +113,7 @@ export class ConfigureWalletComponent implements OnInit {
     this.exampleExpandedPrivateKey = exampleSeedFull.slice(trimIdx + 12, trimIdx + 18) + '...';
 
     // array of mnemonic words
-    this.exampleMnemonicWords = bip39.entropyToMnemonic(exampleSeedFull).split(' ');
+    this.exampleMnemonicWords = (await entropyToMnemonic(exampleSeedFull)).split(' ');
   }
 
   async importExistingWallet() {
@@ -297,7 +297,7 @@ export class ConfigureWalletComponent implements OnInit {
 
           // Try and decode the mnemonic
           try {
-            const newSeed = bip39.mnemonicToEntropy(mnemonic);
+            const newSeed = await mnemonicToEntropy(mnemonic);
             if (!newSeed || newSeed.length !== 64 || !this.util.nano.isValidSeed(newSeed)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.mnemonic-invalid'));
             this.importSeed = newSeed.toUpperCase(); // Force uppercase, for consistency
           } catch (err) {
@@ -328,7 +328,7 @@ export class ConfigureWalletComponent implements OnInit {
         }
       } else if (this.selectedImportOption === 'bip39-mnemonic') {
         // If bip39, import wallet as a single private key
-        if (!bip39.validateMnemonic(this.importSeedBip39MnemonicModel)) {
+        if (!await validateMnemonic(this.importSeedBip39MnemonicModel)) {
           return this.notifications.sendError(this.translocoService.translate('ui-notifications.mnemonic-invalid'));
         }
         if (!this.validIndex) {
@@ -357,7 +357,7 @@ export class ConfigureWalletComponent implements OnInit {
   async createNewWallet() {
     const seedBytes = this.util.account.generateSeedBytes();
     this.newWalletSeed = this.util.hex.fromUint8(seedBytes);
-    this.newWalletMnemonic = bip39.entropyToMnemonic(this.newWalletSeed);
+    this.newWalletMnemonic = await entropyToMnemonic(this.newWalletSeed);
 
     // Split the seed up so we can show 4 per line
     const words = this.newWalletMnemonic.split(' ');
@@ -390,24 +390,36 @@ export class ConfigureWalletComponent implements OnInit {
     }
   }
 
-  saveWalletPassword() {
+  async saveWalletPassword() {
     if (this.walletPasswordConfirmModel !== this.walletPasswordModel) {
       return this.notifications.sendError(this.translocoService.translate('ui-notifications.password-confirm-invalid'));
     }
     if (!isStrongWalletPassword(this.walletPasswordModel)) {
       return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.password-minimum'));
     }
+
+    if (this.isNewWallet) {
+      try {
+        // The mnemonic checksum uses async WebCrypto in the Vite browser build.
+        // Do not clear password fields or advance the wizard if it fails.
+        await this.createNewWallet();
+      } catch {
+        this.newWalletSeed = '';
+        this.newWalletMnemonic = '';
+        this.newWalletMnemonicLines = [];
+        return this.notifications.sendError(this.translocoService.translate('ui-notifications.wallet-encryption-failed'));
+      }
+    }
+
     this.newPassword = this.walletPasswordModel;
     this.walletPasswordModel = '';
     this.walletPasswordConfirmModel = '';
 
-    if (this.isNewWallet) {
-      this.createNewWallet();
-    } else if (this.selectedImportOption === 'mnemonic' || this.selectedImportOption === 'seed') {
-      this.importExistingWallet();
-    } else if (this.selectedImportOption === 'privateKey' || this.selectedImportOption === 'expandedKey'
-    || this.selectedImportOption === 'bip39-mnemonic') {
-      this.importSingleKeyWallet();
+    if (!this.isNewWallet && (this.selectedImportOption === 'mnemonic' || this.selectedImportOption === 'seed')) {
+      await this.importExistingWallet();
+    } else if (!this.isNewWallet && (this.selectedImportOption === 'privateKey' || this.selectedImportOption === 'expandedKey'
+    || this.selectedImportOption === 'bip39-mnemonic')) {
+      await this.importSingleKeyWallet();
     }
   }
 
