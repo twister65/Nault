@@ -58,6 +58,39 @@ export function isModernWalletCiphertext(value: string): boolean {
   return typeof value === 'string' && value.startsWith(PREFIX);
 }
 
+/**
+ * Validate an existing encrypted payload before allowing storage or import.
+ * This does not encrypt plaintext; new writes must use encryptWalletSecret.
+ * In particular a 64-character hex seed can never pass this validation.
+ */
+export function requireEncryptedWalletCiphertext(value: unknown): string {
+  if (typeof value !== 'string' || value.length < 32 || value.length > MAX_PAYLOAD_LENGTH) {
+    throw new Error('Invalid encrypted wallet');
+  }
+  if (isModernWalletCiphertext(value)) {
+    // Shape is checked again and authenticated on unlock.
+    const json = new TextDecoder('utf-8', { fatal: true }).decode(decode64(value.slice(PREFIX.length)));
+    const envelope = JSON.parse(json) as EncryptedSecretV2;
+    if (!envelope || envelope.v !== 2 || envelope.kdf !== 'PBKDF2-SHA256' ||
+        envelope.iterations !== ITERATIONS || envelope.cipher !== 'AES-256-GCM' ||
+        decode64(envelope.salt).length !== SALT_LENGTH || decode64(envelope.iv).length !== IV_LENGTH ||
+        decode64(envelope.data).length !== 80) {
+      throw new Error('Invalid encrypted wallet');
+    }
+    return value;
+  }
+  if (isLegacyWalletCiphertext(value)) {
+    // CryptoJS/OpenSSL salted format: "Salted__" || 8-byte salt || ciphertext.
+    const raw = decode64(value);
+    if (raw.length < 32 || (raw.length - 16) % 16 !== 0 ||
+        new TextDecoder().decode(raw.slice(0, 8)) !== 'Salted__') {
+      throw new Error('Invalid encrypted wallet');
+    }
+    return value;
+  }
+  throw new Error('Unsupported encrypted wallet format');
+}
+
 async function deriveKey(password: string, salt: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
   if (!globalThis.crypto?.subtle) throw new Error('Secure WebCrypto context required');
   const material = await crypto.subtle.importKey(
