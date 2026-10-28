@@ -24,6 +24,8 @@ jobs:
           node-version: '22'
       - name: Regenerate npm lockfile with compatible patched tmp and brace-expansion
         run: npm install --package-lock-only --lockfile-version=2 --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Refresh brace-expansion to latest patched release within each original major
+        run: npm update brace-expansion --package-lock-only --lockfile-version=2 --legacy-peer-deps --ignore-scripts --no-audit --no-fund
       - name: Install development packages without unnecessary native postinstall
         run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
       - name: Test dev package security and API compatibility
