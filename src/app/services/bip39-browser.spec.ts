@@ -1,4 +1,4 @@
-import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from './bip39-browser';
+import { entropyToMnemonic, mnemonicToEntropy, mnemonicToSeedHex, validateMnemonic } from './bip39-browser';
 
 describe('BIP39 browser SHA-256 checksum compatibility', () => {
   it('matches the official 128-bit zero entropy vector', async () => {
@@ -21,6 +21,13 @@ describe('BIP39 browser SHA-256 checksum compatibility', () => {
     const mnemonic = await entropyToMnemonic(entropy);
     expect(mnemonic.split(' ').length).toBe(24);
     expect(await mnemonicToEntropy(mnemonic)).toBe(entropy.toLowerCase());
+  });
+
+  it('keeps the official PBKDF2-HMAC-SHA512 seed derivation vector', async () => {
+    const mnemonic = Array(11).fill('abandon').concat('about').join(' ');
+    expect(await mnemonicToSeedHex(mnemonic, 'TREZOR')).toBe(
+      'c55257c360c07c72029aebc1b53c05ed0362ada38ead3e3e9efa3708e53495531f09a6987599d18264c1e1c92f2cf141630c7a3c4ab7c81b2f001698e7463b04'
+    );
   });
 
   it('rejects a changed checksum, unknown words, and malformed entropy', async () => {
