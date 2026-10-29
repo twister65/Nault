@@ -39,9 +39,26 @@ describe('AppSettingsService', () => {
   it('only rotates among tested public nodes', inject([AppSettingsService], (service: AppSettingsService) => {
     const active = service.serverOptions.filter(server => server.shouldRandom).map(server => server.value);
     expect(active).toEqual(['berrypay', 'rainstorm', 'nanoslo']);
-    ['somenano', 'spynano', 'twister32-rsnano'].forEach(name => {
-      expect(active).not.toContain(name);
-      expect(service.serverOptions.some(server => server.value === name)).toBe(true);
-    });
+    expect(active).not.toContain('twister32-rsnano');
+    expect(service.serverOptions.some(server => server.value === 'twister32-rsnano')).toBe(true);
+  }));
+
+  it('removes retired nodes and falls back safely for previously saved selections', inject([AppSettingsService], (service: AppSettingsService) => {
+    const retainedPublicServers = ['berrypay', 'rainstorm', 'nanoslo'];
+    const retainedEndpoints = service.serverOptions
+      .filter(server => retainedPublicServers.includes(server.value))
+      .map(server => server.api);
+
+    for (const removedServer of ['somenano', 'spynano']) {
+      expect(service.serverOptions.some(server => server.value === removedServer)).toBe(false);
+
+      service.settings.serverName = removedServer;
+      service.loadServerSettings();
+
+      expect(service.settings.serverName).toBe('random');
+      expect(retainedEndpoints).toContain(service.settings.serverAPI);
+    }
+
+    expect(service.knownApiEndpoints).not.toContain('node.somenano.com');
   }));
 });
