@@ -1,12 +1,12 @@
 # Nault
 
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/nault/nault)
-[![GitHub All Releases](https://img.shields.io/github/downloads/nault/nault/total)](https://github.com/Nault/Nault/releases/latest)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/twister65/Nault)
+[![GitHub All Releases](https://img.shields.io/github/downloads/twister65/Nault/total)](https://github.com/twister65/Nault/releases/latest)
 [![Discord](https://img.shields.io/badge/discord-join%20chat-orange.svg?logo=discord&color=7289DA)](https://discord.nanocenter.org)
 
 Nault is a community-driven fork of the popular nano wallet [NanoVault](https://github.com/cronoh/nanovault) 💙
 
-It's a fully client-side signing wallet for sending and receiving [nano](https://github.com/nanocurrency/nano-node/) either directly in your browser at [nault.cc](https://nault.cc) or with the [desktop app](https://github.com/Nault/Nault/releases/latest).
+It's a fully client-side signing wallet for sending and receiving [nano](https://github.com/nanocurrency/nano-node/) either directly in your browser at [twister32.changeip.org](https://twister32.changeip.org/) or with the [desktop app](https://github.com/twister65/Nault/releases/latest).
 
 Seamless integration with any nano compatible RPC backend/websocket and the aim to be more frequently maintained are some of the main features. Those together will greatly increase the stability, performance and uptime.
 
@@ -16,7 +16,7 @@ ___
 ## How To Use
 Nault comes in different flavors to suit your needs.
 #### Desktop App
-Available for Windows/Mac/Linux – just head over to the [latest release](https://github.com/Nault/Nault/releases/latest) and download the version for your OS. Arch Linux users may [install it from the (unofficial) AUR](https://aur.archlinux.org/packages/nault-bin/).
+Available for Windows/Mac/Linux – just head over to the [latest release](https://github.com/twister65/Nault/releases/latest) and download the version for your OS. Arch Linux users may [install it from the (unofficial) AUR](https://aur.archlinux.org/packages/nault-bin/).
 
 If you want to verify the binary checksum there are plenty of apps to do this. One way is using a powershell or bash terminal:
 
@@ -26,18 +26,18 @@ If you want to verify the binary checksum there are plenty of apps to do this. O
 Then compare the output hash with the one listed in the corresponding checksums file that you download.
 
 #### Web App
-You can also use Nault from any device on the web at [nault.cc](https://nault.cc).
+You can also use this Nault fork from any device on the web at [twister32.changeip.org](https://twister32.changeip.org/). Encrypted v2 wallet backup QR links created on this site point back to its own `/import-wallet` page. For recovery, also retain a securely stored offline seed or encrypted JSON backup; a QR link alone is not a durable backup.
 
 Both the desktop (recommended) and web version supports the Ledger Nano hardware wallet. For help using it, please refer to [this guide](https://docs.nault.cc/2020/08/04/ledger-guide.html).
 
-The web version can additionally be pulled from the [dockerhub repo](https://hub.docker.com/r/nault/nault) using: docker pull nault/nault:latest
+The original upstream web image remains available in the [upstream Docker Hub repository](https://hub.docker.com/r/nault/nault) using: `docker pull nault/nault:latest`. This upstream image is **not** the same as this fork's latest `master` and may not support v2 wallet backups.
 
 A full security guide and other useful articles can be found in the [Nault Docs](https://docs.nault.cc).
 
 #### Mobile App
 There is no native mobile app but the web wallet contains a Progressive Web App (PWA). That allows you to run it in offline mode for remote-signing.
 
-If you visit [nault.cc](https://nault.cc) in your phone you will be given the option to install it.
+If you visit [twister32.changeip.org](https://twister32.changeip.org/) in your phone you will be given the option to install it. The PWA opens on the same HTTPS origin and can work offline once installed and cached.
 
 * Android: Click on "Install Nault for Android" in the menu
 * iOS (Safari only): 1 - Tap the share button. 2 - Select "+ Add to home screen". 3 - Open Nault from the home screen
