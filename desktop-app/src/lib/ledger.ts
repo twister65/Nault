@@ -297,7 +297,10 @@ export class LedgerService {
 
     try {
       await this.getLedgerAccount(0, false);
-      this.setLedgerStatus(LedgerStatus.READY);
+      // The native HID session is already READY. Publishing another READY
+      // every five seconds makes the renderer temporarily show Reconnect while
+      // it verifies the saved account again. Only send changes or failures.
+
     } catch (err) {
       if (ledgerStatusCode(err) === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
         this.setLedgerStatus(LedgerStatus.LOCKED, `Ledger device locked`);
