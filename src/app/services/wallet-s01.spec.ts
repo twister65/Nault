@@ -42,4 +42,28 @@ describe('S-01 WalletService persistence', () => {
     await expectAsync(service.setSoftwareWalletPassword('short')).toBeRejected();
     expect(localStorage.getItem(key)).toBe(before);
   });
+
+  it('does not redirect a v2 QR to an incompatible upstream app', async () => {
+    await service.setSoftwareWalletPassword(pass);
+    const currentIsPublicHttps = window.location.protocol === 'https:' &&
+      !!window.location.hostname &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1';
+    expect(service.canExportWalletQr()).toBe(currentIsPublicHttps);
+    if (currentIsPublicHttps) {
+      expect(service.generateExportUrl()).toContain(window.location.origin + '/import-wallet#');
+      expect(service.generateExportUrl()).not.toContain('https://nault.cc/import-wallet#');
+    } else {
+      expect(() => service.generateExportUrl()).toThrow();
+      // JSON is still usable regardless of origin.
+      expect(service.generateExportData().seed).toBe(service.walletCiphertext);
+    }
+  });
+
+  it('keeps the historical CryptoJS QR destination for compatible v1 backups', () => {
+    // A salted OpenSSL/CryptoJS fixture is sufficient for this routing test.
+    service.walletCiphertext = 'U2FsdGVkX1' + 'A'.repeat(55);
+    expect(service.canExportWalletQr()).toBeTrue();
+    expect(service.generateExportUrl()).toContain('https://nault.cc/import-wallet#');
+  });
 });
