@@ -88,6 +88,9 @@
       <div
         class="uk-width-1-4 nav-container"
         [class.nav-open]="navExpanded"
+        (touchstart)="onNavTouchStart($event)"
+        (touchend)="onNavTouchEnd($event)"
+        (touchcancel)="onNavTouchCancel()"
         [style.height]="( innerHeightWithoutMobileBar + 'px' )"
       >
         <div class="nav-header">
