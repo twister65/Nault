@@ -491,10 +491,29 @@ export class WalletService {
     return exportData;
   }
 
+  /**
+   * A v2 backup must open in the same HTTPS Nault deployment that generated it.
+   * The upstream nault.cc instance is not guaranteed to understand our v2 format.
+   * Desktop and localhost builds have no portable QR import origin: use JSON.
+   */
+  canExportWalletQr(): boolean {
+    if (this.wallet.type === 'ledger' || isLegacyWalletCiphertext(this.walletCiphertext || '')) return true;
+    return isModernWalletCiphertext(this.walletCiphertext || '') &&
+      window.location.protocol === 'https:' &&
+      !!window.location.hostname &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1';
+  }
+
   generateExportUrl() {
+    if (!this.canExportWalletQr()) {
+      throw new Error('A v2 wallet QR requires a public HTTPS origin; export JSON instead');
+    }
     const exportData = this.generateExportData();
     const base64Data = btoa(JSON.stringify(exportData));
-    return 'https://nault.cc/import-wallet#' + base64Data;
+    const base = this.wallet.type !== 'ledger' && isModernWalletCiphertext(this.walletCiphertext || '')
+      ? window.location.origin : 'https://nault.cc';
+    return base + '/import-wallet#' + base64Data;
   }
 
   lockWallet() {
