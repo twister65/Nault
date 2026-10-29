@@ -269,6 +269,31 @@ export class AppComponent implements OnInit {
     this.updates.activateUpdate();
   }
 
+  private navTouchStart: { x: number; y: number } | null = null;
+
+  onNavTouchStart(event: TouchEvent): void {
+    if (!this.navExpanded || event.touches.length !== 1) {
+      this.navTouchStart = null;
+      return;
+    }
+    this.navTouchStart = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+  }
+
+  onNavTouchEnd(event: TouchEvent): void {
+    const start = this.navTouchStart;
+    this.navTouchStart = null;
+    if (!start || !this.navExpanded || event.changedTouches.length !== 1) return;
+    const dx = event.changedTouches[0].clientX - start.x;
+    const dy = event.changedTouches[0].clientY - start.y;
+    // Only a deliberate leftward horizontal swipe closes the drawer.
+    // Vertical scrolling and taps retain their existing behavior.
+    if (dx < -60 && Math.abs(dx) > Math.abs(dy) * 1.5) this.closeNav();
+  }
+
+  onNavTouchCancel(): void {
+    this.navTouchStart = null;
+  }
+
   toggleNav() {
     this.navExpanded = !this.navExpanded;
     this.onNavExpandedChange();
