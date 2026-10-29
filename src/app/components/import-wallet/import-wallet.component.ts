@@ -84,14 +84,19 @@ export class ImportWalletComponent implements OnInit {
         return this.notifications.sendError(this.translocoService.translate('ui-notifications.import-seed-invalid'));
       }
 
-      this.router.navigate(['accounts']); // load accounts and watch them update in real-time
       this.notifications.sendInfo(this.translocoService.translate('ui-notifications.wallet-loading'));
-      if (await this.walletService.loadImportedWallet(decryptedSecret, this.walletPassword,
-        this.importData.accountsIndex || 0, this.importData.indexes || null, walletType, secret)) {
-          this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-imported'), {length: 10000});
-      } else {
+      const imported = await this.walletService.loadImportedWallet(decryptedSecret, this.walletPassword,
+        this.importData.accountsIndex || 0, this.importData.indexes || null, walletType, secret);
+      if (!imported) {
         return this.notifications.sendError(this.translocoService.translate('ui-notifications.wallet-import-failed'));
       }
+
+      // Notify the account view only after the imported accounts exist.
+      // Navigating before the asynchronous import completes leaves the installed
+      // Android PWA showing an empty account list until it is restarted.
+      this.walletService.informNewWallet();
+      await this.router.navigate(['accounts']);
+      this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-imported'), {length: 10000});
 
     } catch (err) {
       this.walletPassword = '';
