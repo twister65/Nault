@@ -95,5 +95,10 @@ jobs:
               gh release create "$RELEASE_TAG" --verify-tag --draft --title "${RELEASE_TAG#v} (twister65 fork)" --notes 'Desktop build artifacts; validation required before publication.'
             fi
           fi
-          (cd packages && sha256sum * > SHA256SUMS)
+          # Only publish after every platform artifact exists and local digests verify.
+          test "$(find packages -maxdepth 1 -type f -name '*.AppImage' | wc -l)" -ge 1
+          test "$(find packages -maxdepth 1 -type f -name '*.exe' | wc -l)" -ge 1
+          test "$(find packages -maxdepth 1 -type f -name '*.dmg' | wc -l)" -ge 1
+          (cd packages && sha256sum * > SHA256SUMS && sha256sum --check SHA256SUMS)
           gh release upload "$RELEASE_TAG" packages/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false
