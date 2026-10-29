@@ -36,6 +36,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Verify release tag matches package and lockfile versions
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node -e "const p=require('./package.json'),l=require('./package-lock.json'),v=process.env.RELEASE_TAG.replace(/^v/,''); if(p.version!==v||l.version!==v||l.packages[''].version!==v) throw Error('Release tag/version mismatch')"
       - name: Install locked dependencies
         run: npm ci --legacy-peer-deps --no-audit --no-fund
       - name: Verify tar APIs used by native build tooling
@@ -62,6 +69,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@v8
         with:
           pattern: desktop-*
@@ -78,7 +88,12 @@ jobs:
           if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > draft-state; then
             test "$(cat draft-state)" = true
           else
-            gh release create "$RELEASE_TAG" --verify-tag --draft --title "$RELEASE_TAG" --notes 'Desktop build artifacts; validation required before publication.'
+            notes_file="docs/releases/${RELEASE_TAG}.md"
+            if test -s "$notes_file"; then
+              gh release create "$RELEASE_TAG" --verify-tag --draft --title "${RELEASE_TAG#v} (twister65 fork)" --notes-file "$notes_file"
+            else
+              gh release create "$RELEASE_TAG" --verify-tag --draft --title "${RELEASE_TAG#v} (twister65 fork)" --notes 'Desktop build artifacts; validation required before publication.'
+            fi
           fi
           (cd packages && sha256sum * > SHA256SUMS)
           gh release upload "$RELEASE_TAG" packages/* --clobber
