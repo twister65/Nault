@@ -94,22 +94,6 @@ export class AppSettingsService {
       shouldRandom: true,
     },
     {
-      name: 'SomeNano',
-      value: 'somenano',
-      api: 'https://node.somenano.com/proxy',
-      ws: 'wss://node.somenano.com/websocket',
-      auth: null,
-      shouldRandom: false,
-    },
-    {
-      name: 'SpyNano (New Node - Use with caution)',
-      value: 'spynano',
-      api: 'https://node.spynano.org/proxy',
-      ws: 'wss://node.spynano.org/websocket',
-      auth: null,
-      shouldRandom: false,
-    },
-    {
       // Preferred personal RsNano node, not included in random rotation.
       name: 'Twister32 RsNano',
       value: 'twister32-rsnano',
@@ -143,9 +127,7 @@ export class AppSettingsService {
     if (!server.api) return acc;
     acc.push( server.api.replace(/https?:\/\//g, '') );
     return acc;
-  }, [
-    'node.somenano.com'
-  ]);
+  }, [] as string[]);
 
   constructor(
     private translate: TranslocoService
