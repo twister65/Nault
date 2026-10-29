@@ -118,7 +118,11 @@
                   </div>
                   @if (!showQRExport) {
                     <div class="uk-card-footer uk-text-right@s uk-text-center nlt-button-group">
-                      <button (click)="exportWallet()" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1">{{ 'ui-manage-wallet.export' | transloco }}</button>
+                      @if (walletService.canExportWalletQr()) {
+                        <button (click)="exportWallet()" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1">{{ 'ui-manage-wallet.export' | transloco }}</button>
+                      } @else {
+                        <button (click)="exportToFile()" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1">{{ 'ui-manage-wallet.export-file' | transloco }}</button>
+                      }
                     </div>
                   }
                 } @else {
