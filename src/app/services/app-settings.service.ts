@@ -45,12 +45,12 @@ export class AppSettingsService {
     lockOnClose: 1,
     lockInactivityMinutes: 30,
     ledgerReconnect: 'usb',
-    powSource: 'best',
+    powSource: 'server',
     multiplierSource: 1,
     customWorkServer: '',
     pendingOption: 'amount',
     decentralizedAliasesOption: 'disabled',
-    serverName: 'random',
+    serverName: 'twister32-rsnano',
     serverAPI: null,
     serverWS: null,
     serverAuth: null,
@@ -110,8 +110,8 @@ export class AppSettingsService {
       shouldRandom: false,
     },
     {
-      // Optional personal node, excluded from random selection while RPC is being repaired.
-      name: 'Twister32 RsNano (test only)',
+      // Preferred personal RsNano node, not included in random rotation.
+      name: 'Twister32 RsNano',
       value: 'twister32-rsnano',
       api: 'https://twister32.changeip.net/proxy',
       ws: 'wss://twister32.changeip.net/ws',
@@ -156,6 +156,12 @@ export class AppSettingsService {
     const settingsStore = localStorage.getItem(this.storeKey);
     if (settingsStore) {
       settings = JSON.parse(settingsStore);
+      // Migrate only the legacy pair of defaults from pre-Twister32 installs.
+      // Keep any other user-selected RPC or PoW preference unchanged.
+      if (settings.serverName === 'random' && settings.powSource === 'best') {
+        settings = { ...settings, serverName: 'twister32-rsnano', powSource: 'server' };
+        localStorage.setItem(this.storeKey, JSON.stringify(settings));
+      }
     }
     this.settings = Object.assign(this.settings, settings);
 
@@ -261,12 +267,12 @@ export class AppSettingsService {
       lockOnClose: 1,
       lockInactivityMinutes: 30,
       ledgerReconnect: 'usb',
-      powSource: 'best',
+      powSource: 'server',
       multiplierSource: 1,
       customWorkServer: '',
       pendingOption: 'amount',
       decentralizedAliasesOption: 'disabled',
-      serverName: 'random',
+      serverName: 'twister32-rsnano',
       serverAPI: null,
       serverWS: null,
       serverAuth: null,
