@@ -614,6 +614,8 @@ export class ConfigureAppComponent implements OnInit {
       return optionName;
     }
 
+    // The dedicated work endpoint is presented under its actual provider name.
+    if (selectedServerOption.value === 'twister32-rsnano') return selectedServerOption.name;
     return ( optionName + ' (' + selectedServerOption.name + ')' );
   }
 
