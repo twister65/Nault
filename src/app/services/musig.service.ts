@@ -4,8 +4,9 @@ import { NotificationService } from './notification.service';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import * as nanocurrency from 'nanocurrency';
+import base32 from 'nano-base32';
 import { environment } from 'environments/environment';
-const base32 = require('nano-base32');
+
 
 // WebAssembly exports used by the existing musig-nano ABI.
 // Every pointer and length is represented as an i32 in JavaScript.

@@ -3,7 +3,7 @@ import { inject } from '@angular/core';
 import { TranslocoService } from '@jsverse/transloco';
 import {ActivatedRoute, Router} from '@angular/router';
 import {NotificationService} from '../../services/notification.service';
-import * as CryptoJS from 'crypto-js';
+import { decryptWalletSecret } from '../../services/wallet-encryption';
 import {WalletService, WalletType} from '../../services/wallet.service';
 import {UtilService} from '../../services/util.service';
 
@@ -74,8 +74,7 @@ export class ImportWalletComponent implements OnInit {
       if (walletType === null) {
         return this.importDataError(this.translocoService.translate('ui-notifications.import-data-link-bad'));
       }
-      const decryptedBytes = CryptoJS.AES.decrypt(secret, this.walletPassword);
-      const decryptedSecret = decryptedBytes?.toString(CryptoJS.enc.Utf8);
+      const decryptedSecret = await decryptWalletSecret(secret, this.walletPassword, walletType);
       if (!decryptedSecret || decryptedSecret.length !== 64) {
         this.walletPassword = '';
         return this.notifications.sendError(this.translocoService.translate('ui-notifications.password-invalid'));
@@ -88,7 +87,7 @@ export class ImportWalletComponent implements OnInit {
       this.router.navigate(['accounts']); // load accounts and watch them update in real-time
       this.notifications.sendInfo(this.translocoService.translate('ui-notifications.wallet-loading'));
       if (await this.walletService.loadImportedWallet(decryptedSecret, this.walletPassword,
-        this.importData.accountsIndex || 0, this.importData.indexes || null, walletType)) {
+        this.importData.accountsIndex || 0, this.importData.indexes || null, walletType, secret)) {
           this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-imported'), {length: 10000});
       } else {
         return this.notifications.sendError(this.translocoService.translate('ui-notifications.wallet-import-failed'));

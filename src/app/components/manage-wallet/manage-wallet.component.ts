@@ -1,13 +1,15 @@
-import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { inject } from '@angular/core';
 import { TranslocoService } from '@jsverse/transloco';
+import { MIN_WALLET_PASSWORD_LENGTH, isStrongWalletPassword } from '../../services/wallet-encryption';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {ApiService} from '../../services/api.service';
 import {UtilService} from '../../services/util.service';
 import {AppSettingsService} from '../../services/app-settings.service';
 import * as QRCode from 'qrcode';
-import * as bip from 'bip39';
+import { entropyToMnemonic } from '../../services/bip39-browser';
+import { Subscription } from 'rxjs';
 import {formatDate} from '@angular/common';
 
 type CsvCell = string | number | null | undefined;
@@ -28,7 +30,7 @@ interface HistoryExportEntry {
     changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
-export class ManageWalletComponent implements OnInit {
+export class ManageWalletComponent implements OnInit, OnDestroy {
   private readonly translocoService = inject(TranslocoService);
 
 
@@ -36,11 +38,15 @@ export class ManageWalletComponent implements OnInit {
   accounts = this.walletService.wallet.accounts;
 
   newPassword = '';
+  readonly minimumPasswordLength = MIN_WALLET_PASSWORD_LENGTH;
   confirmPassword = '';
 
   showQRExport = false;
   QRExportUrl = '';
   QRExportImg = '';
+  seedMnemonicValue = '';
+  private mnemonicSubscription: Subscription | null = null;
+  private mnemonicGeneration = 0;
 
   csvExportStarted = false;
   transactionHistoryLimit = 500; // if the backend server limit changes, change this too
@@ -68,6 +74,10 @@ export class ManageWalletComponent implements OnInit {
 
   async ngOnInit() {
     this.wallet = this.walletService.wallet;
+    // Recompute only when unlocking, never as a synchronous template expression.
+    this.mnemonicSubscription = this.wallet.locked$.subscribe(locked => {
+      void this.refreshSeedMnemonic(locked);
+    });
 
     // Update selected account if changed in the sidebar
     this.walletService.wallet.selectedAccount$.subscribe(async acc => {
@@ -87,24 +97,39 @@ export class ManageWalletComponent implements OnInit {
     if (this.newPassword !== this.confirmPassword) {
       return this.notifications.sendError(this.translocoService.translate('ui-notifications.passwords-mismatch'));
     }
-    if (this.newPassword.length < 1) {
-      return this.notifications.sendError(this.translocoService.translate('ui-notifications.password-empty'));
+    if (!isStrongWalletPassword(this.newPassword)) {
+      return this.notifications.sendError(this.translocoService.translate('ui-notifications.password-minimum'));
     }
     if (this.walletService.isLocked()) {
       const wasUnlocked = await this.walletService.requestWalletUnlock();
+      if (!wasUnlocked) return;
+    }
 
-      if (wasUnlocked === false) {
+    // Migrating an old backup must be an explicit opt-in, never a side-effect
+    // of unlocking an old wallet. Require confirmation that a recovery backup exists.
+    if (this.walletService.isLegacySoftwareWallet()) {
+      const UIkit = (window as unknown as { UIkit: { modal: {
+        confirm(message: string, options: { labels: { ok: string; cancel: string } }): Promise<unknown>
+      } } }).UIkit;
+      try {
+        await UIkit.modal.confirm(this.translocoService.translate('ui-manage-wallet.legacy-migration-confirm'), {
+          labels: {
+            ok: this.translocoService.translate('ui-manage-wallet.password-update'),
+            cancel: this.translocoService.translate('general.cancel'),
+          }
+        });
+      } catch {
         return;
       }
     }
-
-    this.walletService.wallet.password = this.newPassword;
-    this.walletService.saveWalletExport();
-
+    try {
+      await this.walletService.setSoftwareWalletPassword(this.newPassword);
+    } catch {
+      return this.notifications.sendError(this.translocoService.translate('ui-notifications.wallet-encryption-failed'));
+    }
     this.newPassword = '';
     this.confirmPassword = '';
     this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.password-updated'));
-
     this.showQRExport = false;
   }
 
@@ -128,10 +153,26 @@ export class ManageWalletComponent implements OnInit {
     this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-seed-copied'), { identifier: 'success-copied' });
   }
 
-  seedMnemonic() {
-    if (this.wallet && this.wallet.seed ) {
-      return bip.entropyToMnemonic(this.wallet.seed);
+  private async refreshSeedMnemonic(locked: boolean): Promise<void> {
+    const generation = ++this.mnemonicGeneration;
+    this.seedMnemonicValue = '';
+    if (locked || this.wallet.type !== 'seed' || !this.wallet.seed) return;
+    const seed = this.wallet.seed;
+    try {
+      const mnemonic = await entropyToMnemonic(seed);
+      // A lock, wallet replacement, or component teardown must discard this copy.
+      if (generation !== this.mnemonicGeneration || this.wallet.locked || this.wallet.seed !== seed) return;
+      this.seedMnemonicValue = mnemonic;
+    } catch {
+      this.seedMnemonicValue = '';
     }
+  }
+
+  ngOnDestroy() {
+    this.mnemonicGeneration++;
+    this.seedMnemonicValue = '';
+    this.mnemonicSubscription?.unsubscribe();
+    this.mnemonicSubscription = null;
   }
 
   triggerFileDownload(fileName: string, exportData: object, type: 'json' | 'csv') {

@@ -1,7 +1,8 @@
 import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { MIN_WALLET_PASSWORD_LENGTH, isStrongWalletPassword } from '../../services/wallet-encryption';
 import {WalletService, NotificationService, RepresentativeService} from '../../services';
 import {ActivatedRoute, Router} from '@angular/router';
-import * as bip39 from 'bip39';
+import { entropyToMnemonic, mnemonicToEntropy, mnemonicToSeedHex, validateMnemonic } from '../../services/bip39-browser';
 import {LedgerService, LedgerStatus, getLedgerReadinessIssue} from '../../services/ledger.service';
 import {localizeNotificationMessage} from '../../services/notification-message';
 import { QrModalService } from '../../services/qr-modal.service';
@@ -49,6 +50,7 @@ export class ConfigureWalletComponent implements OnInit {
   newWalletMnemonic = '';
   newWalletMnemonicLines: string[][] = [];
   newPassword = '';
+  readonly minimumPasswordLength = MIN_WALLET_PASSWORD_LENGTH;
   importSeedModel = '';
   importPrivateKeyModel = '';
   importExpandedKeyModel = '';
@@ -111,30 +113,35 @@ export class ConfigureWalletComponent implements OnInit {
     this.exampleExpandedPrivateKey = exampleSeedFull.slice(trimIdx + 12, trimIdx + 18) + '...';
 
     // array of mnemonic words
-    this.exampleMnemonicWords = bip39.entropyToMnemonic(exampleSeedFull).split(' ');
+    this.exampleMnemonicWords = (await entropyToMnemonic(exampleSeedFull)).split(' ');
   }
 
   async importExistingWallet() {
     this.notifications.sendInfo(this.translocoService.translate('ui-notifications.wallet-scanning'), {length: 7000});
-    this.route.navigate(['accounts']); // load accounts and watch them update in real-time
-    await this.walletService.createWalletFromSeed(this.importSeed);
-    this.importSeed = '';
-    this.storePassword();
-
-    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-imported'), {length: 10000});
-
-    // this.repService.detectChangeableReps(); // this is now called from change-rep-widget.component when new wallet
-    this.walletService.informNewWallet();
+    try {
+      await this.walletService.createWalletFromSeed(this.importSeed);
+      // All new software-wallet data must be encrypted before reporting success.
+      await this.storePassword();
+      this.importSeed = '';
+      this.route.navigate(['accounts']);
+      this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-imported'), {length: 10000});
+      this.walletService.informNewWallet();
+    } catch {
+      this.notifications.sendError(this.translocoService.translate('ui-notifications.wallet-encryption-failed'));
+    }
   }
 
   async importSingleKeyWallet() {
-    this.walletService.createWalletFromSingleKey(this.keyString, this.isExpanded);
-    this.storePassword();
-    this.route.navigate(['accounts']); // load accounts and watch them update in real-time
-    this.keyString = '';
-
-    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-key-imported'));
-    this.walletService.informNewWallet();
+    try {
+      await this.walletService.createWalletFromSingleKey(this.keyString, this.isExpanded);
+      await this.storePassword();
+      this.route.navigate(['accounts']);
+      this.keyString = '';
+      this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.wallet-key-imported'));
+      this.walletService.informNewWallet();
+    } catch {
+      this.notifications.sendError(this.translocoService.translate('ui-notifications.wallet-encryption-failed'));
+    }
   }
 
   // "Use Ledger" always configures the attached hardware wallet. Reconnect
@@ -290,7 +297,7 @@ export class ConfigureWalletComponent implements OnInit {
 
           // Try and decode the mnemonic
           try {
-            const newSeed = bip39.mnemonicToEntropy(mnemonic);
+            const newSeed = await mnemonicToEntropy(mnemonic);
             if (!newSeed || newSeed.length !== 64 || !this.util.nano.isValidSeed(newSeed)) return this.notifications.sendError(this.translocoService.translate('ui-notifications.mnemonic-invalid'));
             this.importSeed = newSeed.toUpperCase(); // Force uppercase, for consistency
           } catch (err) {
@@ -321,17 +328,17 @@ export class ConfigureWalletComponent implements OnInit {
         }
       } else if (this.selectedImportOption === 'bip39-mnemonic') {
         // If bip39, import wallet as a single private key
-        if (!bip39.validateMnemonic(this.importSeedBip39MnemonicModel)) {
+        if (!await validateMnemonic(this.importSeedBip39MnemonicModel)) {
           return this.notifications.sendError(this.translocoService.translate('ui-notifications.mnemonic-invalid'));
         }
         if (!this.validIndex) {
           return this.notifications.sendError(this.translocoService.translate('ui-notifications.account-index-invalid'));
         }
 
-        // convert mnemonic to bip39 seed
-        const bip39Seed = this.importSeedBip39MnemonicPasswordModel !== '' ?
-        this.util.string.mnemonicToSeedSync(this.importSeedBip39MnemonicModel, this.importSeedBip39MnemonicPasswordModel).toString('hex') :
-        this.util.string.mnemonicToSeedSync(this.importSeedBip39MnemonicModel).toString('hex');
+        // Native WebCrypto PBKDF2 retains the previous 2048-round SHA-512 derivation.
+        const bip39Seed = await mnemonicToSeedHex(
+          this.importSeedBip39MnemonicModel, this.importSeedBip39MnemonicPasswordModel
+        );
 
         // derive private key from bip39 seed using the account index provided
         const accounts = wallet.accounts(bip39Seed, Number(this.importSeedBip39MnemonicIndexModel),
@@ -350,7 +357,7 @@ export class ConfigureWalletComponent implements OnInit {
   async createNewWallet() {
     const seedBytes = this.util.account.generateSeedBytes();
     this.newWalletSeed = this.util.hex.fromUint8(seedBytes);
-    this.newWalletMnemonic = bip39.entropyToMnemonic(this.newWalletSeed);
+    this.newWalletMnemonic = await entropyToMnemonic(this.newWalletSeed);
 
     // Split the seed up so we can show 4 per line
     const words = this.newWalletMnemonic.split(' ');
@@ -367,42 +374,57 @@ export class ConfigureWalletComponent implements OnInit {
     this.activePanel = panels.backup;
   }
 
-  confirmNewSeed() {
+  async confirmNewSeed() {
     if (!this.hasConfirmedBackup) {
       return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.confirm-wallet-backup'));
     }
-    this.walletService.createNewWallet(this.newWalletSeed);
-    this.storePassword();
-    this.newWalletSeed = '';
-    this.newWalletMnemonicLines = [];
-    this.saveNewWallet();
-
-    this.activePanel = panels.final;
+    try {
+      await this.walletService.createNewWallet(this.newWalletSeed);
+      await this.storePassword();
+      this.newWalletSeed = '';
+      this.newWalletMnemonicLines = [];
+      this.saveNewWallet();
+      this.activePanel = panels.final;
+    } catch {
+      this.notifications.sendError(this.translocoService.translate('ui-notifications.wallet-encryption-failed'));
+    }
   }
 
-  saveWalletPassword() {
+  async saveWalletPassword() {
     if (this.walletPasswordConfirmModel !== this.walletPasswordModel) {
       return this.notifications.sendError(this.translocoService.translate('ui-notifications.password-confirm-invalid'));
     }
-    if (this.walletPasswordModel.length < 6) {
+    if (!isStrongWalletPassword(this.walletPasswordModel)) {
       return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.password-minimum'));
     }
+
+    if (this.isNewWallet) {
+      try {
+        // The mnemonic checksum uses async WebCrypto in the Vite browser build.
+        // Do not clear password fields or advance the wizard if it fails.
+        await this.createNewWallet();
+      } catch {
+        this.newWalletSeed = '';
+        this.newWalletMnemonic = '';
+        this.newWalletMnemonicLines = [];
+        return this.notifications.sendError(this.translocoService.translate('ui-notifications.wallet-encryption-failed'));
+      }
+    }
+
     this.newPassword = this.walletPasswordModel;
     this.walletPasswordModel = '';
     this.walletPasswordConfirmModel = '';
 
-    if (this.isNewWallet) {
-      this.createNewWallet();
-    } else if (this.selectedImportOption === 'mnemonic' || this.selectedImportOption === 'seed') {
-      this.importExistingWallet();
-    } else if (this.selectedImportOption === 'privateKey' || this.selectedImportOption === 'expandedKey'
-    || this.selectedImportOption === 'bip39-mnemonic') {
-      this.importSingleKeyWallet();
+    if (!this.isNewWallet && (this.selectedImportOption === 'mnemonic' || this.selectedImportOption === 'seed')) {
+      await this.importExistingWallet();
+    } else if (!this.isNewWallet && (this.selectedImportOption === 'privateKey' || this.selectedImportOption === 'expandedKey'
+    || this.selectedImportOption === 'bip39-mnemonic')) {
+      await this.importSingleKeyWallet();
     }
   }
 
-  storePassword() {
-    this.walletService.wallet.password = this.newPassword;
+  async storePassword(): Promise<void> {
+    await this.walletService.setSoftwareWalletPassword(this.newPassword);
     this.newPassword = '';
   }
 
