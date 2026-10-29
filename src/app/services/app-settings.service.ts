@@ -113,10 +113,10 @@ export class AppSettingsService {
       // Preferred personal RsNano node, not included in random rotation.
       name: 'Twister32 RsNano',
       value: 'twister32-rsnano',
-      api: 'https://twister32.changeip.org/proxy',
-      ws: 'wss://twister32.changeip.org/ws',
+      api: 'https://twister32.changeip.net/proxy',
+      ws: 'wss://twister32.changeip.net/ws',
       // Separate PoW proxy; the RPC endpoint is not a substitute for /pow.
-      work: 'https://twister32.changeip.org/pow',
+      work: 'https://twister32.changeip.net/pow',
       auth: null,
       shouldRandom: false,
     },
