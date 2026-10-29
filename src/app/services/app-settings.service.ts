@@ -156,6 +156,12 @@ export class AppSettingsService {
     const settingsStore = localStorage.getItem(this.storeKey);
     if (settingsStore) {
       settings = JSON.parse(settingsStore);
+      // Migrate only the legacy pair of defaults from pre-Twister32 installs.
+      // Keep any other user-selected RPC or PoW preference unchanged.
+      if (settings.serverName === 'random' && settings.powSource === 'best') {
+        settings = { ...settings, serverName: 'twister32-rsnano', powSource: 'server' };
+        localStorage.setItem(this.storeKey, JSON.stringify(settings));
+      }
     }
     this.settings = Object.assign(this.settings, settings);
 
