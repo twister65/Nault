@@ -35,12 +35,11 @@ The original upstream web image remains available in the [upstream Docker Hub re
 A full security guide and other useful articles can be found in the [Nault Docs](https://docs.nault.cc).
 
 #### Mobile App
-There is no native mobile app but the web wallet contains a Progressive Web App (PWA). That allows you to run it in offline mode for remote-signing.
+There is no native mobile app, but the web wallet contains a Progressive Web App (PWA). That allows you to run it in offline mode for remote-signing.
 
-If you visit [twister32.changeip.org](https://twister32.changeip.org/) in your phone you will be given the option to install it. The PWA opens on the same HTTPS origin and can work offline once installed and cached.
+To install Nault on **Android or iOS**, open [twister32.changeip.org](https://twister32.changeip.org/) in **Google Chrome** on your phone. Open the Nault menu and select **"Install Nault for Android"** or **"Install Nault for iOS"**, depending on your device, then follow the installation instructions. The PWA opens on the same HTTPS origin and can work offline once installed and cached.
 
-* Android: Click on "Install Nault for Android" in the menu
-* iOS (Safari only): 1 - Tap the share button. 2 - Select "+ Add to home screen". 3 - Open Nault from the home screen
+**Ledger Bluetooth compatibility:** Web Bluetooth is supported in Chrome on Android, but **not in Chrome on iOS**. Installing the PWA on an iPhone does not enable Bluetooth connections to a Ledger Nano X.
 
 ## How To Help
 
