@@ -144,6 +144,9 @@
       "buildResources": "desktop-app/assets",
       "app": "./"
     },
+    "nsis": {
+      "artifactName": "Nault-Setup-${version}.${ext}"
+    },
     "mac": {
       "target": "dmg",
       "category": "public.app-category.finance",
