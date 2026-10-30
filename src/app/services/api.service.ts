@@ -133,7 +133,7 @@ export class ApiService {
   async delegatorsCount(account: string): Promise<{ count: string }> {
     return await this.request('delegators_count', { account }, false);
   }
-  async representativesOnline(): Promise<{ representatives: Record<string, string> | string[], error?: string } | null> {
+  async representativesOnline(): Promise<{ representatives: Record<string, string>, error?: string } | null> {
     const settings = this.appSettings.settings;
     // A restricted public proxy may reject this optional RPC even though
     // balances, frontiers and WebSocket notifications are fully functional.
