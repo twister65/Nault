@@ -47,3 +47,5 @@ declare module 'hw-app-nano' {
 // Replaced with a full SHA by Angular's --define in npm build scripts.
 // Uncustomized ng serve / isolated tests use null from angular.json.
 declare const __NAULT_BUILD_COMMIT__: string | null;
+// The same package.json version is embedded into PWA and Electron bundles.
+declare const __NAULT_BUILD_VERSION__: string | null;
