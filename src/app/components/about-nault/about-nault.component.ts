@@ -13,7 +13,7 @@ export function readBuildCommit(metadata: unknown): string | null {
 export function readBuildVersion(metadata: unknown): string | null {
   const value = metadata !== null && typeof metadata === 'object'
     ? (metadata as { version?: unknown }).version : null;
-  return typeof value === 'string' && /^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$/.test(value)
+  return typeof value === 'string' && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(value)
     ? value : null;
 }
 
