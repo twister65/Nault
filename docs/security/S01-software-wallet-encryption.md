@@ -1,52 +1,52 @@
-# S-01 — Chiffrement des portefeuilles logiciels (proposition en revue)
+# S-01 — Software wallet encryption (proposal under review)
 
-**Source :** audit préliminaire du 12 octobre 2026, constat S-01 (élevé).
-**Branche :** fix/security-s01-wallet-encryption — ne pas fusionner sans tests et autorisation.
-**Périmètre :** seed Nano, clé privée et clé privée étendue. Hors périmètre : Ledger, MuSig, RPC, IPC.
+**Source:** Preliminary audit of October 12, 2026, finding S-01 (high severity).
+**Branch:** fix/security-s01-wallet-encryption — do not merge without testing and authorization.
+**Scope:** Nano seed, private key, and expanded private key. Out of scope: Ledger, MuSig, RPC, IPC.
 
-## Menace et choix cryptographiques
+## Threat model and cryptographic choices
 
-Le format historique CryptoJS.AES.encrypt(secret, password) utilise une dérivation de mot de passe à coût faible et n'authentifie pas le ciphertext. Une copie du stockage local permet des attaques hors ligne.
+The legacy `CryptoJS.AES.encrypt(secret, password)` format uses a low-cost password derivation method and does not authenticate the ciphertext. A copy of local storage enables offline attacks.
 
-Nouvelles écritures : enveloppe versionnée nault:v2:<base64(JSON)> avec sel aléatoire 16 octets, PBKDF2-HMAC-SHA-256 à **600 000 itérations**, AES-256-GCM via WebCrypto, nonce aléatoire 12 octets et tag 128 bits. Le type de portefeuille (seed, privateKey, expandedKey) entre dans les données authentifiées. La phrase de passe doit contenir **au moins 12 caractères** ; recommander une phrase de passe longue et unique.
+New writes use a versioned `nault:v2:<base64(JSON)>` envelope with a random 16-byte salt, PBKDF2-HMAC-SHA-256 with **600,000 iterations**, AES-256-GCM via WebCrypto, a random 12-byte nonce, and a 128-bit authentication tag. The wallet type (`seed`, `privateKey`, `expandedKey`) is included in the authenticated data. The passphrase must be **at least 12 characters long**; recommend a long, unique passphrase.
 
-Absence de WebCrypto sécurisé, paramètres inconnus, mot de passe trop court, corruption, ciphertext malformé ou type incorrect : **échec fermé**, sans écriture en clair et sans nouveau chiffrement historique.
+If secure WebCrypto is unavailable, parameters are unknown, the password is too short, data is corrupted, the ciphertext is malformed, or the wallet type is incorrect: **fail closed**, without writing plaintext or creating new legacy-encrypted data.
 
-## Compatibilité et migration
+## Compatibility and migration
 
-1. Les sauvegardes historiques CryptoJS/OpenSSL restent lisibles avec leur ancien mot de passe. Déverrouiller un portefeuille ancien ne le migre **pas** automatiquement.
-2. Les nouveaux portefeuilles logiciels sont chiffrés en v2 **avant** notification de succès. Les sauvegardes déclenchées pendant la découverte des comptes ne doivent pas écrire de secret en clair.
-3. L'import explicite d'un ancien backup préserve son ciphertext ; changer ensuite son mot de passe permet de passer au nouveau format.
-4. La rotation de mot de passe d'un ancien portefeuille demande confirmation de l'existence d'une **sauvegarde de récupération vérifiée** et ne remplace que le stockage local. Les exports antérieurs gardent leur ancien mot de passe.
-5. Une erreur de dérivation/chiffrement ou d'écriture de stockage ne doit pas remplacer l'ancienne copie. Les comptes et adresses dérivées restent inchangés.
-6. Ne jamais utiliser une seed réelle dans les tests, journaux, captures, HAR, commentaires ou exemples.
+1. Legacy CryptoJS/OpenSSL backups remain readable with their original password. Unlocking a legacy wallet does **not** migrate it automatically.
+2. New software wallets are encrypted as v2 **before** a success notification is displayed. Backups triggered while accounts are being discovered must not write secrets in plaintext.
+3. Explicitly importing a legacy backup preserves its ciphertext; changing its password afterward allows migration to the new format.
+4. Rotating the password of a legacy wallet requires confirmation that a **verified recovery backup** exists and replaces only local storage. Earlier exports retain their old password.
+5. A key-derivation, encryption, or storage-write error must not replace the previous copy. Derived accounts and addresses remain unchanged.
+6. Never use a real seed in tests, logs, screenshots, HAR files, comments, or examples.
 
-La confirmation de sauvegarde est une déclaration utilisateur, **pas** une vérification cryptographique. Prévoir une restauration d'une copie fictive et une procédure de sauvegarde hors navigateur avant déploiement réel.
+Backup confirmation is a user declaration, **not** cryptographic verification. Plan a restore test using a dummy copy and an out-of-browser backup procedure before any real deployment.
 
-## Plan de validation obligatoire
+## Mandatory validation plan
 
-- Tests Karma/Jasmine : sel/nonce distincts, aller-retour de secret fictif, mauvais mot de passe, ciphertext altéré, mauvais type, version inconnue, compatibilité legacy, absence d'écriture en clair et rollback après échec.
-- Migration fictive : backup historique → déverrouillage → export inchangé → rotation explicitement confirmée → stockage v2 → redémarrage → mêmes comptes/adresses → restauration du backup v1 avec son ancien mot de passe.
-- Formats : seed, privateKey, expandedKey, plusieurs index, URL/QR. Vérifier la taille du QR.
-- Plateformes : ChromeOS, PWA hors ligne, Android, Electron Linux et Windows, builds macOS x64/arm64. Vérifier la disponibilité de crypto.subtle.
-- Gates : compilation Angular 22, lint, Karma/Jasmine, CodeQL Advanced v4, tests de restauration, revue de sécurité et CI verte. Aucun déploiement ni fusion sans validation et accord.
+- Karma/Jasmine tests: distinct salts/nonces, dummy-secret round trip, incorrect password, tampered ciphertext, incorrect type, unknown version, legacy compatibility, no plaintext writes, and rollback after failure.
+- Dummy migration: legacy backup → unlock → unchanged export → explicitly confirmed password rotation → v2 storage → restart → same accounts/addresses → restoration of the v1 backup using its original password.
+- Formats: `seed`, `privateKey`, `expandedKey`, multiple account indices, URL/QR. Check QR code size.
+- Platforms: ChromeOS, offline PWA, Android, Electron on Linux and Windows, macOS x64/arm64 builds. Verify `crypto.subtle` availability.
+- Gates: Angular 22 build, lint, Karma/Jasmine, CodeQL Advanced v4, restoration tests, security review, and green CI. No deployment or merge without validation and approval.
 
-## Limites et retour arrière
+## Limitations and rollback
 
-Cette protection concerne la seed au repos ; le secret reste en RAM quand le hot wallet est déverrouillé. Elle ne protège pas d'un malware, d'un XSS actif ou d'un keylogger. Elle ne touche pas aux seeds Ledger.
+This protection applies to the seed at rest; the secret remains in RAM while the hot wallet is unlocked. It does not protect against malware, active XSS, or keyloggers. Ledger seeds are unaffected.
 
-Conserver une seed de récupération hors ligne ou un export ancien **effectivement vérifié** avant migration. Ne pas effacer l'export historique après rotation ; un ancien Nault ne peut pas lire le format v2 et ne doit jamais réécrire ce stockage. Restaurer la sauvegarde historique avec une version compatible si besoin.
+Keep an offline recovery seed or an **actually verified** legacy export before migration. Do not delete the legacy export after password rotation; an older Nault version cannot read v2 and must never overwrite that storage. If needed, restore the legacy backup using a compatible version.
 
-## Compte rendu S01-04 — ChromeOS (29 octobre 2026)
+## S01-04 test report — ChromeOS (October 29, 2026)
 
-**Statut : 7/7 tests manuels réussis sur ChromeOS, avec une sauvegarde et une seed entièrement fictives.** Le libellé initial du rapport indiquait « Android », mais l'utilisateur a expressément précisé que les manipulations ont été réalisées sur **ChromeOS**. Ne pas comptabiliser ce scénario comme une validation Android.
+**Status: 7/7 manual tests passed on ChromeOS, using an entirely dummy backup and seed.** The original report label said “Android,” but the user explicitly clarified that these steps were performed on **ChromeOS**. Do not count this scenario as Android validation.
 
-1. Import de la sauvegarde historique CryptoJS/OpenSSL v1 au format JSON : réussi.
-2. Deux comptes Nano aux index 0 et 1 retrouvés : réussi. Adresses publiques communiquées pour référence, abrégées dans ce document : index 0 `nano_3se9n8su…jwxyrkh`, index 1 `nano_181gqshx…35ipz`.
-3. Verrouillage, rechargement et déverrouillage de l'ancienne sauvegarde sans migration implicite : réussi ; export toujours préfixé `U2FsdGVkX1`.
-4. Rotation volontaire de mot de passe avec confirmation explicite : réussie.
-5. Export du portefeuille migré : préfixe `nault:v2:` confirmé ; adresses des comptes 0 et 1 inchangées.
-6. Après migration, ancien mot de passe refusé sur le portefeuille v2, nouveau mot de passe accepté : réussi.
-7. Restauration de la sauvegarde v1 originale avec son mot de passe historique, mêmes comptes : réussie.
+1. Import of a legacy CryptoJS/OpenSSL v1 backup in JSON format: passed.
+2. Two Nano accounts at indices 0 and 1 recovered: passed. Public addresses provided for reference, abbreviated in this document: index 0 `nano_3se9n8su…jwxyrkh`, index 1 `nano_181gqshx…35ipz`.
+3. Locking, reloading, and unlocking the legacy backup without implicit migration: passed; export still started with `U2FsdGVkX1`.
+4. Voluntary password rotation with explicit confirmation: passed.
+5. Export of the migrated wallet: `nault:v2:` prefix confirmed; account addresses at indices 0 and 1 unchanged.
+6. After migration, the old password was rejected for the v2 wallet, and the new password was accepted: passed.
+7. Restoration of the original v1 backup with its legacy password, recovering the same accounts: passed.
 
-**À faire :** vérifications Android/PWA réelles, scénarios distincts de clé privée/clé étendue et URL/QR si non déjà couverts, puis revue finale du risque cryptographique avant une éventuelle fusion dans `master`. Android-test a été déployé sur le commit `7fcb8b0` avec l'accord explicite de l'utilisateur. Aucune fusion dans `master` n'est autorisée par le présent compte rendu.
+**Remaining work:** Actual Android/PWA checks; separate private-key/expanded-key and URL/QR scenarios if not already covered; and a final cryptographic risk review before any potential merge into `master`. Android-test was deployed at commit `7fcb8b0` with the user's explicit approval. This report does not authorize a merge into `master`.
