@@ -70,6 +70,9 @@ jobs:
       - name: Verify patched electron-updater dependency chain
         run: npm run test:electron-updater-security
 
+      - name: Verify native Desktop menu localization and updater fork feed
+        run: node --test scripts/test-desktop-locale.test.cjs
+
       - name: Reject all vulnerable semver dependencies (Ledger / native builds)
         run: npm run test:semver-security
 

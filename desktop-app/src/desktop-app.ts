@@ -6,6 +6,7 @@ import * as url from 'url';
 import * as path from 'path';
 import { initialize } from './lib/ledger';
 import { configureWebBluetooth } from './lib/web-bluetooth';
+import { desktopLabels } from './lib/desktop-locale';
 import * as settings from 'electron-settings';
 const log = require('electron-log');
 
@@ -23,6 +24,8 @@ process.on('uncaughtExceptionMonitor', (error, origin) => {
 // Too annoying if there would be long-term problems with the source
 // Error would pop up on every launch
 let showUpdateErrors = false;
+let manualUpdateCheck = false;
+let updatePromptOpen = false;
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 let isDownloading = false;
 const nano_schemes = ['nano', 'nanorep', 'nanoseed', 'nanokey', 'nanosign', 'nanoprocess'];
@@ -109,59 +112,78 @@ function windowStateKeeper() {
 
 class AppUpdater {
   constructor() {
-    // We want the user to proactively download the install
+    // Require explicit confirmation before downloading an update.
     autoUpdater.autoDownload = false;
     autoUpdater.logger = log;
 
-    autoUpdater.on('update-available', () => {
-      if (isDownloading) return;
-      const dialogOpts = {
-        type: 'info' as const,
-        buttons: ['Update', 'Ask Later'],
-        title: 'New Version',
-        message: 'An update for Nault is available!',
-        detail: 'Do you want to download and install it?'
-      }
+    autoUpdater.on('update-available', (info) => {
+      manualUpdateCheck = false;
+      if (isDownloading || updatePromptOpen) return;
+      showUpdateErrors = false;
+      updatePromptOpen = true;
+      const t = desktopLabels(app.getLocale());
+      void dialog.showMessageBox({
+        type: 'info',
+        buttons: [t.update, t.askLater],
+        defaultId: 0,
+        cancelId: 1,
+        title: t.newVersion,
+        message: t.updateAvailable,
+        detail: `${t.downloadPrompt} ${info.version} ?`
+      }).then(({ response }) => {
+        updatePromptOpen = false;
+        if (response !== 0) return;
+        isDownloading = true;
+        showUpdateErrors = true;
+        // The updater emits its own error event; consume the rejected promise.
+        void autoUpdater.downloadUpdate().catch(error => {
+          log.warn('Update download failed:', error);
+        });
+      }).catch(error => {
+        updatePromptOpen = false;
+        log.warn('Could not display update dialog:', error);
+      });
+    });
 
-      isDownloading = true;
-      dialog.showMessageBox(dialogOpts).then((returnValue) => {
-        if (returnValue.response === 0) {
-          showUpdateErrors = true; // enable errors
-          autoUpdater.downloadUpdate();
-        } else {
-          isDownloading = false;
-        }
-      })
-    })
+    autoUpdater.on('update-not-available', () => {
+      const requestedManually = manualUpdateCheck;
+      manualUpdateCheck = false;
+      showUpdateErrors = false;
+      if (!requestedManually) return;
+      const t = desktopLabels(app.getLocale());
+      void dialog.showMessageBox({
+        type: 'info', buttons: [t.ok], title: t.upToDate, message: t.noUpdate
+      });
+    });
 
     autoUpdater.on('update-downloaded', () => {
-      autoUpdater.quitAndInstall(true, true);
-    })
-
-    autoUpdater.on('download-progress', (progressObj) => {
-      sendStatusToWindow(progressObj);
-    })
-
-    autoUpdater.on('error', message => {
-      log.error('There was a problem updating the application');
-      log.error(message);
       isDownloading = false;
+      showUpdateErrors = false;
+      autoUpdater.quitAndInstall(true, true);
+    });
 
-      if (!showUpdateErrors) {
-        return;
-      }
-      mainWindow?.setTitle(`Nault - ${autoUpdater.currentVersion}`); // reset title
-      showUpdateErrors = false; // disable errors
-      const dialogOpts = {
-        type: 'error' as const,
-        buttons: ['OK'],
-        title: 'Update Error',
-        message: 'Something went wrong while downloading Nault.',
-        detail: `You will be notified again on next start.\nMore details in the log at: ${logLocation}`
-      }
+    autoUpdater.on('download-progress', progressObj => {
+      sendStatusToWindow(progressObj);
+    });
 
-      dialog.showMessageBox(dialogOpts).then((returnValue) => {})
-    })
+    autoUpdater.on('error', error => {
+      log.error('There was a problem updating Nault:', error);
+      const shouldNotify = showUpdateErrors || manualUpdateCheck;
+      isDownloading = false;
+      manualUpdateCheck = false;
+      showUpdateErrors = false;
+      updatePromptOpen = false;
+      mainWindow?.setTitle(`Nault - ${autoUpdater.currentVersion}`);
+      if (!shouldNotify) return; // Keep automatic checks silent on network errors.
+      const t = desktopLabels(app.getLocale());
+      void dialog.showMessageBox({
+        type: 'error',
+        buttons: [t.ok],
+        title: t.updateError,
+        message: t.updateFailed,
+        detail: `${t.errorLog} ${logLocation}`
+      });
+    });
   }
 }
 new AppUpdater();
@@ -392,10 +414,14 @@ if (!appLock) {
   });
 }
 
-async function checkForUpdates() {
+async function checkForUpdates(manual = false) {
   // Source checkouts have no packaged updater configuration. Never contact the
   // release feed while testing a development branch.
   if (!app.isPackaged) return;
+  if (manual) {
+    manualUpdateCheck = true;
+    showUpdateErrors = true;
+  }
 
   try {
     await autoUpdater.checkForUpdates();
@@ -407,9 +433,10 @@ async function checkForUpdates() {
 
 // Build up the menu bar options based on platform
 function getApplicationMenu() {
+  const t = desktopLabels(app.getLocale());
   const template: any = [
     {
-      label: 'Edit',
+      label: t.edit,
       submenu: [
         {role: 'undo'},
         {role: 'redo'},
@@ -423,7 +450,7 @@ function getApplicationMenu() {
       ]
     },
     {
-      label: 'View',
+      label: t.view,
       submenu: [
         {role: 'reload'},
         {role: 'forcereload'},
@@ -438,6 +465,7 @@ function getApplicationMenu() {
     },
     {
       role: 'window',
+      label: t.window,
       submenu: [
         {role: 'minimize'},
         {role: 'close'}
@@ -445,9 +473,10 @@ function getApplicationMenu() {
     },
     {
       role: 'help',
+      label: t.help,
       submenu: [
         {
-          label: 'Nault Help Docs',
+          label: t.docs,
           click () { loadExternal('https://docs.nault.cc/'); }
         },
         {
@@ -460,23 +489,23 @@ function getApplicationMenu() {
         },
         {type: 'separator'},
         {
-          label: 'View GitHub',
-          click () { loadExternal('https://github.com/Nault/Nault'); }
+          label: t.github,
+          click () { loadExternal('https://github.com/twister65/Nault'); }
         },
         {
-          label: 'Submit a bug report',
-          click () { loadExternal('https://github.com/Nault/Nault/issues/new'); }
+          label: t.bug,
+          click () { loadExternal('https://github.com/twister65/Nault/issues/new'); }
         },
         {
-          label: 'Release notes',
-          click () { loadExternal('https://github.com/Nault/Nault/releases'); }
+          label: t.releaseNotes,
+          click () { loadExternal('https://github.com/twister65/Nault/releases'); }
         },
         {type: 'separator'},
         {
-          label: `Check for Updates`,
+          label: t.checkUpdates,
           enabled: app.isPackaged,
           click () {
-            checkForUpdates();
+            void checkForUpdates(true);
           }
         },
       ]
@@ -490,10 +519,10 @@ function getApplicationMenu() {
         {role: 'about'},
         {type: 'separator'},
         {
-          label: `Check for Updates`,
+          label: t.checkUpdates,
           enabled: app.isPackaged,
           click () {
-            checkForUpdates();
+            void checkForUpdates(true);
           }
         },
         {type: 'separator'},
@@ -511,7 +540,7 @@ function getApplicationMenu() {
     template[1].submenu.push(
       {type: 'separator'},
       {
-        label: 'Speech',
+        label: t.speech,
         submenu: [
           {role: 'startspeaking'},
           {role: 'stopspeaking'}

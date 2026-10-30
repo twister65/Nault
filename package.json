@@ -1,6 +1,6 @@
 {
   "name": "nault",
-  "version": "1.18.4",
+  "version": "1.18.5",
   "license": "MIT",
   "description": "Wallet for interacting with nano",
   "author": "The Nano Community / Andrew Steele",
@@ -130,6 +130,11 @@
     "brace-expansion": "1.1.21"
   },
   "build": {
+    "publish": {
+      "provider": "github",
+      "owner": "twister65",
+      "repo": "Nault"
+    },
     "appId": "cc.nault",
     "buildVersion": "1.0.0",
     "productName": "Nault",
