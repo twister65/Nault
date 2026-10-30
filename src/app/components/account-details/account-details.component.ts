@@ -72,6 +72,8 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   loadingAccountDetails = false;
   loadingIncomingTxList = false;
   loadingTxList = false;
+  // Advanced tools are temporarily hidden while their flows are being finalized.
+  readonly advancedFeaturesEnabled = false;
   showAdvancedOptions = false;
   showEditAddressBook = false;
   addressBookModel = '';
@@ -155,7 +157,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
   async ngOnInit() {
     const params = this.router.snapshot.queryParams;
-    if ('sign' in params) {
+    if (this.advancedFeaturesEnabled && 'sign' in params) {
       this.remoteVisible = params.sign === '1';
       this.showAdvancedOptions = params.sign === '1';
     }
@@ -1276,7 +1278,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   }
 
   showRemote(state: boolean) {
-    this.remoteVisible = !state;
+    this.remoteVisible = this.advancedFeaturesEnabled && !state;
   }
 
   showRemoteModal() {

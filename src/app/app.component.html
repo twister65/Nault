@@ -243,22 +243,11 @@
             <ul class="uk-nav-sub">
               <li><a routerLink="/representatives" [queryParams]="" routerLinkActive="active"><div class="label">{{ 'general.representatives' | transloco }}</div></a></li>
               <li><a routerLink="/configure-app" routerLinkActive="active"><div class="label">{{ 'general.app-settings' | transloco }}</div></a></li>
-              <li><a routerLink="/about-nault" routerLinkActive="active"><div class="label">{{ 'about-nault.title' | transloco }}</div></a></li>
               <li *ngIf="isConfigured()"><a routerLink="/manage-wallet" routerLinkActive="active"><div class="label">{{ 'ui-shell.manage-wallet' | transloco }}</div></a></li>
               <li><a routerLink="/configure-wallet" routerLinkActive="active"><div class="label">{{ 'ui-shell.configure-new-wallet' | transloco }}</div></a></li>
             </ul>
           </li>
-          <li class="uk-parent">
-            <a href="#">{{ 'ui-shell.advanced-tools' | transloco }}</a>
-            <ul class="uk-nav-sub">
-              <li><a routerLink="/sweeper" routerLinkActive="active"><div class="label">{{ 'ui-shell.wallet-sweeper' | transloco }}</div></a></li>
-              <li><a routerLink="/remote-signing" routerLinkActive="active"><div class="label">{{ 'ui-shell.remote-signing' | transloco }}</div></a></li>
-              <li><a routerLink="/multisig" routerLinkActive="active"><div class="label">{{ 'ui-shell.multi-signature' | transloco }}</div></a></li>
-              <li><a routerLink="/keygenerator" routerLinkActive="active"><div class="label">{{ 'ui-shell.keypair-generator' | transloco }}</div></a></li>
-              <li><a routerLink="/converter" routerLinkActive="active"><div class="label">{{ 'ui-shell.unit-converter' | transloco }}</div></a></li>
-              <li><a routerLink="/qr-generator" routerLinkActive="active"><div class="label">{{ 'ui-shell.qr-generator' | transloco }}</div></a></li>
-            </ul>
-          </li>
+          <li><a routerLink="/about-nault" routerLinkActive="active"><div class="label">{{ 'about-nault.title' | transloco }}</div></a></li>
         </ul>
 
         <app-install-widget></app-install-widget>
