@@ -19,7 +19,7 @@ Available for Windows/Mac/Linux – just head over to the [latest release](https
 
 If you want to verify the binary checksum there are plenty of apps to do this. One way is using a powershell or bash terminal:
 
-* **Powershell:** `Get-FileHash -Path '.\Nault-Setup-x.x.x-Windows.exe' -Algorithm SHA256`
+* **Powershell:** `Get-FileHash -Path '.\Nault-Setup-x.x.x.exe' -Algorithm SHA256`
 * **Bash:** `openssl sha256 Nault-x.x.x.AppImage`
 
 Then compare the output hash with the one listed in the corresponding checksums file that you download.
