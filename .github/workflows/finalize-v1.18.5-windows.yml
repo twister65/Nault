@@ -1,0 +1,95 @@
+name: Finalize v1.18.5 Windows release checksums
+
+# One-time release repair. Remove after successful publication.
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/finalize-v1.18.5-windows.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.repository == 'twister65/Nault'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Download and validate complete published release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag=v1.18.5
+          test "$(gh release view "$tag" --json isDraft --jq .isDraft)" = false
+          test "$(gh release view "$tag" --json isPrerelease --jq .isPrerelease)" = false
+          mkdir -p "$RUNNER_TEMP/assets"
+          gh release download "$tag" --dir "$RUNNER_TEMP/assets"
+          export RELEASE_ASSET_DIR="$RUNNER_TEMP/assets"
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import os
+          from pathlib import Path
+          import re
+
+          directory = Path(os.environ['RELEASE_ASSET_DIR'])
+          current = directory / 'Nault-Setup-1.18.5.exe'
+          blockmap = directory / 'Nault-Setup-1.18.5.exe.blockmap'
+          latest = directory / 'latest.yml'
+          for path in (current, blockmap, latest):
+              assert path.is_file() and path.stat().st_size > 0, f'Missing release asset {path.name}'
+          text = latest.read_text(encoding='utf-8')
+          assert re.search(r'(?m)^version:\s*1\.18\.5\s*$', text), 'Wrong release version'
+          assert text.count(current.name) >= 2, 'Updater URL and path must match Windows installer'
+          assert 'Nault.Setup.1.18.5.exe' not in text, 'Old Windows installer still referenced'
+          expected = base64.b64encode(hashlib.sha512(current.read_bytes()).digest()).decode('ascii')
+          hashes = re.findall(r'(?m)^\s*sha512:\s*(\S+)\s*$', text)
+          sizes = re.findall(r'(?m)^\s*size:\s*(\d+)\s*$', text)
+          assert hashes and all(s == expected for s in hashes), 'Windows installer SHA512 mismatch'
+          assert sizes and all(int(s) == current.stat().st_size for s in sizes), 'Windows installer size mismatch'
+          assert (directory / 'Nault-1.18.5.AppImage').is_file(), 'Linux release asset missing'
+          assert (directory / 'Nault-1.18.5.dmg').is_file(), 'macOS release asset missing'
+          assert (directory / 'latest-linux.yml').is_file(), 'Linux metadata missing'
+          assert (directory / 'latest-mac.yml').is_file(), 'macOS metadata missing'
+
+          obsolete = {'Nault.Setup.1.18.5.exe', 'Nault.Setup.1.18.5.exe.blockmap'}
+          output = []
+          for path in sorted(directory.iterdir(), key=lambda p: p.name):
+              if not path.is_file() or path.name in obsolete or path.name == 'SHA256SUMS':
+                  continue
+              h = hashlib.sha256()
+              with path.open('rb') as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                      h.update(chunk)
+              output.append(f'{h.hexdigest()}  {path.name}\n')
+          assert len(output) >= 9, f'Incomplete release assets: only {len(output)} checksums'
+          result = directory / 'SHA256SUMS'
+          result.write_text(''.join(output), encoding='utf-8')
+          print(f'Validated complete release and regenerated {len(output)} checksums')
+          PY
+      - name: Publish and verify SHA256SUMS then delete only old dot-named Windows assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag=v1.18.5
+          gh release upload "$tag" "$RUNNER_TEMP/assets/SHA256SUMS" --clobber
+          mkdir -p "$RUNNER_TEMP/verify"
+          gh release download "$tag" --pattern SHA256SUMS --dir "$RUNNER_TEMP/verify"
+          cmp "$RUNNER_TEMP/assets/SHA256SUMS" "$RUNNER_TEMP/verify/SHA256SUMS"
+          gh release delete-asset "$tag" Nault.Setup.1.18.5.exe --yes
+          gh release delete-asset "$tag" Nault.Setup.1.18.5.exe.blockmap --yes
+          names="$(gh release view "$tag" --json assets --jq '.assets[].name')"
+          printf '%s\n' "$names" | grep -Fx 'Nault-Setup-1.18.5.exe'
+          printf '%s\n' "$names" | grep -Fx 'Nault-Setup-1.18.5.exe.blockmap'
+          printf '%s\n' "$names" | grep -Fx 'latest.yml'
+          printf '%s\n' "$names" | grep -Fx 'SHA256SUMS'
+          ! printf '%s\n' "$names" | grep -Fx 'Nault.Setup.1.18.5.exe'
+          ! printf '%s\n' "$names" | grep -Fx 'Nault.Setup.1.18.5.exe.blockmap'
+          echo "Windows v1.18.5 release finalized with the hyphenated name and verified checksums."
