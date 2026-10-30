@@ -1,0 +1,77 @@
+name: Repair v1.18.5 Windows update metadata
+
+# One-time release metadata repair; delete this workflow after the fix is verified.
+# The release binaries are immutable: only the Windows latest.yml asset changes.
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/repair-v1.18.5-windows-update.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.repository == 'twister65/Nault'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Verify tag and published release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$(gh release view v1.18.5 --json isDraft --jq .isDraft)" = false
+          test "$(gh release view v1.18.5 --json isPrerelease --jq .isPrerelease)" = false
+          test "$(gh release view v1.18.5 --json assets --jq '.assets[].name' | grep -Fx 'Nault.Setup.1.18.5.exe')" = 'Nault.Setup.1.18.5.exe'
+          test "$(gh release view v1.18.5 --json assets --jq '.assets[].name' | grep -Fx 'Nault.Setup.1.18.5.exe.blockmap')" = 'Nault.Setup.1.18.5.exe.blockmap'
+          mkdir -p "$RUNNER_TEMP/update" "$RUNNER_TEMP/verify"
+          gh release download v1.18.5 --pattern latest.yml --pattern Nault.Setup.1.18.5.exe --dir "$RUNNER_TEMP/update"
+      - name: Fix installer basename; verify SHA-512 and file size
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, hashlib, os, pathlib, re
+          directory = pathlib.Path(os.environ['RUNNER_TEMP']) / 'update'
+          manifest = directory / 'latest.yml'
+          binary = directory / 'Nault.Setup.1.18.5.exe'
+          original = manifest.read_text('utf-8')
+          old = 'Nault-Setup-1.18.5.exe'
+          new = binary.name
+          if old not in original:
+              if new in original:
+                  print('Manifest already corrected: no update required')
+              else:
+                  raise SystemExit('Unexpected Windows update filename; aborting')
+          else:
+              assert new not in original, 'Mixed manifest URLs; aborting'
+          assert re.search(r'(?m)^version:\\s*1\\.18\\.5\\s*$', original), 'Unexpected metadata version'
+          expected_hash = base64.b64encode(hashlib.sha512(binary.read_bytes()).digest()).decode('ascii')
+          hashes = re.findall(r'(?m)^\\s*sha512:\\s*(\\S+)\\s*$', original)
+          assert hashes and all(h == expected_hash for h in hashes), 'Metadata SHA-512 mismatch; aborting'
+          sizes = re.findall(r'(?m)^\\s*size:\\s*(\\d+)\\s*$', original)
+          assert sizes and all(int(s) == binary.stat().st_size for s in sizes), 'Installer size mismatch; aborting'
+          if old in original:
+              fixed = original.replace(old, new)
+              assert old not in fixed and new in fixed
+              manifest.write_text(fixed, encoding='utf-8')
+              print('Corrected Windows latest.yml; actual installer SHA-512 and size verified')
+          PY
+      - name: Upload only corrected latest.yml
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release upload v1.18.5 "$RUNNER_TEMP/update/latest.yml" --clobber
+          gh release download v1.18.5 --pattern latest.yml --dir "$RUNNER_TEMP/verify"
+          grep -Fq 'Nault.Setup.1.18.5.exe' "$RUNNER_TEMP/verify/latest.yml"
+          ! grep -Fq 'Nault-Setup-1.18.5.exe' "$RUNNER_TEMP/verify/latest.yml"
+          echo "Windows update metadata corrected; Linux/macOS assets and installers unchanged."
