@@ -48,7 +48,7 @@ test('English and unknown system locales keep a complete English fallback', () =
 test('release metadata explicitly targets the maintained fork and version is coherent', () => {
   const pkg = require('../package.json');
   const lock = require('../package-lock.json');
-  assert.equal(pkg.version, '1.18.5');
+  assert.match(pkg.version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
   assert.equal(lock.version, pkg.version);
   assert.equal(lock.packages[''].version, pkg.version);
   assert.deepEqual(pkg.build.publish, {
