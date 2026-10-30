@@ -92,6 +92,32 @@ describe('WalletService saved Ledger device transport capability', () => {
   });
 });
 
+describe('WalletService.reloadBalances with no configured accounts', () => {
+  it('resets balances locally without sending empty-account RPC requests', async () => {
+    const service = Object.create(WalletService.prototype) as any;
+    service.wallet = {
+      accounts: [],
+      balance: 123,
+      pending: 456,
+      updatingBalance: false,
+      balanceInitialized: false
+    };
+    service.api = {
+      accountsBalances: jasmine.createSpy('accountsBalances'),
+      accountsFrontiers: jasmine.createSpy('accountsFrontiers')
+    };
+
+    await service.reloadBalances();
+
+    expect(service.api.accountsBalances).not.toHaveBeenCalled();
+    expect(service.api.accountsFrontiers).not.toHaveBeenCalled();
+    expect(service.wallet.balance.toString()).toBe('0');
+    expect(service.wallet.pending.toString()).toBe('0');
+    expect(service.wallet.balanceInitialized).toBe(true);
+    expect(service.wallet.updatingBalance).toBe(false);
+  });
+});
+
 describe('WalletService.reloadBalances errors', () => {
   it('clears the loading indicator if the RPC refresh rejects', async () => {
     // Avoid unrelated Angular dependencies: exercise the error boundary directly.
