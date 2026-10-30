@@ -133,8 +133,19 @@ export class ApiService {
   async delegatorsCount(account: string): Promise<{ count: string }> {
     return await this.request('delegators_count', { account }, false);
   }
-  async representativesOnline(): Promise<{ representatives: Record<string, string>, error?: string }> {
-    return await this.request('representatives_online', { }, false);
+  async representativesOnline(): Promise<{ representatives: Record<string, string> | string[], error?: string } | null> {
+    const settings = this.appSettings.settings;
+    // A restricted public proxy may reject this optional RPC even though
+    // balances, frontiers and WebSocket notifications are fully functional.
+    // Match by endpoint as random mode keeps serverName === 'random'.
+    const knownUnsupported = settings.serverName !== 'custom' &&
+      this.appSettings.serverOptions?.some(server =>
+        server.api === settings.serverAPI && server.supportsRepresentativesOnline === false);
+    if (knownUnsupported) return null;
+
+    // Optional representative metadata must not mark an otherwise healthy
+    // wallet RPC server offline when an endpoint refuses the action.
+    return (await this.request('representatives_online', { }, true)) || null;
   }
 
   // Nano Node can return JSON-encoded block contents, while RsNano returns a JSON object.
