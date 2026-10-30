@@ -221,6 +221,61 @@ describe('ApiService RPC proxy fallback', () => {
   });
 });
 
+describe('ApiService optional representative metadata', () => {
+  const berryPay = 'https://xno-rpc.berrypay.org/proxy';
+  const nanoSlo = 'https://nanoslo.0x.no/proxy';
+
+  function setup(serverName: string, serverAPI: string) {
+    const http = { post: jasmine.createSpy('post').and.returnValue(of({ representatives: { example: 'nano_rep' } })) };
+    const node = {
+      node: { status: true },
+      setOnline: jasmine.createSpy('setOnline'),
+      setOffline: jasmine.createSpy('setOffline'),
+      setLoading: jasmine.createSpy('setLoading')
+    };
+    const settings = {
+      settings: { serverName, serverAPI, serverAuth: null },
+      serverOptions: [
+        { value: 'berrypay', api: berryPay, supportsRepresentativesOnline: false },
+        { value: 'nanoslo', api: nanoSlo, supportsRepresentativesOnline: true }
+      ]
+    };
+    return { api: new ApiService(http as any, node as any, settings as any), http, node, settings };
+  }
+
+  it('skips an unsupported public proxy in both explicit and random modes', async () => {
+    const { api, http, settings } = setup('berrypay', berryPay);
+
+    expect(await api.representativesOnline()).toBeNull();
+    settings.settings.serverName = 'random';
+    expect(await api.representativesOnline()).toBeNull();
+    expect(http.post).not.toHaveBeenCalled();
+  });
+
+  it('still queries supported and explicitly configured custom endpoints', async () => {
+    const { api, http, settings } = setup('nanoslo', nanoSlo);
+
+    expect(await api.representativesOnline()).toEqual({ representatives: { example: 'nano_rep' } });
+    settings.settings.serverName = 'custom';
+    settings.settings.serverAPI = berryPay;
+    expect(await api.representativesOnline()).toEqual({ representatives: { example: 'nano_rep' } });
+    expect(http.post).toHaveBeenCalledTimes(2);
+    expect(http.post.calls.allArgs().map(args => args[1])).toEqual([
+      { action: 'representatives_online' },
+      { action: 'representatives_online' }
+    ]);
+  });
+
+  it('does not mark the node offline when optional representative RPC returns HTTP 400', async () => {
+    const { api, http, node } = setup('nanoslo', nanoSlo);
+    http.post.and.returnValue(throwError({ status: 400 }));
+
+    expect(await api.representativesOnline()).toBeNull();
+    expect(http.post).toHaveBeenCalledTimes(1);
+    expect(node.setOffline).not.toHaveBeenCalled();
+  });
+});
+
 describe('ApiService bounded secure requests', () => {
   function setup(serverName = 'random') {
     const http = { post: jasmine.createSpy('post').and.returnValue(throwError({ status: 503 })) };

@@ -76,6 +76,8 @@ export class AppSettingsService {
       ws: 'wss://xno-rpc.berrypay.org/ws',
       auth: null,
       shouldRandom: true,
+      // This public proxy rejects representatives_online (HTTP 400).
+      supportsRepresentativesOnline: false,
     },
     {
       name: 'Rainstorm City',

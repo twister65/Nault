@@ -932,9 +932,16 @@ export class WalletService {
   }
 
   private async refreshBalances() {
-    const fiatPrice = this.price.price.lastPrice;
-
     const accountIDs = this.wallet.accounts.map(a => a.id);
+    if (accountIDs.length === 0) {
+      // An empty wallet needs no RPC request. Public proxies may reject an
+      // empty accounts list, which would incorrectly mark a healthy node offline.
+      this.resetBalances();
+      this.wallet.balanceInitialized = true;
+      return;
+    }
+
+    const fiatPrice = this.price.price.lastPrice;
     const accounts = await this.api.accountsBalances(accountIDs);
     const frontiers = await this.api.accountsFrontiers(accountIDs);
     // const allFrontiers = [];
