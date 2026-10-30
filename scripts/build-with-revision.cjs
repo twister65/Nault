@@ -4,6 +4,8 @@ const { execFileSync, spawnSync } = require('node:child_process');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
+// The PWA and Electron renderer must embed the exact same release version.
+const releaseVersion = require('../package.json').version;
 const isFullSha = value => typeof value === 'string' && /^[a-f0-9]{40}$/i.test(value);
 
 function readGitCommit() {
@@ -24,7 +26,10 @@ function resolveCommitSha(env = process.env, fallback = readGitCommit) {
   return isFullSha(gitSha) ? gitSha.toLowerCase() : null;
 }
 
-function angularBuildArgs(config, commit, angularCliPath) {
+function angularBuildArgs(config, commit, angularCliPath, version = releaseVersion) {
+  if (typeof version !== 'string' || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
+    throw new Error('Invalid release version in package.json.');
+  }
   if (commit !== null && !isFullSha(commit)) {
     throw new Error('Invalid build commit; expected a full Git SHA or null.');
   }
@@ -34,6 +39,7 @@ function angularBuildArgs(config, commit, angularCliPath) {
   // Pass the full quoted string literal to Angular esbuild. Never substitute
   // a moving GitHub branch HEAD at runtime or load a separate JSON asset.
   args.push('--define', `__NAULT_BUILD_COMMIT__=${JSON.stringify(commit)}`);
+  args.push('--define', `__NAULT_BUILD_VERSION__=${JSON.stringify(version)}`);
   return args;
 }
 
@@ -44,6 +50,7 @@ function main() {
   }
   const sha = resolveCommitSha();
   console.log('Nault embedded build commit:', sha ? sha.slice(0, 7) : 'unavailable');
+  console.log('Nault embedded release version:', releaseVersion);
   const angularCli = require.resolve('@angular/cli/bin/ng.js');
   const child = spawnSync(process.execPath, angularBuildArgs(config, sha, angularCli), {
     cwd: root, stdio: 'inherit', env: process.env

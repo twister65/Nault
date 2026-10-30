@@ -21,6 +21,15 @@ describe('AccountDetailsComponent', () => {
     // Constructor smoke test; lifecycle scenarios supply explicit inputs and I/O mocks.
   });
 
+  it('keeps advanced account options and remote signing disabled', () => {
+    expect(component.advancedFeaturesEnabled).toBe(false);
+    expect(component.showAdvancedOptions).toBe(false);
+    expect(component.remoteVisible).toBe(false);
+
+    component.showRemote(false);
+    expect(component.remoteVisible).toBe(false);
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });

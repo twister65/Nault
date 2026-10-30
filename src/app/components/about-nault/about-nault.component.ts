@@ -9,12 +9,21 @@ export function readBuildCommit(metadata: unknown): string | null {
     ? sha.toLowerCase() : null;
 }
 
+// Only display a valid build-time release version; never trust runtime URLs.
+export function readBuildVersion(metadata: unknown): string | null {
+  const value = metadata !== null && typeof metadata === 'object'
+    ? (metadata as { version?: unknown }).version : null;
+  return typeof value === 'string' && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(value)
+    ? value : null;
+}
+
 @Component({
   selector: 'app-about-nault',
   templateUrl: './about-nault.component.html',
   standalone: false
 })
 export class AboutNaultComponent implements OnInit {
+  releaseVersion: string | null = null;
   commitShort: string | null = null;
   commitUrl: string | null = null;
 
@@ -24,6 +33,9 @@ export class AboutNaultComponent implements OnInit {
     // 'typeof' also permits isolated tests without a build replacement.
     const buildSha = typeof __NAULT_BUILD_COMMIT__ === 'undefined'
       ? null : __NAULT_BUILD_COMMIT__;
+    const buildVersion = typeof __NAULT_BUILD_VERSION__ === 'undefined'
+      ? null : __NAULT_BUILD_VERSION__;
+    this.releaseVersion = readBuildVersion({ version: buildVersion });
     const sha = readBuildCommit({ commit: buildSha });
     this.commitShort = sha ? sha.slice(0, 7) : null;
     this.commitUrl = sha ? `https://github.com/twister65/Nault/commit/${sha}` : null;

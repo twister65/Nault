@@ -4,6 +4,16 @@
     <div class="uk-card-body">
       <div class="uk-form-horizontal">
         <div class="uk-margin">
+          <div class="uk-form-label">{{ 'about-nault.version' | transloco }}</div>
+          <div class="uk-form-controls">
+            @if (releaseVersion) {
+              <code>{{ releaseVersion }}</code>
+            } @else {
+              <span>{{ 'about-nault.unknown' | transloco }}</span>
+            }
+          </div>
+        </div>
+        <div class="uk-margin">
           <div class="uk-form-label">{{ 'about-nault.commit' | transloco }}</div>
           <div class="uk-form-controls">
             @if (commitUrl) {

@@ -1,5 +1,5 @@
 {
-  "about-nault": {"title":"Acerca de Nault","commit":"Commit de GitHub","unknown":"No disponible","description":"Revisión integrada en esta aplicación durante la compilación. Haz clic en el commit para consultar su código fuente en GitHub."},
+  "about-nault": {"title":"Acerca de Nault","version":"Versión","commit":"Commit de GitHub","unknown":"No disponible","description":"Revisión integrada en esta aplicación durante la compilación. Haz clic en el commit para consultar su código fuente en GitHub."},
   "account-details": {
     "account-details": "Detalles de la cuenta",
     "address-book-name-leave-blank-to-remove": "Nombre en la libreta de direcciones (déjalo vacío para eliminarlo)",
