@@ -51,6 +51,8 @@ If you want to know how to setup the development environment head over to [DEVEL
 Special thanks to the following!
 
 - [Nault](https://github.com/Nault/Nault) - The original upstream
+- [Electron](https://www.electronjs.org/) - Build cross-platform desktop apps with JavaScript, HTML, and CSS
+- [Angular](https://angular.dev/) - Deliver web apps with confidence 🚀
 - [rsnano-node](https://github.com/rsnano-node/rsnano-node) - RsNano is a Rust port of nano-node
 - [nano-work-server](https://github.com/nanocurrency/nano-work-server) - A dedicated work server for the Nano cryptocurrency
 - [ChatGPT](https://chatgpt.com/) - ChatGPT helped me improve the stability and security of Nault.
