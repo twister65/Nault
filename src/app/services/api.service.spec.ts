@@ -226,7 +226,7 @@ describe('ApiService optional representative metadata', () => {
   const nanoSlo = 'https://nanoslo.0x.no/proxy';
 
   function setup(serverName: string, serverAPI: string) {
-    const http = { post: jasmine.createSpy('post').and.returnValue(of({ representatives: ['nano_rep'] })) };
+    const http = { post: jasmine.createSpy('post').and.returnValue(of({ representatives: { example: 'nano_rep' } })) };
     const node = {
       node: { status: true },
       setOnline: jasmine.createSpy('setOnline'),
@@ -255,10 +255,10 @@ describe('ApiService optional representative metadata', () => {
   it('still queries supported and explicitly configured custom endpoints', async () => {
     const { api, http, settings } = setup('nanoslo', nanoSlo);
 
-    expect(await api.representativesOnline()).toEqual({ representatives: ['nano_rep'] });
+    expect(await api.representativesOnline()).toEqual({ representatives: { example: 'nano_rep' } });
     settings.settings.serverName = 'custom';
     settings.settings.serverAPI = berryPay;
-    expect(await api.representativesOnline()).toEqual({ representatives: ['nano_rep'] });
+    expect(await api.representativesOnline()).toEqual({ representatives: { example: 'nano_rep' } });
     expect(http.post).toHaveBeenCalledTimes(2);
     expect(http.post.calls.allArgs().map(args => args[1])).toEqual([
       { action: 'representatives_online' },
