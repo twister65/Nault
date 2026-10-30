@@ -55,3 +55,13 @@ test('release metadata explicitly targets the maintained fork and version is coh
     provider: 'github', owner: 'twister65', repo: 'Nault'
   });
 });
+
+test('Help menu links to maintained fork and omits upstream Discord', () => {
+  const electronSource = fs.readFileSync(
+    path.join(__dirname, '../desktop-app/src/desktop-app.ts'), 'utf8'
+  );
+  assert.match(electronSource, /https:\/\/github\.com\/twister65\/Nault'/);
+  assert.match(electronSource, /https:\/\/github\.com\/twister65\/Nault\/issues\/new/);
+  assert.match(electronSource, /https:\/\/github\.com\/twister65\/Nault\/releases/);
+  assert.doesNotMatch(electronSource, /Discord \(#nault\)|discord\.nanocenter\.org/);
+});
