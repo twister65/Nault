@@ -65,3 +65,8 @@ test('Help menu links to maintained fork and omits upstream Discord', () => {
   assert.match(electronSource, /https:\/\/github\.com\/twister65\/Nault\/releases/);
   assert.doesNotMatch(electronSource, /Discord \(#nault\)|discord\.nanocenter\.org/);
 });
+
+test('Windows release NSIS installer uses a hyphenated filename', () => {
+  const pkg = require('../package.json');
+  assert.equal(pkg.build.nsis.artifactName, 'Nault-Setup-${version}.${ext}');
+});

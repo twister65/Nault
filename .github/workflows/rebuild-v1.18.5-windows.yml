@@ -1,0 +1,166 @@
+name: Rebuild v1.18.5 Windows installer with hyphenated filename
+
+# One-time repair of the existing release; remove after verification.
+# Builds the original v1.18.5 tag with an explicit NSIS artifact name.
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rebuild-v1.18.5-windows.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild-windows:
+    if: github.repository == 'twister65/Nault'
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      NODE_OPTIONS: --openssl-legacy-provider
+    steps:
+      - name: Checkout immutable v1.18.5 release source
+        uses: actions/checkout@v7
+        with:
+          ref: v1.18.5
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Assert exact release source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((git rev-parse HEAD).Trim() -ne '580335caf7d6097ce97f1136e6321773f348883f') { throw 'Unexpected release tag commit' }
+          node -e "const p=require('./package.json'),l=require('./package-lock.json'); if(p.version!=='1.18.5'||l.version!==p.version||l.packages[''].version!==p.version) process.exit(1)"
+          if ($LASTEXITCODE -ne 0) { throw 'Release version mismatch' }
+      - name: Install locked dependencies
+        shell: pwsh
+        run: |
+          npm ci --legacy-peer-deps --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
+      - name: Build Windows NSIS installer using the hyphenated name
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          npm run desktop:build
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop build failed' }
+          npx --no-install electron-builder --win nsis --x64 --publish never '-c.npmRebuild=false' '-c.nsis.artifactName=Nault-Setup-${version}.${ext}'
+          if ($LASTEXITCODE -ne 0) { throw 'Windows installer packaging failed' }
+      - name: Validate generated installer, blockmap and updater feed
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @'
+          import base64
+          import hashlib
+          from pathlib import Path
+          import re
+
+          out = Path('desktop-app/build')
+          exe = out / 'Nault-Setup-1.18.5.exe'
+          blockmap = out / 'Nault-Setup-1.18.5.exe.blockmap'
+          latest = out / 'latest.yml'
+          for path in (exe, blockmap, latest):
+              assert path.is_file() and path.stat().st_size > 0, f'Missing {path}'
+          assert not (out / 'Nault.Setup.1.18.5.exe').exists(), 'Unexpected dot-named Windows installer'
+          text = latest.read_text(encoding='utf-8')
+          assert re.search(r'(?m)^version:\s*1\.18\.5\s*$', text), 'Wrong latest.yml version'
+          assert text.count(exe.name) >= 2, 'Both update URL and path must match the new installer'
+          assert 'Nault.Setup.1.18.5.exe' not in text, 'Old filename remains in latest.yml'
+          expected = base64.b64encode(hashlib.sha512(exe.read_bytes()).digest()).decode('ascii')
+          hashes = re.findall(r'(?m)^\s*sha512:\s*(\S+)\s*$', text)
+          assert hashes and all(item == expected for item in hashes), 'Installer SHA512 mismatch'
+          sizes = re.findall(r'(?m)^\s*size:\s*(\d+)\s*$', text)
+          assert sizes and all(int(item) == exe.stat().st_size for item in sizes), 'Installer size mismatch'
+          print('Windows NSIS installer, blockmap and latest.yml validated')
+          '@ | Set-Content -LiteralPath "$env:RUNNER_TEMP\validate-windows-release.py" -Encoding utf8
+          python "$env:RUNNER_TEMP\validate-windows-release.py"
+          if ($LASTEXITCODE -ne 0) { throw 'Update metadata validation failed' }
+      - name: Upload replacement Windows installer, blockmap and then latest.yml
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((gh release view v1.18.5 --json isDraft --jq .isDraft).Trim() -ne 'false') { throw 'Release is a draft' }
+          $build = 'desktop-app/build'
+          gh release upload v1.18.5 "$build/Nault-Setup-1.18.5.exe" "$build/Nault-Setup-1.18.5.exe.blockmap" --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to upload Windows installer and blockmap' }
+          gh release upload v1.18.5 "$build/latest.yml" --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to update latest.yml' }
+      - name: Rebuild release SHA256SUMS without changing Linux or macOS assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $meta = Join-Path $env:RUNNER_TEMP 'nault-release-checksums'
+          New-Item -ItemType Directory -Path $meta -Force | Out-Null
+          gh release download v1.18.5 --pattern SHA256SUMS --dir $meta
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download existing SHA256SUMS' }
+          @'
+          import hashlib
+          from pathlib import Path
+          import os
+
+          existing = Path(os.environ['RUNNER_TEMP']) / 'nault-release-checksums' / 'SHA256SUMS'
+          entries = {}
+          for line in existing.read_text(encoding='utf-8').splitlines():
+              if not line.strip():
+                  continue
+              pieces = line.split(None, 1)
+              assert len(pieces) == 2 and len(pieces[0]) == 64, f'Unrecognized checksum entry: {line}'
+              entries[pieces[1].lstrip('*')] = pieces[0].lower()
+          old_names = ('Nault.Setup.1.18.5.exe', 'Nault.Setup.1.18.5.exe.blockmap')
+          assert all(name in entries for name in old_names), 'Expected original Windows assets not present in checksums'
+          for name in (*old_names, 'latest.yml'):
+              entries.pop(name, None)
+          out = Path('desktop-app/build')
+          for name in ('Nault-Setup-1.18.5.exe', 'Nault-Setup-1.18.5.exe.blockmap', 'latest.yml'):
+              entries[name] = hashlib.sha256((out / name).read_bytes()).hexdigest()
+          assert len(entries) >= 5, 'Unexpectedly short SHA256SUMS'
+          existing.write_text(''.join(f'{value}  {name}\n' for name, value in sorted(entries.items())), encoding='utf-8')
+          print('Retained unchanged asset checksums and recalculated Windows/checksum metadata')
+          '@ | Set-Content -LiteralPath "$env:RUNNER_TEMP\rebuild-release-checksums.py" -Encoding utf8
+          python "$env:RUNNER_TEMP\rebuild-release-checksums.py"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot update SHA256SUMS safely' }
+          gh release upload v1.18.5 "$meta/SHA256SUMS" --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish SHA256SUMS' }
+      - name: Verify published new files and remove retired dot-named Windows assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $names = @(gh release view v1.18.5 --json assets --jq '.assets[].name')
+          foreach ($required in @('Nault-Setup-1.18.5.exe', 'Nault-Setup-1.18.5.exe.blockmap', 'latest.yml', 'SHA256SUMS')) {
+            if ($names -notcontains $required) { throw "Missing published asset: $required" }
+          }
+          $meta = Join-Path $env:RUNNER_TEMP 'nault-release-verify'
+          New-Item -ItemType Directory -Path $meta -Force | Out-Null
+          gh release download v1.18.5 --pattern latest.yml --pattern SHA256SUMS --dir $meta
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot verify published metadata' }
+          foreach ($filename in @('latest.yml', 'SHA256SUMS')) {
+            $expected = (Get-FileHash "desktop-app/build/$filename" -Algorithm SHA256).Hash.ToLower()
+            if ($filename -eq 'SHA256SUMS') {
+              $expected = (Get-FileHash "$env:RUNNER_TEMP/nault-release-checksums/SHA256SUMS" -Algorithm SHA256).Hash.ToLower()
+            }
+            $actual = (Get-FileHash "$meta/$filename" -Algorithm SHA256).Hash.ToLower()
+            if ($expected -ne $actual) { throw "Published $filename checksum mismatch" }
+          }
+          gh release delete-asset v1.18.5 Nault.Setup.1.18.5.exe --yes
+          if ($LASTEXITCODE -ne 0) { throw 'Could not remove previous Windows installer' }
+          gh release delete-asset v1.18.5 Nault.Setup.1.18.5.exe.blockmap --yes
+          if ($LASTEXITCODE -ne 0) { throw 'Could not remove previous blockmap' }
+          $names = @(gh release view v1.18.5 --json assets --jq '.assets[].name')
+          if ($names -contains 'Nault.Setup.1.18.5.exe' -or $names -contains 'Nault.Setup.1.18.5.exe.blockmap') { throw 'Retired Windows assets remain' }
+          Write-Host 'Release v1.18.5 Windows auto-update package repaired; Linux and macOS assets unchanged.'
