@@ -483,10 +483,6 @@ function getApplicationMenu() {
           label: 'Reddit (r/nanocurrency)',
           click () { loadExternal('https://www.reddit.com/r/nanocurrency'); }
         },
-        {
-          label: 'Discord (#nault)',
-          click () { loadExternal('https://discord.nanocenter.org/'); }
-        },
         {type: 'separator'},
         {
           label: t.github,
