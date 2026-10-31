@@ -60,7 +60,17 @@ export class AppSettingsService {
     identiconsStyle: 'nanoidenticons',
   };
 
-  serverOptions = [
+  // Explicit optional capabilities preserve typing when no built-in server uses a flag.
+  serverOptions: Array<{
+    name: string;
+    value: string;
+    api: string | null;
+    ws: string | null;
+    auth: string | null;
+    shouldRandom: boolean;
+    work?: string;
+    supportsRepresentativesOnline?: boolean;
+  }> = [
     {
       name: 'Random',
       value: 'random',
