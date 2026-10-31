@@ -1741,3 +1741,91 @@ input[type=number] {
 	}
 }
 // ========================================================================
+
+
+// Accessible contrast on pale backgrounds (light mode only).
+// UIkit's pastel notification colors and generic metadata text are too faint
+// against the Nault light cards, especially for RPC statistics and status toasts.
+.light-mode {
+	.content-container {
+		color: #344861;
+
+		.uk-card-default {
+			color: #344861;
+		}
+
+		.uk-form-label {
+			color: #2D4059;
+			font-weight: 500;
+		}
+
+		.uk-text-meta {
+			color: #50617D !important;
+
+			a {
+				color: #2367AD;
+			}
+		}
+
+		.uk-text-muted {
+			color: #50617D !important;
+		}
+
+		#node-stats-table {
+			td {
+				color: #344861;
+
+				strong {
+					color: #273E5E;
+					font-weight: 600;
+				}
+			}
+		}
+	}
+
+	// Notifications sit outside .content-container. Keep each status visually
+	// distinct while ensuring the text is readable over its tinted surface.
+	.notification-container .wallet-notification {
+		border-width: 1px;
+		border-style: solid;
+		box-shadow: 0 3px 14px rgba(31, 69, 112, 0.12);
+
+		p {
+			color: inherit;
+			font-weight: 500;
+		}
+
+		.uk-alert-close {
+			color: inherit;
+			opacity: 0.85;
+
+			&:hover, &:focus {
+				opacity: 1;
+			}
+		}
+
+		&.uk-alert-primary {
+			background: #E9F3FD;
+			color: #185384;
+			border-color: #A9CBEA;
+		}
+
+		&.uk-alert-success {
+			background: #E8F6EE;
+			color: #176345;
+			border-color: #A8D9BE;
+		}
+
+		&.uk-alert-warning {
+			background: #FFF0DB;
+			color: #86440F;
+			border-color: #E8C596;
+		}
+
+		&.uk-alert-danger {
+			background: #FCEAF0;
+			color: #9D2C45;
+			border-color: #E6B2C0;
+		}
+	}
+}
