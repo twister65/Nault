@@ -253,3 +253,88 @@
 		}
 	}
 }
+
+
+// Balance cards should belong to the light sidebar palette, rather than
+// retaining the dark wallet-card appearance used in Night Mode.
+// Scope everything to light mode so the existing dark theme is unchanged.
+.light-mode .nano-card {
+	background: linear-gradient(140deg, #FFFFFF 0%, #EFF6FE 100%);
+	border: 1px solid #C9DCEF;
+	border-radius: 14px;
+	box-shadow: 0 4px 14px rgba(31, 69, 112, 0.08);
+	box-sizing: border-box;
+
+	&.is-wallet {
+		background: linear-gradient(140deg, #FFFFFF 0%, #EFF6FE 100%);
+
+		// The dashed dark wallet outline does not fit the light design.
+		&::after {
+			display: none;
+		}
+	}
+
+	&.incoming-card {
+		background: linear-gradient(140deg, #FFFFFF 0%, #EAF7F3 100%);
+		border-color: #BFDED3;
+	}
+
+	> .logo,
+	&.is-wallet > .logo {
+		filter: none;
+		opacity: 0.11;
+		background-size: 150%;
+		background-position: 29% 30%;
+	}
+
+	> .card-contents {
+		> .account-name-container {
+			> .name {
+				color: #253C59;
+				font-weight: 600;
+			}
+
+			> a.name:hover {
+				border-color: #2367AD;
+			}
+
+			> .select-button {
+				&:hover, &.open {
+					border-color: #2367AD;
+				}
+
+				> .circle {
+					background: #315D93;
+				}
+
+				&.open {
+					background: #2367AD;
+
+					> .circle {
+						background: #FFFFFF;
+					}
+				}
+			}
+		}
+
+		> .account-balances {
+			> .spinner-container .uk-spinner {
+				color: #2367AD;
+			}
+
+			> .balance-container {
+				&.primary {
+					color: #183456;
+				}
+
+				&.converted {
+					color: #50647D;
+				}
+
+				> .currency-name {
+					font-weight: 500;
+				}
+			}
+		}
+	}
+}
