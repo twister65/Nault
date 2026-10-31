@@ -141,6 +141,129 @@ describe('LedgerService pending-receive reconnect message', () => {
   });
 });
 
+describe('Ledger browser USB connection serialization', () => {
+  function setup() {
+    const service = Object.create(LedgerService.prototype) as any;
+    service.isDesktop = false;
+    service.isAndroidWeb = false;
+    service.transportMode = 'USB';
+    service.ledger = {status: LedgerStatus.NOT_CONNECTED, transport: null, nano: null};
+    service.waitTimeout = 30000;
+    return service;
+  }
+
+  it('waits for a previous WebUSB interface to close before opening again', async () => {
+    const service = setup();
+    let finishClose: () => void;
+    const closed = new Promise<void>(resolve => { finishClose = resolve; });
+    const close = jasmine.createSpy('close').and.returnValue(closed);
+    service.ledger.transport = { close };
+    service.resetLedger();
+
+    const newTransport = { close: jasmine.createSpy('newClose').and.resolveTo() };
+    const create = jasmine.createSpy('create').and.resolveTo(newTransport);
+    service.DynamicTransport = { create };
+
+    const opening = service.loadTransport();
+    await Promise.resolve();
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(create).not.toHaveBeenCalled();
+
+    finishClose!();
+    await opening;
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(service.ledger.transport).toBe(newTransport);
+    expect(service.ledger.nano).toBeTruthy();
+  });
+
+  it('keeps multiple asynchronous USB closes ordered ahead of the next open', async () => {
+    const service = setup();
+    let releaseFirst: () => void;
+    const firstClose = new Promise<void>(resolve => { releaseFirst = resolve; });
+    const closeFirst = jasmine.createSpy('closeFirst').and.returnValue(firstClose);
+    const closeSecond = jasmine.createSpy('closeSecond').and.resolveTo();
+    service.ledger.transport = { close: closeFirst };
+    service.resetLedger();
+    service.ledger.transport = { close: closeSecond };
+    service.resetLedger();
+
+    const create = jasmine.createSpy('create').and.resolveTo({
+      close: jasmine.createSpy('close').and.resolveTo()
+    });
+    service.DynamicTransport = { create };
+    const opening = service.loadTransport();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(closeSecond).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+
+    releaseFirst!();
+    await opening;
+    expect(closeSecond).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('discards a USB transport opened after a reset during device selection', async () => {
+    const service = setup();
+    let finishOpen: (transport: any) => void;
+    const deviceOpen = new Promise<any>(resolve => { finishOpen = resolve; });
+    const create = jasmine.createSpy('create').and.returnValue(deviceOpen);
+    service.DynamicTransport = { create };
+    const opening = service.loadTransport();
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(create).toHaveBeenCalledTimes(1);
+    service.resetLedger();
+    const stale = {close: jasmine.createSpy('close').and.resolveTo()};
+    finishOpen!(stale);
+
+    await expectAsync(opening).toBeRejectedWithError('USB connection cancelled');
+    expect(stale.close).toHaveBeenCalledTimes(1);
+    expect(service.ledger.transport).toBeNull();
+  });
+
+  it('shares concurrent USB loads and releases the guard for a future attempt', async () => {
+    const service = setup();
+    let complete: (value: boolean) => void;
+    const pending = new Promise<boolean>(resolve => { complete = resolve; });
+    const loadSession = jasmine.createSpy('loadLedgerSession').and.returnValues(
+      pending, Promise.resolve(true)
+    );
+    service.loadLedgerSession = loadSession;
+
+    const first = service.loadLedger(true);
+    const second = service.loadLedger(true);
+    expect(loadSession).toHaveBeenCalledTimes(1);
+
+    complete!(true);
+    expect(await first).toBe(true);
+    expect(await second).toBe(true);
+    expect(await service.loadLedger(true)).toBe(true);
+    expect(loadSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('releases the USB guard on failure so a retry is possible', async () => {
+    const service = setup();
+    const loadSession = jasmine.createSpy('loadLedgerSession').and.returnValues(
+      Promise.reject(new Error('USB connection failed')), Promise.resolve(true)
+    );
+    service.loadLedgerSession = loadSession;
+    await expectAsync(service.loadLedger(true)).toBeRejectedWithError('USB connection failed');
+    expect(await service.loadLedger(true)).toBe(true);
+    expect(loadSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not serialize Bluetooth load attempts through the browser USB guard', async () => {
+    const service = setup();
+    service.transportMode = 'Bluetooth';
+    const loadSession = jasmine.createSpy('loadLedgerSession').and.resolveTo(false);
+    service.loadLedgerSession = loadSession;
+    await Promise.all([service.loadLedger(true), service.loadLedger(true)]);
+    expect(loadSession).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('Ledger USB account readiness after transport changes', () => {
   function setup(error: unknown) {
     const service = Object.create(LedgerService.prototype) as any;
