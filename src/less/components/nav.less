@@ -870,3 +870,61 @@
 		}
 	}
 }
+
+
+// The sidebar used to remain dark regardless of the selected theme.
+// Keep the existing dark palette as the default and apply a matching light
+// palette only when Night Mode is disabled.
+.light-mode {
+  .nav-container {
+    background: #F4FAFF;
+    color: #535B72;
+    scrollbar-color: #B6C6DD #F4FAFF;
+
+    &::-webkit-scrollbar-track { background: #F4FAFF; }
+    &::-webkit-scrollbar-thumb {
+      background: #B6C6DD;
+      border-color: #F4FAFF;
+    }
+
+    .left-nav > li {
+      > a {
+        color: #303D57;
+        border-bottom-color: #DCE9F9;
+        &:focus { color: #303D57; }
+        &:hover { color: #3379CA; }
+        &.active { color: @global-primary-background; }
+      }
+      &.uk-parent.uk-open > a { color: #535B72; }
+      .uk-nav-sub {
+        border-bottom-color: #DCE9F9;
+        > li > a {
+          color: #303D57;
+          &:hover { color: #3379CA; }
+          &.active { color: @global-primary-background; }
+        }
+      }
+    }
+
+    .nav-separator-top,
+    .nav-status-row,
+    .nav-representative-info { border-color: #DCE9F9; }
+
+    .nav-action-receive > .label,
+    .nav-representative-info > .representative > h2 { color: #535B72; }
+
+    .nav-representative-info > .representative > .representative-name-row {
+      > .name, > .weight-total { color: #303D57; }
+    }
+
+    .nav-search {
+      background: #E0EBFA;
+      input { color: #303D57; }
+    }
+
+    > .footer {
+      .section-caption { color: #535B72; }
+      &.footer-actions::after { background: #DCE9F9; }
+    }
+  }
+}
