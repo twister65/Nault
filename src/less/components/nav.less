@@ -892,8 +892,19 @@
         color: #303D57;
         border-bottom-color: #DCE9F9;
         &:focus { color: #303D57; }
-        &:hover { color: #3379CA; }
-        &.active { color: @global-primary-background; }
+        &:hover {
+          color: #2367AD;
+          background: #E8F2FF;
+        }
+        &.active {
+          color: #2367AD;
+          background: #DDEBFD;
+          font-weight: 600;
+        }
+        &:focus-visible {
+          outline: 2px solid #2367AD;
+          outline-offset: -2px;
+        }
       }
       &.uk-parent.uk-open > a { color: #535B72; }
       .uk-nav-sub {
@@ -918,16 +929,27 @@
     }
 
     .nav-search {
-      background: #E0EBFA;
-      input { color: #303D57; }
+      background: #E4EFFC;
+      box-shadow: inset 0 0 0 1px #CDDFF3;
+      input {
+        color: #303D57;
+        &::placeholder { color: #526782; }
+      }
+    }
+
+    // Status text must remain readable on the pale sidebar surface.
+    .nav-status-row {
+      .uk-text-warning { color: #A65018 !important; }
+      .uk-text-success { color: #0D7854 !important; }
+      > .status-labels > .secondary > a { color: #2367AD; }
     }
 
     > .footer {
       .section-caption { color: #535B72; }
       &.footer-actions::after { background: #DCE9F9; }
       &.footer-attribution > .attribution > a {
-        color: #3379CA;
-        &:hover { border-color: #3379CA; }
+        color: #2367AD;
+        &:hover { border-color: #2367AD; }
       }
     }
   }

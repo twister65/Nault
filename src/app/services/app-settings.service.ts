@@ -60,7 +60,17 @@ export class AppSettingsService {
     identiconsStyle: 'nanoidenticons',
   };
 
-  serverOptions = [
+  // Explicit optional capabilities preserve typing when no built-in server uses a flag.
+  serverOptions: Array<{
+    name: string;
+    value: string;
+    api: string | null;
+    ws: string | null;
+    auth: string | null;
+    shouldRandom: boolean;
+    work?: string;
+    supportsRepresentativesOnline?: boolean;
+  }> = [
     {
       name: 'Random',
       value: 'random',
@@ -68,16 +78,6 @@ export class AppSettingsService {
       ws: null,
       auth: null,
       shouldRandom: false,
-    },
-    {
-      name: 'Berry Pay',
-      value: 'berrypay',
-      api: 'https://xno-rpc.berrypay.org/proxy',
-      ws: 'wss://xno-rpc.berrypay.org/ws',
-      auth: null,
-      shouldRandom: true,
-      // This public proxy rejects representatives_online (HTTP 400).
-      supportsRepresentativesOnline: false,
     },
     {
       name: 'Rainstorm City',
