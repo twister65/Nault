@@ -61,6 +61,14 @@ export class LedgerNotReadyError extends Error {
   }
 }
 
+// A second user-initiated signing request must not interrupt the first.
+export class LedgerSigningBusyError extends Error {
+  constructor() {
+    super('Ledger signing already in progress');
+    this.name = 'LedgerSigningBusyError';
+  }
+}
+
 
 export interface LedgerData {
   status: string;
@@ -100,6 +108,20 @@ export function getLedgerReadinessIssue(error: unknown): 'locked' | 'app-not-ope
   return null;
 }
 
+// Report only a stable category to the UI. Never expose raw BLE/native errors.
+export function getLedgerSigningIssue(error: unknown): 'rejected' | 'busy' | 'not-ready' | 'failed' {
+  const detail = ledgerErrorFields(error);
+  const message = String(detail.message || '');
+  if (detail.statusCode === STATUS_CODES.CONDITIONS_OF_USE_NOT_SATISFIED ||
+      /0x6985\b/i.test(message) || message === 'Transaction denied on Ledger device') return 'rejected';
+  if (error instanceof LedgerNotReadyError || getLedgerReadinessIssue(error)) return 'not-ready';
+  if (detail.name === 'LedgerSigningBusyError' ||
+      detail.name === 'TransportRaceCondition' || detail.id === 'TransportRaceCondition' ||
+      detail.name === 'TransportLocked' || detail.id === 'TransportLocked' ||
+      /\b(?:ledger|device|transport) (?:is )?busy\b/i.test(message)) return 'busy';
+  return 'failed';
+}
+
 function ledgerReadinessMessage(issue: 'locked' | 'app-not-open'): string {
   return issue === 'locked'
     ? 'Ledger locked. Unlock your Ledger, open the Nano app, then click Reconnect.'
@@ -121,6 +143,9 @@ export class LedgerService {
   pollInterval = 5000;
 
   pollingLedger = false;
+  // Status probes and cache/sign APDUs must never overlap on a BLE transport.
+  private statusCheckInFlight: Promise<void> | null = null;
+  private signingSessionActive = false;
 
   ledger: LedgerData = {
     status: LedgerStatus.NOT_CONNECTED,
@@ -820,6 +845,23 @@ export class LedgerService {
     }
   }
 
+  // Reserve the device before awaiting the current status probe. This covers
+  // cacheBlock + signBlock as one unit, including failures and user refusal.
+  // Never retry a signature or blockchain submission automatically.
+  async withSigningSession<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.signingSessionActive) throw new LedgerSigningBusyError();
+    this.signingSessionActive = true;
+    const generation = this.bluetoothGeneration;
+    try {
+      if (this.statusCheckInFlight) await this.statusCheckInFlight;
+      // A disconnect/reconnect while waiting invalidates the pending action.
+      if (generation !== this.bluetoothGeneration) throw new LedgerNotReadyError();
+      return await operation();
+    } finally {
+      this.signingSessionActive = false;
+    }
+  }
+
   async updateCache(accountIndex: number, blockHash: string) {
     await this.requireReadyForSigning();
     const blockResponse = await this.api.blocksInfo([blockHash]);
@@ -898,11 +940,19 @@ export class LedgerService {
     }, this.pollInterval);
   }
 
-  async checkLedgerStatus() {
-    if (this.ledger.status !== LedgerStatus.READY) {
-      return;
+  async checkLedgerStatus(): Promise<void> {
+    if (this.signingSessionActive || this.ledger.status !== LedgerStatus.READY) return;
+    if (this.statusCheckInFlight) return this.statusCheckInFlight;
+    const pending = this.checkLedgerStatusOnce();
+    this.statusCheckInFlight = pending;
+    try {
+      await pending;
+    } finally {
+      if (this.statusCheckInFlight === pending) this.statusCheckInFlight = null;
     }
+  }
 
+  private async checkLedgerStatusOnce(): Promise<void> {
     const generation = this.bluetoothGeneration;
     let statusText = '';
     try {
