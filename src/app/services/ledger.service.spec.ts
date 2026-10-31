@@ -160,7 +160,11 @@ describe('Ledger browser USB connection serialization', () => {
     service.ledger.transport = { close };
     service.resetLedger();
 
-    const newTransport = { close: jasmine.createSpy('newClose').and.resolveTo() };
+    const newTransport = {
+      close: jasmine.createSpy('newClose').and.resolveTo(),
+      setScrambleKey: jasmine.createSpy('setScrambleKey'),
+      decorateAppAPIMethods: jasmine.createSpy('decorateAppAPIMethods')
+    };
     const create = jasmine.createSpy('create').and.resolveTo(newTransport);
     service.DynamicTransport = { create };
 
@@ -188,7 +192,9 @@ describe('Ledger browser USB connection serialization', () => {
     service.resetLedger();
 
     const create = jasmine.createSpy('create').and.resolveTo({
-      close: jasmine.createSpy('close').and.resolveTo()
+      close: jasmine.createSpy('close').and.resolveTo(),
+      setScrambleKey: jasmine.createSpy('setScrambleKey'),
+      decorateAppAPIMethods: jasmine.createSpy('decorateAppAPIMethods')
     });
     service.DynamicTransport = { create };
     const opening = service.loadTransport();
