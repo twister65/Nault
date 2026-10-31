@@ -4,6 +4,22 @@
     <div class="uk-card-body">
       <div class="uk-form-horizontal">
         <div class="uk-margin">
+          <div class="uk-form-label">{{ 'about-nault.platform' | transloco }}</div>
+          <div class="uk-form-controls">{{ applicationTypeKey | transloco }}</div>
+        </div>
+        @if (!isDesktop) {
+          <div class="uk-margin">
+            <div class="uk-form-label">{{ 'about-nault.domain' | transloco }}</div>
+            <div class="uk-form-controls">
+              @if (pwaDomain) {
+                <code>{{ pwaDomain }}</code>
+              } @else {
+                <span>{{ 'about-nault.unknown' | transloco }}</span>
+              }
+            </div>
+          </div>
+        }
+        <div class="uk-margin">
           <div class="uk-form-label">{{ 'about-nault.version' | transloco }}</div>
           <div class="uk-form-controls">
             @if (releaseVersion) {
