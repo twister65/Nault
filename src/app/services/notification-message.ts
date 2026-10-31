@@ -17,6 +17,10 @@ export function localizeNotificationMessage(message: string, translate: Notifica
       return translate('ui-notifications.bluetooth-unavailable');
     case 'Waiting for confirmation on Ledger Device...':
       return translate('ui-notifications.ledger-confirmation-waiting');
+    case 'Ledger is busy. Wait a moment and try signing again.':
+      return translate('ui-notifications.ledger-signing-busy');
+    case 'Ledger signing failed. Check the connection and try again.':
+      return translate('ui-notifications.ledger-signing-failed');
     case 'Ledger does not match the configured wallet.':
       return translate('ui-notifications.ledger-wallet-mismatch');
     case 'Ledger is not ready. Unlock your Ledger, open the Nano app, then click Reconnect.':

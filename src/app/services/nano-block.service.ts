@@ -5,7 +5,7 @@ import {WorkPoolService} from './work-pool.service';
 import BigNumber from 'bignumber.js';
 import {NotificationService} from './notification.service';
 import {AppSettingsService} from './app-settings.service';
-import {LedgerService, LedgerStatus} from './ledger.service';
+import {LedgerService, LedgerStatus, getLedgerSigningIssue} from './ledger.service';
 import { WalletAccount } from './wallet.service';
 import {BehaviorSubject} from 'rxjs';
 import { tools as nanocurrencyWebTools } from 'nanocurrency-web';
@@ -88,13 +88,15 @@ export class NanoBlockService {
       };
       try {
         this.sendLedgerNotification();
-        await this.ledgerService.updateCache(walletAccount.index, toAcct.frontier);
-        const sig = await this.ledgerService.signBlock(walletAccount.index, ledgerBlock);
+        const sig = await this.ledgerService.withSigningSession(async () => {
+          await this.ledgerService.updateCache(walletAccount.index, toAcct.frontier);
+          return this.ledgerService.signBlock(walletAccount.index, ledgerBlock);
+        });
         this.clearLedgerNotification();
         blockData.signature = sig.signature;
       } catch (err) {
         this.clearLedgerNotification();
-        this.sendLedgerDeniedNotification();
+        this.sendLedgerDeniedNotification(err);
         return;
       }
     } else {
@@ -239,8 +241,10 @@ export class NanoBlockService {
       };
       try {
         this.sendLedgerNotification();
-        await this.ledgerService.updateCache(walletAccount.index, fromAccount.frontier);
-        const sig = await this.ledgerService.signBlock(walletAccount.index, ledgerBlock);
+        const sig = await this.ledgerService.withSigningSession(async () => {
+          await this.ledgerService.updateCache(walletAccount.index, fromAccount.frontier);
+          return this.ledgerService.signBlock(walletAccount.index, ledgerBlock);
+        });
         this.clearLedgerNotification();
         blockData.signature = sig.signature;
       } catch (err) {
@@ -313,11 +317,13 @@ export class NanoBlockService {
       }
       try {
         this.sendLedgerNotification();
-        // On new accounts, we do not need to cache anything
-        if (!openEquiv) {
-          await this.ledgerService.updateCache(walletAccount.index, toAcct.frontier);
-        }
-        const sig = await this.ledgerService.signBlock(walletAccount.index, ledgerBlock);
+        const sig = await this.ledgerService.withSigningSession(async () => {
+          // On new accounts, we do not need to cache anything.
+          if (!openEquiv) {
+            await this.ledgerService.updateCache(walletAccount.index, toAcct.frontier);
+          }
+          return this.ledgerService.signBlock(walletAccount.index, ledgerBlock);
+        });
         this.notifications.removeNotification('ledger-sign');
         blockData.signature = sig.signature.toUpperCase();
       } catch (err) {
@@ -406,17 +412,18 @@ export class NanoBlockService {
       }
       try {
         this.sendLedgerNotification();
-        // On new accounts, we do not need to cache anything
-        if (!openEquiv) {
-          if (prevBlock === null) {
-            throw new Error('The previous block is required for Ledger signing.');
+        const sig = await this.ledgerService.withSigningSession(async () => {
+          // On new accounts, we do not need to cache anything.
+          if (!openEquiv) {
+            if (prevBlock === null) {
+              throw new Error('The previous block is required for Ledger signing.');
+            }
+            try {
+              await this.ledgerService.updateCacheOffline(accountIndex, prevBlock);
+            } catch (err) { console.log(err); }
           }
-          try {
-            // await this.ledgerService.updateCache(accountIndex, block.previous);
-            await this.ledgerService.updateCacheOffline(accountIndex, prevBlock);
-          } catch (err) {console.log(err); }
-        }
-        const sig = await this.ledgerService.signBlock(accountIndex, ledgerBlock);
+          return this.ledgerService.signBlock(accountIndex, ledgerBlock);
+        });
         this.clearLedgerNotification();
         block.signature = sig.signature;
       } catch (err) {
@@ -526,10 +533,17 @@ export class NanoBlockService {
   }
 
   sendLedgerDeniedNotification(err: unknown = null) {
-    const message = err !== null && typeof err === 'object' && 'message' in err
-      ? err.message
-      : null;
-    this.notifications.sendWarning(message ? String(message) : 'Transaction denied on Ledger device');
+    const issue = getLedgerSigningIssue(err);
+    // Safe diagnostics: category only; never log APDUs, addresses or raw errors.
+    console.warn('[Ledger signing] interrupted', { reason: issue });
+    const message = issue === 'rejected'
+      ? 'Transaction denied on Ledger device'
+      : issue === 'busy'
+        ? 'Ledger is busy. Wait a moment and try signing again.'
+        : issue === 'not-ready'
+          ? 'Ledger is not ready. Unlock your Ledger, open the Nano app, then click Reconnect.'
+          : 'Ledger signing failed. Check the connection and try again.';
+    this.notifications.sendWarning(message);
   }
   sendLedgerNotification() {
     this.notifications.sendInfo(`Waiting for confirmation on Ledger Device...`, { identifier: 'ledger-sign', length: 0 });

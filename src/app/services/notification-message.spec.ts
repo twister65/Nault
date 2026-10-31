@@ -19,6 +19,8 @@ describe('localizeNotificationMessage', () => {
     'ui-notifications.ledger-hid-read-timeout': 'délai de lecture HID de la Ledger dépassé',
     'ui-notifications.ledger-signing-error': 'Erreur lors de la signature du bloc : {{error}}',
     'ui-notifications.ledger-user-rejected': 'Transaction refusée sur la Ledger (0x6985).',
+    'ui-notifications.ledger-signing-busy': 'La Ledger est occupée. Patientez un instant puis relancez manuellement la signature.',
+    'ui-notifications.ledger-signing-failed': 'Échec de la signature sur la Ledger. Vérifiez la connexion, puis réessayez.',
     'ui-notifications.received-amount': 'Réception de {{amount}} XNO réussie !',
     'ui-notifications.received': 'Réception de XNO réussie !',
   };
@@ -113,6 +115,13 @@ describe('localizeNotificationMessage', () => {
   it('localizes a HID timeout while retaining the signing failure semantics', () => {
     expect(localizeNotificationMessage('Error signing block: Ledger HID read timed out', translate))
       .toBe('Erreur lors de la signature du bloc : délai de lecture HID de la Ledger dépassé');
+  });
+
+  it('translates busy and generic signing problems without exposing transport errors', () => {
+    expect(localizeNotificationMessage('Ledger is busy. Wait a moment and try signing again.', translate))
+      .toContain('La Ledger est occupée');
+    expect(localizeNotificationMessage('Ledger signing failed. Check the connection and try again.', translate))
+      .toContain('Échec de la signature sur la Ledger');
   });
 
   it('localizes a Ledger user refusal rather than reporting a failed signing operation', () => {

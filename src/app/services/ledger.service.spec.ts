@@ -1,7 +1,7 @@
 import { ComponentTestModule, isolateConstructorIO } from '../../testing/component-test.module';
 import { TestBed, inject } from '@angular/core/testing';
 
-import { LedgerService, LedgerStatus, isAndroidBrowser, LedgerNotReadyError, getLedgerReadinessIssue, identifyLedgerUsbModel } from './ledger.service';
+import { LedgerService, LedgerStatus, isAndroidBrowser, LedgerNotReadyError, LedgerSigningBusyError, getLedgerReadinessIssue, getLedgerSigningIssue, identifyLedgerUsbModel } from './ledger.service';
 
 describe('LedgerService', () => {
   beforeEach(() => {
@@ -453,5 +453,100 @@ describe('Ledger wallet identity guard and Android USB policy', () => {
     expect(service.ledgerStatus$.next).toHaveBeenCalledWith(
       jasmine.objectContaining({ status: LedgerStatus.NOT_CONNECTED,
         statusText: jasmine.stringMatching(/disabled on Android/) }));
+  });
+});
+
+describe('Ledger signing session and status polling isolation (#58)', () => {
+  function setup() {
+    const service = Object.create(LedgerService.prototype) as any;
+    service.ledger = { status: LedgerStatus.READY };
+    service.bluetoothGeneration = 0;
+    service.signingSessionActive = false;
+    service.statusCheckInFlight = null;
+    service.configuringWallet = true;
+    service.ledgerStatus$ = { next: jasmine.createSpy('next') };
+    service.getLedgerAccount = jasmine.createSpy('getLedgerAccount').and.resolveTo({ address: 'nano_test' });
+    return service;
+  }
+
+  it('waits for an already-running status check before the cache/sign sequence', async () => {
+    const service = setup();
+    let finishPoll: (value: any) => void;
+    const pendingPoll = new Promise<any>(resolve => { finishPoll = resolve; });
+    service.getLedgerAccount.and.returnValue(pendingPoll);
+    const poll = service.checkLedgerStatus();
+    const sequence: string[] = [];
+    const signing = service.withSigningSession(async () => {
+      sequence.push('cache');
+      sequence.push('sign');
+      return 'signed';
+    });
+
+    await Promise.resolve();
+    expect(sequence).toEqual([]);
+    await service.checkLedgerStatus(); // Skipped, not a second concurrent APDU.
+    expect(service.getLedgerAccount).toHaveBeenCalledTimes(1);
+
+    finishPoll!({ address: 'nano_test' });
+    await poll;
+    expect(await signing).toBe('signed');
+    expect(sequence).toEqual(['cache', 'sign']);
+    await service.checkLedgerStatus();
+    expect(service.getLedgerAccount).toHaveBeenCalledTimes(2);
+  });
+
+  it('skips periodic probes during a pending Ledger signature and resumes afterward', async () => {
+    const service = setup();
+    let finishSignature: () => void;
+    const signature = new Promise<void>(resolve => { finishSignature = resolve; });
+    const signing = service.withSigningSession(async () => {
+      await signature;
+      return 'approved';
+    });
+    await service.checkLedgerStatus();
+    expect(service.getLedgerAccount).not.toHaveBeenCalled();
+    finishSignature!();
+    expect(await signing).toBe('approved');
+    await service.checkLedgerStatus();
+    expect(service.getLedgerAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses overlapping user-initiated signatures and always releases the guard on error', async () => {
+    const service = setup();
+    let release: () => void;
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const first = service.withSigningSession(async () => {
+      await blocked;
+      throw new Error('Transport disconnected');
+    });
+    await expectAsync(service.withSigningSession(async () => 'second'))
+      .toBeRejectedWithError(LedgerSigningBusyError);
+    release!();
+    await expectAsync(first).toBeRejectedWithError('Transport disconnected');
+    expect(await service.withSigningSession(async () => 'manual retry')).toBe('manual retry');
+  });
+
+  it('invalidates a signing request if the BLE session changes while waiting for the poll', async () => {
+    const service = setup();
+    let finishPoll: (value: any) => void;
+    service.getLedgerAccount.and.returnValue(new Promise<any>(resolve => { finishPoll = resolve; }));
+    const poll = service.checkLedgerStatus();
+    const cache = jasmine.createSpy('cache').and.resolveTo('cached');
+    const signing = service.withSigningSession(cache);
+    service.bluetoothGeneration++;
+    finishPoll!({ address: 'nano_test' });
+    await poll;
+    await expectAsync(signing).toBeRejectedWithError(LedgerNotReadyError);
+    expect(cache).not.toHaveBeenCalled();
+  });
+
+  it('classifies busy, refusal and connection problems without treating refusal as contention', () => {
+    expect(getLedgerSigningIssue({ name: 'TransportRaceCondition' })).toBe('busy');
+    expect(getLedgerSigningIssue({ id: 'TransportLocked' })).toBe('busy');
+    expect(getLedgerSigningIssue(new LedgerSigningBusyError())).toBe('busy');
+    expect(getLedgerSigningIssue({ statusCode: 0x6985, message: 'Conditions not satisfied' })).toBe('rejected');
+    expect(getLedgerSigningIssue(new Error('Ledger device: UNKNOWN_ERROR (0x6985)'))).toBe('rejected');
+    expect(getLedgerSigningIssue(new LedgerNotReadyError())).toBe('not-ready');
+    expect(getLedgerSigningIssue({ name: 'NotAllowedError', message: 'Access denied' })).toBe('failed');
   });
 });
