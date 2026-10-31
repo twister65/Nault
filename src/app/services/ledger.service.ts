@@ -172,6 +172,11 @@ export class LedgerService {
   queryingDesktopLedger = false;
   private bluetoothConnecting = false;
   private bluetoothGeneration = 0;
+  // WebUSB/WebHID connects must not overlap, including calls from other views.
+  // resetLedger() is synchronous for callers, but its close is asynchronous.
+  private usbConnectionInFlight: Promise<any> | null = null;
+  private usbClosePending: Promise<void> = Promise.resolve();
+  private usbGeneration = 0;
   private pendingReconnectNotified = false;
   // Human-readable pairing advice for the Configure Wallet flow (not a raw native error).
   bluetoothErrorMessage = '';
@@ -258,8 +263,19 @@ export class LedgerService {
     this.ledger.nano = null;
     this.pollingLedger = false;
     this.bluetoothGeneration++;
+    this.usbGeneration = (this.usbGeneration || 0) + 1;
     if (transport) {
-      Promise.resolve(transport.close()).catch(() => {});
+      if (!this.isDesktop && this.transportMode !== 'Bluetooth') {
+        // Keep close operations ordered. The next USB open waits for the
+        // previous browser interface release instead of racing with it.
+        const previousClose = this.usbClosePending || Promise.resolve();
+        this.usbClosePending = previousClose.then(() => transport.close()).then(
+          () => {}, () => {}
+        );
+      } else {
+        // Preserve the existing immediate close for Bluetooth and Electron.
+        Promise.resolve(transport.close()).catch(() => {});
+      }
     }
   }
 
@@ -465,16 +481,26 @@ export class LedgerService {
   }
 
   async loadTransport() {
-    return new Promise((resolve, reject) => {
-      this.DynamicTransport.create(3000, this.waitTimeout).then(trans => {
-
-        // LedgerLogs.listen((log: LedgerLog) => console.log(`Ledger: ${log.type}: ${log.message}`));
-        this.ledger.transport = trans;
-        this.ledger.nano = new Nano(this.ledger.transport);
-
-        resolve(this.ledger.transport);
-      }).catch(reject);
-    });
+    const browserUsb = !this.isDesktop && this.transportMode !== 'Bluetooth';
+    const generation = this.usbGeneration || 0;
+    if (browserUsb) {
+      await (this.usbClosePending || Promise.resolve());
+      if (generation !== (this.usbGeneration || 0) || this.transportMode === 'Bluetooth') {
+        throw new Error('USB connection cancelled');
+      }
+    }
+    const trans = await this.DynamicTransport.create(3000, this.waitTimeout);
+    if (browserUsb && (generation !== (this.usbGeneration || 0) || this.transportMode === 'Bluetooth')) {
+      // A reset or transport switch happened while Chromium was opening the
+      // interface. Never publish a stale transport as the active wallet.
+      const previousClose = this.usbClosePending || Promise.resolve();
+      this.usbClosePending = previousClose.then(() => trans.close()).then(() => {}, () => {});
+      await this.usbClosePending;
+      throw new Error('USB connection cancelled');
+    }
+    this.ledger.transport = trans;
+    this.ledger.nano = new Nano(trans);
+    return trans;
   }
 
 
@@ -484,6 +510,22 @@ export class LedgerService {
    * @returns {Promise<any>}
    */
   async loadLedger(hideNotifications = false, forceBluetoothReconnect = false) {
+    // Share one browser USB connection attempt between manual import,
+    // reconnect and readiness checks. BLE and native Electron are unaffected.
+    if (!this.isDesktop && !this.isAndroidWeb && this.transportMode !== 'Bluetooth') {
+      if (this.usbConnectionInFlight) return this.usbConnectionInFlight;
+      const attempt = this.loadLedgerSession(hideNotifications, forceBluetoothReconnect);
+      this.usbConnectionInFlight = attempt;
+      try {
+        return await attempt;
+      } finally {
+        if (this.usbConnectionInFlight === attempt) this.usbConnectionInFlight = null;
+      }
+    }
+    return this.loadLedgerSession(hideNotifications, forceBluetoothReconnect);
+  }
+
+  private async loadLedgerSession(hideNotifications = false, forceBluetoothReconnect = false) {
     this.lastUsbSelectionCancelled = false;
     this.lastBluetoothSelectionCancelled = false;
     if (this.isAndroidWeb && this.transportMode !== 'Bluetooth') {
