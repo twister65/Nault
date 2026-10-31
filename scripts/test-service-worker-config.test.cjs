@@ -34,3 +34,33 @@ test('Angular production build emits the intended service worker manifest', () =
     group.name === 'app' && group.urls.includes('/index.html')
   ), 'App shell remains in the prefetch group');
 });
+
+test('production PWA loads its CSS directly without a deferred inline script', () => {
+  const workspace = JSON.parse(fs.readFileSync(path.join(root, 'angular.json'), 'utf8'));
+  const build = workspace.projects.nault.architect.build;
+  const production = build.configurations.production;
+  const desktop = build.configurations.desktop;
+  assert.equal(production.optimization.scripts, true);
+  assert.equal(production.optimization.styles.minify, true);
+  assert.equal(production.optimization.styles.inlineCritical, false);
+  assert.equal(production.optimization.fonts, true);
+  assert.equal(desktop.optimization, true, 'Desktop optimization is unchanged');
+
+  const htmlFile = path.join(root, 'dist', 'index.html');
+  assert.ok(fs.existsSync(htmlFile), 'Run npm run wallet:build before this test');
+  const html = fs.readFileSync(htmlFile, 'utf8');
+
+  // The deferred critical-CSS path starts styles.css as media="print" and
+  // relies on an inline JavaScript snippet to restore media="all".
+  // A strict CSP or unexpected browser behavior can leave the UI unstyled.
+  const links = [...html.matchAll(/<link\b[^>]*>/gi)].map(match => match[0]);
+  const cssLinks = links.filter(link => /\brel=["']stylesheet["']/i.test(link));
+  assert.ok(cssLinks.length > 0, 'Production HTML directly includes stylesheets');
+  const mainCss = cssLinks.find(link => /\bhref=["']([^"']*styles(?:-[\w]+)?\.css)["']/i.test(link));
+  assert.ok(mainCss, 'Main application stylesheet is linked');
+  assert.doesNotMatch(mainCss, /\bmedia=["']print["']/i, 'Main stylesheet must not be print-only');
+  assert.doesNotMatch(html, /data-beasties-media=/i, 'No deferred critical-CSS loader is required');
+
+  const asset = mainCss.match(/\bhref=["']([^"']+)["']/i)[1].replace(/^\//, '');
+  assert.ok(fs.existsSync(path.join(root, 'dist', asset)), 'CSS asset is present in built output');
+});
