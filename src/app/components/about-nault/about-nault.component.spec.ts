@@ -1,4 +1,4 @@
-import { AboutNaultComponent, readBuildCommit, readBuildVersion } from './about-nault.component';
+import { AboutNaultComponent, readBuildCommit, readBuildVersion, readPwaDomain } from './about-nault.component';
 
 describe('Nault build commit', () => {
   it('accepts a full commit SHA and normalizes its case', () => {
@@ -22,9 +22,24 @@ describe('Nault build commit', () => {
     expect(readBuildCommit({})).toBeNull();
   });
 
+  it('displays the actual PWA domain (including preview deployments), not a hard-coded URL', () => {
+    expect(readPwaDomain(false, { protocol: 'https:', hostname: 'twister32.changeip.org' })).toBe('twister32.changeip.org');
+    expect(readPwaDomain(false, { protocol: 'https:', hostname: 'nault-android-test.vercel.app' })).toBe('nault-android-test.vercel.app');
+    expect(readPwaDomain(false, { protocol: 'http:', hostname: 'localhost' })).toBe('localhost');
+  });
+
+  it('never treats a Desktop or non-web location as a PWA domain', () => {
+    expect(readPwaDomain(true, { protocol: 'https:', hostname: 'twister32.changeip.org' })).toBeNull();
+    expect(readPwaDomain(false, { protocol: 'file:', hostname: '' })).toBeNull();
+    expect(readPwaDomain(false, { protocol: 'chrome-extension:', hostname: 'extension' })).toBeNull();
+    expect(readPwaDomain(false, null)).toBeNull();
+  });
+
   it('can render About without fetching a revision file or a network request', () => {
     const component = new AboutNaultComponent();
     expect(() => component.ngOnInit()).not.toThrow();
+    expect(component.applicationTypeKey).toBe(component.isDesktop ? 'about-nault.platform-desktop' : 'about-nault.platform-pwa');
+    expect(component.pwaDomain).toBe(component.isDesktop ? null : readPwaDomain(false, window.location));
     if (component.releaseVersion !== null) {
       expect(component.releaseVersion).toMatch(/^\d+\.\d+\.\d+/);
     }

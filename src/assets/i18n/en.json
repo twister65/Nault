@@ -1,5 +1,5 @@
 {
-  "about-nault": {"title":"About Nault","version":"Version","commit":"GitHub commit","unknown":"Unavailable","description":"Revision embedded at build time in this application. Click the commit to view the exact source on GitHub."},
+  "about-nault": {"title":"About Nault","platform":"Application type","platform-pwa":"PWA (Web)","platform-desktop":"Desktop (Electron)","domain":"PWA domain","version":"Version","commit":"GitHub commit","unknown":"Unavailable","description":"Revision embedded at build time in this application. Click the commit to view the exact source on GitHub."},
   "account-details": {
     "account-details": "Account Details",
     "address-book-name-leave-blank-to-remove": "Address Book Name (Leave blank to remove)",
