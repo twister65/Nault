@@ -853,6 +853,8 @@
     "received-amount": "Réception de {{amount}} XNO réussie !",
     "received": "Réception des XNO réussie !",
     "ledger-user-rejected": "Transaction refusée sur la Ledger (0x6985).",
+    "ledger-signing-busy": "La Ledger est occupée. Patientez un instant puis relancez manuellement la signature.",
+    "ledger-signing-failed": "Échec de la signature sur la Ledger. Vérifiez la connexion, puis réessayez.",
     "node-offline": "Impossible de se connecter au nœud Nano. Les soldes affichés peuvent être inexacts !",
     "ledger-pending-reconnect": "Des XNO sont en attente de réception. Déverrouillez votre Ledger, ouvrez l’application Nano, puis cliquez sur « Reconnecter » pour les recevoir.",
     "tracked-receivable": "L’adresse suivie {{account}} peut maintenant recevoir {{amount}} XNO.",
