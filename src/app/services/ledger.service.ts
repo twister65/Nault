@@ -273,7 +273,8 @@ export class LedgerService {
           () => {}, () => {}
         );
       } else {
-        Promise.resolve().then(() => transport.close()).catch(() => {});
+        // Preserve the existing immediate close for Bluetooth and Electron.
+        Promise.resolve(transport.close()).catch(() => {});
       }
     }
   }
