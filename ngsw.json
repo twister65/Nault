@@ -1,6 +1,6 @@
 {
   "configVersion": 1,
-  "timestamp": 1793476177912,
+  "timestamp": 1793483448678,
   "index": "/index.html",
   "assetGroups": [
     {
@@ -11,11 +11,11 @@
         "ignoreVary": true
       },
       "urls": [
-        "/chunk-C7rnj2Hn.js",
-        "/chunk-Cj_2KQPx.js",
-        "/chunk-JrQWFlP4.js",
+        "/chunk-BKbCS5oc.js",
+        "/chunk-DBjVtNN_.js",
+        "/chunk-DlFwic6X.js",
         "/index.html",
-        "/main-BEF6E75W.js",
+        "/main-M6R2L5UB.js",
         "/manifest.webmanifest",
         "/polyfills-XCTNWQMG.js",
         "/styles-D4PGBBRR.css",
@@ -232,11 +232,11 @@
     "/assets/logo_source/nault-logo.ai": "22d5d60e0e6c226c118b5faf41e90a5dcd977fed",
     "/assets/logo_source/nault-logo.eps": "a2147e36015ef5497c846a0b74dfb2a4828fd2cd",
     "/assets/logo_source/nault-logo.svg": "d9682092a80a1e825c646a1e7cebd8e4e9aead49",
-    "/chunk-C7rnj2Hn.js": "0b923bdb7272cfd1197c22abb2f8a545b76e0f19",
-    "/chunk-Cj_2KQPx.js": "364c6c4abea903c289d75eaa29c0aaafcc48e68d",
-    "/chunk-JrQWFlP4.js": "f37853a0a7245d69feacde7e48434e9a32550654",
-    "/index.html": "33e7bc2298bfcdece9e76079702db542d2773e8c",
-    "/main-BEF6E75W.js": "10c4ab3a13179bf1a4dbac6f8351fea0e24b2514",
+    "/chunk-BKbCS5oc.js": "361c383e0d28198fd145c284e2bce64d88d0fa69",
+    "/chunk-DBjVtNN_.js": "6af332381aa347fa5bac61c4485be40ad77451cb",
+    "/chunk-DlFwic6X.js": "5f49ad40ee3e6455ee98ac271c62b448e2bebe45",
+    "/index.html": "7d0311812d64bf4d2a6b10931fd9f6843db1dffb",
+    "/main-M6R2L5UB.js": "5b506b5e37ccc744db8e5dab583449d9fc3c007e",
     "/manifest.webmanifest": "fb9ce0116a92808e43c4203fa61fdcb255708437",
     "/polyfills-XCTNWQMG.js": "1d01522c681783180bea98427ee72f35b2f4d49c",
     "/styles-D4PGBBRR.css": "2bdac3cf176113ce0d57d9a838aa6afdd35f4de9",
@@ -260,5 +260,5 @@
       "regex": "^\\/(?:.+\\/)?[^/]*__[^/]*\\/.*$"
     }
   ],
-  "navigationRequestStrategy": "freshness"
+  "navigationRequestStrategy": "performance"
 }
