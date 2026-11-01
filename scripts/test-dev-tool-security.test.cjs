@@ -96,8 +96,9 @@ test('follow-redirects is patched in Karma HTTP proxy tooling',()=>{
   assert.match(copy.entry.integrity||'',/^sha512-/);
 });
 
-test('affected minimatch 10.x consumers use patched v11, older toolchains keep their API',()=>{
+test('affected minimatch 10.x and Electron universal consumers use patched v11, legacy APIs remain',()=>{
   assert.equal(pkg.overrides['minimatch@^10.0.0'],'11.0.3');
+  assert.equal(pkg.overrides['minimatch@^9.0.3'],'11.0.3');
   for(const parent of [
     'node_modules/@eslint/config-array',
     'node_modules/@typescript-eslint/typescript-estree',
@@ -112,13 +113,23 @@ test('affected minimatch 10.x consumers use patched v11, older toolchains keep t
     assert.equal(dependency.entry.dependencies?.['@isaacs/nonrecursive-glob-match'],'^1.0.3');
   }
   const copies=Object.entries(pk).filter(([key])=>key.endsWith('/minimatch'));
-  assert.ok(copies.length>=7,'expected legacy and modern minimatch consumers');
+  assert.ok(copies.length>=6,'expected legacy and modern minimatch consumers');
   for(const [name,entry] of copies)
-    assert.notEqual(entry.version,'10.2.6',name+' has vulnerable preprocessing');
-  assert.equal(resolve('node_modules/@electron/universal','minimatch')?.entry.version,'9.0.9');
+    assert.ok(!['9.0.9','10.2.6'].includes(entry.version),name+' remains flagged by Dependabot: '+entry.version);
+  assert.equal(resolve('node_modules/@electron/universal','minimatch')?.entry.version,'11.0.3');
   assert.equal(resolve('node_modules/karma','minimatch')?.entry.version,'3.1.5');
   assert.equal(resolve('node_modules/@electron/asar','minimatch')?.entry.version,'3.1.5');
   assert.equal(resolve('node_modules/dir-compare','minimatch')?.entry.version,'3.1.5');
   assert.equal(resolve('node_modules/filelist','minimatch')?.entry.version,'5.1.9');
   assert.equal(pk['node_modules/@isaacs/nonrecursive-glob-match']?.version,'1.0.3');
+});
+
+test('Electron universal resolves minimatch v11 with matchBase patterns',()=>{
+  const {createRequire}=require('node:module');
+  const universalRequire=createRequire(path.resolve(__dirname,'../node_modules/@electron/universal/package.json'));
+  const minimatch=universalRequire('minimatch');
+  assert.equal(typeof minimatch.minimatch,'function','CJS named minimatch export required by universal 2.x');
+  assert.equal(minimatch.minimatch('Contents/Frameworks/Helper.app','*.app',{matchBase:true}),true);
+  assert.equal(minimatch.minimatch('Contents/Frameworks/Helper.app','*.asar',{matchBase:true}),false);
+  assert.equal(minimatch.minimatch('Contents/Resources/app.asar','**/*.asar',{matchBase:true}),true);
 });
