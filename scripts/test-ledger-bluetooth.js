@@ -27,7 +27,7 @@ function mainHarness() {
   const dialogs = [];
   const timers = new Map(); let next = 0;
   const code = fs.readFileSync(path.join(root, 'desktop-app/dist/lib/web-bluetooth.js'), 'utf8');
-  const { configureWebBluetooth } = load(code, { electron: { dialog: {
+  const { configureWebBluetooth } = load(code, { './desktop-locale': require(path.join(root, 'desktop-app/dist/lib/desktop-locale.js')), electron: { app: { getLocale: () => 'en-US' }, dialog: {
     showMessageBox(_window, options) { return new Promise(resolve => dialogs.push({ options, resolve })); }
   } }, 'electron-log': { info() {}, warn() {} } }, {
     setTimeout(fn, delay) { timers.set(++next, { fn, delay }); return next; },
