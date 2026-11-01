@@ -183,7 +183,8 @@
     "pbkdf2": "3.1.7",
     "sha.js": "2.4.12",
     "app-builder-lib": {
-      "form-data": "4.0.6"
+      "form-data": "4.0.6",
+      "minimatch": "11.0.3"
     },
     "tar": "7.5.22",
     "@angular/build": {
@@ -217,7 +218,17 @@
     "ws": "8.21.0",
     "tmp": "0.2.7",
     "body-parser": "1.20.9",
-    "diff": "3.5.1"
+    "diff": "3.5.1",
+    "@eslint/config-array": {
+      "minimatch": "11.0.3"
+    },
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.3"
+    },
+    "eslint": {
+      "minimatch": "11.0.3"
+    },
+    "follow-redirects": "1.16.2"
   },
   "browser": {
     "stream": "stream-browserify"

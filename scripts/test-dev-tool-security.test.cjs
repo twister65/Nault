@@ -86,3 +86,36 @@ test('patched diff preserves patch round trips used by developer tooling',()=>{
   assert.equal(diff.parsePatch(patch).length,1);
   assert.equal(diff.applyPatch(before,patch),after);
 });
+
+test('follow-redirects is patched in Karma HTTP proxy tooling',()=>{
+  assert.equal(pkg.overrides['follow-redirects'],'1.16.2');
+  const copy=resolve('node_modules/http-proxy','follow-redirects');
+  assert.ok(copy,'http-proxy should resolve follow-redirects');
+  assert.equal(copy.entry.version,'1.16.2');
+  assert.equal(copy.entry.dev,true,'redirect handling here is dev-only');
+  assert.match(copy.entry.integrity||'',/^sha512-/);
+});
+
+test('affected minimatch 10.x consumers use patched v11, older toolchains keep their API',()=>{
+  for(const parent of [
+    'node_modules/@eslint/config-array',
+    'node_modules/@typescript-eslint/typescript-estree',
+    'node_modules/app-builder-lib',
+    'node_modules/eslint'
+  ]){
+    const dependency=resolve(parent,'minimatch');
+    assert.ok(dependency,parent+' needs minimatch');
+    assert.equal(dependency.entry.version,'11.0.3',parent);
+    assert.equal(dependency.entry.dev,true,parent);
+    assert.match(dependency.entry.integrity||'',/^sha512-/);
+    assert.equal(dependency.entry.dependencies?.['@isaacs/nonrecursive-glob-match'],'^1.0.3');
+  }
+  const copies=Object.entries(pk).filter(([key])=>key.endsWith('/minimatch'));
+  assert.ok(copies.length>=8,'expected legacy and modern minimatch consumers');
+  for(const [name,entry] of copies)
+    assert.notEqual(entry.version,'10.2.6',name+' has vulnerable preprocessing');
+  assert.equal(resolve('node_modules/@electron/universal','minimatch')?.entry.version,'9.0.9');
+  assert.equal(resolve('node_modules/karma','minimatch')?.entry.version,'3.1.5');
+  assert.equal(resolve('node_modules/filelist','minimatch')?.entry.version,'5.1.9');
+  assert.equal(pk['node_modules/@isaacs/nonrecursive-glob-match']?.version,'1.0.3');
+});
