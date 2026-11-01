@@ -1,7 +1,13 @@
 import { parentPort } from 'worker_threads';
 import TransportNodeHidNoEvents from '@ledgerhq/hw-transport-node-hid-noevents';
-import HID from 'node-hid';
-import { identifyNativeLedgerUsbModel, selectLedgerHidDescriptor } from './ledger-usb-model';
+import { identifyNativeLedgerUsbModel, LedgerHidDescriptor, selectLedgerHidDescriptor } from './ledger-usb-model';
+
+// node-hid currently ships without TypeScript declarations in this build.
+// Keep the native binding confined to the worker and type only the metadata
+// necessary for matching the selected Ledger HID interface.
+const HID = require('node-hid') as {
+  devices: (vendorId: number, productId: number) => LedgerHidDescriptor[];
+};
 
 // Own the native HID handle on a dedicated Node.js worker thread. The
 // node-hid 2.1.1 asynchronous read callback fails under Electron 44.
