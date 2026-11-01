@@ -62,7 +62,7 @@ test('Ledger devices and legacy native build chain remain on compatible patched 
     assert.ok(lock.packages[parent], parent + ' missing from lockfile');
     assert.equal(depVersion(parent, 'semver'), expected, parent + ' resolved semver version');
   }
-  assert.equal(manifest.devDependencies.electron, '44.10.1');
+  assert.equal(manifest.devDependencies.electron, '45.2.1');
   assert.equal(manifest.dependencies['@ledgerhq/devices'], '7.0.2');
 });
 
