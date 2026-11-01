@@ -116,6 +116,8 @@ test('affected minimatch 10.x consumers use patched v11, older toolchains keep t
     assert.notEqual(entry.version,'10.2.6',name+' has vulnerable preprocessing');
   assert.equal(resolve('node_modules/@electron/universal','minimatch')?.entry.version,'9.0.9');
   assert.equal(resolve('node_modules/karma','minimatch')?.entry.version,'3.1.5');
+  assert.equal(resolve('node_modules/@electron/asar','minimatch')?.entry.version,'3.1.5');
+  assert.equal(resolve('node_modules/dir-compare','minimatch')?.entry.version,'3.1.5');
   assert.equal(resolve('node_modules/filelist','minimatch')?.entry.version,'5.1.9');
   assert.equal(pk['node_modules/@isaacs/nonrecursive-glob-match']?.version,'1.0.3');
 });
