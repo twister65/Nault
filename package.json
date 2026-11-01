@@ -182,20 +182,6 @@
     "cipher-base": "1.0.5",
     "pbkdf2": "3.1.7",
     "sha.js": "2.4.12",
-    "app-builder-lib": {
-      "minimatch": "11.0.3",
-      "@electron/asar": {
-        "minimatch": "3.1.5"
-      },
-      "@electron/universal": {
-        "@electron/asar": {
-          "minimatch": "3.1.5"
-        },
-        "dir-compare": {
-          "minimatch": "3.1.5"
-        }
-      }
-    },
     "tar": "7.5.22",
     "@angular/build": {
       "vite": "8.3.3"
@@ -229,16 +215,8 @@
     "tmp": "0.2.7",
     "body-parser": "1.20.9",
     "diff": "3.5.1",
-    "@eslint/config-array": {
-      "minimatch": "11.0.3"
-    },
-    "@typescript-eslint/typescript-estree": {
-      "minimatch": "11.0.3"
-    },
-    "eslint": {
-      "minimatch": "11.0.3"
-    },
-    "follow-redirects": "1.16.2"
+    "follow-redirects": "1.16.2",
+    "minimatch@^10.0.0": "11.0.3"
   },
   "browser": {
     "stream": "stream-browserify"
