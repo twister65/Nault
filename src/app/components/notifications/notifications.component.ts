@@ -1,6 +1,6 @@
 import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { Subscription } from 'rxjs';
-import {NotificationService, NotificationType} from '../../services/notification.service';
+import {NotificationService, NotificationType, NotificationOptions} from '../../services/notification.service';
 import { TranslocoService } from '@jsverse/transloco';
 import { localizeNotificationMessage } from '../../services/notification-message';
 
@@ -22,6 +22,7 @@ export class NotificationsComponent implements OnInit, OnDestroy {
     cssClass: string;
     identifier: string | null;
     length: number;
+    action?: NotificationOptions['action'];
   }> = [];
   private readonly subscriptions = new Subscription();
 
@@ -61,6 +62,7 @@ export class NotificationsComponent implements OnInit, OnDestroy {
         cssClass: this.getCssClass(notification.type),
         identifier: identifier,
         length: length,
+        action: notification.options.action,
       };
 
       this.notifications.push(newNotification);
