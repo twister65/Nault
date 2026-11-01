@@ -17,6 +17,10 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - name: Restore the unmodified master lockfile for clean resolution
+        run: |
+          git fetch --depth=1 origin 1183456770d9ac34f1d84ab7c50b6b6d1414601c
+          git show FETCH_HEAD:package-lock.json > package-lock.json
       - name: Regenerate npm v2 lock
         run: npm install --package-lock-only --legacy-peer-deps --ignore-scripts --no-audit --no-fund
         env:
