@@ -94,6 +94,43 @@ async function main() {
     h.dialogs[1].resolve({ response: 1 }); await flush();
     assert.deepEqual(responses, [false]); h.cancel();
   });
+  await check('native HID model classification accepts only known Ledger hardware', async () => {
+    const { identifyNativeLedgerUsbModel, selectLedgerHidDescriptor } = require(path.join(root, 'desktop-app/dist/lib/ledger-usb-model.js'));
+    const linux = selectLedgerHidDescriptor([
+      { vendorId: 0x1234, productId: 0x5011, interface: 0, path: 'other' },
+      { vendorId: 0x2c97, productId: 0x5011, interface: 1, path: 'wrong-interface' },
+      { vendorId: 0x2c97, productId: 0x5011, interface: 0, path: 'selected-ledger' }
+    ], 'linux');
+    assert.equal(linux.path, 'selected-ledger', 'select the Ledger HID interface actually opened');
+    assert.equal(identifyNativeLedgerUsbModel({ deviceModel: null }, linux), 'nanoSPlus',
+      'read Linux USB model even if node-hid getDeviceInfo supplies no product metadata');
+    assert.equal(identifyNativeLedgerUsbModel({ deviceModel: { id: 'nanoX' } }, linux), 'nanoSPlus',
+      'the selected HID descriptor must win over stale name-based model hints');
+    const windows = selectLedgerHidDescriptor([
+      { vendorId: 0x2c97, productId: 0x4011, usagePage: 0xffa0, path: 'selected-x' }
+    ], 'win32');
+    assert.equal(identifyNativeLedgerUsbModel(null, windows), 'nanoX');
+    assert.equal(selectLedgerHidDescriptor([{ vendorId: 0x2c97, productId: 0x5011, interface: 1, path: 'not-hid' }], 'linux'), null);
+    assert.equal(identifyNativeLedgerUsbModel(null, {vendorId: 0x1234, productId: 0x5011}), null);
+    assert.equal(identifyNativeLedgerUsbModel({ deviceModel: { id: 'nanoSP' } }), 'nanoSPlus');
+    assert.equal(identifyNativeLedgerUsbModel({ deviceModel: { id: 'nanoS' } }), 'nanoS');
+    assert.equal(identifyNativeLedgerUsbModel({ deviceModel: { id: 'nanoX' } }), 'nanoX');
+    assert.equal(identifyNativeLedgerUsbModel({
+      device: { getDeviceInfo: () => ({ vendorId: 0x2c97, productId: 0x5011 }) }
+    }), 'nanoSPlus');
+    assert.equal(identifyNativeLedgerUsbModel({
+      device: { getDeviceInfo: () => ({ vendorId: 0x2c97, productId: 0x4011 }) }
+    }), 'nanoX');
+    assert.equal(identifyNativeLedgerUsbModel({
+      device: { getDeviceInfo: () => ({ vendorId: 0x2c97, productId: 0x1011 }) }
+    }), 'nanoS');
+    assert.equal(identifyNativeLedgerUsbModel({
+      device: { getDeviceInfo: () => ({ vendorId: 0x1234, productId: 0x5011 }) }
+    }), null, 'never classify a non-Ledger USB device');
+    assert.equal(identifyNativeLedgerUsbModel({ deviceModel: { id: 'unknown' } }), null);
+    assert.equal(identifyNativeLedgerUsbModel({ device: { getDeviceInfo: () => { throw Error('unavailable'); } } }), null);
+  });
+
   await check('native BLE IPC is rejected without importing Noble', async () => {
     const { LedgerService } = load(fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8'), {
       './ledger-hid-worker-transport': {}, 'hw-app-nano': {}, rxjs: require('rxjs'), electron: {}
@@ -113,7 +150,7 @@ async function main() {
     const { initialize, LedgerService: NativeLedgerService } = load(compiled, {
       './ledger-hid-worker-transport': { async open() {
         opens++;
-        return { async close() { closes++; } };
+        return { usbModel: 'nanoSPlus', async close() { closes++; } };
       } },
       'hw-app-nano': FakeNano,
       rxjs: require('rxjs'),
@@ -134,6 +171,8 @@ async function main() {
     for (let i = 0; i < 5; i++) await flush();
     assert.equal(opens, 1);
     assert.deepEqual(messages.filter(m => m.event === 'ledger-status').map(m => m.data.status), ['ready']);
+    assert.deepEqual(messages.filter(m => m.event === 'ledger-status').map(m => m.data.deviceModel), ['nanoSPlus'],
+      'a ready native HID session must forward the USB model through trusted IPC');
     await assert.rejects(handles['ledger-release-usb']({ sender: event.sender, trusted: false }),
       /Untrusted Ledger IPC sender/);
     assert.equal(closes, 0, 'untrusted frames must not touch the HID handle');

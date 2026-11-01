@@ -1,5 +1,6 @@
 import { ComponentTestModule, isolateConstructorIO } from '../../testing/component-test.module';
 import { TestBed, inject } from '@angular/core/testing';
+import { Subject } from 'rxjs';
 
 import { LedgerService, LedgerStatus, isAndroidBrowser, LedgerNotReadyError, LedgerSigningBusyError, getLedgerReadinessIssue, getLedgerSigningIssue, identifyLedgerUsbModel } from './ledger.service';
 
@@ -50,6 +51,47 @@ describe('Ledger USB model and transport capabilities', () => {
     service.ledger = {status: LedgerStatus.READY, nano: {}, transport: {deviceModel: {id: 'nanoSP'}} as any};
     expect(service.connectedDeviceModel).toBe('nanoSPlus');
     service.ledger.transport = null;
+    expect(service.connectedDeviceModel).toBeNull();
+  });
+});
+
+describe('Electron HID model forwarding', () => {
+  it('verifies the account before persisting the model and clears a disconnected hint', async () => {
+    const service = Object.create(LedgerService.prototype) as any;
+    service.isDesktop = true;
+    service.transportMode = 'USB';
+    service.ledger = { status: LedgerStatus.NOT_CONNECTED, transport: null, nano: null };
+    service.ledgerStatus$ = new Subject();
+    service.configuringWallet = false;
+    service.supportsBluetooth = false;
+    service.configuredWalletAccount = () => ({ index: 0, id: 'nano_expected' });
+    const verified = jasmine.createSpy('onVerifiedDeviceModel');
+    service.onVerifiedDeviceModel = verified;
+    let handler: (_event: unknown, message: any) => void;
+    service.desktop = {
+      connect: () => {},
+      on: (_channel: string, listener: (_event: unknown, message: any) => void) => { handler = listener; }
+    };
+    service.appSettings = { getAppSetting: () => 'usb' };
+    const readAccount = jasmine.createSpy('getLedgerAccount').and.resolveTo({ address: 'nano_expected' });
+    service.getLedgerAccount = readAccount;
+
+    service.configureDesktop();
+    handler!(null, { event: 'ledger-status',
+      data: { status: LedgerStatus.READY, statusText: 'Ledger ready', deviceModel: 'nanoSPlus' } });
+    expect(verified).not.toHaveBeenCalled();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(readAccount).toHaveBeenCalledWith(0);
+    expect(verified).toHaveBeenCalledOnceWith('nanoSPlus');
+    expect(service.connectedDeviceModel).toBe('nanoSPlus');
+
+    handler!(null, { event: 'ledger-status',
+      data: { status: LedgerStatus.NOT_CONNECTED, statusText: 'Disconnected', deviceModel: null } });
+    expect(service.connectedDeviceModel).toBeNull();
+    handler!(null, { event: 'ledger-status',
+      data: { status: LedgerStatus.READY, statusText: 'Ledger ready', deviceModel: 'unexpected' } });
+    await Promise.resolve();
     expect(service.connectedDeviceModel).toBeNull();
   });
 });
