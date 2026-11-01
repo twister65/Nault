@@ -48,7 +48,7 @@ test('Ledger HID / Electron settings / Karma consumers preserve their dependenci
     assert.ok(resolved, path + ' cannot resolve lodash');
     assert.equal(resolved.entry.version, '4.18.1', path);
   }
-  assert.equal(manifest.devDependencies.electron, '44.10.0');
+  assert.equal(manifest.devDependencies.electron, '44.10.1');
   assert.equal(packages['node_modules/tar-fs']?.version, '2.1.4');
 });
 
