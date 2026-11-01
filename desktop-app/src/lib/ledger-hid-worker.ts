@@ -1,5 +1,6 @@
 import { parentPort } from 'worker_threads';
 import TransportNodeHidNoEvents from '@ledgerhq/hw-transport-node-hid-noevents';
+import { identifyNativeLedgerUsbModel } from './ledger-usb-model';
 
 // Own the native HID handle on a dedicated Node.js worker thread. The
 // node-hid 2.1.1 asynchronous read callback fails under Electron 44.
@@ -81,7 +82,8 @@ async function initialize() {
     }
 
     transport = opened;
-    port.postMessage({ type: 'ready' });
+    // Send only the allowlisted model, never HID paths or USB identifiers.
+    port.postMessage({ type: 'ready', usbModel: identifyNativeLedgerUsbModel(opened) });
   } catch (error) {
     port.postMessage({ type: 'fatal', message: errorMessage(error) });
     port.close();

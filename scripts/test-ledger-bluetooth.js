@@ -94,6 +94,27 @@ async function main() {
     h.dialogs[1].resolve({ response: 1 }); await flush();
     assert.deepEqual(responses, [false]); h.cancel();
   });
+  await check('native HID model classification accepts only known Ledger hardware', async () => {
+    const { identifyNativeLedgerUsbModel } = require(path.join(root, 'desktop-app/dist/lib/ledger-usb-model.js'));
+    assert.equal(identifyNativeLedgerUsbModel({ deviceModel: { id: 'nanoSP' } }), 'nanoSPlus');
+    assert.equal(identifyNativeLedgerUsbModel({ deviceModel: { id: 'nanoS' } }), 'nanoS');
+    assert.equal(identifyNativeLedgerUsbModel({ deviceModel: { id: 'nanoX' } }), 'nanoX');
+    assert.equal(identifyNativeLedgerUsbModel({
+      device: { getDeviceInfo: () => ({ vendorId: 0x2c97, productId: 0x5011 }) }
+    }), 'nanoSPlus');
+    assert.equal(identifyNativeLedgerUsbModel({
+      device: { getDeviceInfo: () => ({ vendorId: 0x2c97, productId: 0x4011 }) }
+    }), 'nanoX');
+    assert.equal(identifyNativeLedgerUsbModel({
+      device: { getDeviceInfo: () => ({ vendorId: 0x2c97, productId: 0x1011 }) }
+    }), 'nanoS');
+    assert.equal(identifyNativeLedgerUsbModel({
+      device: { getDeviceInfo: () => ({ vendorId: 0x1234, productId: 0x5011 }) }
+    }), null, 'never classify a non-Ledger USB device');
+    assert.equal(identifyNativeLedgerUsbModel({ deviceModel: { id: 'unknown' } }), null);
+    assert.equal(identifyNativeLedgerUsbModel({ device: { getDeviceInfo: () => { throw Error('unavailable'); } } }), null);
+  });
+
   await check('native BLE IPC is rejected without importing Noble', async () => {
     const { LedgerService } = load(fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8'), {
       './ledger-hid-worker-transport': {}, 'hw-app-nano': {}, rxjs: require('rxjs'), electron: {}
@@ -113,7 +134,7 @@ async function main() {
     const { initialize, LedgerService: NativeLedgerService } = load(compiled, {
       './ledger-hid-worker-transport': { async open() {
         opens++;
-        return { async close() { closes++; } };
+        return { usbModel: 'nanoSPlus', async close() { closes++; } };
       } },
       'hw-app-nano': FakeNano,
       rxjs: require('rxjs'),
@@ -134,6 +155,8 @@ async function main() {
     for (let i = 0; i < 5; i++) await flush();
     assert.equal(opens, 1);
     assert.deepEqual(messages.filter(m => m.event === 'ledger-status').map(m => m.data.status), ['ready']);
+    assert.deepEqual(messages.filter(m => m.event === 'ledger-status').map(m => m.data.deviceModel), ['nanoSPlus'],
+      'a ready native HID session must forward the USB model through trusted IPC');
     await assert.rejects(handles['ledger-release-usb']({ sender: event.sender, trusted: false }),
       /Untrusted Ledger IPC sender/);
     assert.equal(closes, 0, 'untrusted frames must not touch the HID handle');

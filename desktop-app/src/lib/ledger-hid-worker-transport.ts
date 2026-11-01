@@ -1,6 +1,7 @@
 import Transport from '@ledgerhq/hw-transport';
 import { Worker } from 'worker_threads';
 import * as path from 'path';
+import { LedgerUsbModel, normalizeLedgerUsbModel } from './ledger-usb-model';
 
 interface ExchangePending {
   resolve: (response: Buffer) => void;
@@ -8,7 +9,7 @@ interface ExchangePending {
 }
 
 type WorkerResponse =
-  | { type: 'ready' }
+  | { type: 'ready'; usbModel?: LedgerUsbModel | null }
   | { type: 'result'; id: number; data: number[] }
   | { type: 'error'; id: number; message: string }
   | { type: 'fatal'; message: string };
@@ -28,6 +29,8 @@ export default class LedgerHidWorkerTransport extends Transport {
   private readonly pending = new Map<number, ExchangePending>();
   private nextId = 0;
   private ready = false;
+  // The model is metadata from the native worker, not a wallet identity.
+  usbModel: LedgerUsbModel | null = null;
   private failed = false;
   private closed = false;
 
@@ -42,6 +45,7 @@ export default class LedgerHidWorkerTransport extends Transport {
     worker.on('message', (message: WorkerResponse) => {
       if (message.type === 'ready') {
         if (!this.failed && !this.closed) {
+          this.usbModel = normalizeLedgerUsbModel(message.usbModel);
           this.ready = true;
           this.resolveStartup();
         }
