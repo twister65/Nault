@@ -95,7 +95,23 @@ async function main() {
     assert.deepEqual(responses, [false]); h.cancel();
   });
   await check('native HID model classification accepts only known Ledger hardware', async () => {
-    const { identifyNativeLedgerUsbModel } = require(path.join(root, 'desktop-app/dist/lib/ledger-usb-model.js'));
+    const { identifyNativeLedgerUsbModel, selectLedgerHidDescriptor } = require(path.join(root, 'desktop-app/dist/lib/ledger-usb-model.js'));
+    const linux = selectLedgerHidDescriptor([
+      { vendorId: 0x1234, productId: 0x5011, interface: 0, path: 'other' },
+      { vendorId: 0x2c97, productId: 0x5011, interface: 1, path: 'wrong-interface' },
+      { vendorId: 0x2c97, productId: 0x5011, interface: 0, path: 'selected-ledger' }
+    ], 'linux');
+    assert.equal(linux.path, 'selected-ledger', 'select the Ledger HID interface actually opened');
+    assert.equal(identifyNativeLedgerUsbModel({ deviceModel: null }, linux), 'nanoSPlus',
+      'read Linux USB model even if node-hid getDeviceInfo supplies no product metadata');
+    assert.equal(identifyNativeLedgerUsbModel({ deviceModel: { id: 'nanoX' } }, linux), 'nanoSPlus',
+      'the selected HID descriptor must win over stale name-based model hints');
+    const windows = selectLedgerHidDescriptor([
+      { vendorId: 0x2c97, productId: 0x4011, usagePage: 0xffa0, path: 'selected-x' }
+    ], 'win32');
+    assert.equal(identifyNativeLedgerUsbModel(null, windows), 'nanoX');
+    assert.equal(selectLedgerHidDescriptor([{ vendorId: 0x2c97, productId: 0x5011, interface: 1, path: 'not-hid' }], 'linux'), null);
+    assert.equal(identifyNativeLedgerUsbModel(null, {vendorId: 0x1234, productId: 0x5011}), null);
     assert.equal(identifyNativeLedgerUsbModel({ deviceModel: { id: 'nanoSP' } }), 'nanoSPlus');
     assert.equal(identifyNativeLedgerUsbModel({ deviceModel: { id: 'nanoS' } }), 'nanoS');
     assert.equal(identifyNativeLedgerUsbModel({ deviceModel: { id: 'nanoX' } }), 'nanoX');

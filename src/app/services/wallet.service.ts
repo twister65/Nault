@@ -161,6 +161,7 @@ export class WalletService {
           this.wallet.ledgerDeviceModel === model) return;
       this.wallet.ledgerDeviceModel = model;
       this.saveWalletExport();
+      console.info('[Ledger USB] verified model saved', { model });
     };
     this.websocket.newTransactions$.subscribe(async (transaction) => {
       if (!transaction) return; // Not really a new transaction

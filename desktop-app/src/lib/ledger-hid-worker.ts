@@ -1,6 +1,7 @@
 import { parentPort } from 'worker_threads';
 import TransportNodeHidNoEvents from '@ledgerhq/hw-transport-node-hid-noevents';
-import { identifyNativeLedgerUsbModel } from './ledger-usb-model';
+import HID from 'node-hid';
+import { identifyNativeLedgerUsbModel, selectLedgerHidDescriptor } from './ledger-usb-model';
 
 // Own the native HID handle on a dedicated Node.js worker thread. The
 // node-hid 2.1.1 asynchronous read callback fails under Electron 44.
@@ -52,7 +53,11 @@ port.on('message', (message: WorkerRequest) => {
 
 async function initialize() {
   try {
-    const opened = await TransportNodeHidNoEvents.open(null);
+    // Reuse Ledger's own HID interface filter, but retain the chosen USB
+    // descriptor: node-hid's opened handle can omit model/product metadata.
+    // Open the *same* path, never infer a model from an unrelated device.
+    const selected = selectLedgerHidDescriptor(HID.devices(0x2c97, 0), process.platform);
+    const opened = await TransportNodeHidNoEvents.open(selected ? selected.path : null);
     const device: any = opened.device;
     (opened as any).readHID = (): Promise<Buffer> =>
       new Promise<Buffer>((resolve, reject) => {
@@ -82,8 +87,10 @@ async function initialize() {
     }
 
     transport = opened;
+    const usbModel = identifyNativeLedgerUsbModel(opened, selected);
+    console.info('[Ledger USB] HID model identified', { model: usbModel || 'unknown' });
     // Send only the allowlisted model, never HID paths or USB identifiers.
-    port.postMessage({ type: 'ready', usbModel: identifyNativeLedgerUsbModel(opened) });
+    port.postMessage({ type: 'ready', usbModel });
   } catch (error) {
     port.postMessage({ type: 'fatal', message: errorMessage(error) });
     port.close();
