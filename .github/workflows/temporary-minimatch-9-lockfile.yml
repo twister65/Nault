@@ -32,3 +32,5 @@ jobs:
             git commit -m "chore(lockfile): resolve patched minimatch for Electron universal"
             git push origin HEAD:fix/minimatch-9-electron-universal
           fi
+
+# Regenerate after refining the 9.x-only override.
