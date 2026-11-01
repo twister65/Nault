@@ -54,7 +54,7 @@ jobs:
           const lock = require('./package-lock.json');
           const manifest = require('./package.json');
           for (const [name, expected] of Object.entries({
-            electron: '44.10.0',
+            electron: '44.10.1',
             vite: '8.3.3',
             undici: '7.30.1',
             'fast-uri': '3.1.9'
@@ -64,7 +64,7 @@ jobs:
             assert.match(entry?.integrity || '', /^sha512-/, name + ' integrity');
           }
           assert.equal(lock.packages['node_modules/node-gyp/node_modules/undici']?.version, '6.29.1');
-          assert.equal(manifest.devDependencies.electron, '44.10.0');
+          assert.equal(manifest.devDependencies.electron, '44.10.1');
           console.log('Security patch versions verified');
           NODE
       - name: Verify patched electron-updater dependency chain
