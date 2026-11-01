@@ -109,6 +109,32 @@ describe('WalletWidgetComponent', () => {
     }
   });
 
+  it('hides Bluetooth on Windows and Linux Desktop after native HID identifies Nano S Plus', () => {
+    const oldModel = component.walletService.wallet.ledgerDeviceModel;
+    const oldDesktop = component.ledgerService.isDesktop;
+    const oldUsb = component.ledgerService.supportsUSB;
+    const oldBluetooth = component.ledgerService.supportsBluetooth;
+    try {
+      component.ledgerService.isDesktop = true;
+      component.ledgerService.supportsUSB = true;
+      component.ledgerService.supportsBluetooth = true;
+      component.walletService.wallet.ledgerDeviceModel = 'nanoSPlus';
+      expect(component.canReconnectUsb).toBeTrue();
+      expect(component.canReconnectBluetooth).toBeFalse();
+      component.walletService.wallet.ledgerDeviceModel = 'nanoS';
+      expect(component.canReconnectBluetooth).toBeFalse();
+      component.walletService.wallet.ledgerDeviceModel = 'nanoX';
+      expect(component.canReconnectBluetooth).toBeTrue();
+      component.walletService.wallet.ledgerDeviceModel = null;
+      expect(component.canReconnectBluetooth).toBeTrue(); // older wallets remain compatible
+    } finally {
+      component.walletService.wallet.ledgerDeviceModel = oldModel;
+      component.ledgerService.isDesktop = oldDesktop;
+      component.ledgerService.supportsUSB = oldUsb;
+      component.ledgerService.supportsBluetooth = oldBluetooth;
+    }
+  });
+
   it('does not change transport after a blocked Nano S Plus Bluetooth reconnect', async () => {
     const model = component.walletService.wallet.ledgerDeviceModel;
     const bluetooth = component.ledgerService.supportsBluetooth;

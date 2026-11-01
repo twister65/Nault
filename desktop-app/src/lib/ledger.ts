@@ -276,7 +276,13 @@ export class LedgerService {
 
   setLedgerStatus(status: string, statusText = '') {
     this.ledger.status = status;
-    this.ledgerStatus$.next({ status: this.ledger.status, statusText });
+    // Only publish a hardware model with a successfully initialized HID session.
+    // The renderer verifies the saved Nano account before persisting this hint.
+    const transport = this.ledger.transport as (Transport & { usbModel?: unknown }) | null;
+    const model = transport?.usbModel;
+    const deviceModel = status === LedgerStatus.READY &&
+      (model === 'nanoS' || model === 'nanoSPlus' || model === 'nanoX') ? model : null;
+    this.ledgerStatus$.next({ status: this.ledger.status, statusText, deviceModel });
   }
 
   ledgerPath(accountIndex: number) {

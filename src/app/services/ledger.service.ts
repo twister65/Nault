@@ -153,8 +153,12 @@ export class LedgerService {
     transport: null,
   };
 
+  private desktopUsbModel: LedgerUsbModel | null = null;
+
   get connectedDeviceModel(): LedgerUsbModel | null {
     if (this.transportMode === 'Bluetooth') return 'nanoX';
+    // Electron's native HID handle lives in a worker, not in ledger.transport.
+    if (this.isDesktop) return this.desktopUsbModel;
     return identifyLedgerUsbModel(this.ledger?.transport);
   }
 
@@ -283,6 +287,7 @@ export class LedgerService {
 
   // Scraps binding to any existing transport/nano object
   resetLedger() {
+    this.desktopUsbModel = null;
     const transport = this.ledger.transport;
     this.ledger.transport = null;
     this.ledger.nano = null;
@@ -314,6 +319,12 @@ export class LedgerService {
       if (!message || !message.event || !this.usesDesktopUsb) return;
       switch (message.event) {
         case 'ledger-status':
+          // Trust only known non-secret model values from the main process.
+          // Never overwrite the saved wallet until its address has been checked.
+          const model: unknown = message.data.deviceModel;
+          this.desktopUsbModel = message.data.status === LedgerStatus.READY &&
+            (model === 'nanoS' || model === 'nanoSPlus' || model === 'nanoX')
+            ? model : null;
           if (message.data.status === LedgerStatus.READY && !this.configuringWallet) {
             // Desktop USB also requires device/account matching before exposing READY.
             this.ledger.status = LedgerStatus.NOT_CONNECTED;
