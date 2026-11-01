@@ -182,9 +182,6 @@
     "cipher-base": "1.0.5",
     "pbkdf2": "3.1.7",
     "sha.js": "2.4.12",
-    "app-builder-lib": {
-      "form-data": "4.0.6"
-    },
     "tar": "7.5.22",
     "@angular/build": {
       "vite": "8.3.3"
@@ -217,7 +214,9 @@
     "ws": "8.21.0",
     "tmp": "0.2.7",
     "body-parser": "1.20.9",
-    "diff": "3.5.1"
+    "diff": "3.5.1",
+    "follow-redirects": "1.16.2",
+    "minimatch@^10.0.0": "11.0.3"
   },
   "browser": {
     "stream": "stream-browserify"
