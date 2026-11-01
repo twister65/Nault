@@ -856,6 +856,8 @@ export class LedgerService {
     }
   }
 
+  get signingInProgress(): boolean { return this.signingSessionActive; }
+
   // Reserve the device before awaiting the current status probe. This covers
   // cacheBlock + signBlock as one unit, including failures and user refusal.
   // Never retry a signature or blockchain submission automatically.
