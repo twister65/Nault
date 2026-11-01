@@ -27,5 +27,11 @@ contextBridge.exposeInMainWorld('naultDesktop', {
   // A single privileged, allowlisted action. No generic invoke is exposed.
   releaseLedgerUsb(): Promise<boolean> {
     return ipcRenderer.invoke('ledger-release-usb');
+  },
+  beginLedgerSigning(): Promise<boolean> {
+    return ipcRenderer.invoke('ledger-signing-start');
+  },
+  endLedgerSigning(): Promise<boolean> {
+    return ipcRenderer.invoke('ledger-signing-end');
   }
 });
