@@ -217,9 +217,7 @@
     "diff": "3.5.1",
     "follow-redirects": "1.16.2",
     "minimatch@^10.0.0": "11.0.3",
-    "@electron/universal": {
-      "minimatch": "11.0.3"
-    }
+    "minimatch@^9.0.3": "11.0.3"
   },
   "browser": {
     "stream": "stream-browserify"
