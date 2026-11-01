@@ -98,7 +98,7 @@ test('follow-redirects is patched in Karma HTTP proxy tooling',()=>{
 
 test('affected minimatch 10.x and Electron universal consumers use patched v11, legacy APIs remain',()=>{
   assert.equal(pkg.overrides['minimatch@^10.0.0'],'11.0.3');
-  assert.equal(pkg.overrides['@electron/universal']?.minimatch,'11.0.3');
+  assert.equal(pkg.overrides['minimatch@^9.0.3'],'11.0.3');
   for(const parent of [
     'node_modules/@eslint/config-array',
     'node_modules/@typescript-eslint/typescript-estree',
