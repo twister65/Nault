@@ -217,6 +217,41 @@ async function main() {
     assert.equal(native.pollingLedger, false);
   });
 
+  await check('renderer reservation pauses native polling across cache and signing', async () => {
+    const { LedgerService: NativeLedgerService } = load(
+      fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8'), {
+        './ledger-hid-worker-transport': {}, 'hw-app-nano': {},
+        rxjs: require('rxjs'), electron: {}
+      }
+    );
+    const native = new NativeLedgerService();
+    native.ledger.status = 'ready';
+    native.ledger.nano = {};
+    native.pollingLedger = true;
+    let releasePoll;
+    let count = 0;
+    native.getLedgerAccount = async () => {
+      count++;
+      await new Promise(resolve => { releasePoll = resolve; });
+    };
+    const polling = native.checkLedgerStatus();
+    let reservationCompleted = false;
+    const reserving = native.beginSigning().then(() => { reservationCompleted = true; });
+    assert.equal(reservationCompleted, false, 'must wait for an in-flight native probe');
+    assert.equal(count, 1);
+    releasePoll();
+    await polling;
+    await reserving;
+    assert.equal(reservationCompleted, true);
+    await native.checkLedgerStatus();
+    assert.equal(count, 1, 'new native probes must be suppressed during signing');
+    await assert.rejects(native.beginSigning(), /already in progress/);
+    native.endSigning();
+    native.getLedgerAccount = async () => { count++; };
+    await native.checkLedgerStatus();
+    assert.equal(count, 2, 'probes resume after a completed or rejected signature');
+  });
+
   await check('USB rejection 0x6985 preserves session and a subsequent signature succeeds', async () => {
     const { LedgerService: NativeLedgerService, isLedgerUserRejection } = load(
       fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8'), {
