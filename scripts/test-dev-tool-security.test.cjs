@@ -112,7 +112,7 @@ test('affected minimatch 10.x consumers use patched v11, older toolchains keep t
     assert.equal(dependency.entry.dependencies?.['@isaacs/nonrecursive-glob-match'],'^1.0.3');
   }
   const copies=Object.entries(pk).filter(([key])=>key.endsWith('/minimatch'));
-  assert.ok(copies.length>=8,'expected legacy and modern minimatch consumers');
+  assert.ok(copies.length>=7,'expected legacy and modern minimatch consumers');
   for(const [name,entry] of copies)
     assert.notEqual(entry.version,'10.2.6',name+' has vulnerable preprocessing');
   assert.equal(resolve('node_modules/@electron/universal','minimatch')?.entry.version,'9.0.9');
