@@ -183,8 +183,18 @@
     "pbkdf2": "3.1.7",
     "sha.js": "2.4.12",
     "app-builder-lib": {
-      "form-data": "4.0.6",
-      "minimatch": "11.0.3"
+      "minimatch": "11.0.3",
+      "@electron/asar": {
+        "minimatch": "3.1.5"
+      },
+      "@electron/universal": {
+        "@electron/asar": {
+          "minimatch": "3.1.5"
+        },
+        "dir-compare": {
+          "minimatch": "3.1.5"
+        }
+      }
     },
     "tar": "7.5.22",
     "@angular/build": {
