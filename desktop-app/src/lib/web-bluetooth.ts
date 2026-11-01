@@ -1,10 +1,12 @@
-import { BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
+import { desktopLabels } from './desktop-locale';
 const log = require('electron-log');
 
 // Chromium filters requestDevice by the Ledger service UUIDs in TransportWebBLE.
 // A name is only a label: never automatically select or pair based on a name.
 export function configureWebBluetooth(window: BrowserWindow, isTrustedURL: (url: string) => boolean) {
   const contents = window.webContents;
+  const t = desktopLabels(app.getLocale());
   const trusted = () => !window.isDestroyed() && !contents.isDestroyed() && isTrustedURL(contents.getURL());
   const selected = new Set<string>();
   type Scan = {
@@ -37,10 +39,10 @@ export function configureWebBluetooth(window: BrowserWindow, isTrustedURL: (url:
     const devices = request.devices.slice(0, 12);
     try {
       const result = await dialog.showMessageBox(window, {
-        type: 'question', title: 'Connect Ledger via Bluetooth',
-        message: devices.length ? 'Select your Ledger' : 'Searching for a Ledger…',
-        detail: 'Unlock your Ledger, enable Bluetooth and open the Nano app. Use Refresh if your device is not listed. Verify any pairing code on the Ledger.',
-        buttons: ['Cancel', 'Refresh', ...devices.map(d => `${d.deviceName || 'Unnamed device'} (${d.deviceId})`)],
+        type: 'question', title: t.ledgerBluetoothTitle,
+        message: devices.length ? t.selectLedger : t.searchLedger,
+        detail: t.ledgerBluetoothAdvice,
+        buttons: [t.cancel, t.refresh, ...devices.map(d => `${d.deviceName || t.unnamedDevice} (${d.deviceId})`)],
         defaultId: 0, cancelId: 0, noLink: true, signal: request.abort.signal
       });
       if (scan !== request) return;
@@ -109,10 +111,10 @@ export function configureWebBluetooth(window: BrowserWindow, isTrustedURL: (url:
     pairingCancels.add(cancel);
     timer = setTimeout(cancel, 60000);
     dialog.showMessageBox(window, {
-      type: 'question', title: 'Pair Ledger',
-      message: details.pairingKind === 'confirmPin' ? `Does your Ledger display ${details.pin}?` : 'Pair with the Ledger you selected?',
-      detail: 'Confirm only if you are pairing your own Ledger. Also confirm on the device when asked.',
-      buttons: ['Cancel', 'Confirm'], defaultId: 0, cancelId: 0, noLink: true,
+      type: 'question', title: t.pairLedger,
+      message: details.pairingKind === 'confirmPin' ? `${t.confirmPinPrompt} ${details.pin}?` : t.pairPrompt,
+      detail: t.pairAdvice,
+      buttons: [t.cancel, t.confirm], defaultId: 0, cancelId: 0, noLink: true,
       signal: abort.signal
     }).then(result => finishPairing(trusted() && details.frame === contents.mainFrame && result.response === 1), cancel);
   });
