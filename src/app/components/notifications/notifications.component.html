@@ -8,6 +8,12 @@
       >
       <a class="uk-alert-close close-notification" uk-close></a>
       <p [innerHTML]="notification.message"></p>
+      @if (notification.action) {
+        <button type="button" class="uk-button uk-button-primary uk-button-small"
+          (click)="$event.stopPropagation(); notification.action.run()">
+          {{ notification.action.labelKey | transloco }}
+        </button>
+      }
     </div>
   }
 </div>

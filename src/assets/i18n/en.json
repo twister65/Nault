@@ -1,5 +1,15 @@
 {
-  "about-nault": {"title":"About Nault","platform":"Application type","platform-pwa":"PWA (Web)","platform-desktop":"Desktop (Electron)","domain":"PWA domain","version":"Version","commit":"GitHub commit","unknown":"Unavailable","description":"Revision embedded at build time in this application. Click the commit to view the exact source on GitHub."},
+  "about-nault": {
+    "title": "About Nault",
+    "platform": "Application type",
+    "platform-pwa": "PWA (Web)",
+    "platform-desktop": "Desktop (Electron)",
+    "domain": "PWA domain",
+    "version": "Version",
+    "commit": "GitHub commit",
+    "unknown": "Unavailable",
+    "description": "Revision embedded at build time in this application. Click the commit to view the exact source on GitHub."
+  },
   "account-details": {
     "account-details": "Account Details",
     "address-book-name-leave-blank-to-remove": "Address Book Name (Leave blank to remove)",
@@ -860,6 +870,9 @@
     "tracked-receivable": "Tracked address {{account}} can now receive {{amount}} XNO",
     "tracked-sent": "Tracked address {{account}} sent {{amount}} XNO",
     "tracked-received": "Tracked address {{account}} received incoming {{amount}} XNO",
-    "tracked-representative": "Tracked address {{account}} changed its representative to {{representative}}"
+    "tracked-representative": "Tracked address {{account}} changed its representative to {{representative}}",
+    "apply-update": "Apply now",
+    "update-signing-active": "Finish the Ledger confirmation before applying the update.",
+    "update-activation-failed": "The update could not be activated. Restart Nault to try again."
   }
 }

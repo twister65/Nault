@@ -25,6 +25,10 @@ test('native Electron menu and updater dialogs use French on fr-FR systems', () 
   assert.equal(fr.update, 'Mettre à jour');
   assert.match(fr.updateAvailable, /mise à jour/i);
   assert.match(fr.noUpdate, /déjà à jour/);
+  assert.equal(fr.cancel, 'Annuler');
+  assert.equal(fr.refresh, 'Actualiser');
+  assert.equal(fr.confirm, 'Confirmer');
+  assert.match(fr.pairLedger, /Ledger/);
 });
 
 test('Spanish system locale has native labels and update messages', () => {

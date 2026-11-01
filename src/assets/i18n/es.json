@@ -1,5 +1,15 @@
 {
-  "about-nault": {"title":"Acerca de Nault","platform":"Tipo de aplicación","platform-pwa":"PWA (Web)","platform-desktop":"Escritorio (Electron)","domain":"Dominio de la PWA","version":"Versión","commit":"Commit de GitHub","unknown":"No disponible","description":"Revisión integrada en esta aplicación durante la compilación. Haz clic en el commit para consultar su código fuente en GitHub."},
+  "about-nault": {
+    "title": "Acerca de Nault",
+    "platform": "Tipo de aplicación",
+    "platform-pwa": "PWA (Web)",
+    "platform-desktop": "Escritorio (Electron)",
+    "domain": "Dominio de la PWA",
+    "version": "Versión",
+    "commit": "Commit de GitHub",
+    "unknown": "No disponible",
+    "description": "Revisión integrada en esta aplicación durante la compilación. Haz clic en el commit para consultar su código fuente en GitHub."
+  },
   "account-details": {
     "account-details": "Detalles de la cuenta",
     "address-book-name-leave-blank-to-remove": "Nombre en la libreta de direcciones (déjalo vacío para eliminarlo)",
@@ -860,6 +870,9 @@
     "tracked-receivable": "La dirección seguida {{account}} ya puede recibir {{amount}} XNO.",
     "tracked-sent": "La dirección seguida {{account}} ha enviado {{amount}} XNO.",
     "tracked-received": "La dirección seguida {{account}} ha recibido {{amount}} XNO.",
-    "tracked-representative": "La dirección seguida {{account}} ha cambiado su representante a {{representative}}."
+    "tracked-representative": "La dirección seguida {{account}} ha cambiado su representante a {{representative}}.",
+    "apply-update": "Aplicar ahora",
+    "update-signing-active": "Termina la confirmación en Ledger antes de aplicar la actualización.",
+    "update-activation-failed": "No se pudo activar la actualización. Reinicia Nault para intentarlo de nuevo."
   }
 }

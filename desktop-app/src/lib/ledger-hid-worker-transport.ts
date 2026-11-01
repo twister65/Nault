@@ -11,7 +11,7 @@ interface ExchangePending {
 type WorkerResponse =
   | { type: 'ready'; usbModel?: LedgerUsbModel | null }
   | { type: 'result'; id: number; data: number[] }
-  | { type: 'error'; id: number; message: string }
+  | { type: 'error'; id: number; message: string; statusCode?: number }
   | { type: 'fatal'; message: string };
 
 /**
@@ -58,7 +58,10 @@ export default class LedgerHidWorkerTransport extends Transport {
         if (message.type === 'result') {
           request.resolve(Buffer.from(message.data));
         } else {
-          request.reject(new Error(message.message));
+          const error = new Error(message.message) as Error & {statusCode?: number};
+          if (Number.isInteger(message.statusCode) && message.statusCode! >= 0 &&
+              message.statusCode! <= 0xffff) error.statusCode = message.statusCode;
+          request.reject(error);
         }
       }
     });

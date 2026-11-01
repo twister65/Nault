@@ -34,4 +34,14 @@ export class DesktopService {
     return this._ipc.send(...args);
   }
 
+  beginLedgerSigning(): Promise<boolean> {
+    if (!this._ipc) return Promise.reject(new Error('Electron IPC is unavailable'));
+    return this._ipc.beginLedgerSigning();
+  }
+
+  endLedgerSigning(): Promise<boolean> {
+    if (!this._ipc) return Promise.reject(new Error('Electron IPC is unavailable'));
+    return this._ipc.endLedgerSigning();
+  }
+
 }

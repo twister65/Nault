@@ -60,6 +60,10 @@ export class LedgerService {
 
   pollingLedger = false;
   queryingLedger = false;
+  // Renderer signing reservations also pause *native* health polling. Browser
+  // polling alone cannot prevent a race with the main process' own HID reads.
+  private signingReserved = false;
+  private statusPollInFlight: Promise<void> | null = null;
   private usbGeneration = 0;
   private usbOpening: Promise<LedgerHidWorkerTransport> | null = null;
   private usbClosing: Promise<void> = Promise.resolve();
@@ -78,6 +82,7 @@ export class LedgerService {
 
   // Reset connection to the ledger device, update the status
   resetLedger(errorMessage = '', notifyStatus = true) {
+    this.signingReserved = false;
     const transport = this.ledger.transport;
     this.ledger.transport = null;
     this.ledger.nano = null;
@@ -208,7 +213,7 @@ export class LedgerService {
     return false;
   }
 
-  async getLedgerAccount(accountIndex: number, showOnScreen = false) {
+  async getLedgerAccount(accountIndex: number, showOnScreen = false, requestId?: number) {
     try {
       this.queryingLedger = true;
       console.info('[Ledger diagnosis] Requesting Nano address (index only):', accountIndex);
@@ -216,13 +221,17 @@ export class LedgerService {
       console.info('[Ledger diagnosis] Nano address request resolved');
       this.queryingLedger = false;
 
-      this.ledgerMessage$.next({ event: 'account-details', data: Object.assign({ accountIndex }, account) });
+      this.ledgerMessage$.next({ event: 'account-details',
+        data: Object.assign({ accountIndex, ...(requestId === undefined ? {} : { requestId }) }, account) });
     } catch (err) {
       this.queryingLedger = false;
       console.error('[Ledger diagnosis] Nano address request failed:', err);
 
-      const data = { error: true, errorMessage: ledgerErrorMessage(err) };
-      this.ledgerMessage$.next({ event: 'account-details', data: Object.assign({ accountIndex }, data) });
+      const statusCode = ledgerStatusCode(err);
+      const data = { error: true, errorMessage: ledgerErrorMessage(err),
+        ...(statusCode === undefined ? {} : { statusCode }) };
+      this.ledgerMessage$.next({ event: 'account-details',
+        data: { accountIndex, ...(requestId === undefined ? {} : { requestId }), ...data } });
 
       if (isLedgerUserRejection(err)) {
         // Refusing address confirmation does not invalidate USB/HID transport.
@@ -234,18 +243,22 @@ export class LedgerService {
     }
   }
 
-  async cacheBlock(accountIndex: number, cacheData: unknown, signature: unknown) {
+  async cacheBlock(accountIndex: number, cacheData: unknown, signature: unknown, requestId?: number) {
     try {
       this.queryingLedger = true;
       const cacheResponse = await this.ledger.nano.cacheBlock(this.ledgerPath(accountIndex), cacheData, signature);
       this.queryingLedger = false;
 
-      this.ledgerMessage$.next({ event: 'cache-block', data: Object.assign({ accountIndex }, cacheResponse) });
+      this.ledgerMessage$.next({ event: 'cache-block',
+        data: Object.assign({ accountIndex, ...(requestId === undefined ? {} : { requestId }) }, cacheResponse) });
     } catch (err) {
       this.queryingLedger = false;
 
-      const data = { error: true, errorMessage: ledgerErrorMessage(err) };
-      this.ledgerMessage$.next({ event: 'cache-block', data: Object.assign({ accountIndex }, data) });
+      const statusCode = ledgerStatusCode(err);
+      const data = { error: true, errorMessage: ledgerErrorMessage(err),
+        ...(statusCode === undefined ? {} : { statusCode }) };
+      this.ledgerMessage$.next({ event: 'cache-block',
+        data: { accountIndex, ...(requestId === undefined ? {} : { requestId }), ...data } });
 
       // Cancellation is expected; preserve READY, Nano app and HID session.
       if (isLedgerUserRejection(err)) return;
@@ -253,18 +266,22 @@ export class LedgerService {
     }
   }
 
-  async signBlock(accountIndex: number, blockData: unknown) {
+  async signBlock(accountIndex: number, blockData: unknown, requestId?: number) {
     try {
       this.queryingLedger = true;
       const signResponse = await this.ledger.nano.signBlock(this.ledgerPath(accountIndex), blockData);
       this.queryingLedger = false;
 
-      this.ledgerMessage$.next({ event: 'sign-block', data: Object.assign({ accountIndex }, signResponse) });
+      this.ledgerMessage$.next({ event: 'sign-block',
+        data: Object.assign({ accountIndex, ...(requestId === undefined ? {} : { requestId }) }, signResponse) });
     } catch (err) {
       this.queryingLedger = false;
 
-      const data = { error: true, errorMessage: ledgerErrorMessage(err) };
-      this.ledgerMessage$.next({ event: 'sign-block', data: Object.assign({ accountIndex }, data) });
+      const statusCode = ledgerStatusCode(err);
+      const data = { error: true, errorMessage: ledgerErrorMessage(err),
+        ...(statusCode === undefined ? {} : { statusCode }) };
+      this.ledgerMessage$.next({ event: 'sign-block',
+        data: { accountIndex, ...(requestId === undefined ? {} : { requestId }), ...data } });
 
       // 0x6985 is a declined transaction, not a USB/HID disconnect.
       // Report the refusal to the renderer, but keep the worker transport open
@@ -289,6 +306,28 @@ export class LedgerService {
     return `${this.walletPrefix}${accountIndex}'`;
   }
 
+  // Called only through trusted, narrow main-frame IPC. Setting the flag
+  // synchronously prevents new native polls while an in-flight probe finishes.
+  async beginSigning(): Promise<boolean> {
+    if (this.signingReserved) throw new Error('Ledger signing already in progress');
+    this.signingReserved = true;
+    try {
+      if (this.statusPollInFlight) await this.statusPollInFlight;
+      if (this.ledger.status !== LedgerStatus.READY || !this.ledger.nano) {
+        throw new Error('Ledger is not ready for signing');
+      }
+      return true;
+    } catch (error) {
+      this.signingReserved = false;
+      throw error;
+    }
+  }
+
+  endSigning(): boolean {
+    this.signingReserved = false;
+    return true;
+  }
+
   pollLedgerStatus() {
     if (!this.pollingLedger) return;
     setTimeout(async () => {
@@ -297,23 +336,28 @@ export class LedgerService {
     }, this.pollInterval);
   }
 
-  async checkLedgerStatus() {
-    if (this.ledger.status !== LedgerStatus.READY) return;
-    if (this.queryingLedger) return; // Already querying ledger, skip this iteration
+  async checkLedgerStatus(): Promise<void> {
+    if (this.signingReserved || this.ledger.status !== LedgerStatus.READY ||
+        this.queryingLedger || this.statusPollInFlight) return;
 
-    try {
-      await this.getLedgerAccount(0, false);
-      // The native HID session is already READY. Publishing another READY
-      // every five seconds makes the renderer temporarily show Reconnect while
-      // it verifies the saved account again. Only send changes or failures.
-
-    } catch (err) {
-      if (ledgerStatusCode(err) === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
-        this.setLedgerStatus(LedgerStatus.LOCKED, `Ledger device locked`);
-      } else {
-        this.setLedgerStatus(LedgerStatus.NOT_CONNECTED, `Ledger Disconnected: ${ledgerErrorMessage(err)}`);
+    const pending = (async () => {
+      try {
+        await this.getLedgerAccount(0, false);
+        // Healthy native polls never emit a redundant READY status.
+      } catch (err) {
+        if (ledgerStatusCode(err) === STATUS_CODES.SECURITY_STATUS_NOT_SATISFIED) {
+          this.setLedgerStatus(LedgerStatus.LOCKED, 'Ledger device locked');
+        } else {
+          this.setLedgerStatus(LedgerStatus.NOT_CONNECTED, `Ledger Disconnected: ${ledgerErrorMessage(err)}`);
+        }
+        this.pollingLedger = false;
       }
-      this.pollingLedger = false;
+    })();
+    this.statusPollInFlight = pending;
+    try {
+      await pending;
+    } finally {
+      if (this.statusPollInFlight === pending) this.statusPollInFlight = null;
     }
   }
 }
@@ -349,6 +393,15 @@ export function initialize(isTrustedSender: (event: IpcMainEvent | IpcMainInvoke
     return true;
   });
 
+  ipcMain.handle('ledger-signing-start', async event => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted Ledger IPC sender');
+    return Ledger.beginSigning();
+  });
+  ipcMain.handle('ledger-signing-end', async event => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted Ledger IPC sender');
+    return Ledger.endSigning();
+  });
+
   // Listen for new messages from the browser window and dispatch accordingly
   ipcMain.on('ledger', (event, data) => {
     // The renderer is not allowed to invoke hardware-wallet commands from
@@ -370,13 +423,13 @@ export function initialize(isTrustedSender: (event: IpcMainEvent | IpcMainInvoke
         Ledger.loadLedger(data.data.bluetooth);
         break;
       case 'account-details':
-        Ledger.getLedgerAccount(data.data.accountIndex || 0, data.data.showOnScreen || false);
+        Ledger.getLedgerAccount(data.data.accountIndex || 0, data.data.showOnScreen || false, data.data.requestId);
         break;
       case 'cache-block':
-        Ledger.cacheBlock(data.data.accountIndex, data.data.cacheData, data.data.signature);
+        Ledger.cacheBlock(data.data.accountIndex, data.data.cacheData, data.data.signature, data.data.requestId);
         break;
       case 'sign-block':
-        Ledger.signBlock(data.data.accountIndex, data.data.blockData);
+        Ledger.signBlock(data.data.accountIndex, data.data.blockData, data.data.requestId);
         break;
     }
   });
