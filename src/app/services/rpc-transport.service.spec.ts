@@ -48,7 +48,7 @@ describe('RPC network boundary', () => {
     spyOn(window, 'fetch').and.callFake(input => {
       const target = String(input);
       apiTargets.push(target);
-      if (target.includes('spynano.org')) {
+      if (target === 'https://node.spynano.org/proxy') {
         return Promise.reject(new TypeError('net::ERR_NAME_NOT_RESOLVED'));
       }
       if (target === 'https://rainstorm.city/api') {
