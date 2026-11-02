@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { Subject } from 'rxjs';
 import * as url from 'url';
 import { TranslocoService, getBrowserCultureLang, getBrowserLang } from '@jsverse/transloco';
 
@@ -34,6 +35,7 @@ export interface AppSettings {
 @Injectable()
 export class AppSettingsService {
   storeKey = `nanovault-appsettings`;
+  readonly serverFailover$ = new Subject<{ previousName: string; nextName: string }>();
 
   settings: AppSettings = {
     language: '',
@@ -68,6 +70,7 @@ export class AppSettingsService {
     ws: string | null;
     auth: string | null;
     shouldRandom: boolean;
+    allowFailover?: boolean;
     work?: string;
     supportsRepresentativesOnline?: boolean;
   }> = [
@@ -86,6 +89,7 @@ export class AppSettingsService {
       ws: 'wss://rainstorm.city/websocket',
       auth: null,
       shouldRandom: true,
+      allowFailover: true,
     },
     {
       name: 'NanOslo',
@@ -94,6 +98,27 @@ export class AppSettingsService {
       ws: 'wss://nanoslo.0x.no/websocket',
       auth: null,
       shouldRandom: true,
+      allowFailover: true,
+    },
+    // TEST-ONLY: these removed nodes are restored to exercise failure cases.
+    // Delete these entries before this PR can leave draft status.
+    {
+      name: 'SomeNano (failover test only)',
+      value: 'somenano',
+      api: 'https://node.somenano.com/proxy',
+      ws: 'wss://node.somenano.com/websocket',
+      auth: null,
+      shouldRandom: false,
+      allowFailover: true,
+    },
+    {
+      name: 'SpyNano (failover test only)',
+      value: 'spynano',
+      api: 'https://node.spynano.org/proxy',
+      ws: 'wss://node.spynano.org/websocket',
+      auth: null,
+      shouldRandom: false,
+      allowFailover: true,
     },
     {
       // Preferred personal RsNano node, not included in random rotation.
@@ -105,6 +130,7 @@ export class AppSettingsService {
       work: 'https://twister32.changeip.net/pow',
       auth: null,
       shouldRandom: false,
+      allowFailover: true,
     },
     {
       name: 'Custom',
@@ -201,6 +227,23 @@ export class AppSettingsService {
       this.settings.serverAPI = matchingServerOption.api;
       this.settings.serverWS = matchingServerOption.ws;
     }
+  }
+
+  // A successful RPC failover updates persisted settings and announces its
+  // WebSocket endpoint. A stale in-flight request cannot undo another switch.
+  // Never rotate a user-configured private RPC or Offline Mode.
+  activateFailover(expectedName: string, expectedApi: string, nextApi: string): boolean {
+    if (expectedName === 'custom' || expectedName === 'offline') return false;
+    const previous = this.serverOptions.find(server => server.api === expectedApi && server.allowFailover);
+    const next = this.serverOptions.find(server => server.api === nextApi && server.allowFailover);
+    if (!previous || !next || !next.api || previous.value === next.value ||
+        (expectedName !== 'random' && previous.value !== expectedName) ||
+        this.settings.serverName !== expectedName || this.settings.serverAPI !== expectedApi ||
+        this.settings.serverAuth) return false;
+
+    this.setAppSettings({ serverName: next.value, serverAPI: next.api, serverWS: next.ws, serverAuth: null });
+    this.serverFailover$.next({ previousName: previous.name, nextName: next.name });
+    return true;
   }
 
   // Only use a dedicated PoW endpoint when the explicitly selected server

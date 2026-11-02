@@ -13,6 +13,9 @@
   "configure-app": {
     "language": "Sprache"
   },
+  "ui-notifications": {
+    "node-failover": "Der Nano-RPC-Knoten {{previous}} ist nicht erreichbar. Automatischer Wechsel zu {{next}}."
+  },
   "general": {
     "account": "Konto",
     "accounts": "Konten",

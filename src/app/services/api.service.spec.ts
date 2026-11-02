@@ -282,7 +282,8 @@ describe('ApiService bounded secure requests', () => {
     const node = { node: { status: true }, setOnline: jasmine.createSpy(), setOffline: jasmine.createSpy(), setLoading: jasmine.createSpy() };
     const settings = {
       settings: { serverName, serverAPI: 'https://a.invalid/rpc', serverAuth: 'test-secret' },
-      serverOptions: ['a', 'b', 'b', 'c', 'd'].map(host => ({ api: `https://${host}.invalid/rpc`, shouldRandom: true }))
+      serverOptions: ['a', 'b', 'b', 'c', 'd'].map(host => ({ api: `https://${host}.invalid/rpc`, value: host, shouldRandom: true, allowFailover: true })),
+      activateFailover: jasmine.createSpy('activateFailover').and.returnValue(true)
     };
     return { http, node, settings, api: new ApiService(http as any, node as any, settings as any) };
   }
@@ -349,12 +350,24 @@ describe('ApiService bounded secure requests', () => {
     expect(rejected).toBe(true);
     expect(http.post).toHaveBeenCalledTimes(1);
   }));
-  it('recovers on a second server without mutating the configured endpoint', async () => {
+  it('activates a successful RPC fallback for persistence by settings', async () => {
     const { api, http, settings } = setup();
     http.post.and.returnValues(throwError({ status: 503 }), of({ balances: {} }));
     expect(await api.accountsBalances([])).toEqual({ balances: {} });
-    expect(settings.settings.serverAPI).toBe('https://a.invalid/rpc');
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith('random', 'https://a.invalid/rpc', 'https://b.invalid/rpc');
     expect(http.post).toHaveBeenCalledTimes(2);
+  });
+  it('does not select an HTTP 200 RPC error response as healthy', async () => {
+    const { api, http, settings } = setup();
+    http.post.and.returnValues(throwError({ status: 503 }), of({ error: 'Action not allowed' }), of({ balances: {} }));
+    expect(await api.accountsBalances([])).toEqual({ balances: {} });
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith('random', 'https://a.invalid/rpc', 'https://c.invalid/rpc');
+  });
+  it('does not rotate a custom server', async () => {
+    const { api, http, settings } = setup('custom');
+    await expectAsync(api.accountsBalances([])).toBeRejected();
+    expect(http.post).toHaveBeenCalledTimes(1);
+    expect(settings.activateFailover).not.toHaveBeenCalled();
   });
   it('counts legacy fallback against the same total attempt budget', async () => {
     const { api, http } = setup();

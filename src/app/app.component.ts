@@ -122,6 +122,15 @@ export class AppComponent implements OnInit {
     // set translation language
     this.translate.setActiveLang(this.settings.settings.language);
 
+    // Align WebSocket subscriptions and the visible notice after an RPC switch.
+    this.settings.serverFailover$.subscribe(({ previousName, nextName }) => {
+      this.notifications.removeNotification('node-failover');
+      this.notifications.sendWarning(this.translate.translate('ui-notifications.node-failover', {
+        previous: previousName, next: nextName,
+      }), { identifier: 'node-failover', length: 12000 });
+      this.websocket.forceReconnect();
+    });
+
     this.addressBook.loadAddressBook();
     this.workPool.loadWorkCache();
 

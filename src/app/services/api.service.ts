@@ -46,10 +46,14 @@ export class ApiService {
       throw error;
     }
     const endpoints = [apiUrl];
-    // Never automatically replay publication after an ambiguous network failure.
-    if (!url && !skipError && settings.serverName === 'random' && action !== 'process' && action !== 'work_generate') {
+    // Rotate only trusted built-in RPC nodes on retryable network failures.
+    // Never replay signed blocks, work generation, optional calls or custom RPC.
+    const knownSource = this.appSettings.serverOptions?.find(server =>
+      server.allowFailover && server.api === firstUrl);
+    if (!url && !skipError && action !== 'process' && action !== 'work_generate' &&
+        knownSource && (settings.serverName === 'random' || settings.serverName === knownSource.value)) {
       for (const server of this.appSettings.serverOptions || []) {
-        if (!server.shouldRandom || !server.api) continue;
+        if (!server.allowFailover || !server.api) continue;
         try {
           const candidate = secureEndpoint(server.api, 'rpc');
           if (!endpoints.includes(candidate)) endpoints.push(candidate);
@@ -76,6 +80,13 @@ export class ApiService {
             .pipe(timeout(Math.max(1, Math.min(action === 'work_generate' ? 120000 : 15000, remaining)))).toPromise();
           if (typeof validateResponse === 'function' && validateResponse(res).err != null) {
             throw { isValidationFailure: true };
+          }
+          // Some proxies respond HTTP 200 with an RPC error, not valid data.
+          if (endpoint !== apiUrl && res && typeof res.error === 'string') {
+            throw { status: 503, error: res.error };
+          }
+          if (endpoint !== apiUrl && !url && !skipError) {
+            this.appSettings.activateFailover(settings.serverName, firstUrl, endpoint);
           }
           this.node.setOnline();
           return res;

@@ -44,13 +44,49 @@ describe('AppSettingsService', () => {
     expect(service.serverOptions.some(server => server.value === 'twister32-rsnano')).toBe(true);
   }));
 
-  it('removes retired nodes and falls back safely for previously saved selections', inject([AppSettingsService], (service: AppSettingsService) => {
+  it('restores SomeNano and SpyNano only as opt-in failover test nodes', inject([AppSettingsService], (service: AppSettingsService) => {
+    for (const value of ['somenano', 'spynano']) {
+      const node = service.serverOptions.find(option => option.value === value);
+      expect(node).toBeTruthy();
+      expect(node?.shouldRandom).toBe(false);
+      expect(node?.allowFailover).toBe(true);
+    }
+  }));
+
+  it('persists a failover, WebSocket endpoint and notification event only once', inject([AppSettingsService], (service: AppSettingsService) => {
+    service.settings.serverName = 'twister32-rsnano';
+    service.loadServerSettings();
+    const previous = service.settings.serverAPI!;
+    const onFailover = jasmine.createSpy('onFailover');
+    service.serverFailover$.subscribe(onFailover);
+    expect(service.activateFailover('twister32-rsnano', previous, 'https://rainstorm.city/api')).toBe(true);
+    expect(service.settings.serverName).toBe('rainstorm');
+    expect(service.settings.serverAPI).toBe('https://rainstorm.city/api');
+    expect(service.settings.serverWS).toBe('wss://rainstorm.city/websocket');
+    expect(service.settings.serverAuth).toBeNull();
+    expect(JSON.parse(localStorage.getItem(service.storeKey)!).serverName).toBe('rainstorm');
+    expect(onFailover).toHaveBeenCalledWith({ previousName: 'Twister32 RsNano', nextName: 'Rainstorm City' });
+    expect(service.activateFailover('twister32-rsnano', previous, 'https://nanoslo.0x.no/proxy')).toBe(false);
+    expect(onFailover).toHaveBeenCalledTimes(1);
+  }));
+
+  it('never switches a custom RPC or explicit offline selection', inject([AppSettingsService], (service: AppSettingsService) => {
+    service.settings.serverName = 'custom';
+    service.settings.serverAPI = 'https://private.invalid/rpc';
+    service.settings.serverAuth = 'secret';
+    expect(service.activateFailover('custom', 'https://private.invalid/rpc', 'https://rainstorm.city/api')).toBe(false);
+    service.settings.serverName = 'offline';
+    expect(service.activateFailover('offline', 'https://private.invalid/rpc', 'https://rainstorm.city/api')).toBe(false);
+    expect(service.settings.serverAPI).toBe('https://private.invalid/rpc');
+  }));
+
+  it('removes Berry Pay and falls back safely for previously saved selections', inject([AppSettingsService], (service: AppSettingsService) => {
     const retainedPublicServers = ['rainstorm', 'nanoslo'];
     const retainedEndpoints = service.serverOptions
       .filter(server => retainedPublicServers.includes(server.value))
       .map(server => server.api);
 
-    for (const removedServer of ['somenano', 'spynano', 'berrypay']) {
+    for (const removedServer of ['berrypay']) {
       expect(service.serverOptions.some(server => server.value === removedServer)).toBe(false);
 
       service.settings.serverName = removedServer;
@@ -60,7 +96,7 @@ describe('AppSettingsService', () => {
       expect(retainedEndpoints).toContain(service.settings.serverAPI);
     }
 
-    expect(service.knownApiEndpoints).not.toContain('node.somenano.com');
+    expect(service.knownApiEndpoints).toContain('node.somenano.com/proxy');
     expect(service.knownApiEndpoints).not.toContain('xno-rpc.berrypay.org/proxy');
   }));
 });
