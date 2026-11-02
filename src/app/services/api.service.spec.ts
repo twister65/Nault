@@ -340,9 +340,9 @@ describe('ApiService bounded secure requests', () => {
   it('never retries the selected node or duplicated/disabled/unsafe fallback targets', async () => {
     const { api, http, settings } = setup('spynano');
     settings.serverOptions.push(
-      { api: 'https://a.invalid/rpc', value: 'duplicate', shouldRandom: false, allowFailover: true },
+      { api: 'https://a.invalid/rpc', value: 'duplicate', shouldRandom: false, allowFailover: true, failoverTarget: undefined },
       { api: 'https://spy.invalid/proxy', value: 'spynano', shouldRandom: false, allowFailover: true, failoverTarget: false },
-      { api: 'http://192.0.2.10:7076', value: 'unsafe', shouldRandom: false, allowFailover: true }
+      { api: 'http://192.0.2.10:7076', value: 'unsafe', shouldRandom: false, allowFailover: true, failoverTarget: undefined }
     );
     await expectAsync(api.accountsBalances([])).toBeRejected();
     expect(http.post.calls.allArgs().map(args => args[0])).toEqual([
