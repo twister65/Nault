@@ -49,6 +49,38 @@ test('English and unknown system locales keep a complete English fallback', () =
   assert.deepEqual(Object.keys(desktopLabels('es')).sort(), fields);
 });
 
+
+test('all Electron role commands have explicit EN/FR/ES labels while keeping their native roles', () => {
+  const electronSource = fs.readFileSync(
+    path.join(__dirname, '../desktop-app/src/desktop-app.ts'), 'utf8'
+  );
+  const menuSource = electronSource.split('function getApplicationMenu() {')[1]
+    .split('function loadExternal(')[0];
+  const roleEntries = [...menuSource.matchAll(/\\{role: '([a-z]+)'(?:, label: t\\.([a-zA-Z]+))?\\}/g)];
+  assert.ok(roleEntries.length >= 28, 'all native menu commands should be covered');
+  const locales = ['en-US', 'fr-FR', 'es-ES'].map(locale => desktopLabels(locale));
+  for (const [, role, key] of roleEntries) {
+    assert.ok(key, 'Electron role ' + role + ' is missing its explicit translated label');
+    for (const labels of locales) {
+      assert.equal(typeof labels[key], 'string', 'missing ' + role + ' label: ' + key);
+      assert.ok(labels[key].trim(), 'empty translated command ' + role);
+    }
+  }
+  const fr = desktopLabels('fr-FR');
+  assert.equal(fr.reload, 'Recharger');
+  assert.equal(fr.forceReload, 'Forcer le rechargement');
+  assert.equal(fr.toggleDevTools, 'Outils de développement');
+  assert.equal(fr.undo, 'Annuler');
+  assert.equal(fr.selectAll, 'Tout sélectionner');
+  assert.equal(fr.minimize, 'Réduire');
+  assert.equal(fr.close, 'Fermer');
+  assert.equal(desktopLabels('es-ES').reload, 'Recargar');
+  assert.equal(desktopLabels('en-US').reload, 'Reload');
+  // The native roles retain their accelerator/shortcut behavior.
+  assert.match(menuSource, /\\{role: 'reload', label: t\\.reload\\}/);
+  assert.match(menuSource, /\\{role: 'toggledevtools', label: t\\.toggleDevTools\\}/);
+});
+
 test('release metadata explicitly targets the maintained fork and version is coherent', () => {
   const pkg = require('../package.json');
   const lock = require('../package-lock.json');
