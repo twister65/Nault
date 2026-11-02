@@ -504,7 +504,7 @@ describe('ApiService bounded secure requests', () => {
     expect(settings.activateFailover).toHaveBeenCalledTimes(1);
   });
 
-  it('limits WS-triggered health probes to three seconds per RPC candidate', fakeAsync(() => {
+  it('times out the primary at three seconds and probes all backups in parallel for ten more', fakeAsync(() => {
     const { api, http } = setup('spynano');
     http.post.and.returnValue(NEVER);
     let rejected = false;
@@ -513,10 +513,31 @@ describe('ApiService bounded secure requests', () => {
     tick(2999);
     expect(http.post).toHaveBeenCalledTimes(1);
     tick(1);
-    expect(http.post).toHaveBeenCalledTimes(2);
-    tick(9000);
+    expect(http.post).toHaveBeenCalledTimes(4);
+    tick(9999);
+    expect(rejected).toBe(false);
+    tick(1);
     expect(rejected).toBe(true);
     expect(http.post).toHaveBeenCalledTimes(4);
+  }));
+
+  it('accepts a public fallback responding after three seconds and aborts slower candidates', fakeAsync(() => {
+    const { api, http, settings } = setup('spynano');
+    const late = new Subject<any>();
+    http.post.and.returnValues(
+      throwError({ status: 0 }), NEVER, late, NEVER
+    );
+    let completed = false;
+    api.checkNodeAvailability().then(() => { completed = true; });
+    expect(http.post).toHaveBeenCalledTimes(4);
+    tick(4500);
+    late.next({ balances: {} });
+    late.complete();
+    tick(0);
+    expect(completed).toBe(true);
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith(
+      'spynano', 'https://a.invalid/rpc', 'https://c.invalid/rpc'
+    );
   }));
 
   it('moves to a working fallback after the first timed-out health probe', fakeAsync(() => {

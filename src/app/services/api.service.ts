@@ -1,7 +1,8 @@
 import { Injectable } from '@angular/core';
 import { RpcTransportService } from './rpc-transport.service';
 import { secureEndpoint } from './endpoint-policy';
-import { timeout } from 'rxjs/operators';
+import { catchError, map, timeout } from 'rxjs/operators';
+import { EMPTY, firstValueFrom, merge } from 'rxjs';
 import { HttpHeaders } from '@angular/common/http';
 import {NodeService} from './node.service';
 import {AppSettingsService} from './app-settings.service';
@@ -23,6 +24,63 @@ export class ApiService {
   // Math.random globally (which can disrupt Jasmine and Zone.js internals).
   private randomFallbackIndex(lastIndex: number): number {
     return Math.floor(Math.random() * (lastIndex + 1));
+  }
+
+  // Only anonymous, synthetic availability checks may run concurrently.
+  // Aborts pending backup requests as soon as the first valid response wins.
+  // Normal wallet RPC (including signed process and PoW) remains sequential
+  // with its established attempt budget and cannot enter this method.
+  private async probeHealthyBackup(
+    candidates: string[],
+    requestData: Record<string, unknown>,
+    validateResponse: (res: any) => { err: string | null },
+    expectedName: string,
+    expectedUrl: string
+  ): Promise<any> {
+    let lastFailure: any = new Error('No responsive Nano RPC fallback');
+    const sources = candidates.map(endpoint => this.http.post(endpoint,
+      { ...requestData, action: 'accounts_balances' }, { responseType: 'json' } as any).pipe(
+      timeout(10000),
+      map(res => {
+        if (res && typeof res.error === 'string') {
+          throw { isRpcError: true, error: res.error };
+        }
+        if (validateResponse(res).err != null) {
+          throw { isValidationFailure: true };
+        }
+        return { endpoint, response: res };
+      }),
+      catchError(error => {
+        lastFailure = error;
+        const failure = error && typeof error === 'object'
+          ? error as { status?: number; name?: string; isRpcError?: boolean; isValidationFailure?: boolean }
+          : {};
+        console.info('[Nano RPC health] Probe failed:', endpoint, {
+          status: failure.status ?? null,
+          reason: failure.isRpcError ? 'rpc-error' :
+            failure.isValidationFailure ? 'invalid-response' :
+            failure.name === 'TimeoutError' ? 'timeout' : 'network'
+        });
+        return EMPTY;
+      })
+    ));
+    for (const endpoint of candidates) {
+      console.info('[Nano RPC health] Trying fallback:', endpoint);
+    }
+    // firstValueFrom unsubscribes the other requests on the first valid
+    // response. A single 10-second budget covers every public fallback.
+    let selected: { endpoint: string; response: any };
+    try {
+      selected = await firstValueFrom(merge(...sources));
+    } catch (_) {
+      throw lastFailure;
+    }
+    if (!this.appSettings.activateFailover(expectedName, expectedUrl, selected.endpoint)) {
+      throw { isStaleFailover: true };
+    }
+    console.info('[Nano RPC health] Failover activated:', selected.endpoint);
+    this.node.setOnline();
+    return selected.response;
   }
 
   // Some public RPC proxies still whitelist the legacy pending action names.
@@ -119,12 +177,6 @@ export class ApiService {
         }
         try {
           const remaining = deadline - Date.now();
-          if (healthProbe && endpoint !== apiUrl) {
-            // Network diagnostics only; never include wallet account data or
-            // credentials. In Chrome Console, healthy requests are otherwise
-            // invisible, which previously made failover appear inactive.
-            console.info('[Nano RPC health] Trying fallback:', endpoint);
-          }
           const res = await this.http.post(endpoint, { ...data, action: requestAction }, options)
             .pipe(timeout(Math.max(1, Math.min(action === 'work_generate' ? 120000 : perAttemptTimeoutMs, remaining)))).toPromise();
           // Older public Nano nodes may reject the new RPC action in a JSON
@@ -192,6 +244,22 @@ export class ApiService {
               this.node.setOffline(silentOffline ? null : undefined);
             }
             throw error;
+          }
+          if (healthProbe && endpoint === apiUrl && endpoints.length > 1 &&
+              typeof validateResponse === 'function') {
+            try {
+              // The primary still has its fast 3-second DNS/connection check.
+              // Check other public nodes concurrently for up to 10 seconds.
+              // Sequential 3-second aborts were falsely rejecting every
+              // candidate in the user's Electron Linux HAR.
+              return await this.probeHealthyBackup(
+                endpoints.slice(1, this.maxHealthProbeEndpoints), data,
+                validateResponse, settings.serverName, firstUrl
+              );
+            } catch (fallbackError) {
+              this.node.setOffline(silentOffline ? null : undefined);
+              throw fallbackError;
+            }
           }
           break;
         }
