@@ -282,7 +282,7 @@ describe('ApiService bounded secure requests', () => {
     const node = { node: { status: true }, setOnline: jasmine.createSpy(), setOffline: jasmine.createSpy(), setLoading: jasmine.createSpy() };
     const settings = {
       settings: { serverName, serverAPI: 'https://a.invalid/rpc', serverAuth: 'test-secret' },
-      serverOptions: ['a', 'b', 'b', 'c', 'd'].map(host => ({ api: `https://${host}.invalid/rpc`, value: host, shouldRandom: true, allowFailover: true })),
+      serverOptions: ['a', 'b', 'b', 'c', 'd'].map(host => ({ api: `https://${host}.invalid/rpc`, value: host === 'a' && serverName === 'spynano' ? 'spynano' : host, shouldRandom: true, allowFailover: true })),
       activateFailover: jasmine.createSpy('activateFailover').and.returnValue(true)
     };
     return { http, node, settings, api: new ApiService(http as any, node as any, settings as any) };
