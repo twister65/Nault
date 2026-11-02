@@ -529,6 +529,7 @@ describe('ApiService bounded secure requests', () => {
     );
     let completed = false;
     api.checkNodeAvailability().then(() => { completed = true; });
+    tick(0); // Allow the first DNS error to schedule concurrent backup probes.
     expect(http.post).toHaveBeenCalledTimes(4);
     tick(4500);
     late.next({ balances: {} });
