@@ -504,7 +504,11 @@ export class AppComponent implements OnInit {
       // A healthy WS plus no wallet is not an RPC outage. In particular,
       // Android visibility/online events must not start gratuitous probes.
       if (!this.walletService.isConfigured() && this.settings.settings.serverWS &&
-          this.websocket.socket.connected) {
+          this.websocket.socket.connected && !this.nodeService.internetRecoveryPending) {
+        // A merely open WS is enough to avoid gratuitous checks on a normal
+        // visibility event, but not after a real cable-disconnect event.
+        // Following a disconnection, verify the original RPC before releasing
+        // the failover guard.
         this.nodeService.internetRecoveryPending = false;
         this.networkRecoveryAttempts = 0;
         return;
