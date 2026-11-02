@@ -81,7 +81,7 @@ describe('AppComponent', () => {
     expect(probe).not.toHaveBeenCalled();
     app.onNetworkOnline();
     tick(0);
-    expect(probe).toHaveBeenCalledOnceWith(false, false);
+    expect(probe).toHaveBeenCalledOnceWith(true, false);
     expect(app.settings.settings.serverName).toBe('rainstorm');
     expect(app.nodeService.internetRecoveryPending).toBe(false);
   }));
