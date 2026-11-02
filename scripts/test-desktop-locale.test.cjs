@@ -56,7 +56,7 @@ test('all Electron role commands have explicit EN/FR/ES labels while keeping the
   );
   const menuSource = electronSource.split('function getApplicationMenu() {')[1]
     .split('function loadExternal(')[0];
-  const roleEntries = [...menuSource.matchAll(/\\{role: '([a-z]+)'(?:, label: t\\.([a-zA-Z]+))?\\}/g)];
+  const roleEntries = [...menuSource.matchAll(/\{role: '([a-z]+)'(?:, label: t\.([a-zA-Z]+))?\}/g)];
   assert.ok(roleEntries.length >= 28, 'all native menu commands should be covered');
   const locales = ['en-US', 'fr-FR', 'es-ES'].map(locale => desktopLabels(locale));
   for (const [, role, key] of roleEntries) {
@@ -77,8 +77,8 @@ test('all Electron role commands have explicit EN/FR/ES labels while keeping the
   assert.equal(desktopLabels('es-ES').reload, 'Recargar');
   assert.equal(desktopLabels('en-US').reload, 'Reload');
   // The native roles retain their accelerator/shortcut behavior.
-  assert.match(menuSource, /\\{role: 'reload', label: t\\.reload\\}/);
-  assert.match(menuSource, /\\{role: 'toggledevtools', label: t\\.toggleDevTools\\}/);
+  assert.match(menuSource, /\{role: 'reload', label: t\.reload\}/);
+  assert.match(menuSource, /\{role: 'toggledevtools', label: t\.toggleDevTools\}/);
 });
 
 test('release metadata explicitly targets the maintained fork and version is coherent', () => {
