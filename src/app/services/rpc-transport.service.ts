@@ -40,11 +40,18 @@ export class RpcTransportService {
           throw { status: response.status, isValidationFailure: true };
         }
         if (!response.ok) {
-          // Nano JSON-RPC action errors (including those returned with HTTP
-          // 500 by a proxy) must not be treated as gateway outages.
+          // A Nano RPC action refusal is not a node outage even if a proxy
+          // wraps it in HTTP 5xx. Conversely, gateways can return a JSON
+          // { error: "Bad Gateway" } body: that is transport failure, not
+          // an unsupported Nano RPC action. Keep the HTTP status in both
+          // cases so ApiService can make the correct failover decision.
+          const errorMessage = body !== null && typeof body === 'object' &&
+            typeof body.error === 'string' ? body.error : null;
+          const gatewayResponse = response.status >= 500 && errorMessage !== null &&
+            /\b(?:bad gateway|gateway[\s-]*time[\s-]*out|service(?: temporarily)? unavailable|upstream(?: connect| request| server| timed| timeout)|proxy error)\b/i
+              .test(errorMessage);
           throw { status: response.status, error: body,
-            isRpcError: body !== null && typeof body === 'object' &&
-              typeof body.error === 'string' };
+            isRpcError: errorMessage !== null && !gatewayResponse };
         }
         observer.next(body);
         observer.complete();

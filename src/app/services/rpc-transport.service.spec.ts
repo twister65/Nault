@@ -75,6 +75,110 @@ describe('RPC network boundary', () => {
     expect(node.setOnline).toHaveBeenCalled();
   });
 
+
+  it('treats gateway JSON error bodies as HTTP failures, not Nano RPC action errors', async () => {
+    let gatewayStatus = 502;
+    let gatewayMessage = 'Bad Gateway';
+    spyOn(window, 'fetch').and.callFake(() => Promise.resolve(
+      new Response(JSON.stringify({ error: gatewayMessage }), {
+        status: gatewayStatus, headers: { 'Content-Type': 'application/json' }
+      })
+    ));
+    for (const [status, message] of [
+      [502, 'Bad Gateway'],
+      [503, 'Service Unavailable'],
+      [504, 'Gateway Timeout'],
+      [500, 'upstream connect error']
+    ] as Array<[number, string]>) {
+      gatewayStatus = status;
+      gatewayMessage = message;
+      await expectAsync(new RpcTransportService()
+        .post('https://node.somenano.com/proxy', { action: 'accounts_balances' }, {})
+        .toPromise()).toBeRejectedWith(
+        jasmine.objectContaining({ status, isRpcError: false })
+      );
+    }
+  });
+
+  it('fails over from SomeNano on the FIRST HTTP 502 JSON Bad Gateway response', async () => {
+    const fetchSpy = spyOn(window, 'fetch').and.callFake(input => {
+      if (String(input) === 'https://node.somenano.com/proxy') {
+        return Promise.resolve(new Response(JSON.stringify({ error: 'Bad Gateway' }), { status: 502 }));
+      }
+      if (String(input) === 'https://nanoslo.0x.no/proxy') {
+        return Promise.resolve(new Response(JSON.stringify({ balances: {} }), { status: 200 }));
+      }
+      return Promise.reject(new Error('Unexpected endpoint'));
+    });
+    const node = {
+      node: { status: true },
+      setOnline: jasmine.createSpy('setOnline'),
+      setOffline: jasmine.createSpy('setOffline'),
+      setLoading: jasmine.createSpy('setLoading')
+    };
+    const settings = {
+      settings: { serverName: 'somenano', serverAPI: 'https://node.somenano.com/proxy', serverAuth: null },
+      serverOptions: [
+        { value: 'somenano', api: 'https://node.somenano.com/proxy', allowFailover: true },
+        { value: 'nanoslo', api: 'https://nanoslo.0x.no/proxy', allowFailover: true }
+      ],
+      activateFailover: jasmine.createSpy('activateFailover').and.returnValue(true)
+    };
+    await new ApiService(new RpcTransportService(), node as any, settings as any).checkNodeAvailability();
+    expect(fetchSpy.calls.allArgs().map(args => String(args[0]))).toEqual([
+      'https://node.somenano.com/proxy', 'https://nanoslo.0x.no/proxy'
+    ]);
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith(
+      'somenano', 'https://node.somenano.com/proxy', 'https://nanoslo.0x.no/proxy'
+    );
+    expect(node.setOnline).toHaveBeenCalled();
+    expect(node.setOffline).not.toHaveBeenCalled();
+  });
+
+  it('keeps a legacy Nano action refusal on SomeNano even with HTTP 502', async () => {
+    const fetchSpy = spyOn(window, 'fetch').and.callFake((_url, options) => {
+      const action = JSON.parse(String(options?.body)).action;
+      if (action === 'accounts_receivable') {
+        return Promise.resolve(new Response(JSON.stringify({
+          error: 'Action accounts_receivable not allowed'
+        }), { status: 502 }));
+      }
+      if (action === 'accounts_pending') {
+        return Promise.resolve(new Response(JSON.stringify({ blocks: {} }), { status: 200 }));
+      }
+      return Promise.reject(new Error('Unexpected RPC action'));
+    });
+    const node = {
+      node: { status: true },
+      setOnline: jasmine.createSpy('setOnline'),
+      setOffline: jasmine.createSpy('setOffline'),
+      setLoading: jasmine.createSpy('setLoading')
+    };
+    const settings = {
+      settings: { serverName: 'somenano', serverAPI: 'https://node.somenano.com/proxy', serverAuth: null },
+      serverOptions: [
+        { value: 'somenano', api: 'https://node.somenano.com/proxy', allowFailover: true },
+        { value: 'nanoslo', api: 'https://nanoslo.0x.no/proxy', allowFailover: true }
+      ],
+      activateFailover: jasmine.createSpy('activateFailover')
+    };
+    const api = new ApiService(new RpcTransportService(), node as any, settings as any);
+    expect(await api.accountsPending(['nano_test'])).toEqual({ blocks: {} });
+    expect(fetchSpy.calls.allArgs().map(args => String(args[0]))).toEqual([
+      'https://node.somenano.com/proxy', 'https://node.somenano.com/proxy'
+    ]);
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+    expect(node.setOffline).not.toHaveBeenCalled();
+  });
+
+  it('does not treat an unrelated Nano JSON error as a gateway outage', async () => {
+    spyOn(window, 'fetch').and.returnValue(Promise.resolve(new Response(
+      JSON.stringify({ error: 'Block not found' }), { status: 502 }
+    )));
+    await expectAsync(new RpcTransportService().post('https://node.somenano.com/proxy', {}, {})
+      .toPromise()).toBeRejectedWith(jasmine.objectContaining({ status: 502, isRpcError: true }));
+  });
+
   it('preserves HTTP 500/502/503/504 even if the proxy responds with HTML', async () => {
     let status = 500;
     spyOn(window, 'fetch').and.callFake(() => Promise.resolve(new Response(
