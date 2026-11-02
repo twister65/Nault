@@ -306,7 +306,8 @@ export class ApiService {
             } catch (fallbackError) {
               // A late backup from an old network generation must not mark a
               // successfully recovered original node offline again.
-              if (!fallbackError?.isStaleFailover) {
+              if (!(fallbackError && typeof fallbackError === 'object' &&
+                'isStaleFailover' in fallbackError && fallbackError.isStaleFailover)) {
                 this.node.setOffline(silentOffline ? null : undefined);
               }
               throw fallbackError;
