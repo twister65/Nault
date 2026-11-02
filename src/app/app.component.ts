@@ -177,7 +177,9 @@ export class AppComponent implements OnInit {
 
   async ngOnInit() {
     this.onWindowResize(window);
-    this.settings.loadAppSettings();
+    // Resolve Electron's native OS locale before choosing the initial Angular
+    // language. Browsers fall back to their navigator culture as before.
+    this.settings.loadAppSettings(await this.desktop.getSystemLocale());
 
     this.updateAppTheme();
 

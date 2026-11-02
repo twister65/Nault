@@ -15,6 +15,16 @@ const moduleContext = { exports: {} };
 vm.runInNewContext(code, moduleContext, { filename: file });
 const { desktopLabels } = moduleContext.exports;
 
+test('native OS locale bridge is restricted to the trusted wallet renderer', () => {
+  const mainSource = fs.readFileSync(path.join(__dirname, '../desktop-app/src/desktop-app.ts'), 'utf8');
+  const preloadSource = fs.readFileSync(path.join(__dirname, '../desktop-app/src/preload.ts'), 'utf8');
+  const settingsSource = fs.readFileSync(path.join(__dirname, '../src/app/services/app-settings.service.ts'), 'utf8');
+  assert.match(mainSource, /ipcMain\.handle\('app-system-locale', event => \{/);
+  assert.match(mainSource, /if \(!isTrustedLedgerSender\(event\)\) throw new Error\('Untrusted locale request'\)/);
+  assert.match(preloadSource, /getSystemLocale\(\): Promise<string>/);
+  assert.match(settingsSource, /loadAppSettings\(systemLocale\?: string \| null\)/);
+});
+
 test('native Electron menu and updater dialogs use French on fr-FR systems', () => {
   const fr = desktopLabels('fr-FR');
   assert.equal(fr.edit, 'Édition');

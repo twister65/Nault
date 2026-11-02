@@ -228,6 +228,13 @@ function isTrustedLedgerSender(event: IpcMainEvent | IpcMainInvokeEvent): boolea
 // the physical Ledger display.
 initialize(isTrustedLedgerSender);
 
+// Read-only desktop locale bridge. Enforce the same main-frame/file origin
+// restrictions as Ledger IPC; never expose Electron or general IPC to Angular.
+ipcMain.handle('app-system-locale', event => {
+  if (!isTrustedLedgerSender(event)) throw new Error('Untrusted locale request');
+  return app.getLocale();
+});
+
 function createWindow () {
   // Get window state
   const mainWindowStateKeeper = windowStateKeeper();

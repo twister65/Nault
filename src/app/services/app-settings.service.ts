@@ -163,7 +163,7 @@ export class AppSettingsService {
     private translate: TranslocoService
   ) { }
 
-  loadAppSettings() {
+  loadAppSettings(systemLocale?: string | null) {
     let settings: AppSettings = this.settings;
     const settingsStore = localStorage.getItem(this.storeKey);
     if (settingsStore) {
@@ -180,12 +180,22 @@ export class AppSettingsService {
     if (!this.settings.language) {
       const browserCultureLang = getBrowserCultureLang();
       const browserLang = getBrowserLang();
-
+      // The Electron native menu already uses app.getLocale(). The renderer's
+      // navigator language may disagree with it (notably Linux/Windows).
+      // Use the OS locale only for first-run defaults; never overwrite a
+      // language explicitly saved by the user.
+      const osLanguage = typeof systemLocale === 'string'
+        ? systemLocale.toLowerCase().replace('_', '-') : '';
+      const osBaseLanguage = osLanguage.split('-')[0];
       const availableLanguages = this.translate.getAvailableLangs();
       const available = (language: string) => availableLanguages.some(
         item => typeof item === 'string' ? item === language : item.id === language
       );
-      if (browserCultureLang && available(browserCultureLang)) {
+      if (osLanguage && available(osLanguage)) {
+        this.settings.language = osLanguage;
+      } else if (osBaseLanguage && available(osBaseLanguage)) {
+        this.settings.language = osBaseLanguage;
+      } else if (browserCultureLang && available(browserCultureLang)) {
         this.settings.language = browserCultureLang;
       } else if (browserLang && available(browserLang)) {
         this.settings.language = browserLang;
@@ -287,7 +297,7 @@ export class AppSettingsService {
   clearAppSettings() {
     localStorage.removeItem(this.storeKey);
     this.settings = {
-      language: 'en',
+      language: '',
       displayDenomination: 'mnano',
       // displayPrefix: 'xrb',
       walletStore: 'localStorage',

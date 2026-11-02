@@ -16,6 +16,35 @@ describe('AppSettingsService', () => {
     expect(service).toBeTruthy();
   }));
 
+  it('defaults to the OS French language only when there is no saved choice', inject([AppSettingsService], (service: AppSettingsService) => {
+    const saved = localStorage.getItem(service.storeKey);
+    try {
+      localStorage.removeItem(service.storeKey);
+      service.settings.language = '';
+      service.loadAppSettings('fr-FR');
+      expect(service.settings.language).toBe('fr');
+      service.settings.language = 'es';
+      service.loadAppSettings('fr-FR');
+      expect(service.settings.language).toBe('es');
+    } finally {
+      if (saved === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, saved);
+    }
+  }));
+
+  it('restores the OS-language default after clearing application settings', inject([AppSettingsService], (service: AppSettingsService) => {
+    const saved = localStorage.getItem(service.storeKey);
+    try {
+      service.clearAppSettings();
+      expect(service.settings.language).toBe('');
+      service.loadAppSettings('fr_FR');
+      expect(service.settings.language).toBe('fr');
+    } finally {
+      if (saved === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, saved);
+    }
+  }));
+
   it('lists Twister32 RsNano but never selects it at random', inject([AppSettingsService], (service: AppSettingsService) => {
     const server = service.serverOptions.find(option => option.value === 'twister32-rsnano');
     expect(server).toBeTruthy();
