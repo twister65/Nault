@@ -32,7 +32,7 @@ describe('AppComponent', () => {
     const app = TestBed.inject(AppComponent);
     app.settings.settings.serverAPI = 'https://example.test/proxy';
     app.settings.settings.serverWS = 'wss://example.test/ws';
-    const rpc = spyOn(TestBed.inject(ApiService), 'accountsBalances').and.callFake(async () => {
+    const rpc = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.callFake(async () => {
       app.nodeService.setOnline(); // ApiService does this when a real RPC succeeds.
       return { balances: {} };
     });
@@ -52,7 +52,7 @@ describe('AppComponent', () => {
     const app = TestBed.inject(AppComponent);
     app.settings.settings.serverAPI = 'https://example.test/proxy';
     let calls = 0;
-    const rpc = spyOn(TestBed.inject(ApiService), 'accountsBalances').and.callFake(async () => {
+    const rpc = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.callFake(async () => {
       calls++;
       if (calls === 1) throw new Error('No network');
       app.nodeService.setOnline();
@@ -72,7 +72,7 @@ describe('AppComponent', () => {
   it('does not probe wallet RPC in the explicit offline mode', fakeAsync(() => {
     const app = TestBed.inject(AppComponent);
     app.settings.settings.serverAPI = null;
-    const rpc = spyOn(TestBed.inject(ApiService), 'accountsBalances').and.stub();
+    const rpc = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.stub();
     app.onNetworkOnline();
     tick(0);
     expect(rpc).not.toHaveBeenCalled();

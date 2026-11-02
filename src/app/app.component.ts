@@ -437,9 +437,12 @@ export class AppComponent implements OnInit {
     try {
       // Prefer normal wallet reads: not every public RPC allows node statistics.
       if (this.wallet.accounts.length) await this.walletService.reloadBalances();
-      // Check connectivity with the normal wallet RPC whitelist, not block_count,
-      // which privacy-preserving public nodes may intentionally deny.
-      if (this.nodeService.node.status !== true) await this.api.accountsBalances([]);
+      // Empty account arrays may be refused by healthy public RPC proxies.
+      // Use the wallet-independent health probe also on network recovery.
+      if (this.nodeService.node.status !== true) {
+        if (this.wallet.accounts.length) await this.api.accountsBalances(this.wallet.accounts.map(a => a.id));
+        else await this.api.checkNodeAvailability();
+      }
 
       if (!navigator.onLine || this.settings.settings.serverAPI !== endpoint) return;
 
