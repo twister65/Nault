@@ -95,9 +95,11 @@ export class ApiService {
     // A backup may complete after the Ethernet cable is reconnected.
     // If the offline transition was observed, it must not replace the
     // selected server: first retry the original on network recovery.
-    if (this.node.internetRecoveryPending ||
-        this.node.internetInterruptionGeneration !== expectedNetworkGeneration ||
-        await this.internetDisconnected()) {
+    if (this.node.internetInterruptionGeneration !== expectedNetworkGeneration) {
+      // A backup from before the outage is stale even after original recovery.
+      throw { isStaleFailover: true };
+    }
+    if (this.node.internetRecoveryPending || await this.internetDisconnected()) {
       this.markInternetDisconnected();
       throw { status: 0, isInternetDisconnected: true };
     }
@@ -230,9 +232,10 @@ export class ApiService {
             throw { isValidationFailure: true };
           }
           if (endpoint !== apiUrl && !url && !skipError) {
-            if (this.node.internetRecoveryPending ||
-                this.node.internetInterruptionGeneration !== expectedNetworkGeneration ||
-                await this.internetDisconnected()) {
+            if (this.node.internetInterruptionGeneration !== expectedNetworkGeneration) {
+              throw { isStaleFailover: true };
+            }
+            if (this.node.internetRecoveryPending || await this.internetDisconnected()) {
               this.markInternetDisconnected();
               throw { status: 0, isInternetDisconnected: true };
             }

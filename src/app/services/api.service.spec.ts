@@ -340,7 +340,16 @@ describe('ApiService optional representative metadata', () => {
 describe('ApiService bounded secure requests', () => {
   function setup(serverName = 'random') {
     const http = { post: jasmine.createSpy('post').and.returnValue(throwError({ status: 503 })) };
-    const node = { node: { status: true }, setOnline: jasmine.createSpy(), setOffline: jasmine.createSpy(), setLoading: jasmine.createSpy() };
+    const node = {
+      node: { status: true },
+      internetRecoveryPending: false,
+      internetInterruptionGeneration: 0,
+      markInternetInterrupted() {
+        if (!this.internetRecoveryPending) this.internetInterruptionGeneration++;
+        this.internetRecoveryPending = true;
+      },
+      setOnline: jasmine.createSpy(), setOffline: jasmine.createSpy(), setLoading: jasmine.createSpy()
+    };
     const settings = {
       settings: { serverName, serverAPI: 'https://a.invalid/rpc', serverAuth: 'test-secret' },
       serverOptions: ['a', 'b', 'b', 'c', 'd'].map(host => ({ api: `https://${host}.invalid/rpc`, value: host === 'a' && serverName === 'spynano' ? 'spynano' : host, shouldRandom: true, allowFailover: true, failoverTarget: undefined as boolean | undefined })),
@@ -455,6 +464,7 @@ describe('ApiService bounded secure requests', () => {
     tick(0);
     expect(rejected).toBe(true);
     expect(settings.activateFailover).not.toHaveBeenCalled();
+    expect(node.internetRecoveryPending).toBe(false); // Late reply must not mark a fresh outage.
   }));
 
   it('limits authentication to the configured custom RPC, not an explicit PoW server', async () => {
