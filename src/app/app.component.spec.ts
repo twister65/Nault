@@ -34,7 +34,7 @@ describe('AppComponent', () => {
     app.settings.settings.serverWS = 'wss://example.test/ws';
     const rpc = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.callFake(async () => {
       app.nodeService.setOnline(); // ApiService does this when a real RPC succeeds.
-      return { balances: {} };
+      return;
     });
     const ws = spyOn(TestBed.inject(WebsocketService), 'forceReconnect').and.stub();
 
@@ -56,7 +56,7 @@ describe('AppComponent', () => {
       calls++;
       if (calls === 1) throw new Error('No network');
       app.nodeService.setOnline();
-      return { balances: {} };
+      return;
     });
 
     app.onNetworkOffline();
