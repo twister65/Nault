@@ -592,3 +592,35 @@ describe('Ledger signing session and status polling isolation (#58)', () => {
     expect(getLedgerSigningIssue({ name: 'NotAllowedError', message: 'Access denied' })).toBe('failed');
   });
 });
+
+describe('Desktop Ledger IPC command correlation', () => {
+  it('ignores stale, mismatched and untagged poll responses', async () => {
+    const service = Object.create(LedgerService.prototype) as LedgerService;
+    const messages = new Subject<any>();
+    (service as any).desktopMessage$ = messages;
+    const pending = service.getDesktopResponse('sign-block', 41);
+    messages.next({ event: 'sign-block', data: { requestId: 40, signature: 'stale' } });
+    messages.next({ event: 'account-details', data: { accountIndex: 0 } });
+    messages.next({ event: 'sign-block', data: { requestId: 41, signature: 'expected' } });
+    const result = await pending;
+    expect(result.signature).toBe('expected');
+    expect(messages.observers.length).toBe(0);
+  });
+
+  it('preserves user-denied APDU status instead of losing it at the IPC boundary', async () => {
+    const service = Object.create(LedgerService.prototype) as LedgerService;
+    const messages = new Subject<any>();
+    (service as any).desktopMessage$ = messages;
+    const pending = service.getDesktopResponse('sign-block', 42);
+    messages.next({ event: 'sign-block', data: {
+      requestId: 42, error: true, errorMessage: 'Denied by user', statusCode: 0x6985
+    } });
+    try {
+      await pending;
+      fail('Expected rejected signature');
+    } catch (error) {
+      expect(getLedgerSigningIssue(error)).toBe('rejected');
+    }
+    expect(messages.observers.length).toBe(0);
+  });
+});

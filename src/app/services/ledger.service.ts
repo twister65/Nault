@@ -199,6 +199,7 @@ export class LedgerService {
   lastBluetoothSelectionCancelled = false;
 
   queryingDesktopLedger = false;
+  private desktopRequestId = 0;
   private bluetoothConnecting = false;
   private bluetoothGeneration = 0;
   // WebUSB/WebHID connects must not overlap, including calls from other views.
@@ -428,35 +429,45 @@ export class LedgerService {
    * @param {any} filterFn
    * @returns {Promise<any>}
    */
-  async getDesktopResponse(eventType: string, filterFn?: (data: {accountIndex: number}) => boolean): Promise<any> {
+  // Correlate replies with commands, not just account indices: background HID
+  // polls and replies from timed-out requests must never resolve a new command.
+  async getDesktopResponse(eventType: string, requestId: number): Promise<any> {
     return new Promise((resolve, reject) => {
-      const sub = this.desktopMessage$
-        .subscribe((response: any) => {
-          // Listen to all desktop messages until one passes our filters
-          if (response.event !== eventType) {
-            return; // Not the event we want.
+      let settled = false;
+      let subscription: { unsubscribe(): void } | null = null;
+      const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        subscription?.unsubscribe();
+        reject(new Error('Desktop Ledger ' + eventType + ' response timed out'));
+      }, eventType === 'sign-block' ? 90000 : 45000);
+
+      subscription = this.desktopMessage$.subscribe((response: any) => {
+        if (settled || response?.event !== eventType ||
+            response.data?.requestId !== requestId) return;
+        settled = true;
+        clearTimeout(timeout);
+        subscription?.unsubscribe();
+        if (response.data.error === true) {
+          const error = new Error(String(response.data.errorMessage || 'Ledger command failed')) as Error & { statusCode?: number };
+          // Only APDU status codes, never native errors or HID identifiers.
+          if (Number.isInteger(response.data.statusCode) &&
+              response.data.statusCode >= 0 && response.data.statusCode <= 0xffff) {
+            error.statusCode = response.data.statusCode;
           }
-
-          if (filterFn) {
-            const shouldSkip = filterFn(response.data); // This function should return boolean
-            if (!shouldSkip) return; // This is not the message the subscriber wants
-          }
-
-          sub.unsubscribe(); // This is a message we want, safe to unsubscribe to further messages now.
-
-          if (response.data && response.data.error === true) {
-            return reject(new Error(response.data.errorMessage)); // Request failed!
-          }
-
+          reject(error);
+        } else {
           resolve(response.data);
-        }, err => {
-          console.log(`Desktop message got error!`, err);
-          reject(err);
-        });
+        }
+      }, error => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        subscription?.unsubscribe();
+        reject(error);
+      });
     });
-
   }
-
 
 
   async getLedgerAccountDesktop(accountIndex: number, showOnScreen: boolean) {
@@ -465,10 +476,12 @@ export class LedgerService {
     }
     this.queryingDesktopLedger = true;
 
-    this.desktop.send('ledger', { event: 'account-details', data: { accountIndex, showOnScreen } });
-
+    const requestId = ++this.desktopRequestId;
     try {
-      const details = await this.getDesktopResponse('account-details', a => a.accountIndex === accountIndex);
+      if (!this.desktop.send('ledger', { event: 'account-details', data: { accountIndex, showOnScreen, requestId } })) {
+        throw new Error('Electron Ledger IPC is unavailable');
+      }
+      const details = await this.getDesktopResponse('account-details', requestId);
       this.queryingDesktopLedger = false;
 
       return details;
@@ -484,16 +497,18 @@ export class LedgerService {
     }
     this.queryingDesktopLedger = true;
 
-    this.desktop.send('ledger', { event: 'cache-block', data: { accountIndex, cacheData, signature } });
-
+    const requestId = ++this.desktopRequestId;
     try {
-      const details = await this.getDesktopResponse('cache-block', a => a.accountIndex === accountIndex);
+      if (!this.desktop.send('ledger', { event: 'cache-block', data: { accountIndex, cacheData, signature, requestId } })) {
+        throw new Error('Electron Ledger IPC is unavailable');
+      }
+      const details = await this.getDesktopResponse('cache-block', requestId);
       this.queryingDesktopLedger = false;
 
       return details;
     } catch (err) {
       this.queryingDesktopLedger = false;
-      throw new Error(`Error caching block: ${ledgerErrorFields(err).message ?? err}`);
+      throw err; // Preserve the structured APDU refusal classification.
     }
   }
 
@@ -503,16 +518,18 @@ export class LedgerService {
     }
     this.queryingDesktopLedger = true;
 
-    this.desktop.send('ledger', { event: 'sign-block', data: { accountIndex, blockData } });
-
+    const requestId = ++this.desktopRequestId;
     try {
-      const details = await this.getDesktopResponse('sign-block', a => a.accountIndex === accountIndex);
+      if (!this.desktop.send('ledger', { event: 'sign-block', data: { accountIndex, blockData, requestId } })) {
+        throw new Error('Electron Ledger IPC is unavailable');
+      }
+      const details = await this.getDesktopResponse('sign-block', requestId);
       this.queryingDesktopLedger = false;
 
       return details;
     } catch (err) {
       this.queryingDesktopLedger = false;
-      throw new Error(`Error signing block: ${ledgerErrorFields(err).message ?? err}`);
+      throw err; // Do not erase statusCode (notably the user's 0x6985 refusal).
     }
   }
 
@@ -856,6 +873,8 @@ export class LedgerService {
     }
   }
 
+  get signingInProgress(): boolean { return this.signingSessionActive; }
+
   // Reserve the device before awaiting the current status probe. This covers
   // cacheBlock + signBlock as one unit, including failures and user refusal.
   // Never retry a signature or blockchain submission automatically.
@@ -863,12 +882,23 @@ export class LedgerService {
     if (this.signingSessionActive) throw new LedgerSigningBusyError();
     this.signingSessionActive = true;
     const generation = this.bluetoothGeneration;
+    let nativeReserved = false;
     try {
       if (this.statusCheckInFlight) await this.statusCheckInFlight;
       // A disconnect/reconnect while waiting invalidates the pending action.
       if (generation !== this.bluetoothGeneration) throw new LedgerNotReadyError();
+      if (this.usesDesktopUsb) {
+        await this.desktop.beginLedgerSigning();
+        nativeReserved = true;
+      }
+      if (generation !== this.bluetoothGeneration) throw new LedgerNotReadyError();
       return await operation();
     } finally {
+      if (nativeReserved) {
+        try { await this.desktop.endLedgerSigning(); } catch (error) {
+          console.warn('Unable to release native Ledger signing reservation', error);
+        }
+      }
       this.signingSessionActive = false;
     }
   }

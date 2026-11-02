@@ -208,8 +208,9 @@ export class AppComponent implements OnInit {
       if (event.type === 'VERSION_READY') {
         console.log(`SW update available. Current: ${event.currentVersion.hash}. New: ${event.latestVersion.hash}`);
         this.notifications.sendInfo(
-          'An update was installed in the background and will be applied on next launch. <a href="#" (click)="applySwUpdate()">Apply immediately</a>',
-          { length: 10000 }
+          'An update was installed in the background and will be applied on next launch.',
+          { identifier: 'pwa-update-ready', length: 0,
+            action: { labelKey: 'ui-notifications.apply-update', run: () => { void this.applySwUpdate(); } } }
         );
       } else if (event.type === 'VERSION_INSTALLATION_FAILED') {
         console.error('SW update installation failed:', event.error);
@@ -265,8 +266,20 @@ export class AppComponent implements OnInit {
     this.settings.setAppSetting('walletVersion', 2); // Update wallet version so we do not patch in the future.
   }
 
-  applySwUpdate() {
-    this.updates.activateUpdate();
+  async applySwUpdate(): Promise<void> {
+    // Replacing the app shell during a hardware signature can strand a
+    // pending user confirmation. The user can retry once signing has ended.
+    if (this.ledger.signingInProgress) {
+      this.notifications.sendWarning(this.translate.translate('ui-notifications.update-signing-active'));
+      return;
+    }
+    try {
+      await this.updates.activateUpdate();
+      // activateUpdate() alone would leave mixed old/new chunks in memory.
+      window.location.reload();
+    } catch (_error) {
+      this.notifications.sendWarning(this.translate.translate('ui-notifications.update-activation-failed'));
+    }
   }
 
   private navTouchStart: { x: number; y: number } | null = null;

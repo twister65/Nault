@@ -30,6 +30,13 @@ function errorMessage(error: any): string {
   return error && error.message ? String(error.message) : String(error);
 }
 
+function apduStatus(error: unknown): number | undefined {
+  const code = error && typeof error === 'object' && 'statusCode' in error
+    ? (error as {statusCode?: unknown}).statusCode : undefined;
+  return typeof code === 'number' && Number.isInteger(code) && code >= 0 && code <= 0xffff
+    ? code : undefined;
+}
+
 port.on('message', (message: WorkerRequest) => {
   if (message.type === 'close') {
     closing = true;
@@ -52,7 +59,7 @@ port.on('message', (message: WorkerRequest) => {
       const reply = await transport.exchange(Buffer.from(message.apdu));
       port.postMessage({ type: 'result', id: message.id, data: Array.from(reply) });
     } catch (error) {
-      port.postMessage({ type: 'error', id: message.id, message: errorMessage(error) });
+      port.postMessage({ type: 'error', id: message.id, message: errorMessage(error), statusCode: apduStatus(error) });
     }
   });
 });

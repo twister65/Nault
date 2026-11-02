@@ -102,6 +102,9 @@ jobs:
       - name: Test Ledger Bluetooth transport and reconnect handling
         run: node scripts/test-ledger-bluetooth.js
 
+      - name: Verify PWA and Desktop parity safeguards
+        run: node --test scripts/test-parity-static.test.cjs
+
       - name: Run focused Nano / RsNano RPC tests
         run: npm test -- --include=src/app/services/api.service.spec.ts --include=src/app/services/wallet.service.spec.ts --include=src/app/services/websocket.service.spec.ts --include=src/app/services/rpc-transport.service.spec.ts --include=src/app/services/endpoint-policy.service.spec.ts --watch=false --browsers=ChromeHeadlessCI --progress=false
 

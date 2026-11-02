@@ -438,37 +438,37 @@ function getApplicationMenu() {
     {
       label: t.edit,
       submenu: [
-        {role: 'undo'},
-        {role: 'redo'},
+        {role: 'undo', label: t.undo},
+        {role: 'redo', label: t.redo},
         {type: 'separator'},
-        {role: 'cut'},
-        {role: 'copy'},
-        {role: 'paste'},
-        {role: 'pasteandmatchstyle'},
-        {role: 'delete'},
-        {role: 'selectall'}
+        {role: 'cut', label: t.cut},
+        {role: 'copy', label: t.copy},
+        {role: 'paste', label: t.paste},
+        {role: 'pasteandmatchstyle', label: t.pasteAndMatchStyle},
+        {role: 'delete', label: t.delete},
+        {role: 'selectall', label: t.selectAll}
       ]
     },
     {
       label: t.view,
       submenu: [
-        {role: 'reload'},
-        {role: 'forcereload'},
-        {role: 'toggledevtools'},
+        {role: 'reload', label: t.reload},
+        {role: 'forcereload', label: t.forceReload},
+        {role: 'toggledevtools', label: t.toggleDevTools},
         {type: 'separator'},
-        {role: 'resetzoom'},
-        {role: 'zoomin'},
-        {role: 'zoomout'},
+        {role: 'resetzoom', label: t.resetZoom},
+        {role: 'zoomin', label: t.zoomIn},
+        {role: 'zoomout', label: t.zoomOut},
         {type: 'separator'},
-        {role: 'togglefullscreen'}
+        {role: 'togglefullscreen', label: t.toggleFullScreen}
       ]
     },
     {
       role: 'window',
       label: t.window,
       submenu: [
-        {role: 'minimize'},
-        {role: 'close'}
+        {role: 'minimize', label: t.minimize},
+        {role: 'close', label: t.close}
       ]
     },
     {
@@ -512,7 +512,7 @@ function getApplicationMenu() {
     template.unshift({
       label: 'Nault',
       submenu: [
-        {role: 'about'},
+        {role: 'about', label: t.about},
         {type: 'separator'},
         {
           label: t.checkUpdates,
@@ -524,11 +524,11 @@ function getApplicationMenu() {
         {type: 'separator'},
         // {role: 'services', submenu: []},
         // {type: 'separator'},
-        {role: 'hide'},
-        {role: 'hideothers'},
-        {role: 'unhide'},
+        {role: 'hide', label: t.hide},
+        {role: 'hideothers', label: t.hideOthers},
+        {role: 'unhide', label: t.unhide},
         {type: 'separator'},
-        {role: 'quit'}
+        {role: 'quit', label: t.quit}
       ]
     });
 
@@ -538,19 +538,19 @@ function getApplicationMenu() {
       {
         label: t.speech,
         submenu: [
-          {role: 'startspeaking'},
-          {role: 'stopspeaking'}
+          {role: 'startspeaking', label: t.startSpeaking},
+          {role: 'stopspeaking', label: t.stopSpeaking}
         ]
       }
     );
 
     // Window menu
     template[3].submenu = [
-      {role: 'close'},
-      {role: 'minimize'},
-      {role: 'zoom'},
+      {role: 'close', label: t.close},
+      {role: 'minimize', label: t.minimize},
+      {role: 'zoom', label: t.zoom},
       {type: 'separator'},
-      {role: 'front'}
+      {role: 'front', label: t.front}
     ];
   }
 
