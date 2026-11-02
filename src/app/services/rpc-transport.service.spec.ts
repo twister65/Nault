@@ -149,6 +149,16 @@ describe('RPC network boundary', () => {
     expect(settings.activateFailover).not.toHaveBeenCalled();
   });
 
+  it('marks JSON RPC action denials as application errors even with HTTP 500', async () => {
+    spyOn(window, 'fetch').and.returnValue(Promise.resolve(new Response(
+      JSON.stringify({ error: 'Action accounts_receivable not allowed' }), { status: 500 }
+    )));
+    await expectAsync(new RpcTransportService()
+      .post('https://example.org/proxy', {}, {}).toPromise()).toBeRejectedWith(
+        jasmine.objectContaining({ status: 500, isRpcError: true })
+      );
+  });
+
   it('preserves proxy refusal bodies for the legacy compatibility fallback', async () => {
     spyOn(window, 'fetch').and.returnValue(Promise.resolve(new Response(
       JSON.stringify({ error: 'Action receivable not allowed' }), { status: 500 }

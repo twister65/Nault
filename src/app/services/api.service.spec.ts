@@ -205,7 +205,7 @@ describe('ApiService RPC proxy fallback', () => {
     expect(payloads.map(p => p.action)).toEqual(['accounts_receivable']);
   });
 
-  it('does not silently fall back on an unrelated HTTP 500 error', async () => {
+  it('does not silently fall back on an unrelated HTTP 500 JSON-RPC action error', async () => {
     const { api, payloads, node } = setupProxy('accounts_receivable', 'custom', 'Internal server error');
 
     let error: any;
@@ -217,7 +217,35 @@ describe('ApiService RPC proxy fallback', () => {
 
     expect(error).toBeDefined();
     expect(payloads.map(p => p.action)).toEqual(['accounts_receivable']);
-    expect(node.setOffline).toHaveBeenCalled();
+    expect(node.setOffline).not.toHaveBeenCalled();
+  });
+
+  it('retries accounts_pending on HTTP 200 JSON action denial without switching servers', async () => {
+    const { api, payloads, node, settings } = setupProxy(null, 'random');
+    const http = (api as any).http;
+    http.post.and.callFake((_url: string, payload: any) => {
+      payloads.push({ ...payload });
+      return of(payload.action === 'accounts_receivable'
+        ? { error: 'Action accounts_receivable not allowed' }
+        : { blocks: {} });
+    });
+    expect(await api.accountsPending(['nano_test'])).toEqual({ blocks: {} });
+    expect(payloads.map(p => p.action)).toEqual(['accounts_receivable', 'accounts_pending']);
+    expect(node.setOffline).not.toHaveBeenCalled();
+    expect(settings.loadServerSettings).not.toHaveBeenCalled();
+  });
+
+  it('retries pending on HTTP 200 JSON action denial on the same node', async () => {
+    const { api, payloads } = setupProxy(null);
+    const http = (api as any).http;
+    http.post.and.callFake((_url: string, payload: any) => {
+      payloads.push({ ...payload });
+      return of(payload.action === 'receivable'
+        ? { error: 'Action receivable not allowed' }
+        : { blocks: {} });
+    });
+    expect(await api.pending('nano_test', 5)).toEqual({ blocks: {} });
+    expect(payloads.map(p => p.action)).toEqual(['receivable', 'pending']);
   });
 });
 
@@ -425,11 +453,22 @@ describe('ApiService bounded secure requests', () => {
     expect(settings.activateFailover).toHaveBeenCalledOnceWith('random', 'https://a.invalid/rpc', 'https://b.invalid/rpc');
     expect(http.post).toHaveBeenCalledTimes(2);
   });
-  it('does not select an HTTP 200 RPC error response as healthy', async () => {
+  it('never selects a fallback node on an HTTP 200 JSON-RPC error response', async () => {
     const { api, http, settings } = setup();
-    http.post.and.returnValues(throwError({ status: 503 }), of({ error: 'Action not allowed' }), of({ balances: {} }));
-    expect(await api.accountsBalances([])).toEqual({ balances: {} });
-    expect(settings.activateFailover).toHaveBeenCalledOnceWith('random', 'https://a.invalid/rpc', 'https://c.invalid/rpc');
+    http.post.and.returnValues(throwError({ status: 503 }), of({ error: 'Action accounts_balances not allowed' }), of({ balances: {} }));
+    await expectAsync(api.accountsBalances([])).toBeRejectedWith(jasmine.objectContaining({ isRpcError: true }));
+    expect(http.post).toHaveBeenCalledTimes(2);
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+  });
+
+  it('does not switch a built-in node on a JSON-RPC error with HTTP 500', async () => {
+    const { api, http, settings } = setup('a');
+    http.post.and.returnValues(throwError({
+      status: 500, error: { error: 'Action accounts_balances not allowed' }, isRpcError: true
+    }), of({ balances: {} }));
+    await expectAsync(api.accountsBalances([])).toBeRejected();
+    expect(http.post).toHaveBeenCalledTimes(1);
+    expect(settings.activateFailover).not.toHaveBeenCalled();
   });
   it('does not rotate a custom server', async () => {
     const { api, http, settings } = setup('custom');

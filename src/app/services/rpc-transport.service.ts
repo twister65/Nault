@@ -39,7 +39,13 @@ export class RpcTransportService {
           }
           throw { status: response.status, isValidationFailure: true };
         }
-        if (!response.ok) throw { status: response.status, error: body };
+        if (!response.ok) {
+          // Nano JSON-RPC action errors (including those returned with HTTP
+          // 500 by a proxy) must not be treated as gateway outages.
+          throw { status: response.status, error: body,
+            isRpcError: body !== null && typeof body === 'object' &&
+              typeof body.error === 'string' };
+        }
         observer.next(body);
         observer.complete();
       }).catch(error => {

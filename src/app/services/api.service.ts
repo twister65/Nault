@@ -23,7 +23,9 @@ export class ApiService {
       action === 'receivable' ? 'pending' : null;
     if (!legacyAction) return null;
 
-    const reason = error && error.error && error.error.error;
+    // Both HTTP 200 { error: "..." } and HTTP 4xx/5xx with a JSON error
+    // payload can mean an older Nano proxy denied a newer RPC action.
+    const reason = typeof error?.error === 'string' ? error.error : error?.error?.error;
     return typeof reason === 'string' && reason.trim() === `Action ${action} not allowed`
       ? legacyAction : null;
   }
@@ -84,12 +86,26 @@ export class ApiService {
           const remaining = deadline - Date.now();
           const res = await this.http.post(endpoint, { ...data, action: requestAction }, options)
             .pipe(timeout(Math.max(1, Math.min(action === 'work_generate' ? 120000 : perAttemptTimeoutMs, remaining)))).toPromise();
+          // Older public Nano nodes may reject the new RPC action in a JSON
+          // response with HTTP 200. Retry its legacy alias on this same node;
+          // never confuse a JSON RPC error with transport unavailability.
+          if (res && typeof res.error === 'string') {
+            const legacy = this.legacyReceivableAction(requestAction, res);
+            if (legacy && attempts < 3) {
+              requestAction = legacy;
+              continue;
+            }
+            // Preserve the API's existing error response on the selected node,
+            // but do not select a fallback that rejects this wallet action.
+            if (endpoint !== apiUrl) throw { isRpcError: true, error: res.error };
+            if (typeof validateResponse === 'function') {
+              throw { isRpcError: true, error: res.error };
+            }
+            this.node.setOnline();
+            return res;
+          }
           if (typeof validateResponse === 'function' && validateResponse(res).err != null) {
             throw { isValidationFailure: true };
-          }
-          // Some proxies respond HTTP 200 with an RPC error, not valid data.
-          if (endpoint !== apiUrl && res && typeof res.error === 'string') {
-            throw { status: 503, error: res.error };
           }
           if (endpoint !== apiUrl && !url && !skipError) {
             this.appSettings.activateFailover(settings.serverName, firstUrl, endpoint);
@@ -105,14 +121,17 @@ export class ApiService {
             continue;
           }
           const failure = error && typeof error === 'object'
-            ? error as { isValidationFailure?: boolean; status?: number; name?: string }
+            ? error as { isValidationFailure?: boolean; isRpcError?: boolean; status?: number; name?: string }
             : {};
-          const retryable = !failure.isValidationFailure &&
+          // JSON-RPC application errors show that the node answered; they are
+          // not evidence of a DNS, connection or gateway failure. The same
+          // applies to malformed successful JSON responses.
+          const retryable = !failure.isValidationFailure && !failure.isRpcError &&
             (failure.status === 0 || failure.status === 408 || failure.status === 429 ||
              (typeof failure.status === 'number' && failure.status >= 500) ||
              failure.name === 'TimeoutError' || error instanceof TypeError);
           if (!retryable) {
-            this.node.setOffline();
+            if (!failure.isRpcError) this.node.setOffline();
             throw error;
           }
           break;
