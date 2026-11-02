@@ -1,5 +1,5 @@
 import { secureEndpoint } from '../../services/endpoint-policy';
-import { Component, OnInit, Renderer2, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, Renderer2, ChangeDetectionStrategy } from '@angular/core';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {AppSettingsService, AppSettings, PoWSource} from '../../services/app-settings.service';
@@ -12,7 +12,7 @@ import {ApiService} from '../../services/api.service';
 import {WebsocketService} from '../../services/websocket.service';
 import {NodeService} from '../../services/node.service';
 import {UtilService} from '../../services/util.service';
-import {BehaviorSubject} from 'rxjs';
+import {BehaviorSubject, Subscription} from 'rxjs';
 import {RepresentativeService, StoredRepresentative} from '../../services/representative.service';
 import {NinjaService} from '../../services/ninja.service';
 import {QrModalService} from '../../services/qr-modal.service';
@@ -26,7 +26,8 @@ import { TranslocoService } from '@jsverse/transloco';
     standalone: false
 })
 
-export class ConfigureAppComponent implements OnInit {
+export class ConfigureAppComponent implements OnInit, OnDestroy {
+  private readonly failoverSubscription = new Subscription();
 
   constructor(
     private walletService: WalletService,
@@ -203,9 +204,24 @@ export class ConfigureAppComponent implements OnInit {
 
   async ngOnInit() {
     this.loadFromSettings();
+    this.failoverSubscription.add(this.appSettings.serverFailover$.subscribe(() => {
+      // Keep the visible Server Configuration in sync without discarding
+      // unrelated, unsaved form edits.
+      this.selectedServer = this.appSettings.settings.serverName;
+      this.serverAPI = this.appSettings.settings.serverAPI;
+      this.serverAPIUpdated = this.serverAPI;
+      this.serverWS = this.appSettings.settings.serverWS;
+      this.serverAuth = null;
+      this.resetNodeStats();
+      void this.updateNodeStats();
+    }));
     this.updateNodeStats();
 
     setTimeout(() => this.populateRepresentativeList(), 500);
+  }
+
+  ngOnDestroy(): void {
+    this.failoverSubscription.unsubscribe();
   }
 
   async populateRepresentativeList() {
@@ -527,9 +543,12 @@ export class ConfigureAppComponent implements OnInit {
     } catch (_) {
       this.notifications.sendWarning(this.translocoService.translate('ui-notifications.refresh-balance-server'));
     }
-    // this is updated after setting server to random and doing recheck of wallet balance
+    // Server selection may have changed automatically during the RPC refresh.
+    this.selectedServer = this.appSettings.settings.serverName;
     this.serverAPIUpdated = this.appSettings.settings.serverAPI;
     this.serverAPI = this.serverAPIUpdated;
+    this.serverWS = this.appSettings.settings.serverWS;
+    this.serverAuth = this.appSettings.settings.serverAuth;
     this.statsRefreshEnabled = true;
     this.updateNodeStats();
   }
