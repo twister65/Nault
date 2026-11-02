@@ -1,5 +1,6 @@
 import { RpcTransportService } from './rpc-transport.service';
 import { HttpHeaders } from '@angular/common/http';
+import { ApiService } from './api.service';
 
 describe('RPC network boundary', () => {
   it('forbids redirects and ambient credentials and aborts on unsubscribe', () => {
@@ -19,6 +20,81 @@ describe('RPC network boundary', () => {
     if (!(signal instanceof AbortSignal)) throw new Error('RPC fetch must use an AbortSignal');
     expect(signal.aborted).toBe(true);
   });
+
+  it('preserves HTTP 500/502/503/504 even if the proxy responds with HTML', async () => {
+    let status = 500;
+    spyOn(window, 'fetch').and.callFake(() => Promise.resolve(new Response(
+      '<html>gateway error</html>', { status, headers: { 'Content-Type': 'text/html' } }
+    )));
+    for (status of [500, 502, 503, 504]) {
+      try {
+        await new RpcTransportService().post('https://example.org/proxy', {}, {}).toPromise();
+        fail('HTTP gateway error should reject');
+      } catch (error) {
+        expect(error).toEqual(jasmine.objectContaining({ status }));
+        expect((error as { isValidationFailure?: boolean }).isValidationFailure).not.toBe(true);
+      }
+    }
+  });
+
+  it('fails over on the first HTTP 504 HTML response, not the next WebSocket retry', async () => {
+    const fetchSpy = spyOn(window, 'fetch').and.callFake((input) => {
+      if (String(input) === 'https://node.spynano.org/proxy') {
+        return Promise.resolve(new Response('<html>Gateway Timeout</html>', { status: 504 }));
+      }
+      if (String(input) === 'https://rainstorm.city/api') {
+        return Promise.resolve(new Response(JSON.stringify({ balances: {} }), { status: 200 }));
+      }
+      return Promise.reject(new Error('Unexpected endpoint'));
+    });
+    const node = {
+      node: { status: true },
+      setOnline: jasmine.createSpy('setOnline'),
+      setOffline: jasmine.createSpy('setOffline'),
+      setLoading: jasmine.createSpy('setLoading')
+    };
+    const settings = {
+      settings: { serverName: 'spynano', serverAPI: 'https://node.spynano.org/proxy', serverAuth: null },
+      serverOptions: [
+        { value: 'spynano', api: 'https://node.spynano.org/proxy', allowFailover: true, failoverTarget: false },
+        { value: 'rainstorm', api: 'https://rainstorm.city/api', allowFailover: true }
+      ],
+      activateFailover: jasmine.createSpy('activateFailover').and.returnValue(true)
+    };
+    await new ApiService(new RpcTransportService(), node as any, settings as any).checkNodeAvailability();
+    expect(fetchSpy.calls.allArgs().map(args => String(args[0]))).toEqual([
+      'https://node.spynano.org/proxy', 'https://rainstorm.city/api'
+    ]);
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith(
+      'spynano', 'https://node.spynano.org/proxy', 'https://rainstorm.city/api'
+    );
+    expect(node.setOnline).toHaveBeenCalled();
+  });
+
+  it('does not rotate after HTTP 200 with invalid JSON', async () => {
+    const fetchSpy = spyOn(window, 'fetch').and.returnValue(Promise.resolve(
+      new Response('<html>invalid RPC response</html>', { status: 200 })
+    ));
+    const node = {
+      node: { status: true },
+      setOnline: jasmine.createSpy('setOnline'),
+      setOffline: jasmine.createSpy('setOffline'),
+      setLoading: jasmine.createSpy('setLoading')
+    };
+    const settings = {
+      settings: { serverName: 'spynano', serverAPI: 'https://node.spynano.org/proxy', serverAuth: null },
+      serverOptions: [
+        { value: 'spynano', api: 'https://node.spynano.org/proxy', allowFailover: true },
+        { value: 'rainstorm', api: 'https://rainstorm.city/api', allowFailover: true }
+      ],
+      activateFailover: jasmine.createSpy('activateFailover')
+    };
+    await expectAsync(new ApiService(new RpcTransportService(), node as any, settings as any)
+      .checkNodeAvailability()).toBeRejected();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+  });
+
   it('preserves proxy refusal bodies for the legacy compatibility fallback', async () => {
     spyOn(window, 'fetch').and.returnValue(Promise.resolve(new Response(
       JSON.stringify({ error: 'Action receivable not allowed' }), { status: 500 }

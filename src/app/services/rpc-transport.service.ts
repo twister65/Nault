@@ -25,6 +25,12 @@ export class RpcTransportService {
       }).then(async response => {
         let body: any;
         try { body = await response.json(); } catch (_) {
+          // Gateways often return 502/503/504 with an HTML error page.
+          // Preserve the HTTP status so ApiService can rotate to another node.
+          // Only malformed successful replies are validation failures.
+          if (!response.ok) {
+            throw { status: response.status, error: 'Non-JSON HTTP error response' };
+          }
           throw { status: response.status, isValidationFailure: true };
         }
         if (!response.ok) throw { status: response.status, error: body };
