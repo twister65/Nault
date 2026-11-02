@@ -55,7 +55,11 @@ describe('ConfigureAppComponent server settings', () => {
     };
     notifications = { sendWarning: jasmine.createSpy(), sendSuccess: jasmine.createSpy() };
     websocket = { forceReconnect: jasmine.createSpy() };
-    wallet = { wallet: { accounts: [{ id: 'nano_test' }] }, reloadBalances: jasmine.createSpy().and.returnValue(Promise.resolve()) };
+    wallet = {
+      wallet: { accounts: [{ id: 'nano_test' }] },
+      isConfigured: jasmine.createSpy().and.returnValue(true),
+      reloadBalances: jasmine.createSpy().and.returnValue(Promise.resolve())
+    };
     Object.assign(component, {
       selectedServer: 'custom', serverAPI: 'https://new.example/rpc', serverWS: 'wss://new.example/ws',
       appSettings: settings, notifications, websocket, walletService: wallet,
@@ -81,16 +85,18 @@ describe('ConfigureAppComponent server settings', () => {
     await saving;
     expect(websocket.forceReconnect).toHaveBeenCalledTimes(1);
   });
-  it('keeps a failed manual server refresh quiet until a wallet is configured', async () => {
+  it('reports a single warning for an explicitly failed server change without a wallet', async () => {
     wallet.wallet.accounts = [];
-    wallet.isConfigured = jasmine.createSpy().and.returnValue(false);
+    wallet.isConfigured.and.returnValue(false);
     (component as any).api.checkNodeAvailability.and.returnValue(Promise.reject(new Error('offline')));
     await component.updateServerSettings();
-    expect(notifications.sendWarning).not.toHaveBeenCalled();
+    expect((component as any).api.checkNodeAvailability).toHaveBeenCalledWith(true);
+    expect(notifications.sendWarning).toHaveBeenCalledTimes(1);
   });
 
   it('probes after saving a server without a configured wallet', async () => {
     wallet.wallet.accounts = [];
+    wallet.isConfigured.and.returnValue(false);
     await component.updateServerSettings();
     expect(wallet.reloadBalances).not.toHaveBeenCalled();
     expect((component as any).api.checkNodeAvailability).toHaveBeenCalledTimes(1);
