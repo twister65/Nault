@@ -15,6 +15,14 @@ const moduleContext = { exports: {} };
 vm.runInNewContext(code, moduleContext, { filename: file });
 const { desktopLabels } = moduleContext.exports;
 
+test('native connectivity IPC is read-only and restricted to the wallet renderer', () => {
+  const main = fs.readFileSync(path.join(__dirname, '../desktop-app/src/desktop-app.ts'), 'utf8');
+  const preload = fs.readFileSync(path.join(__dirname, '../desktop-app/src/preload.ts'), 'utf8');
+  assert.match(main, /ipcMain\.handle\('app-network-online', event => \{/);
+  assert.match(main, /if \(!isTrustedLedgerSender\(event\)\) throw new Error\('Untrusted network status request'\)/);
+  assert.match(preload, /isNetworkOnline\(\): Promise<boolean>/);
+});
+
 test('native OS locale bridge is restricted to the trusted wallet renderer', () => {
   const mainSource = fs.readFileSync(path.join(__dirname, '../desktop-app/src/desktop-app.ts'), 'utf8');
   const preloadSource = fs.readFileSync(path.join(__dirname, '../desktop-app/src/preload.ts'), 'utf8');

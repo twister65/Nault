@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import { RpcTransportService } from './rpc-transport.service';
 import { secureEndpoint } from './endpoint-policy';
 import { catchError, map, timeout } from 'rxjs/operators';
@@ -7,6 +7,7 @@ import { HttpHeaders } from '@angular/common/http';
 import {NodeService} from './node.service';
 import {AppSettingsService} from './app-settings.service';
 import { TxType } from './util.service';
+import { DesktopService } from './desktop.service';
 
 @Injectable()
 export class ApiService {
@@ -18,7 +19,22 @@ export class ApiService {
   // background health probe may check every eligible built-in fallback so
   // random choice does not omit the only working node.
   private readonly maxHealthProbeEndpoints = 5;
-  constructor(private http: RpcTransportService, private node: NodeService, private appSettings: AppSettingsService) { }
+  constructor(private http: RpcTransportService, private node: NodeService,
+    private appSettings: AppSettingsService, @Optional() private desktop?: DesktopService) { }
+
+  // Chromium's fetch TypeError does not reliably expose
+  // net::ERR_INTERNET_DISCONNECTED versus net::ERR_NAME_NOT_RESOLVED.
+  // False from either renderer or native Electron means local offline.
+  // True does NOT prove any particular remote host is available.
+  private async internetDisconnected(): Promise<boolean> {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+    return (await this.desktop?.isNetworkOnline()) === false;
+  }
+
+  private markInternetDisconnected(): void {
+    this.node.internetRecoveryPending = true;
+    console.info('[Nano RPC health] Internet disconnected; preserving selected server.');
+  }
 
   // Kept separate to test selection deterministically without mocking
   // Math.random globally (which can disrupt Jasmine and Zone.js internals).
@@ -75,6 +91,13 @@ export class ApiService {
     } catch (_) {
       throw lastFailure;
     }
+    // A backup may complete after the Ethernet cable is reconnected.
+    // If the offline transition was observed, it must not replace the
+    // selected server: first retry the original on network recovery.
+    if (this.node.internetRecoveryPending || await this.internetDisconnected()) {
+      this.markInternetDisconnected();
+      throw { status: 0, isInternetDisconnected: true };
+    }
     if (!this.appSettings.activateFailover(expectedName, expectedUrl, selected.endpoint)) {
       throw { isStaleFailover: true };
     }
@@ -106,7 +129,8 @@ export class ApiService {
     validateResponse?: (response: any) => { err: string | null },
     perAttemptTimeoutMs = 15000,
     silentOffline = false,
-    healthProbe = false
+    healthProbe = false,
+    allowFailover = true
   ): Promise<any> {
     // Snapshot settings: a pending request must not acquire another server's credentials.
     const settings = { ...this.appSettings.settings };
@@ -126,7 +150,8 @@ export class ApiService {
     // Never replay signed blocks, work generation, optional calls or custom RPC.
     const knownSource = this.appSettings.serverOptions?.find(server =>
       server.allowFailover && server.api === firstUrl);
-    if (!url && !skipError && action !== 'process' && action !== 'work_generate' &&
+    if (!url && !skipError && allowFailover && !this.node.internetRecoveryPending &&
+        action !== 'process' && action !== 'work_generate' &&
         knownSource && (settings.serverName === 'random' || settings.serverName === knownSource.value)) {
       // Do not give the first entry in serverOptions an artificial priority.
       // Pick a randomized order without replacement for this failover cycle.
@@ -201,6 +226,10 @@ export class ApiService {
             throw { isValidationFailure: true };
           }
           if (endpoint !== apiUrl && !url && !skipError) {
+            if (this.node.internetRecoveryPending || await this.internetDisconnected()) {
+              this.markInternetDisconnected();
+              throw { status: 0, isInternetDisconnected: true };
+            }
             const activated = this.appSettings.activateFailover(settings.serverName, firstUrl, endpoint);
             // Reject a stale request if the user changed servers before the
             // backup responded. Never claim to be online on the wrong server.
@@ -245,6 +274,14 @@ export class ApiService {
             }
             throw error;
           }
+          // An Ethernet outage is not an RPC-node outage. Hold the current
+          // server throughout this offline/online transition.
+          if (endpoint === apiUrl &&
+              (this.node.internetRecoveryPending || await this.internetDisconnected())) {
+            this.markInternetDisconnected();
+            this.node.setOffline(silentOffline ? null : undefined);
+            throw { status: 0, isInternetDisconnected: true };
+          }
           if (healthProbe && endpoint === apiUrl && endpoints.length > 1 &&
               typeof validateResponse === 'function') {
             try {
@@ -278,16 +315,16 @@ export class ApiService {
   // Health probes alone use a 3-second timeout per candidate so an early WS
   // failure need not await the normal 15-second wallet RPC read timeout.
   // Signed publications and regular wallet requests retain their own budgets.
-  checkNodeAvailability(silentOffline = false): Promise<void> {
+  checkNodeAvailability(silentOffline = false, allowFailover = true): Promise<void> {
     const endpoint = this.appSettings.settings.serverAPI;
-    if (this.pendingHealthCheck?.endpoint === endpoint) return this.pendingHealthCheck.promise;
+    if (allowFailover && this.pendingHealthCheck?.endpoint === endpoint) return this.pendingHealthCheck.promise;
     const burnAccount = 'nano_1111111111111111111111111111111111111111111111111111hifc8npp';
     const promise = this.request('accounts_balances', { accounts: [burnAccount] }, false, '', res => ({
       err: res && res.balances && typeof res.balances === 'object' && !Array.isArray(res.balances)
         ? null : 'Invalid accounts_balances response',
-    }), 3000, silentOffline, true).then(() => undefined);
+    }), 3000, silentOffline, true, allowFailover).then(() => undefined);
     const pending = { endpoint, promise };
-    this.pendingHealthCheck = pending;
+    if (allowFailover) this.pendingHealthCheck = pending;
     // Never create an unhandled rejection from a .finally() cleanup.
     void promise.then(
       () => { if (this.pendingHealthCheck === pending) this.pendingHealthCheck = null; },

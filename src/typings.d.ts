@@ -9,6 +9,7 @@ interface NaultDesktopBridge {
   on(channel: string, listener: (...args: any[]) => void): boolean;
   send(channel: string, ...args: any[]): boolean;
   getSystemLocale(): Promise<string>;
+  isNetworkOnline(): Promise<boolean>;
   releaseLedgerUsb(): Promise<boolean>;
   beginLedgerSigning(): Promise<boolean>;
   endLedgerSigning(): Promise<boolean>;

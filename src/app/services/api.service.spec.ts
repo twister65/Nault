@@ -426,6 +426,31 @@ describe('ApiService bounded secure requests', () => {
     await expectAsync(api.accountsBalances([])).toBeRejected();
     expect(http.post).not.toHaveBeenCalled();
   });
+  it('never switches servers when Electron reports Internet disconnected', async () => {
+    const { api, http, settings, node } = setup('spynano');
+    (api as any).desktop = { isNetworkOnline: () => Promise.resolve(false) };
+    http.post.and.returnValue(throwError({ status: 0 }));
+    await expectAsync(api.checkNodeAvailability(true)).toBeRejectedWith(
+      jasmine.objectContaining({ isInternetDisconnected: true })
+    );
+    expect(http.post).toHaveBeenCalledTimes(1);
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+    expect((node as any).internetRecoveryPending).toBe(true);
+  });
+
+  it('does not activate delayed fallback after a cable-offline event', async () => {
+    const { api, http, settings, node } = setup('spynano');
+    const late = new Subject<any>();
+    http.post.and.returnValues(throwError({ status: 0 }), late, NEVER, NEVER);
+    const pending = api.checkNodeAvailability(true);
+    await Promise.resolve();
+    (node as any).internetRecoveryPending = true;
+    late.next({ balances: {} });
+    late.complete();
+    await expectAsync(pending).toBeRejected();
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+  });
+
   it('limits authentication to the configured custom RPC, not an explicit PoW server', async () => {
     const { api, http } = setup('custom');
     http.post.and.returnValue(of({ work: 'A'.repeat(16) }));

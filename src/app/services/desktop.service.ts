@@ -38,6 +38,11 @@ export class DesktopService {
     if (!this._ipc) return Promise.resolve(null);
     return this._ipc.getSystemLocale().catch(() => null);
   }
+  // Null is an unavailable Electron signal, not an offline indication.
+  isNetworkOnline(): Promise<boolean | null> {
+    if (!this._ipc) return Promise.resolve(null);
+    return this._ipc.isNetworkOnline().catch(() => null);
+  }
 
   beginLedgerSigning(): Promise<boolean> {
     if (!this._ipc) return Promise.reject(new Error('Electron IPC is unavailable'));

@@ -87,6 +87,7 @@ export class AppComponent implements OnInit {
     const settings = this.settings.settings;
     if (!settings.serverAPI || settings.serverWS !== failedWs ||
         settings.serverName === 'custom' || settings.serverName === 'offline' ||
+        this.nodeService.internetRecoveryPending ||
         (typeof navigator !== 'undefined' && !navigator.onLine)) return;
     if (!this.settings.serverOptions.some(node =>
       node.allowFailover && node.api === settings.serverAPI)) return;
@@ -138,6 +139,7 @@ export class AppComponent implements OnInit {
   }
 
   @HostListener('window:offline') onNetworkOffline(): void {
+    this.nodeService.internetRecoveryPending = true;
     this.cancelNetworkRecovery();
     if (this.settings.settings.serverAPI) {
       this.nodeService.setOffline(this.walletService.isConfigured() ? undefined : null);
@@ -503,6 +505,7 @@ export class AppComponent implements OnInit {
       // Android visibility/online events must not start gratuitous probes.
       if (!this.walletService.isConfigured() && this.settings.settings.serverWS &&
           this.websocket.socket.connected) {
+        this.nodeService.internetRecoveryPending = false;
         this.networkRecoveryAttempts = 0;
         return;
       }
@@ -512,7 +515,8 @@ export class AppComponent implements OnInit {
       // Use the wallet-independent health probe also on network recovery.
       if (this.nodeService.node.status !== true) {
         if (this.wallet.accounts.length) await this.api.accountsBalances(this.wallet.accounts.map(a => a.id));
-        else await this.api.checkNodeAvailability(!this.walletService.isConfigured());
+        else await this.api.checkNodeAvailability(!this.walletService.isConfigured(),
+          !this.nodeService.internetRecoveryPending);
       }
 
       if (!navigator.onLine || this.settings.settings.serverAPI !== endpoint) return;
@@ -520,6 +524,7 @@ export class AppComponent implements OnInit {
       // A WebSocket may have exhausted its retry budget while Android was offline.
       // Restoring it only follows successful RPC reads and never replays transactions.
       if (this.settings.settings.serverWS) this.websocket.forceReconnect();
+      this.nodeService.internetRecoveryPending = false;
       this.networkRecoveryAttempts = 0;
     } catch (_) {
       // Keep the node-offline notification until an RPC read succeeds.

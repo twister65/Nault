@@ -69,6 +69,23 @@ describe('AppComponent', () => {
     expect(reconnect).toHaveBeenCalledTimes(2);
   });
 
+  it('retains Rainstorm on cable loss and checks only Rainstorm on recovery', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverName = 'rainstorm';
+    app.settings.settings.serverAPI = 'https://rainstorm.city/api';
+    app.settings.settings.serverWS = 'wss://rainstorm.city/websocket';
+    const probe = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.returnValue(Promise.resolve());
+    app.onNetworkOffline();
+    expect(app.nodeService.internetRecoveryPending).toBe(true);
+    TestBed.inject(WebsocketService).connectionFailure$.next('wss://rainstorm.city/websocket');
+    expect(probe).not.toHaveBeenCalled();
+    app.onNetworkOnline();
+    tick(0);
+    expect(probe).toHaveBeenCalledOnceWith(false, false);
+    expect(app.settings.settings.serverName).toBe('rainstorm');
+    expect(app.nodeService.internetRecoveryPending).toBe(false);
+  }));
+
   it('does not show the persistent node error during first-run network loss', () => {
     const app = TestBed.inject(AppComponent);
     app.settings.settings.serverAPI = 'https://nanoslo.0x.no/proxy';

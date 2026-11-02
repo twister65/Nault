@@ -4,6 +4,10 @@ import {NotificationService} from './notification.service';
 @Injectable()
 export class NodeService {
 
+  // Keep the chosen server through a full Internet outage until the same
+  // server is rechecked after connectivity returns.
+  internetRecoveryPending = false;
+
   node: {status: boolean | null} = {
     status: null, // null - loading, false - offline, true - online
   };

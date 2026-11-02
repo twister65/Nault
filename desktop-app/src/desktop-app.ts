@@ -1,6 +1,6 @@
 import 'core-js/stable';
 
-import { app, BrowserWindow, shell, Menu, screen, dialog, ipcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
+import { app, net, BrowserWindow, shell, Menu, screen, dialog, ipcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as url from 'url';
 import * as path from 'path';
@@ -233,6 +233,11 @@ initialize(isTrustedLedgerSender);
 ipcMain.handle('app-system-locale', event => {
   if (!isTrustedLedgerSender(event)) throw new Error('Untrusted locale request');
   return app.getLocale();
+});
+// Read-only native connectivity hint. Never expose generic IPC.
+ipcMain.handle('app-network-online', event => {
+  if (!isTrustedLedgerSender(event)) throw new Error('Untrusted network status request');
+  return net.isOnline();
 });
 
 function createWindow () {
