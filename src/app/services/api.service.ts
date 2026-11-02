@@ -254,7 +254,11 @@ export class ApiService {
   // while their wallet RPC is fully usable. Do not rotate nodes, mark them
   // offline or display wallet errors for dashboard-only metadata.
   async optionalBlockCount(): Promise<{count: number, unchecked: number, cemented: number } | null> {
-    return (await this.request('block_count', { include_cemented: 'true'}, true)) || null;
+    const result = await this.request('block_count', { include_cemented: 'true'}, true);
+    // Some public proxies return HTTP 200 with a JSON RPC action denial.
+    // Do not render "NaN" counters or claim statistics are available.
+    return result && !result.error && result.count != null && result.cemented != null
+      ? result : null;
   }
   async workGenerate(hash: string, difficulty: string, workServer = ''): Promise<{ work: string }> {
     const validateResponse = (res: {work?: unknown} | null): {err: string | null} => {

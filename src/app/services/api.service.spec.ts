@@ -271,6 +271,15 @@ describe('ApiService optional node statistics', () => {
     expect(node.setOffline).not.toHaveBeenCalled();
     expect(settings.activateFailover).not.toHaveBeenCalled();
   });
+
+  it('does not display unavailable statistics from HTTP 200 JSON RPC denial', async () => {
+    const http = { post: jasmine.createSpy('post').and.returnValue(of({ error: 'Action block_count not allowed' })) };
+    const node = { node: { status: true }, setOffline: jasmine.createSpy('setOffline'), setOnline: jasmine.createSpy('setOnline') };
+    const settings = { settings: { serverAPI: 'https://example.org/proxy', serverName: 'random' } };
+    const api = new ApiService(http as any, node as any, settings as any);
+    expect(await api.optionalBlockCount()).toBeNull();
+    expect(node.setOffline).not.toHaveBeenCalled();
+  });
 });
 
 describe('ApiService optional representative metadata', () => {
