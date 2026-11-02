@@ -361,6 +361,10 @@ describe('ApiService bounded secure requests', () => {
     subject.next({ balances: {} });
     subject.complete();
     await first;
+    // A completed Subject cannot emit a response for a subsequent new request.
+    // Use a fresh, valid RPC response to test that the completed check is
+    // evicted from the in-flight cache.
+    http.post.and.returnValue(of({ balances: {} }));
     await api.checkNodeAvailability();
     expect(http.post).toHaveBeenCalledTimes(2);
   });

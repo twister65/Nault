@@ -21,7 +21,7 @@ describe('WebSocket bounded connections', () => {
     service.connect();
     sockets[0].onerror({});
     sockets[0].onclose({});
-    expect(failures).toEqual(['wss://example.org']);
+    expect(failures).toEqual(['wss://example.org/']);
     tick(5000);
     expect(sockets.length).toBe(2);
     settings.settings.serverWS = null;
@@ -34,10 +34,10 @@ describe('WebSocket bounded connections', () => {
     service.connectionFailure$.subscribe(url => failures.push(url));
     service.connect();
     sockets[0].onclose({});
-    expect(failures).toEqual(['wss://example.org']);
+    expect(failures).toEqual(['wss://example.org/']);
     tick(5000);
     tick(15000); // Second socket never opens.
-    expect(failures).toEqual(['wss://example.org', 'wss://example.org']);
+    expect(failures).toEqual(['wss://example.org/', 'wss://example.org/']);
     settings.settings.serverWS = null;
     service.forceReconnect();
     tick(250);
