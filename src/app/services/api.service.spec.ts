@@ -306,11 +306,6 @@ describe('ApiService optional representative metadata', () => {
 });
 
 describe('ApiService bounded secure requests', () => {
-  beforeEach(() => {
-    // Deterministic no-swap Fisher-Yates results for existing ordered
-    // regression assertions; each random-choice test overrides this.
-    spyOn(Math, 'random').and.returnValue(0.999999);
-  });
   function setup(serverName = 'random') {
     const http = { post: jasmine.createSpy('post').and.returnValue(throwError({ status: 503 })) };
     const node = { node: { status: true }, setOnline: jasmine.createSpy(), setOffline: jasmine.createSpy(), setLoading: jasmine.createSpy() };
@@ -319,7 +314,10 @@ describe('ApiService bounded secure requests', () => {
       serverOptions: ['a', 'b', 'b', 'c', 'd'].map(host => ({ api: `https://${host}.invalid/rpc`, value: host === 'a' && serverName === 'spynano' ? 'spynano' : host, shouldRandom: true, allowFailover: true, failoverTarget: undefined as boolean | undefined })),
       activateFailover: jasmine.createSpy('activateFailover').and.returnValue(true)
     };
-    return { http, node, settings, api: new ApiService(http as any, node as any, settings as any) };
+    const api = new ApiService(http as any, node as any, settings as any);
+    // Stable insertion order for existing tests; no global Math.random spy.
+    const randomIndex = spyOn<any>(api, 'randomFallbackIndex').and.callFake((lastIndex: number) => lastIndex);
+    return { http, node, settings, api, randomIndex };
   }
   it('selects a different first fallback when the random draw changes', async () => {
     const { api, http, settings } = setup();
@@ -327,8 +325,8 @@ describe('ApiService bounded secure requests', () => {
     expect(await api.accountsBalances([])).toEqual({ balances: {} });
     expect(settings.activateFailover).toHaveBeenCalledOnceWith('random', 'https://a.invalid/rpc', 'https://b.invalid/rpc');
 
-    (Math.random as jasmine.Spy).and.returnValue(0);
     const alternative = setup();
+    alternative.randomIndex.and.returnValue(0);
     alternative.http.post.and.returnValues(throwError({ status: 503 }), of({ balances: {} }));
     expect(await alternative.api.accountsBalances([])).toEqual({ balances: {} });
     // With [b, c, d] shuffled using zero draws, c is first.
@@ -352,8 +350,8 @@ describe('ApiService bounded secure requests', () => {
   });
 
   it('tries the next randomized candidate after a failure and persists only a healthy one', async () => {
-    const { api, http, settings } = setup();
-    (Math.random as jasmine.Spy).and.returnValue(0);
+    const { api, http, settings, randomIndex } = setup();
+    randomIndex.and.returnValue(0);
     http.post.and.returnValues(
       throwError({ status: 0 }), throwError({ status: 503 }), of({ balances: {} })
     );

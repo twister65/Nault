@@ -15,6 +15,12 @@ export class ApiService {
   private pendingHealthCheck: { endpoint: string | null; promise: Promise<void> } | null = null;
   constructor(private http: RpcTransportService, private node: NodeService, private appSettings: AppSettingsService) { }
 
+  // Kept separate to test selection deterministically without mocking
+  // Math.random globally (which can disrupt Jasmine and Zone.js internals).
+  private randomFallbackIndex(lastIndex: number): number {
+    return Math.floor(Math.random() * (lastIndex + 1));
+  }
+
   // Some public RPC proxies still whitelist the legacy pending action names.
   // Only retry when the proxy explicitly denies the modern action; never retry
   // unrelated errors or mutate transaction-processing requests.
@@ -75,7 +81,7 @@ export class ApiService {
       // Fisher-Yates shuffle: each distinct eligible fallback can be tried
       // first, regardless of its order in serverOptions.
       for (let i = candidates.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = this.randomFallbackIndex(i);
         [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
       }
       endpoints.push(...candidates);
