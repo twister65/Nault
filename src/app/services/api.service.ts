@@ -13,6 +13,10 @@ export class ApiService {
   // A failed WS handshake and a manual server save may ask for the same
   // health check concurrently. Share one request per selected endpoint.
   private pendingHealthCheck: { endpoint: string | null; promise: Promise<void> } | null = null;
+  // Wallet RPC reads keep their existing three-attempt budget. An isolated
+  // background health probe may check every eligible built-in fallback so
+  // random choice does not omit the only working node.
+  private readonly maxHealthProbeEndpoints = 5;
   constructor(private http: RpcTransportService, private node: NodeService, private appSettings: AppSettingsService) { }
 
   // Kept separate to test selection deterministically without mocking
@@ -43,7 +47,8 @@ export class ApiService {
     url = '',
     validateResponse?: (response: any) => { err: string | null },
     perAttemptTimeoutMs = 15000,
-    silentOffline = false
+    silentOffline = false,
+    healthProbe = false
   ): Promise<any> {
     // Snapshot settings: a pending request must not acquire another server's credentials.
     const settings = { ...this.appSettings.settings };
@@ -89,12 +94,15 @@ export class ApiService {
     }
     if (this.node.node.status === false && !skipError) this.node.setLoading();
     // Includes legacy compatibility calls; PoW gets one longer, cancellable attempt.
-    const deadline = Date.now() + (action === 'work_generate' ? 120000 : 45000);
+    // A 3-second probe of up to five servers has a strict 15-second ceiling.
+    // Ordinary wallet RPC retains its original 45-second and 3-attempt limits.
+    const maxAttempts = healthProbe ? this.maxHealthProbeEndpoints : 3;
+    const deadline = Date.now() + (healthProbe ? 15000 : action === 'work_generate' ? 120000 : 45000);
     let attempts = 0;
     let lastError: any;
-    for (const endpoint of endpoints.slice(0, 3)) {
+    for (const endpoint of endpoints.slice(0, maxAttempts)) {
       let requestAction = action;
-      while (attempts < 3 && Date.now() < deadline) {
+      while (attempts < maxAttempts && Date.now() < deadline) {
         attempts++;
         const options: any = { responseType: 'json' };
         // Explicit work servers never inherit RPC credentials, even at the same origin.
@@ -103,6 +111,12 @@ export class ApiService {
         }
         try {
           const remaining = deadline - Date.now();
+          if (healthProbe && endpoint !== apiUrl) {
+            // Network diagnostics only; never include wallet account data or
+            // credentials. In Chrome Console, healthy requests are otherwise
+            // invisible, which previously made failover appear inactive.
+            console.info('[Nano RPC health] Trying fallback:', endpoint);
+          }
           const res = await this.http.post(endpoint, { ...data, action: requestAction }, options)
             .pipe(timeout(Math.max(1, Math.min(action === 'work_generate' ? 120000 : perAttemptTimeoutMs, remaining)))).toPromise();
           // Older public Nano nodes may reject the new RPC action in a JSON
@@ -127,7 +141,14 @@ export class ApiService {
             throw { isValidationFailure: true };
           }
           if (endpoint !== apiUrl && !url && !skipError) {
-            this.appSettings.activateFailover(settings.serverName, firstUrl, endpoint);
+            const activated = this.appSettings.activateFailover(settings.serverName, firstUrl, endpoint);
+            // Reject a stale request if the user changed servers before the
+            // backup responded. Never claim to be online on the wrong server.
+            if (!activated) {
+              console.info('[Nano RPC health] Backup responded but saved server changed; ignoring stale result.');
+              throw { isStaleFailover: true };
+            }
+            if (healthProbe) console.info('[Nano RPC health] Failover activated:', endpoint);
           }
           this.node.setOnline();
           return res;
@@ -177,7 +198,7 @@ export class ApiService {
     const promise = this.request('accounts_balances', { accounts: [burnAccount] }, false, '', res => ({
       err: res && res.balances && typeof res.balances === 'object' && !Array.isArray(res.balances)
         ? null : 'Invalid accounts_balances response',
-    }), 3000, silentOffline).then(() => undefined);
+    }), 3000, silentOffline, true).then(() => undefined);
     const pending = { endpoint, promise };
     this.pendingHealthCheck = pending;
     // Never create an unhandled rejection from a .finally() cleanup.

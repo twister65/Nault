@@ -463,7 +463,7 @@ describe('ApiService bounded secure requests', () => {
     const { api, http, node } = setup('spynano');
     http.post.and.returnValue(throwError({ status: 0 }));
     await expectAsync(api.checkNodeAvailability(true)).toBeRejected();
-    expect(http.post).toHaveBeenCalledTimes(3);
+    expect(http.post).toHaveBeenCalledTimes(4);
     expect(node.setOffline).toHaveBeenCalledWith(null);
   });
 
@@ -473,6 +473,35 @@ describe('ApiService bounded secure requests', () => {
     await expectAsync(api.checkNodeAvailability()).toBeRejected();
     expect(node.setOffline).toHaveBeenCalled();
     expect(node.setOffline.calls.mostRecent().args[0]).not.toBeNull();
+  });
+
+  it('checks all distinct public candidates during an empty-wallet DNS outage', async () => {
+    const { api, http, settings, randomIndex } = setup('spynano');
+    randomIndex.and.callFake((lastIndex: number) => lastIndex);
+    http.post.and.returnValues(
+      throwError({ status: 0 }), throwError({ status: 502 }), throwError({ status: 503 }), of({ balances: {} })
+    );
+    await api.checkNodeAvailability(true);
+    expect(http.post.calls.allArgs().map(args => args[0])).toEqual([
+      'https://a.invalid/rpc', 'https://b.invalid/rpc', 'https://c.invalid/rpc', 'https://d.invalid/rpc'
+    ]);
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith(
+      'spynano', 'https://a.invalid/rpc', 'https://d.invalid/rpc'
+    );
+  });
+
+  it('keeps the three-attempt limit for normal wallet reads despite additional health candidates', async () => {
+    const { api, http } = setup('spynano');
+    await expectAsync(api.accountsBalances([])).toBeRejected();
+    expect(http.post).toHaveBeenCalledTimes(3);
+  });
+
+  it('ignores a healthy fallback result if the active node changed during the request', async () => {
+    const { api, http, settings } = setup('spynano');
+    http.post.and.returnValues(throwError({ status: 0 }), of({ balances: {} }));
+    settings.activateFailover.and.returnValue(false);
+    await expectAsync(api.checkNodeAvailability(true)).toBeRejected();
+    expect(settings.activateFailover).toHaveBeenCalledTimes(1);
   });
 
   it('limits WS-triggered health probes to three seconds per RPC candidate', fakeAsync(() => {
@@ -485,9 +514,9 @@ describe('ApiService bounded secure requests', () => {
     expect(http.post).toHaveBeenCalledTimes(1);
     tick(1);
     expect(http.post).toHaveBeenCalledTimes(2);
-    tick(6000);
+    tick(9000);
     expect(rejected).toBe(true);
-    expect(http.post).toHaveBeenCalledTimes(3);
+    expect(http.post).toHaveBeenCalledTimes(4);
   }));
 
   it('moves to a working fallback after the first timed-out health probe', fakeAsync(() => {
