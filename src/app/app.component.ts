@@ -139,7 +139,7 @@ export class AppComponent implements OnInit {
   }
 
   @HostListener('window:offline') onNetworkOffline(): void {
-    this.nodeService.internetRecoveryPending = true;
+    this.nodeService.markInternetInterrupted();
     this.cancelNetworkRecovery();
     if (this.settings.settings.serverAPI) {
       this.nodeService.setOffline(this.walletService.isConfigured() ? undefined : null);

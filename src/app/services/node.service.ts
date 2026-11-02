@@ -7,6 +7,14 @@ export class NodeService {
   // Keep the chosen server through a full Internet outage until the same
   // server is rechecked after connectivity returns.
   internetRecoveryPending = false;
+  // Monotonic generation makes late backup responses from an earlier network
+  // outage stale, even if the original node has already reconnected.
+  internetInterruptionGeneration = 0;
+
+  markInternetInterrupted(): void {
+    if (!this.internetRecoveryPending) this.internetInterruptionGeneration++;
+    this.internetRecoveryPending = true;
+  }
 
   node: {status: boolean | null} = {
     status: null, // null - loading, false - offline, true - online

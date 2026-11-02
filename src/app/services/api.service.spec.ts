@@ -438,18 +438,24 @@ describe('ApiService bounded secure requests', () => {
     expect((node as any).internetRecoveryPending).toBe(true);
   });
 
-  it('does not activate delayed fallback after a cable-offline event', async () => {
+  it('does not activate delayed fallback after a cable-offline event', fakeAsync(() => {
     const { api, http, settings, node } = setup('spynano');
     const late = new Subject<any>();
     http.post.and.returnValues(throwError({ status: 0 }), late, NEVER, NEVER);
-    const pending = api.checkNodeAvailability(true);
-    await Promise.resolve();
-    (node as any).internetRecoveryPending = true;
+    let rejected = false;
+    api.checkNodeAvailability(true).catch(() => { rejected = true; });
+    tick(0);
+    expect(http.post).toHaveBeenCalledTimes(4);
+    // The network returned and the original server was restored before the
+    // previously scheduled backup completed: generation still invalidates it.
+    (node as any).internetInterruptionGeneration = 1;
+    (node as any).internetRecoveryPending = false;
     late.next({ balances: {} });
     late.complete();
-    await expectAsync(pending).toBeRejected();
+    tick(0);
+    expect(rejected).toBe(true);
     expect(settings.activateFailover).not.toHaveBeenCalled();
-  });
+  }));
 
   it('limits authentication to the configured custom RPC, not an explicit PoW server', async () => {
     const { api, http } = setup('custom');

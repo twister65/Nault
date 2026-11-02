@@ -32,7 +32,7 @@ export class ApiService {
   }
 
   private markInternetDisconnected(): void {
-    this.node.internetRecoveryPending = true;
+    this.node.markInternetInterrupted();
     console.info('[Nano RPC health] Internet disconnected; preserving selected server.');
   }
 
@@ -51,7 +51,8 @@ export class ApiService {
     requestData: Record<string, unknown>,
     validateResponse: (res: any) => { err: string | null },
     expectedName: string,
-    expectedUrl: string
+    expectedUrl: string,
+    expectedNetworkGeneration: number
   ): Promise<any> {
     let lastFailure: any = new Error('No responsive Nano RPC fallback');
     const sources = candidates.map(endpoint => this.http.post(endpoint,
@@ -94,7 +95,9 @@ export class ApiService {
     // A backup may complete after the Ethernet cable is reconnected.
     // If the offline transition was observed, it must not replace the
     // selected server: first retry the original on network recovery.
-    if (this.node.internetRecoveryPending || await this.internetDisconnected()) {
+    if (this.node.internetRecoveryPending ||
+        this.node.internetInterruptionGeneration !== expectedNetworkGeneration ||
+        await this.internetDisconnected()) {
       this.markInternetDisconnected();
       throw { status: 0, isInternetDisconnected: true };
     }
@@ -134,6 +137,7 @@ export class ApiService {
   ): Promise<any> {
     // Snapshot settings: a pending request must not acquire another server's credentials.
     const settings = { ...this.appSettings.settings };
+    const expectedNetworkGeneration = this.node.internetInterruptionGeneration;
     const firstUrl = url || settings.serverAPI;
     if (!firstUrl) {
       this.node.setOffline(null);
@@ -226,7 +230,9 @@ export class ApiService {
             throw { isValidationFailure: true };
           }
           if (endpoint !== apiUrl && !url && !skipError) {
-            if (this.node.internetRecoveryPending || await this.internetDisconnected()) {
+            if (this.node.internetRecoveryPending ||
+                this.node.internetInterruptionGeneration !== expectedNetworkGeneration ||
+                await this.internetDisconnected()) {
               this.markInternetDisconnected();
               throw { status: 0, isInternetDisconnected: true };
             }
@@ -291,7 +297,8 @@ export class ApiService {
               // candidate in the user's Electron Linux HAR.
               return await this.probeHealthyBackup(
                 endpoints.slice(1, this.maxHealthProbeEndpoints), data,
-                validateResponse, settings.serverName, firstUrl
+                validateResponse, settings.serverName, firstUrl,
+                expectedNetworkGeneration
               );
             } catch (fallbackError) {
               this.node.setOffline(silentOffline ? null : undefined);
