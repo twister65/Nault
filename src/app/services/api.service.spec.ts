@@ -465,6 +465,7 @@ describe('ApiService bounded secure requests', () => {
     expect(rejected).toBe(true);
     expect(settings.activateFailover).not.toHaveBeenCalled();
     expect(node.internetRecoveryPending).toBe(false); // Late reply must not mark a fresh outage.
+    expect(node.setOffline).not.toHaveBeenCalled();
   }));
 
   it('limits authentication to the configured custom RPC, not an explicit PoW server', async () => {

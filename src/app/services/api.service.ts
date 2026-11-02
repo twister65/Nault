@@ -304,7 +304,11 @@ export class ApiService {
                 expectedNetworkGeneration
               );
             } catch (fallbackError) {
-              this.node.setOffline(silentOffline ? null : undefined);
+              // A late backup from an old network generation must not mark a
+              // successfully recovered original node offline again.
+              if (!fallbackError?.isStaleFailover) {
+                this.node.setOffline(silentOffline ? null : undefined);
+              }
               throw fallbackError;
             }
           }
