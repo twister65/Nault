@@ -209,7 +209,7 @@ export class AppComponent implements OnInit {
       // A new user should see the wallet setup screen immediately, not await
       // three failed RPC endpoints or see error toasts while nodes are probed.
       // Continue discovering a healthy public server in the background.
-      void this.api.checkNodeAvailability(true).catch(() => {
+      void this.api.checkNodeAvailability(!this.walletService.isConfigured()).catch(() => {
         // An offline node is recorded internally; setup stays unobstructed.
       });
     }

@@ -250,6 +250,29 @@ describe('ApiService RPC proxy fallback', () => {
   });
 });
 
+describe('ApiService optional node statistics', () => {
+  it('does not treat denied public block_count statistics as a node outage', async () => {
+    const http = { post: jasmine.createSpy('post').and.returnValue(throwError({
+      status: 500, isRpcError: true, error: { error: 'Action block_count not allowed' }
+    })) };
+    const node = {
+      node: { status: true },
+      setOffline: jasmine.createSpy('setOffline'),
+      setOnline: jasmine.createSpy('setOnline')
+    };
+    const settings = {
+      settings: { serverName: 'spynano', serverAPI: 'https://example.org/proxy' },
+      serverOptions: [{ value: 'spynano', api: 'https://example.org/proxy', allowFailover: true }],
+      activateFailover: jasmine.createSpy('activateFailover')
+    };
+    const api = new ApiService(http as any, node as any, settings as any);
+    expect(await api.optionalBlockCount()).toBeNull();
+    expect(http.post).toHaveBeenCalledTimes(1);
+    expect(node.setOffline).not.toHaveBeenCalled();
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+  });
+});
+
 describe('ApiService optional representative metadata', () => {
   const berryPay = 'https://xno-rpc.berrypay.org/proxy';
   const nanoSlo = 'https://nanoslo.0x.no/proxy';

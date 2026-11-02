@@ -264,7 +264,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     this.statsRefreshEnabled = false;
     try {
       try {
-        const blockCount = await this.api.blockCount();
+        const blockCount = await this.api.optionalBlockCount();
         if (!current()) return;
         this.nodeStatsServer = endpoint;
         if (blockCount) {

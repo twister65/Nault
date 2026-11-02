@@ -250,6 +250,12 @@ export class ApiService {
   async blockCount(): Promise<{count: number, unchecked: number, cemented: number }> {
     return await this.request('block_count', { include_cemented: 'true'}, false);
   }
+  // Statistics are optional: restricted public proxies may reject block_count
+  // while their wallet RPC is fully usable. Do not rotate nodes, mark them
+  // offline or display wallet errors for dashboard-only metadata.
+  async optionalBlockCount(): Promise<{count: number, unchecked: number, cemented: number } | null> {
+    return (await this.request('block_count', { include_cemented: 'true'}, true)) || null;
+  }
   async workGenerate(hash: string, difficulty: string, workServer = ''): Promise<{ work: string }> {
     const validateResponse = (res: {work?: unknown} | null): {err: string | null} => {
       if(!res || res.work == null) {
