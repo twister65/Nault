@@ -21,6 +21,60 @@ describe('RPC network boundary', () => {
     expect(signal.aborted).toBe(true);
   });
 
+
+  it('normalizes DNS fetch rejections as retryable status 0 without an HTTP response', async () => {
+    spyOn(window, 'fetch').and.returnValue(Promise.reject(new TypeError('Failed to fetch')));
+    await expectAsync(new RpcTransportService()
+      .post('https://node.spynano.org/proxy', { action: 'accounts_balances' }, {})
+      .toPromise()).toBeRejectedWith(jasmine.objectContaining({ status: 0 }));
+  });
+
+  it('normalizes non-TypeError connection failures as status 0', async () => {
+    const dnsError = new Error('net::ERR_NAME_NOT_RESOLVED');
+    spyOn(window, 'fetch').and.returnValue(Promise.reject(dnsError));
+    try {
+      await new RpcTransportService().post('https://node.spynano.org/proxy', {}, {}).toPromise();
+      fail('DNS failure must reject');
+    } catch (error) {
+      expect(error).toEqual(jasmine.objectContaining({ status: 0, cause: dnsError }));
+    }
+  });
+
+  it('fails over after a DNS error on the first POST without waiting for another WS error', async () => {
+    const firstError = new Error('net::ERR_NAME_NOT_RESOLVED');
+    const fetchSpy = spyOn(window, 'fetch').and.callFake(input => {
+      if (String(input) === 'https://node.spynano.org/proxy') {
+        return Promise.reject(firstError);
+      }
+      if (String(input) === 'https://rainstorm.city/api') {
+        return Promise.resolve(new Response(JSON.stringify({ balances: {} }), { status: 200 }));
+      }
+      return Promise.reject(new Error('Unexpected RPC node'));
+    });
+    const node = {
+      node: { status: true },
+      setOnline: jasmine.createSpy('setOnline'),
+      setOffline: jasmine.createSpy('setOffline'),
+      setLoading: jasmine.createSpy('setLoading'),
+    };
+    const settings = {
+      settings: { serverName: 'spynano', serverAPI: 'https://node.spynano.org/proxy', serverAuth: null },
+      serverOptions: [
+        { value: 'spynano', api: 'https://node.spynano.org/proxy', allowFailover: true, failoverTarget: false },
+        { value: 'rainstorm', api: 'https://rainstorm.city/api', allowFailover: true },
+      ],
+      activateFailover: jasmine.createSpy('activateFailover').and.returnValue(true),
+    };
+    await new ApiService(new RpcTransportService(), node as any, settings as any).checkNodeAvailability();
+    expect(fetchSpy.calls.allArgs().map(args => String(args[0]))).toEqual([
+      'https://node.spynano.org/proxy', 'https://rainstorm.city/api'
+    ]);
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith(
+      'spynano', 'https://node.spynano.org/proxy', 'https://rainstorm.city/api'
+    );
+    expect(node.setOnline).toHaveBeenCalled();
+  });
+
   it('preserves HTTP 500/502/503/504 even if the proxy responds with HTML', async () => {
     let status = 500;
     spyOn(window, 'fetch').and.callFake(() => Promise.resolve(new Response(

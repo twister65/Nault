@@ -18,11 +18,17 @@ export class RpcTransportService {
           if (value !== null) headers.set(key, value);
         });
       }
+      // Distinguish a fetch rejection before any HTTP response (DNS, TLS,
+      // connection refusal, browser network error) from an invalid response.
+      // Browser engines and Electron can report these as different error
+      // classes; the absence of an HTTP response is the reliable boundary.
+      let receivedResponse = false;
       fetch(secureEndpoint(url, 'rpc'), {
         method: 'POST', body: JSON.stringify(payload), headers,
         redirect: 'error', credentials: 'omit', cache: 'no-store',
         referrerPolicy: 'no-referrer', signal: controller.signal
       }).then(async response => {
+        receivedResponse = true;
         let body: any;
         try { body = await response.json(); } catch (_) {
           // Gateways often return 502/503/504 with an HTML error page.
@@ -36,7 +42,13 @@ export class RpcTransportService {
         if (!response.ok) throw { status: response.status, error: body };
         observer.next(body);
         observer.complete();
-      }).catch(error => observer.error(error));
+      }).catch(error => {
+        if (!receivedResponse) {
+          observer.error({ status: 0, error: 'RPC network failure before HTTP response', cause: error });
+        } else {
+          observer.error(error);
+        }
+      });
       return () => controller.abort();
     });
   }
