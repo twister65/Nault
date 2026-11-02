@@ -874,6 +874,7 @@
     "tracked-representative": "L’adresse suivie {{account}} a changé de représentant : {{representative}}.",
     "apply-update": "Appliquer maintenant",
     "update-signing-active": "Terminez la confirmation sur la Ledger avant d’appliquer la mise à jour.",
-    "update-activation-failed": "Impossible d’activer la mise à jour. Redémarrez Nault pour réessayer."
+    "update-activation-failed": "Impossible d’activer la mise à jour. Redémarrez Nault pour réessayer.",
+    "server-unavailable": "Le serveur sélectionné ne répond pas. Essayez un autre nœud Nano."
   }
 }

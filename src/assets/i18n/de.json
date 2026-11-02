@@ -14,7 +14,8 @@
     "language": "Sprache"
   },
   "ui-notifications": {
-    "node-failover": "Der Nano-RPC-Knoten {{previous}} ist nicht erreichbar. Automatischer Wechsel zu {{next}}."
+    "node-failover": "Der Nano-RPC-Knoten {{previous}} ist nicht erreichbar. Automatischer Wechsel zu {{next}}.",
+    "server-unavailable": "Der ausgewählte Server antwortet nicht. Versuchen Sie einen anderen Nano-Knoten."
   },
   "general": {
     "account": "Konto",

@@ -874,6 +874,7 @@
     "tracked-representative": "La dirección seguida {{account}} ha cambiado su representante a {{representative}}.",
     "apply-update": "Aplicar ahora",
     "update-signing-active": "Termina la confirmación en Ledger antes de aplicar la actualización.",
-    "update-activation-failed": "No se pudo activar la actualización. Reinicia Nault para intentarlo de nuevo."
+    "update-activation-failed": "No se pudo activar la actualización. Reinicia Nault para intentarlo de nuevo.",
+    "server-unavailable": "El servidor seleccionado no responde. Prueba con otro nodo Nano."
   }
 }

@@ -549,7 +549,12 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     } catch (_) {
       // Updating server settings is an explicit user action. Report one
       // actionable warning on failure, but not a persistent offline toast.
-      this.notifications.sendWarning(this.translocoService.translate('ui-notifications.refresh-balance-server'));
+      // No balances exist until a wallet is configured. Use a specific,
+      // localized server warning rather than claiming balance refresh failed.
+      const key = this.walletService.isConfigured()
+        ? 'ui-notifications.refresh-balance-server'
+        : 'ui-notifications.server-unavailable';
+      this.notifications.sendWarning(this.translocoService.translate(key));
     }
     // Server selection may have changed automatically during the RPC refresh.
     this.selectedServer = this.appSettings.settings.serverName;
