@@ -48,7 +48,7 @@ export class RpcTransportService {
           const errorMessage = body !== null && typeof body === 'object' &&
             typeof body.error === 'string' ? body.error : null;
           const gatewayResponse = response.status >= 500 && errorMessage !== null &&
-            /\b(?:bad gateway|gateway[\s-]*time[\s-]*out|service(?: temporarily)? unavailable|upstream(?: connect| request| server| timed| timeout)|proxy error)\b/i
+            /\b(?:gateway|service(?: temporarily)? unavailable|upstream(?: connect| request| server| timed| timeout)|proxy error)\b/i
               .test(errorMessage);
           throw { status: response.status, error: body,
             isRpcError: errorMessage !== null && !gatewayResponse };

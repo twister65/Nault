@@ -86,6 +86,7 @@ describe('RPC network boundary', () => {
     ));
     for (const [status, message] of [
       [502, 'Bad Gateway'],
+      [502, 'Gateway error'],
       [503, 'Service Unavailable'],
       [504, 'Gateway Timeout'],
       [500, 'upstream connect error']
