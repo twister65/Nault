@@ -21,6 +21,37 @@ describe('AppComponent', () => {
   it('constructs the application with its real dependency graph', () => {
     expect(TestBed.createComponent(AppComponent).componentInstance).toBeTruthy();
   });
+  it('checks RPC immediately on WebSocket failure for a known built-in node', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    const ws = TestBed.inject(WebsocketService);
+    app.settings.settings.serverName = 'nanoslo';
+    app.settings.settings.serverAPI = 'https://nanoslo.0x.no/proxy';
+    app.settings.settings.serverWS = 'wss://nanoslo.0x.no/websocket';
+    const check = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.returnValue(Promise.resolve());
+    ws.connectionFailure$.next('wss://nanoslo.0x.no/websocket');
+    ws.connectionFailure$.next('wss://nanoslo.0x.no/websocket');
+    expect(check).toHaveBeenCalledTimes(1);
+    tick(0);
+    ws.connectionFailure$.next('wss://nanoslo.0x.no/websocket');
+    expect(check).toHaveBeenCalledTimes(1); // Cooldown prevents repeated probes.
+  }));
+
+  it('ignores stale WS errors, explicit custom RPCs and offline mode', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    const ws = TestBed.inject(WebsocketService);
+    const check = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.returnValue(Promise.resolve());
+    app.settings.settings.serverName = 'nanoslo';
+    app.settings.settings.serverAPI = 'https://nanoslo.0x.no/proxy';
+    app.settings.settings.serverWS = 'wss://nanoslo.0x.no/websocket';
+    ws.connectionFailure$.next('wss://old.example/ws');
+    app.settings.settings.serverName = 'custom';
+    ws.connectionFailure$.next('wss://nanoslo.0x.no/websocket');
+    app.settings.settings.serverName = 'offline';
+    ws.connectionFailure$.next('wss://nanoslo.0x.no/websocket');
+    expect(check).not.toHaveBeenCalled();
+    tick(0);
+  }));
+
   it('resets the inactivity counter when the user interacts', () => {
     const app = TestBed.createComponent(AppComponent).componentInstance;
     app.inactiveSeconds = 30;

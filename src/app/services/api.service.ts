@@ -10,6 +10,9 @@ import { TxType } from './util.service';
 @Injectable()
 export class ApiService {
   storeKey = `nanovault-active-difficulty`;
+  // A failed WS handshake and a manual server save may ask for the same
+  // health check concurrently. Share one request per selected endpoint.
+  private pendingHealthCheck: { endpoint: string | null; promise: Promise<void> } | null = null;
   constructor(private http: RpcTransportService, private node: NodeService, private appSettings: AppSettingsService) { }
 
   // Some public RPC proxies still whitelist the legacy pending action names.
@@ -125,12 +128,22 @@ export class ApiService {
   // the public Nano burn address, never a user's private or wallet account.
   // This read is whitelisted by public RPC proxies; a valid balances response
   // confirms that fallback really supports the wallet's basic RPC operation.
-  async checkNodeAvailability(): Promise<void> {
+  checkNodeAvailability(): Promise<void> {
+    const endpoint = this.appSettings.settings.serverAPI;
+    if (this.pendingHealthCheck?.endpoint === endpoint) return this.pendingHealthCheck.promise;
     const burnAccount = 'nano_1111111111111111111111111111111111111111111111111111hifc8npp';
-    await this.request('accounts_balances', { accounts: [burnAccount] }, false, '', res => ({
+    const promise = this.request('accounts_balances', { accounts: [burnAccount] }, false, '', res => ({
       err: res && res.balances && typeof res.balances === 'object' && !Array.isArray(res.balances)
         ? null : 'Invalid accounts_balances response',
-    }));
+    })).then(() => undefined);
+    const pending = { endpoint, promise };
+    this.pendingHealthCheck = pending;
+    // Never create an unhandled rejection from a .finally() cleanup.
+    void promise.then(
+      () => { if (this.pendingHealthCheck === pending) this.pendingHealthCheck = null; },
+      () => { if (this.pendingHealthCheck === pending) this.pendingHealthCheck = null; }
+    );
+    return promise;
   }
 
   async accountsBalances(accounts: string[]): Promise<{balances: any }> {

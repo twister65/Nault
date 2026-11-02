@@ -49,6 +49,9 @@ export class AppComponent implements OnInit {
       router.events.subscribe(() => {
         this.closeNav();
       });
+      this.websocket.connectionFailure$.subscribe(wsUrl => {
+        void this.probeRpcAfterWebsocketFailure(wsUrl);
+      });
     }
 
   @ViewChild('selectButton') selectButton!: ElementRef<HTMLElement>;
@@ -72,6 +75,36 @@ export class AppComponent implements OnInit {
   private networkRecoveryInProgress = false;
   private networkRecoveryAttempts = 0;
   private readonly maxNetworkRecoveryAttempts = 5;
+  private wsFailureProbeInFlight = false;
+  private lastWsFailureProbeEndpoint: string | null = null;
+  private lastWsFailureProbeAt = 0;
+  private readonly wsProbeCooldownMs = 30000;
+
+  // WS can be unavailable while RPC still works (blocked WS port/proxy).
+  // A failed WS therefore triggers an immediate bounded RPC health check,
+  // never an unconditional switch. Only the RPC layer can select a fallback.
+  private async probeRpcAfterWebsocketFailure(failedWs: string): Promise<void> {
+    const settings = this.settings.settings;
+    if (!settings.serverAPI || settings.serverWS !== failedWs ||
+        settings.serverName === 'custom' || settings.serverName === 'offline' ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)) return;
+    if (!this.settings.serverOptions.some(node =>
+      node.allowFailover && node.api === settings.serverAPI)) return;
+    if (this.wsFailureProbeInFlight) return;
+    const now = Date.now();
+    if (this.lastWsFailureProbeEndpoint === settings.serverAPI &&
+        now - this.lastWsFailureProbeAt < this.wsProbeCooldownMs) return;
+    this.wsFailureProbeInFlight = true;
+    this.lastWsFailureProbeEndpoint = settings.serverAPI;
+    this.lastWsFailureProbeAt = now;
+    try {
+      await this.api.checkNodeAvailability();
+    } catch (_) {
+      // ApiService retains the existing offline notice if no RPC works.
+    } finally {
+      this.wsFailureProbeInFlight = false;
+    }
+  }
   isConfigured = this.walletService.isConfigured;
   donationAccount = environment.donationAddress;
 
@@ -134,6 +167,9 @@ export class AppComponent implements OnInit {
     this.addressBook.loadAddressBook();
     this.workPool.loadWorkCache();
 
+    // Start WS first rather than serializing it behind RPC balance checks.
+    // Account subscriptions are added during wallet restore and kept on reconnect.
+    this.websocket.connect();
     await this.walletService.loadStoredWallet();
     // Subscribe to any transaction tracking
     for (const entry of this.addressBook.addressBook) {
@@ -189,8 +225,6 @@ export class AppComponent implements OnInit {
         this.router.navigate([path], { replaceUrl: true });
       }
     }
-
-    this.websocket.connect();
 
     this.representative.loadRepresentativeList();
 

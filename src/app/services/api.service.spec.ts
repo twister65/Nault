@@ -350,6 +350,21 @@ describe('ApiService bounded secure requests', () => {
     expect(rejected).toBe(true);
     expect(http.post).toHaveBeenCalledTimes(1);
   }));
+  it('shares a pending availability check from WS and manual server save', async () => {
+    const { api, http } = setup('spynano');
+    const subject = new (await import('rxjs')).Subject<any>();
+    http.post.and.returnValue(subject);
+    const first = api.checkNodeAvailability();
+    const second = api.checkNodeAvailability();
+    expect(first).toBe(second);
+    expect(http.post).toHaveBeenCalledTimes(1);
+    subject.next({ balances: {} });
+    subject.complete();
+    await first;
+    await api.checkNodeAvailability();
+    expect(http.post).toHaveBeenCalledTimes(2);
+  });
+
   it('probes the public burn account when no wallet is configured', async () => {
     const { api, http, settings } = setup('spynano');
     // HTTP 504 from the selected node; a successful balances response from the
