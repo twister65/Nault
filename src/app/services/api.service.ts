@@ -53,7 +53,9 @@ export class ApiService {
     if (!url && !skipError && action !== 'process' && action !== 'work_generate' &&
         knownSource && (settings.serverName === 'random' || settings.serverName === knownSource.value)) {
       for (const server of this.appSettings.serverOptions || []) {
-        if (!server.allowFailover || !server.api) continue;
+        // The known-dead SpyNano test fixture may trigger failover but must
+        // never be picked automatically as a healthy fallback candidate.
+        if (!server.allowFailover || server.failoverTarget === false || !server.api) continue;
         try {
           const candidate = secureEndpoint(server.api, 'rpc');
           if (!endpoints.includes(candidate)) endpoints.push(candidate);
@@ -117,6 +119,18 @@ export class ApiService {
       ? 'Too Many Requests to the node. Try again later or choose a different node.'
       : 'RPC unavailable. Retry later or choose another node.');
     throw lastError || new Error('RPC request deadline exceeded.');
+  }
+
+  // Even an unconfigured wallet must detect an unavailable RPC node. Probe
+  // the public Nano burn address, never a user's private or wallet account.
+  // This read is whitelisted by public RPC proxies; a valid balances response
+  // confirms that fallback really supports the wallet's basic RPC operation.
+  async checkNodeAvailability(): Promise<void> {
+    const burnAccount = 'nano_1111111111111111111111111111111111111111111111111111hifc8npp';
+    await this.request('accounts_balances', { accounts: [burnAccount] }, false, '', res => ({
+      err: res && res.balances && typeof res.balances === 'object' && !Array.isArray(res.balances)
+        ? null : 'Invalid accounts_balances response',
+    }));
   }
 
   async accountsBalances(accounts: string[]): Promise<{balances: any }> {

@@ -350,6 +350,27 @@ describe('ApiService bounded secure requests', () => {
     expect(rejected).toBe(true);
     expect(http.post).toHaveBeenCalledTimes(1);
   }));
+  it('probes the public burn account when no wallet is configured', async () => {
+    const { api, http, settings } = setup('spynano');
+    // HTTP 504 from the selected node; a successful balances response from the
+    // next candidate proves failover works without wallet accounts.
+    http.post.and.returnValues(throwError({ status: 504 }), of({ balances: {} }));
+    await api.checkNodeAvailability();
+    const calls = http.post.calls.allArgs();
+    expect(calls.length).toBe(2);
+    expect(calls[0][1]).toEqual({ action: 'accounts_balances', accounts: [
+      'nano_1111111111111111111111111111111111111111111111111111hifc8npp'
+    ] });
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith('spynano', 'https://a.invalid/rpc', 'https://b.invalid/rpc');
+  });
+
+  it('does not accept a successful HTTP response with invalid RPC data', async () => {
+    const { api, http, settings } = setup('spynano');
+    http.post.and.returnValues(throwError({ status: 504 }), of({ random_field: true }));
+    await expectAsync(api.checkNodeAvailability()).toBeRejected();
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+  });
+
   it('activates a successful RPC fallback for persistence by settings', async () => {
     const { api, http, settings } = setup();
     http.post.and.returnValues(throwError({ status: 503 }), of({ balances: {} }));

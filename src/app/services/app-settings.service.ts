@@ -71,6 +71,7 @@ export class AppSettingsService {
     auth: string | null;
     shouldRandom: boolean;
     allowFailover?: boolean;
+    failoverTarget?: boolean;
     work?: string;
     supportsRepresentativesOnline?: boolean;
   }> = [
@@ -100,10 +101,10 @@ export class AppSettingsService {
       shouldRandom: true,
       allowFailover: true,
     },
-    // TEST-ONLY: these removed nodes are restored to exercise failure cases.
-    // Delete these entries before this PR can leave draft status.
+    // SomeNano is retained as a manually selectable public node. Only
+    // SpyNano is temporary and must be removed before merging this PR.
     {
-      name: 'SomeNano (failover test only)',
+      name: 'SomeNano',
       value: 'somenano',
       api: 'https://node.somenano.com/proxy',
       ws: 'wss://node.somenano.com/websocket',
@@ -119,6 +120,7 @@ export class AppSettingsService {
       auth: null,
       shouldRandom: false,
       allowFailover: true,
+      failoverTarget: false,
     },
     {
       // Preferred personal RsNano node, not included in random rotation.

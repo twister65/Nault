@@ -44,13 +44,16 @@ describe('AppSettingsService', () => {
     expect(service.serverOptions.some(server => server.value === 'twister32-rsnano')).toBe(true);
   }));
 
-  it('restores SomeNano and SpyNano only as opt-in failover test nodes', inject([AppSettingsService], (service: AppSettingsService) => {
-    for (const value of ['somenano', 'spynano']) {
-      const node = service.serverOptions.find(option => option.value === value);
-      expect(node).toBeTruthy();
-      expect(node?.shouldRandom).toBe(false);
-      expect(node?.allowFailover).toBe(true);
-    }
+  it('retains SomeNano as a normal selectable node and SpyNano only as a test fixture', inject([AppSettingsService], (service: AppSettingsService) => {
+    const someNano = service.serverOptions.find(option => option.value === 'somenano');
+    expect(someNano?.name).toBe('SomeNano');
+    expect(someNano?.api).toBe('https://node.somenano.com/proxy');
+    expect(someNano?.shouldRandom).toBe(false);
+    expect(someNano?.allowFailover).toBe(true);
+    const spyNano = service.serverOptions.find(option => option.value === 'spynano');
+    expect(spyNano?.shouldRandom).toBe(false);
+    expect(spyNano?.allowFailover).toBe(true);
+    expect(spyNano?.failoverTarget).toBe(false);
   }));
 
   it('persists a failover, WebSocket endpoint and notification event only once', inject([AppSettingsService], (service: AppSettingsService) => {

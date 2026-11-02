@@ -55,11 +55,13 @@ describe('ConfigureAppComponent server settings', () => {
     };
     notifications = { sendWarning: jasmine.createSpy(), sendSuccess: jasmine.createSpy() };
     websocket = { forceReconnect: jasmine.createSpy() };
-    wallet = { reloadBalances: jasmine.createSpy().and.returnValue(Promise.resolve()) };
+    wallet = { wallet: { accounts: [{ id: 'nano_test' }] }, reloadBalances: jasmine.createSpy().and.returnValue(Promise.resolve()) };
     Object.assign(component, {
       selectedServer: 'custom', serverAPI: 'https://new.example/rpc', serverWS: 'wss://new.example/ws',
       appSettings: settings, notifications, websocket, walletService: wallet,
-      translocoService: { translate: (key: string) => key }, node: { node: {} }, statsRequest: 0
+      api: { checkNodeAvailability: jasmine.createSpy().and.returnValue(Promise.resolve()) },
+      translocoService: { translate: (key: string) => key },
+      node: { setLoading: jasmine.createSpy(), node: {} }, statsRequest: 0
     });
     spyOn(component, 'updateNodeStats').and.returnValue(Promise.resolve());
   });
@@ -77,6 +79,13 @@ describe('ConfigureAppComponent server settings', () => {
     expect(websocket.forceReconnect).toHaveBeenCalledTimes(1);
     resolve();
     await saving;
+    expect(websocket.forceReconnect).toHaveBeenCalledTimes(1);
+  });
+  it('probes after saving a server without a configured wallet', async () => {
+    wallet.wallet.accounts = [];
+    await component.updateServerSettings();
+    expect(wallet.reloadBalances).not.toHaveBeenCalled();
+    expect((component as any).api.checkNodeAvailability).toHaveBeenCalledTimes(1);
     expect(websocket.forceReconnect).toHaveBeenCalledTimes(1);
   });
   it('handles a failed refresh without retaining old statistics', async () => {

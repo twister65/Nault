@@ -534,12 +534,18 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
     this.notifications.sendSuccess(this.translocoService.translate('configure-app.server-settings-successfully-updated'));
 
-    this.node.node.status = false; // Directly set node to offline since API url changed.  Status will get set by reloadBalances
+    this.node.setLoading(); // The next RPC read or probe determines the real node status.
 
     // Restore notifications immediately, independently of slow/offline RPC reads.
     this.websocket.forceReconnect();
     try {
-      await this.walletService.reloadBalances();
+      if (this.walletService.wallet?.accounts?.length) {
+        await this.walletService.reloadBalances();
+      } else if (this.appSettings.settings.serverAPI) {
+        // No wallet = no balance request. Probe the public burn address so an
+        // unavailable node still triggers automatic failover after Save.
+        await this.api.checkNodeAvailability();
+      }
     } catch (_) {
       this.notifications.sendWarning(this.translocoService.translate('ui-notifications.refresh-balance-server'));
     }

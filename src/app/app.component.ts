@@ -157,7 +157,13 @@ export class AppComponent implements OnInit {
       this.wallet.selectedAccount = currentUpdatedAccount;
     }
 
-    await this.walletService.reloadBalances().catch(() => this.notifications.sendWarning('Unable to refresh balances. Check your connection.'));
+    if (this.wallet.accounts.length) {
+      await this.walletService.reloadBalances().catch(() => this.notifications.sendWarning('Unable to refresh balances. Check your connection.'));
+    } else if (this.settings.settings.serverAPI) {
+      // reloadBalances() intentionally skips RPC for empty wallets. The
+      // explicit health probe must still detect offline built-in nodes.
+      await this.api.checkNodeAvailability().catch(() => { /* NodeService displays offline state. */ });
+    }
 
     // Workaround fix for github pages when Nault is refreshed (or externally linked) and there is a subpath for example to the send screen.
     // This data is saved from the 404.html page
