@@ -427,6 +427,22 @@ describe('ApiService bounded secure requests', () => {
     expect(rejected).toBe(true);
     expect(http.post).toHaveBeenCalledTimes(1);
   }));
+  it('does not show an offline error on an unconfigured wallet health probe', async () => {
+    const { api, http, node } = setup('spynano');
+    http.post.and.returnValue(throwError({ status: 0 }));
+    await expectAsync(api.checkNodeAvailability(true)).toBeRejected();
+    expect(http.post).toHaveBeenCalledTimes(3);
+    expect(node.setOffline).toHaveBeenCalledWith(null);
+  });
+
+  it('still shows a node error on an explicit or configured-wallet health probe', async () => {
+    const { api, http, node } = setup('spynano');
+    http.post.and.returnValue(throwError({ status: 0 }));
+    await expectAsync(api.checkNodeAvailability()).toBeRejected();
+    expect(node.setOffline).toHaveBeenCalled();
+    expect(node.setOffline.calls.mostRecent().args[0]).not.toBeNull();
+  });
+
   it('limits WS-triggered health probes to three seconds per RPC candidate', fakeAsync(() => {
     const { api, http } = setup('spynano');
     http.post.and.returnValue(NEVER);

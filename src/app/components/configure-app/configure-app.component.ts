@@ -544,10 +544,14 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
       } else if (this.appSettings.settings.serverAPI) {
         // No wallet = no balance request. Probe the public burn address so an
         // unavailable node still triggers automatic failover after Save.
-        await this.api.checkNodeAvailability();
+        await this.api.checkNodeAvailability(!this.walletService.isConfigured());
       }
     } catch (_) {
-      this.notifications.sendWarning(this.translocoService.translate('ui-notifications.refresh-balance-server'));
+      // Only warn if a wallet is affected. Before first setup, a failed
+      // discovery probe is not a user-visible wallet error.
+      if (this.walletService.isConfigured()) {
+        this.notifications.sendWarning(this.translocoService.translate('ui-notifications.refresh-balance-server'));
+      }
     }
     // Server selection may have changed automatically during the RPC refresh.
     this.selectedServer = this.appSettings.settings.serverName;

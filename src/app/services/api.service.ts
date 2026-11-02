@@ -42,7 +42,8 @@ export class ApiService {
     skipError: boolean,
     url = '',
     validateResponse?: (response: any) => { err: string | null },
-    perAttemptTimeoutMs = 15000
+    perAttemptTimeoutMs = 15000,
+    silentOffline = false
   ): Promise<any> {
     // Snapshot settings: a pending request must not acquire another server's credentials.
     const settings = { ...this.appSettings.settings };
@@ -53,7 +54,7 @@ export class ApiService {
     }
     let apiUrl: string;
     try { apiUrl = secureEndpoint(firstUrl, 'rpc'); } catch (error) {
-      this.node.setOffline('Unsafe server address: use HTTPS (HTTP is allowed only on loopback).');
+      this.node.setOffline(silentOffline ? null : 'Unsafe server address: use HTTPS (HTTP is allowed only on loopback).');
       if (skipError) return;
       throw error;
     }
@@ -149,16 +150,16 @@ export class ApiService {
              (typeof failure.status === 'number' && failure.status >= 500) ||
              failure.name === 'TimeoutError' || error instanceof TypeError);
           if (!retryable) {
-            if (!failure.isRpcError) this.node.setOffline();
+            if (!failure.isRpcError) this.node.setOffline(silentOffline ? null : undefined);
             throw error;
           }
           break;
         }
       }
     }
-    this.node.setOffline(lastError && lastError.status === 429
+    this.node.setOffline(silentOffline ? null : (lastError && lastError.status === 429
       ? 'Too Many Requests to the node. Try again later or choose a different node.'
-      : 'RPC unavailable. Retry later or choose another node.');
+      : 'RPC unavailable. Retry later or choose another node.'));
     throw lastError || new Error('RPC request deadline exceeded.');
   }
 
@@ -169,14 +170,14 @@ export class ApiService {
   // Health probes alone use a 3-second timeout per candidate so an early WS
   // failure need not await the normal 15-second wallet RPC read timeout.
   // Signed publications and regular wallet requests retain their own budgets.
-  checkNodeAvailability(): Promise<void> {
+  checkNodeAvailability(silentOffline = false): Promise<void> {
     const endpoint = this.appSettings.settings.serverAPI;
     if (this.pendingHealthCheck?.endpoint === endpoint) return this.pendingHealthCheck.promise;
     const burnAccount = 'nano_1111111111111111111111111111111111111111111111111111hifc8npp';
     const promise = this.request('accounts_balances', { accounts: [burnAccount] }, false, '', res => ({
       err: res && res.balances && typeof res.balances === 'object' && !Array.isArray(res.balances)
         ? null : 'Invalid accounts_balances response',
-    }), 3000).then(() => undefined);
+    }), 3000, silentOffline).then(() => undefined);
     const pending = { endpoint, promise };
     this.pendingHealthCheck = pending;
     // Never create an unhandled rejection from a .finally() cleanup.

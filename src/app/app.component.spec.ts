@@ -3,6 +3,8 @@ import { Renderer2 } from '@angular/core';
 import { ApiService } from './services/api.service';
 import { WebsocketService } from './services/websocket.service';
 import { AppComponent } from './app.component';
+import { WalletService } from './services/wallet.service';
+import { NotificationService } from './services/notification.service';
 import { ComponentTestModule, isolateConstructorIO } from '../testing/component-test.module';
 
 describe('AppComponent', () => {
@@ -51,6 +53,31 @@ describe('AppComponent', () => {
     expect(check).not.toHaveBeenCalled();
     tick(0);
   }));
+
+  it('silently reconnects WebSocket after automatic failover without a wallet', () => {
+    const app = TestBed.inject(AppComponent);
+    const configured = spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(false);
+    const notice = spyOn(TestBed.inject(NotificationService), 'sendWarning');
+    const reconnect = spyOn(TestBed.inject(WebsocketService), 'forceReconnect').and.stub();
+    (app as any).handleServerFailover('SpyNano', 'SomeNano');
+    expect(notice).not.toHaveBeenCalled();
+    expect(reconnect).toHaveBeenCalledTimes(1);
+
+    configured.and.returnValue(true);
+    (app as any).handleServerFailover('SpyNano', 'SomeNano');
+    expect(notice).toHaveBeenCalledTimes(1);
+    expect(reconnect).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not show the persistent node error during first-run network loss', () => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://nanoslo.0x.no/proxy';
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(false);
+    const sendError = spyOn(TestBed.inject(NotificationService), 'sendError');
+    app.onNetworkOffline();
+    expect(app.nodeService.node.status).toBe(false);
+    expect(sendError).not.toHaveBeenCalled();
+  });
 
   it('resets the inactivity counter when the user interacts', () => {
     const app = TestBed.createComponent(AppComponent).componentInstance;

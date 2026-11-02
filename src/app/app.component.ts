@@ -99,13 +99,24 @@ export class AppComponent implements OnInit {
     this.lastWsFailureProbeAt = now;
     try {
       console.info('WebSocket connection failed; verifying Nano RPC before failover.');
-      await this.api.checkNodeAvailability();
+      await this.api.checkNodeAvailability(!this.walletService.isConfigured());
     } catch (_) {
       // ApiService retains the existing offline notice if no RPC works.
     } finally {
       this.wsFailureProbeInFlight = false;
     }
   }
+  private handleServerFailover(previousName: string, nextName: string): void {
+    this.notifications.removeNotification('node-failover');
+    if (this.walletService.isConfigured()) {
+      this.notifications.sendWarning(this.translate.translate('ui-notifications.node-failover', {
+        previous: previousName, next: nextName,
+      }), { identifier: 'node-failover', length: 12000 });
+    }
+    // Reconnect notifications and account subscriptions even for an empty wallet.
+    this.websocket.forceReconnect();
+  }
+
   isConfigured = this.walletService.isConfigured;
   donationAccount = environment.donationAddress;
 
@@ -115,7 +126,9 @@ export class AppComponent implements OnInit {
 
   @HostListener('window:offline') onNetworkOffline(): void {
     this.cancelNetworkRecovery();
-    if (this.settings.settings.serverAPI) this.nodeService.setOffline();
+    if (this.settings.settings.serverAPI) {
+      this.nodeService.setOffline(this.walletService.isConfigured() ? undefined : null);
+    }
   }
 
   @HostListener('window:online') onNetworkOnline(): void {
@@ -158,11 +171,7 @@ export class AppComponent implements OnInit {
 
     // Align WebSocket subscriptions and the visible notice after an RPC switch.
     this.settings.serverFailover$.subscribe(({ previousName, nextName }) => {
-      this.notifications.removeNotification('node-failover');
-      this.notifications.sendWarning(this.translate.translate('ui-notifications.node-failover', {
-        previous: previousName, next: nextName,
-      }), { identifier: 'node-failover', length: 12000 });
-      this.websocket.forceReconnect();
+      this.handleServerFailover(previousName, nextName);
     });
 
     this.addressBook.loadAddressBook();
@@ -197,9 +206,12 @@ export class AppComponent implements OnInit {
     if (this.wallet.accounts.length) {
       await this.walletService.reloadBalances().catch(() => this.notifications.sendWarning('Unable to refresh balances. Check your connection.'));
     } else if (this.settings.settings.serverAPI) {
-      // reloadBalances() intentionally skips RPC for empty wallets. The
-      // explicit health probe must still detect offline built-in nodes.
-      await this.api.checkNodeAvailability().catch(() => { /* NodeService displays offline state. */ });
+      // A new user should see the wallet setup screen immediately, not await
+      // three failed RPC endpoints or see error toasts while nodes are probed.
+      // Continue discovering a healthy public server in the background.
+      void this.api.checkNodeAvailability(true).catch(() => {
+        // An offline node is recorded internally; setup stays unobstructed.
+      });
     }
 
     // Workaround fix for github pages when Nault is refreshed (or externally linked) and there is a subpath for example to the send screen.
@@ -476,7 +488,7 @@ export class AppComponent implements OnInit {
       // Use the wallet-independent health probe also on network recovery.
       if (this.nodeService.node.status !== true) {
         if (this.wallet.accounts.length) await this.api.accountsBalances(this.wallet.accounts.map(a => a.id));
-        else await this.api.checkNodeAvailability();
+        else await this.api.checkNodeAvailability(!this.walletService.isConfigured());
       }
 
       if (!navigator.onLine || this.settings.settings.serverAPI !== endpoint) return;

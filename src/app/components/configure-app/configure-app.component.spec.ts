@@ -81,6 +81,14 @@ describe('ConfigureAppComponent server settings', () => {
     await saving;
     expect(websocket.forceReconnect).toHaveBeenCalledTimes(1);
   });
+  it('keeps a failed manual server refresh quiet until a wallet is configured', async () => {
+    wallet.wallet.accounts = [];
+    wallet.isConfigured = jasmine.createSpy().and.returnValue(false);
+    (component as any).api.checkNodeAvailability.and.returnValue(Promise.reject(new Error('offline')));
+    await component.updateServerSettings();
+    expect(notifications.sendWarning).not.toHaveBeenCalled();
+  });
+
   it('probes after saving a server without a configured wallet', async () => {
     wallet.wallet.accounts = [];
     await component.updateServerSettings();
