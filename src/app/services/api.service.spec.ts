@@ -1,6 +1,6 @@
 import { ApiService } from './api.service';
 import { TxType } from './util.service';
-import { of, throwError, NEVER } from 'rxjs';
+import { of, throwError, NEVER, Subject } from 'rxjs';
 import { fakeAsync, tick } from '@angular/core/testing';
 
 describe('ApiService.process', () => {
@@ -352,7 +352,7 @@ describe('ApiService bounded secure requests', () => {
   }));
   it('shares a pending availability check from WS and manual server save', async () => {
     const { api, http } = setup('spynano');
-    const subject = new (await import('rxjs')).Subject<any>();
+    const subject = new Subject<any>();
     http.post.and.returnValue(subject);
     const first = api.checkNodeAvailability();
     const second = api.checkNodeAvailability();
