@@ -137,7 +137,8 @@ describe('ApiService RPC proxy fallback', () => {
         if (payload.action === refusedAction) {
           return throwError({
             status: 500,
-            error: { error: refusalMessage || `Action ${refusedAction} not allowed` }
+            error: { error: refusalMessage || `Action ${refusedAction} not allowed` },
+            isRpcError: true
           });
         }
         return of({ blocks: {} });
