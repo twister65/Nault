@@ -98,6 +98,7 @@ export class AppComponent implements OnInit {
     this.lastWsFailureProbeEndpoint = settings.serverAPI;
     this.lastWsFailureProbeAt = now;
     try {
+      console.info('WebSocket connection failed; verifying Nano RPC before failover.');
       await this.api.checkNodeAvailability();
     } catch (_) {
       // ApiService retains the existing offline notice if no RPC works.

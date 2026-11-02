@@ -33,7 +33,8 @@ export class ApiService {
     data: Record<string, unknown>,
     skipError: boolean,
     url = '',
-    validateResponse?: (response: any) => { err: string | null }
+    validateResponse?: (response: any) => { err: string | null },
+    perAttemptTimeoutMs = 15000
   ): Promise<any> {
     // Snapshot settings: a pending request must not acquire another server's credentials.
     const settings = { ...this.appSettings.settings };
@@ -82,7 +83,7 @@ export class ApiService {
         try {
           const remaining = deadline - Date.now();
           const res = await this.http.post(endpoint, { ...data, action: requestAction }, options)
-            .pipe(timeout(Math.max(1, Math.min(action === 'work_generate' ? 120000 : 15000, remaining)))).toPromise();
+            .pipe(timeout(Math.max(1, Math.min(action === 'work_generate' ? 120000 : perAttemptTimeoutMs, remaining)))).toPromise();
           if (typeof validateResponse === 'function' && validateResponse(res).err != null) {
             throw { isValidationFailure: true };
           }
@@ -128,6 +129,9 @@ export class ApiService {
   // the public Nano burn address, never a user's private or wallet account.
   // This read is whitelisted by public RPC proxies; a valid balances response
   // confirms that fallback really supports the wallet's basic RPC operation.
+  // Health probes alone use a 3-second timeout per candidate so an early WS
+  // failure need not await the normal 15-second wallet RPC read timeout.
+  // Signed publications and regular wallet requests retain their own budgets.
   checkNodeAvailability(): Promise<void> {
     const endpoint = this.appSettings.settings.serverAPI;
     if (this.pendingHealthCheck?.endpoint === endpoint) return this.pendingHealthCheck.promise;
@@ -135,7 +139,7 @@ export class ApiService {
     const promise = this.request('accounts_balances', { accounts: [burnAccount] }, false, '', res => ({
       err: res && res.balances && typeof res.balances === 'object' && !Array.isArray(res.balances)
         ? null : 'Invalid accounts_balances response',
-    })).then(() => undefined);
+    }), 3000).then(() => undefined);
     const pending = { endpoint, promise };
     this.pendingHealthCheck = pending;
     // Never create an unhandled rejection from a .finally() cleanup.
