@@ -58,15 +58,27 @@ export class ApiService {
       server.allowFailover && server.api === firstUrl);
     if (!url && !skipError && action !== 'process' && action !== 'work_generate' &&
         knownSource && (settings.serverName === 'random' || settings.serverName === knownSource.value)) {
+      // Do not give the first entry in serverOptions an artificial priority.
+      // Pick a randomized order without replacement for this failover cycle.
+      // Keep the current server first, and exclude it and disabled/unsafe
+      // candidates from the shuffled public pool.
+      const candidates: string[] = [];
       for (const server of this.appSettings.serverOptions || []) {
-        // The known-dead SpyNano test fixture may trigger failover but must
-        // never be picked automatically as a healthy fallback candidate.
+        // SpyNano is temporarily selectable as a failing test node but must
+        // never be chosen as a fallback target.
         if (!server.allowFailover || server.failoverTarget === false || !server.api) continue;
         try {
           const candidate = secureEndpoint(server.api, 'rpc');
-          if (!endpoints.includes(candidate)) endpoints.push(candidate);
+          if (candidate !== apiUrl && !candidates.includes(candidate)) candidates.push(candidate);
         } catch (_) { /* Ignore insecure built-in candidates. */ }
       }
+      // Fisher-Yates shuffle: each distinct eligible fallback can be tried
+      // first, regardless of its order in serverOptions.
+      for (let i = candidates.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+      }
+      endpoints.push(...candidates);
     }
     if (this.node.node.status === false && !skipError) this.node.setLoading();
     // Includes legacy compatibility calls; PoW gets one longer, cancellable attempt.

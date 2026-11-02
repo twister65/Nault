@@ -306,6 +306,11 @@ describe('ApiService optional representative metadata', () => {
 });
 
 describe('ApiService bounded secure requests', () => {
+  beforeEach(() => {
+    // Deterministic no-swap Fisher-Yates results for existing ordered
+    // regression assertions; each random-choice test overrides this.
+    spyOn(Math, 'random').and.returnValue(0.999999);
+  });
   function setup(serverName = 'random') {
     const http = { post: jasmine.createSpy('post').and.returnValue(throwError({ status: 503 })) };
     const node = { node: { status: true }, setOnline: jasmine.createSpy(), setOffline: jasmine.createSpy(), setLoading: jasmine.createSpy() };
@@ -316,6 +321,51 @@ describe('ApiService bounded secure requests', () => {
     };
     return { http, node, settings, api: new ApiService(http as any, node as any, settings as any) };
   }
+  it('selects a different first fallback when the random draw changes', async () => {
+    const { api, http, settings } = setup();
+    http.post.and.returnValues(throwError({ status: 503 }), of({ balances: {} }));
+    expect(await api.accountsBalances([])).toEqual({ balances: {} });
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith('random', 'https://a.invalid/rpc', 'https://b.invalid/rpc');
+
+    (Math.random as jasmine.Spy).and.returnValue(0);
+    const alternative = setup();
+    alternative.http.post.and.returnValues(throwError({ status: 503 }), of({ balances: {} }));
+    expect(await alternative.api.accountsBalances([])).toEqual({ balances: {} });
+    // With [b, c, d] shuffled using zero draws, c is first.
+    expect(alternative.settings.activateFailover).toHaveBeenCalledOnceWith(
+      'random', 'https://a.invalid/rpc', 'https://c.invalid/rpc'
+    );
+  });
+
+  it('never retries the selected node or duplicated/disabled/unsafe fallback targets', async () => {
+    const { api, http, settings } = setup('spynano');
+    settings.serverOptions.push(
+      { api: 'https://a.invalid/rpc', value: 'duplicate', shouldRandom: false, allowFailover: true },
+      { api: 'https://spy.invalid/proxy', value: 'spynano', shouldRandom: false, allowFailover: true, failoverTarget: false },
+      { api: 'http://192.0.2.10:7076', value: 'unsafe', shouldRandom: false, allowFailover: true }
+    );
+    await expectAsync(api.accountsBalances([])).toBeRejected();
+    expect(http.post.calls.allArgs().map(args => args[0])).toEqual([
+      'https://a.invalid/rpc', 'https://b.invalid/rpc', 'https://c.invalid/rpc'
+    ]);
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+  });
+
+  it('tries the next randomized candidate after a failure and persists only a healthy one', async () => {
+    const { api, http, settings } = setup();
+    (Math.random as jasmine.Spy).and.returnValue(0);
+    http.post.and.returnValues(
+      throwError({ status: 0 }), throwError({ status: 503 }), of({ balances: {} })
+    );
+    expect(await api.accountsBalances([])).toEqual({ balances: {} });
+    expect(http.post.calls.allArgs().map(args => args[0])).toEqual([
+      'https://a.invalid/rpc', 'https://c.invalid/rpc', 'https://d.invalid/rpc'
+    ]);
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith(
+      'random', 'https://a.invalid/rpc', 'https://d.invalid/rpc'
+    );
+  });
+
   it('stops after three distinct endpoints and never forwards custom credentials in random mode', async () => {
     const { api, http, node } = setup();
     await expectAsync(api.accountsBalances([])).toBeRejected();
