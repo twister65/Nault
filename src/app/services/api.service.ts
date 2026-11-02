@@ -92,6 +92,14 @@ export class ApiService {
       }
       endpoints.push(...candidates);
     }
+    if (healthProbe) {
+      // Public endpoint counts only, not wallet data or RPC authentication.
+      // Helps distinguish no eligible alternatives from failed alternatives
+      // when Chromium Console displays only failed network requests.
+      console.info('[Nano RPC health] Candidate pool:', {
+        selected: settings.serverName, totalEndpoints: endpoints.length
+      });
+    }
     if (this.node.node.status === false && !skipError) this.node.setLoading();
     // Includes legacy compatibility calls; PoW gets one longer, cancellable attempt.
     // A 3-second probe of up to five servers has a strict 15-second ceiling.
@@ -161,8 +169,17 @@ export class ApiService {
             continue;
           }
           const failure = error && typeof error === 'object'
-            ? error as { isValidationFailure?: boolean; isRpcError?: boolean; status?: number; name?: string }
+            ? error as { isValidationFailure?: boolean; isRpcError?: boolean; isStaleFailover?: boolean; status?: number; name?: string }
             : {};
+          if (healthProbe) {
+            console.info('[Nano RPC health] Probe failed:', endpoint, {
+              status: failure.status ?? null,
+              reason: failure.isRpcError ? 'rpc-error' :
+                failure.isValidationFailure ? 'invalid-response' :
+                failure.isStaleFailover ? 'stale-selection' :
+                failure.name === 'TimeoutError' ? 'timeout' : 'network'
+            });
+          }
           // JSON-RPC application errors show that the node answered; they are
           // not evidence of a DNS, connection or gateway failure. The same
           // applies to malformed successful JSON responses.
@@ -171,7 +188,9 @@ export class ApiService {
              (typeof failure.status === 'number' && failure.status >= 500) ||
              failure.name === 'TimeoutError' || error instanceof TypeError);
           if (!retryable) {
-            if (!failure.isRpcError) this.node.setOffline(silentOffline ? null : undefined);
+            if (!failure.isRpcError && !failure.isStaleFailover) {
+              this.node.setOffline(silentOffline ? null : undefined);
+            }
             throw error;
           }
           break;

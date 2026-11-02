@@ -1,6 +1,7 @@
 import { RpcTransportService } from './rpc-transport.service';
 import { HttpHeaders } from '@angular/common/http';
 import { ApiService } from './api.service';
+import { AppSettingsService } from './app-settings.service';
 
 describe('RPC network boundary', () => {
   it('forbids redirects and ambient credentials and aborts on unsubscribe', () => {
@@ -37,6 +38,44 @@ describe('RPC network boundary', () => {
       fail('DNS failure must reject');
     } catch (error) {
       expect(error).toEqual(jasmine.objectContaining({ status: 0, cause: dnsError }));
+    }
+  });
+
+  it('switches actual saved SpyNano settings after trying the entire eligible public pool', async () => {
+    const settings = new AppSettingsService({} as any);
+    const originalStored = localStorage.getItem(settings.storeKey);
+    const apiTargets: string[] = [];
+    spyOn(window, 'fetch').and.callFake(input => {
+      const target = String(input);
+      apiTargets.push(target);
+      if (target.includes('spynano.org')) {
+        return Promise.reject(new TypeError('net::ERR_NAME_NOT_RESOLVED'));
+      }
+      if (target === 'https://rainstorm.city/api') {
+        return Promise.resolve(new Response(JSON.stringify({ balances: {} }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ error: 'Bad Gateway' }), { status: 502 }));
+    });
+    settings.settings.serverName = 'spynano';
+    settings.loadServerSettings();
+    const node = {
+      node: { status: true },
+      setOnline: jasmine.createSpy('setOnline'),
+      setOffline: jasmine.createSpy('setOffline'),
+      setLoading: jasmine.createSpy('setLoading')
+    };
+    try {
+      await new ApiService(new RpcTransportService(), node as any, settings)
+        .checkNodeAvailability(true);
+      expect(apiTargets[0]).toBe('https://node.spynano.org/proxy');
+      expect(apiTargets).toContain('https://rainstorm.city/api');
+      expect(apiTargets.length).toBeLessThanOrEqual(5);
+      expect(settings.settings.serverName).toBe('rainstorm');
+      expect(settings.settings.serverWS).toBe('wss://rainstorm.city/websocket');
+      expect(node.setOffline).not.toHaveBeenCalled();
+    } finally {
+      if (originalStored === null) localStorage.removeItem(settings.storeKey);
+      else localStorage.setItem(settings.storeKey, originalStored);
     }
   });
 
