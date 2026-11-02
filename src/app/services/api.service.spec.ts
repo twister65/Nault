@@ -498,7 +498,7 @@ describe('ApiService bounded secure requests', () => {
 
   it('ignores a healthy fallback result if the active node changed during the request', async () => {
     const { api, http, settings } = setup('spynano');
-    http.post.and.returnValues(throwError({ status: 0 }), of({ balances: {} }));
+    http.post.and.returnValues(throwError({ status: 0 }), of({ balances: {} }), NEVER, NEVER);
     settings.activateFailover.and.returnValue(false);
     await expectAsync(api.checkNodeAvailability(true)).toBeRejected();
     expect(settings.activateFailover).toHaveBeenCalledTimes(1);
@@ -542,12 +542,12 @@ describe('ApiService bounded secure requests', () => {
 
   it('moves to a working fallback after the first timed-out health probe', fakeAsync(() => {
     const { api, http, settings } = setup('spynano');
-    http.post.and.returnValues(NEVER, of({ balances: {} }));
+    http.post.and.returnValues(NEVER, of({ balances: {} }), NEVER, NEVER);
     let completed = false;
     api.checkNodeAvailability().then(() => { completed = true; });
     tick(3000);
     expect(completed).toBe(true);
-    expect(http.post).toHaveBeenCalledTimes(2);
+    expect(http.post).toHaveBeenCalledTimes(4);
     expect(settings.activateFailover).toHaveBeenCalledOnceWith(
       'spynano', 'https://a.invalid/rpc', 'https://b.invalid/rpc'
     );
@@ -576,10 +576,10 @@ describe('ApiService bounded secure requests', () => {
     const { api, http, settings } = setup('spynano');
     // HTTP 504 from the selected node; a successful balances response from the
     // next candidate proves failover works without wallet accounts.
-    http.post.and.returnValues(throwError({ status: 504 }), of({ balances: {} }));
+    http.post.and.returnValues(throwError({ status: 504 }), of({ balances: {} }), NEVER, NEVER);
     await api.checkNodeAvailability();
     const calls = http.post.calls.allArgs();
-    expect(calls.length).toBe(2);
+    expect(calls.length).toBe(4);
     expect(calls[0][1]).toEqual({ action: 'accounts_balances', accounts: [
       'nano_1111111111111111111111111111111111111111111111111111hifc8npp'
     ] });
@@ -588,7 +588,8 @@ describe('ApiService bounded secure requests', () => {
 
   it('does not accept a successful HTTP response with invalid RPC data', async () => {
     const { api, http, settings } = setup('spynano');
-    http.post.and.returnValues(throwError({ status: 504 }), of({ random_field: true }));
+    http.post.and.returnValues(throwError({ status: 504 }),
+      of({ random_field: true }), of({ random_field: true }), of({ random_field: true }));
     await expectAsync(api.checkNodeAvailability()).toBeRejected();
     expect(settings.activateFailover).not.toHaveBeenCalled();
   });
