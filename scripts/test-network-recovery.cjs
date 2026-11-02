@@ -98,8 +98,8 @@ async function main() {
     selectedServer: 'custom', serverAPI: 'https://example.org', serverWS: '', serverAuth: null,
     appSettings: { settings: { serverAPI: 'https://example.org' }, setAppSettings() {}, loadAppSettings() {} },
     notifications: { sendSuccess() {}, sendWarning() { notices++; } },
-    translocoService: { translate: x => x }, node: { node: {} },
-    walletService: { reloadBalances: async () => { throw new Error('offline'); } },
+    translocoService: { translate: x => x }, node: { node: {}, setLoading() {} },
+    walletService: { wallet: { accounts: [{ id: 'nano_test' }] }, reloadBalances: async () => { throw new Error('offline'); } },
     websocket: { forceReconnect() { reconnects++; } }
   });
   await c.updateServerSettings();
