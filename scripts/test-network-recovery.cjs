@@ -80,16 +80,16 @@ async function main() {
 
   const c = Object.create(Settings.prototype);
   Object.assign(c, { statsRequest: 0, statsRefreshEnabled: true, appSettings: { settings: { serverAPI: 'A' } },
-    api: { blockCount: async () => ({ count: 10, unchecked: 0, cemented: 9 }), confirmationQuorum: async () => null, version: async () => ({ node_vendor: 'A' }) } });
+    api: { optionalBlockCount: async () => ({ count: 10, unchecked: 0, cemented: 9 }), confirmationQuorum: async () => null, version: async () => ({ node_vendor: 'A' }) } });
   await c.updateNodeStats(); assert.equal(c.nodeStatsServer, 'A'); assert.equal(c.nodeVendor, 'A');
   c.serverAPI = 'rejected-form-value'; assert.equal(c.nodeStatsServer, 'A');
   let resolve;
-  c.api.blockCount = () => new Promise(r => resolve = r);
+  c.api.optionalBlockCount = () => new Promise(r => resolve = r);
   const pending = c.updateNodeStats(); c.appSettings.settings.serverAPI = 'B';
   resolve({ count: 999 }); await pending;
   assert.equal(c.nodeStatsServer, null); assert.equal(c.nodeVendor, null); assert.equal(c.statsRefreshEnabled, true);
-  c.api.blockCount = async () => { throw new Error('offline'); };
-  c.api.confirmationQuorum = c.api.version = c.api.blockCount;
+  c.api.optionalBlockCount = async () => { throw new Error('offline'); };
+  c.api.confirmationQuorum = c.api.version = c.api.optionalBlockCount;
   await c.updateNodeStats(); assert.equal(c.nodeBlockCount, null); assert.equal(c.statsRefreshEnabled, true);
   console.log('PASS saved endpoint labels, stale result rejection, failed stats and loading cleanup');
 
@@ -99,7 +99,7 @@ async function main() {
     appSettings: { settings: { serverAPI: 'https://example.org' }, setAppSettings() {}, loadAppSettings() {} },
     notifications: { sendSuccess() {}, sendWarning() { notices++; } },
     translocoService: { translate: x => x }, node: { node: {}, setLoading() {} },
-    walletService: { wallet: { accounts: [{ id: 'nano_test' }] }, reloadBalances: async () => { throw new Error('offline'); } },
+    walletService: { wallet: { accounts: [{ id: 'nano_test' }] }, isConfigured: () => true, reloadBalances: async () => { throw new Error('offline'); } },
     websocket: { forceReconnect() { reconnects++; } }
   });
   await c.updateServerSettings();
