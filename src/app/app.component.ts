@@ -106,6 +106,19 @@ export class AppComponent implements OnInit {
       this.wsFailureProbeInFlight = false;
     }
   }
+  // On a clean start there are no wallet accounts to load, and an available
+  // WebSocket already supplies a connection signal. Probing the public burn
+  // address here can falsely declare a working node offline when the RPC
+  // proxy needs more than 3 seconds or rejects that synthetic account.
+  // Let the WebSocket-failure handler validate RPC before any failover.
+  // RPC-only installations still benefit from a silent initial health check.
+  private probeInitialEmptyWalletRpc(): void {
+    if (!this.settings.settings.serverAPI || this.settings.settings.serverWS) return;
+    void this.api.checkNodeAvailability(!this.walletService.isConfigured()).catch(() => {
+      // Without a configured wallet, no persistent offline notification.
+    });
+  }
+
   private handleServerFailover(previousName: string, nextName: string): void {
     this.notifications.removeNotification('node-failover');
     if (this.walletService.isConfigured()) {
@@ -139,6 +152,11 @@ export class AppComponent implements OnInit {
   // Android does not always dispatch 'online' while the PWA is suspended.
   @HostListener('document:visibilitychange') onNetworkVisibilityChange(): void {
     if (document.visibilityState !== 'visible' || !navigator.onLine) return;
+    // Focus/DevTools visibility changes must not start unnecessary burn-account
+    // probes for an empty wallet while the WebSocket is already connected or
+    // performing its normal handshake. WS failures have a dedicated handler.
+    if (!this.walletService.isConfigured() && this.settings.settings.serverWS &&
+        this.websocket.socket.ws) return;
     if (this.nodeService.node.status !== true ||
         (this.settings.settings.serverWS && !this.websocket.socket.connected)) {
       this.networkRecoveryAttempts = 0;
@@ -205,13 +223,10 @@ export class AppComponent implements OnInit {
 
     if (this.wallet.accounts.length) {
       await this.walletService.reloadBalances().catch(() => this.notifications.sendWarning('Unable to refresh balances. Check your connection.'));
-    } else if (this.settings.settings.serverAPI) {
-      // A new user should see the wallet setup screen immediately, not await
-      // three failed RPC endpoints or see error toasts while nodes are probed.
-      // Continue discovering a healthy public server in the background.
-      void this.api.checkNodeAvailability(!this.walletService.isConfigured()).catch(() => {
-        // An offline node is recorded internally; setup stays unobstructed.
-      });
+    } else {
+      // Do not probe a synthetic account on every fresh start with a working
+      // WebSocket. The first WS failure will trigger a real RPC health probe.
+      this.probeInitialEmptyWalletRpc();
     }
 
     // Workaround fix for github pages when Nault is refreshed (or externally linked) and there is a subpath for example to the send screen.
@@ -482,6 +497,13 @@ export class AppComponent implements OnInit {
     this.networkRecoveryInProgress = true;
     const endpoint = this.settings.settings.serverAPI;
     try {
+      // A healthy WS plus no wallet is not an RPC outage. In particular,
+      // Android visibility/online events must not start gratuitous probes.
+      if (!this.walletService.isConfigured() && this.settings.settings.serverWS &&
+          this.websocket.socket.connected) {
+        this.networkRecoveryAttempts = 0;
+        return;
+      }
       // Prefer normal wallet reads: not every public RPC allows node statistics.
       if (this.wallet.accounts.length) await this.walletService.reloadBalances();
       // Empty account arrays may be refused by healthy public RPC proxies.

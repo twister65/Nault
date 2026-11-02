@@ -79,6 +79,41 @@ describe('AppComponent', () => {
     expect(sendError).not.toHaveBeenCalled();
   });
 
+  it('does not probe a default RsNano RPC on first start without a wallet and with WS configured', () => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverName = 'twister32-rsnano';
+    app.settings.settings.serverAPI = 'https://twister32.changeip.net/proxy';
+    app.settings.settings.serverWS = 'wss://twister32.changeip.net/ws';
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(false);
+    const probe = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.returnValue(Promise.resolve());
+    (app as any).probeInitialEmptyWalletRpc();
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it('retains silent startup discovery for an RPC-only node without a wallet', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://example.org/proxy';
+    app.settings.settings.serverWS = null;
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(false);
+    const probe = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.returnValue(Promise.resolve());
+    (app as any).probeInitialEmptyWalletRpc();
+    expect(probe).toHaveBeenCalledOnceWith(true);
+    tick(0);
+  }));
+
+  it('does not restart RPC discovery on network recovery while an empty-wallet WS is connected', async () => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://twister32.changeip.net/proxy';
+    app.settings.settings.serverWS = 'wss://twister32.changeip.net/ws';
+    app.wallet.accounts = [];
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(false);
+    const probe = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability');
+    const ws = TestBed.inject(WebsocketService);
+    ws.socket.connected = true;
+    await (app as any).recoverAfterNetworkReturn();
+    expect(probe).not.toHaveBeenCalled();
+  });
+
   it('resets the inactivity counter when the user interacts', () => {
     const app = TestBed.createComponent(AppComponent).componentInstance;
     app.inactiveSeconds = 30;
