@@ -1,4 +1,4 @@
-import {Component, ElementRef, HostListener, OnInit, ViewChild, Renderer2, ChangeDetectionStrategy} from '@angular/core';
+import {Component, ElementRef, HostListener, OnInit, OnDestroy, ViewChild, Renderer2, ChangeDetectionStrategy} from '@angular/core';
 import {WalletService, WalletAccount} from './services/wallet.service';
 import {AddressBookService} from './services/address-book.service';
 import {AppSettingsService} from './services/app-settings.service';
@@ -25,7 +25,7 @@ import { TranslocoService } from '@jsverse/transloco';
     changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit, OnDestroy {
 
   constructor(
     public walletService: WalletService,
@@ -79,6 +79,53 @@ export class AppComponent implements OnInit {
   private lastWsFailureProbeEndpoint: string | null = null;
   private lastWsFailureProbeAt = 0;
   private readonly wsProbeCooldownMs = 30000;
+  // Electron's browser online/offline events can be missing on Linux,
+  // especially with a virtual network adapter. Poll the already-allowlisted
+  // native, read-only net.isOnline() bridge without making extra HTTP requests.
+  private nativeNetworkTimer: ReturnType<typeof setInterval> | null = null;
+  private nativeNetworkCheckInFlight = false;
+  private lastNativeNetworkOnline: boolean | null = null;
+  private readonly nativeNetworkPollMs = 3000;
+
+  private async pollNativeNetwork(): Promise<void> {
+    if (this.nativeNetworkCheckInFlight) return;
+    this.nativeNetworkCheckInFlight = true;
+    try {
+      const online = await this.desktop.isNetworkOnline();
+      if (typeof online !== 'boolean' || online === this.lastNativeNetworkOnline) return;
+      const previous = this.lastNativeNetworkOnline;
+      this.lastNativeNetworkOnline = online;
+      console.info('[Nano network] Electron network state:', online
+        ? 'online (Internet access not guaranteed)' : 'offline');
+      if (!online) {
+        // One offline transition per interruption; the native poll and
+        // window offline event may report the same physical event.
+        if (!this.nodeService.internetRecoveryPending) this.onNetworkOffline();
+      } else if (previous === false) {
+        // A positive native signal is only an opportunity to retry the
+        // originally selected server, never a reason to rotate.
+        this.onNetworkOnline();
+      }
+    } finally {
+      this.nativeNetworkCheckInFlight = false;
+    }
+  }
+
+  private startNativeNetworkMonitor(): void {
+    if (this.nativeNetworkTimer !== null) return;
+    void this.pollNativeNetwork();
+    this.nativeNetworkTimer = setInterval(() => {
+      void this.pollNativeNetwork();
+    }, this.nativeNetworkPollMs);
+  }
+
+  ngOnDestroy(): void {
+    if (this.nativeNetworkTimer !== null) {
+      clearInterval(this.nativeNetworkTimer);
+      this.nativeNetworkTimer = null;
+    }
+    this.cancelNetworkRecovery();
+  }
 
   // WS can be unavailable while RPC still works (blocked WS port/proxy).
   // A failed WS therefore triggers an immediate bounded RPC health check,
@@ -139,7 +186,9 @@ export class AppComponent implements OnInit {
   }
 
   @HostListener('window:offline') onNetworkOffline(): void {
+    if (this.nodeService.internetRecoveryPending) return;
     this.nodeService.markInternetInterrupted();
+    console.info('[Nano network] Internet disconnected; preserving selected server.');
     this.cancelNetworkRecovery();
     if (this.settings.settings.serverAPI) {
       this.nodeService.setOffline(this.walletService.isConfigured() ? undefined : null);
@@ -147,6 +196,7 @@ export class AppComponent implements OnInit {
   }
 
   @HostListener('window:online') onNetworkOnline(): void {
+    console.info('[Nano network] Connectivity restored; retrying the selected server.');
     this.networkRecoveryAttempts = 0;
     this.scheduleNetworkRecovery(0);
   }
@@ -181,7 +231,11 @@ export class AppComponent implements OnInit {
     this.onWindowResize(window);
     // Resolve Electron's native OS locale before choosing the initial Angular
     // language. Browsers fall back to their navigator culture as before.
-    this.settings.loadAppSettings(await this.desktop.getSystemLocale());
+    const nativeLocale = await this.desktop.getSystemLocale();
+    this.settings.loadAppSettings(nativeLocale);
+    // The PWA uses browser online/offline events; only the Electron renderer
+    // has an OS locale and the trusted native connectivity bridge.
+    if (nativeLocale !== null) this.startNativeNetworkMonitor();
 
     this.updateAppTheme();
 

@@ -2,6 +2,7 @@ import { TestBed, fakeAsync, tick, waitForAsync } from '@angular/core/testing';
 import { Renderer2 } from '@angular/core';
 import { ApiService } from './services/api.service';
 import { WebsocketService } from './services/websocket.service';
+import { DesktopService } from './services/desktop.service';
 import { AppComponent } from './app.component';
 import { WalletService } from './services/wallet.service';
 import { NotificationService } from './services/notification.service';
@@ -68,6 +69,48 @@ describe('AppComponent', () => {
     expect(notice).toHaveBeenCalledTimes(1);
     expect(reconnect).toHaveBeenCalledTimes(2);
   });
+
+  it('detects native Electron offline/online transitions when browser events are absent', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    const native = spyOn(TestBed.inject(DesktopService), 'isNetworkOnline').and.returnValues(
+      Promise.resolve(true), Promise.resolve(false), Promise.resolve(false), Promise.resolve(true)
+    );
+    const offline = spyOn(app, 'onNetworkOffline').and.callThrough();
+    const online = spyOn(app, 'onNetworkOnline').and.stub();
+    (app as any).pollNativeNetwork(); tick(0);
+    expect(offline).not.toHaveBeenCalled();
+    expect(online).not.toHaveBeenCalled();
+    (app as any).pollNativeNetwork(); tick(0);
+    expect(offline).toHaveBeenCalledTimes(1);
+    expect(app.nodeService.internetRecoveryPending).toBe(true);
+    (app as any).pollNativeNetwork(); tick(0);
+    expect(offline).toHaveBeenCalledTimes(1);
+    (app as any).pollNativeNetwork(); tick(0);
+    expect(online).toHaveBeenCalledTimes(1);
+    expect(native).toHaveBeenCalledTimes(4);
+  }));
+
+  it('ignores absent native network status in browser/PWA', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    spyOn(TestBed.inject(DesktopService), 'isNetworkOnline').and.returnValue(Promise.resolve(null));
+    const offline = spyOn(app, 'onNetworkOffline');
+    const online = spyOn(app, 'onNetworkOnline');
+    (app as any).pollNativeNetwork();
+    tick(0);
+    expect(offline).not.toHaveBeenCalled();
+    expect(online).not.toHaveBeenCalled();
+  }));
+
+  it('stops native network monitoring when the component is destroyed', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    const check = spyOn(TestBed.inject(DesktopService), 'isNetworkOnline').and.returnValue(Promise.resolve(true));
+    (app as any).startNativeNetworkMonitor();
+    tick(3000);
+    expect(check).toHaveBeenCalledTimes(2);
+    app.ngOnDestroy();
+    tick(6000);
+    expect(check).toHaveBeenCalledTimes(2);
+  }));
 
   it('retains Rainstorm on cable loss and checks only Rainstorm on recovery', fakeAsync(() => {
     const app = TestBed.inject(AppComponent);
