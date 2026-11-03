@@ -182,7 +182,8 @@
           "Keywords": "Nano;XNO;Ledger;Wallet;",
           "Terminal": "false"
         }
-      }
+      },
+      "maintainer": "Twister32 <26852967+twister65@users.noreply.github.com>"
     },
     "protocols": {
       "name": "nano",
