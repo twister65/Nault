@@ -48,6 +48,7 @@ export class ApiService {
   // with its established attempt budget and cannot enter this method.
   private async probeHealthyBackup(
     candidates: string[],
+    requestAction: string,
     requestData: Record<string, unknown>,
     validateResponse: (res: any) => { err: string | null },
     expectedName: string,
@@ -56,7 +57,7 @@ export class ApiService {
   ): Promise<any> {
     let lastFailure: any = new Error('No responsive Nano RPC fallback');
     const sources = candidates.map(endpoint => this.http.post(endpoint,
-      { ...requestData, action: 'accounts_balances' }, { responseType: 'json' } as any).pipe(
+      { ...requestData, action: requestAction }, { responseType: 'json' } as any).pipe(
       timeout(10000),
       map(res => {
         if (res && typeof res.error === 'string') {
@@ -315,7 +316,7 @@ export class ApiService {
               // Sequential 3-second aborts were falsely rejecting every
               // candidate in the user's Electron Linux HAR.
               return await this.probeHealthyBackup(
-                endpoints.slice(1, this.maxHealthProbeEndpoints), data,
+                endpoints.slice(1, this.maxHealthProbeEndpoints), requestAction, data,
                 validateResponse, settings.serverName, firstUrl,
                 expectedNetworkGeneration
               );
@@ -339,21 +340,28 @@ export class ApiService {
     throw lastError || new Error('RPC request deadline exceeded.');
   }
 
-  // Even an unconfigured wallet must detect an unavailable RPC node. Probe
-  // the public Nano burn address, never a user's private or wallet account.
-  // This read is whitelisted by public RPC proxies; a valid balances response
-  // confirms that fallback really supports the wallet's basic RPC operation.
-  // Health probes alone use a 3-second timeout per candidate so an early WS
-  // failure need not await the normal 15-second wallet RPC read timeout.
-  // Signed publications and regular wallet requests retain their own budgets.
+  // A first-run wallet has no actual accounts to read. Its synthetic burn
+  // address accounts_balances checks consistently timed out on *all* public
+  // backups in the Windows HAR despite healthy block_count/version replies.
+  // For silent (unconfigured-wallet) checks, test light RPC availability with
+  // block_count instead. This checks endpoint liveness, NOT wallet capabilities:
+  // real configured-wallet reads still require validated accounts_balances.
+  // Neither check sends wallet data, credentials or signed transactions.
   checkNodeAvailability(silentOffline = false, allowFailover = true): Promise<void> {
     const endpoint = this.appSettings.settings.serverAPI;
     if (allowFailover && this.pendingHealthCheck?.endpoint === endpoint) return this.pendingHealthCheck.promise;
     const burnAccount = 'nano_1111111111111111111111111111111111111111111111111111hifc8npp';
-    const promise = this.request('accounts_balances', { accounts: [burnAccount] }, false, '', res => ({
-      err: res && res.balances && typeof res.balances === 'object' && !Array.isArray(res.balances)
-        ? null : 'Invalid accounts_balances response',
-    }), 3000, silentOffline, true, allowFailover).then(() => undefined);
+    const healthAction = silentOffline ? 'block_count' : 'accounts_balances';
+    const healthArgs = silentOffline ? { include_cemented: 'true' } : { accounts: [burnAccount] };
+    const validateHealth = (res: any): { err: string | null } => ({
+      err: silentOffline
+        ? (res && (typeof res.count === 'string' || typeof res.count === 'number') &&
+            /^\\d+$/.test(String(res.count)) ? null : 'Invalid block_count response')
+        : (res && res.balances && typeof res.balances === 'object' && !Array.isArray(res.balances)
+            ? null : 'Invalid accounts_balances response'),
+    });
+    const promise = this.request(healthAction, healthArgs, false, '', validateHealth,
+      3000, silentOffline, true, allowFailover).then(() => undefined);
     const pending = { endpoint, promise };
     if (allowFailover) this.pendingHealthCheck = pending;
     // Never create an unhandled rejection from a .finally() cleanup.

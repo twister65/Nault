@@ -476,7 +476,7 @@ describe('ApiService bounded secure requests', () => {
     // previously scheduled backup completed: generation still invalidates it.
     (node as any).internetInterruptionGeneration = 1;
     (node as any).internetRecoveryPending = false;
-    late.next({ balances: {} });
+    late.next({ count: '123456789' });
     late.complete();
     tick(0);
     expect(rejected).toBe(true);
@@ -484,6 +484,36 @@ describe('ApiService bounded secure requests', () => {
     expect(node.internetRecoveryPending).toBe(false); // Late reply must not mark a fresh outage.
     expect(node.setOffline).not.toHaveBeenCalled();
   }));
+
+  it('uses lightweight RPC metadata for a walletless DNS failover on Windows', async () => {
+    const { api, http, settings } = setup('spynano');
+    // Regression from Windows HAR: accounts_balances timed out on Rainstorm,
+    // NanOslo, SomeNano and Twister32, but Rainstorm block_count returned 200.
+    http.post.and.returnValues(throwError({ status: 0 }), of({ count: '225964139' }), NEVER, NEVER);
+    await api.checkNodeAvailability(true);
+    expect(http.post).toHaveBeenCalledTimes(4);
+    for (const [, payload] of http.post.calls.allArgs()) {
+      expect(payload).toEqual({ action: 'block_count', include_cemented: 'true' });
+    }
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith(
+      'spynano', 'https://a.invalid/rpc', 'https://b.invalid/rpc'
+    );
+  });
+
+  it('keeps a working selected RPC even when its WebSocket is unavailable', async () => {
+    const { api, http, settings } = setup('spynano');
+    http.post.and.returnValue(of({ count: '225964139' }));
+    await api.checkNodeAvailability(true);
+    expect(http.post).toHaveBeenCalledTimes(1);
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed block_count without choosing a new node', async () => {
+    const { api, http, settings } = setup('spynano');
+    http.post.and.returnValue(of({ count: 'not-a-number' }));
+    await expectAsync(api.checkNodeAvailability(true)).toBeRejected();
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+  });
 
   it('limits authentication to the configured custom RPC, not an explicit PoW server', async () => {
     const { api, http } = setup('custom');
@@ -538,7 +568,7 @@ describe('ApiService bounded secure requests', () => {
     const { api, http, settings, randomIndex } = setup('spynano');
     randomIndex.and.callFake((lastIndex: number) => lastIndex);
     http.post.and.returnValues(
-      throwError({ status: 0 }), throwError({ status: 502 }), throwError({ status: 503 }), of({ balances: {} })
+      throwError({ status: 0 }), throwError({ status: 502 }), throwError({ status: 503 }), of({ count: '225964139' })
     );
     await api.checkNodeAvailability(true);
     expect(http.post.calls.allArgs().map(args => args[0])).toEqual([
@@ -557,7 +587,7 @@ describe('ApiService bounded secure requests', () => {
 
   it('ignores a healthy fallback result if the active node changed during the request', async () => {
     const { api, http, settings } = setup('spynano');
-    http.post.and.returnValues(throwError({ status: 0 }), of({ balances: {} }), NEVER, NEVER);
+    http.post.and.returnValues(throwError({ status: 0 }), of({ count: '225964139' }), NEVER, NEVER);
     settings.activateFailover.and.returnValue(false);
     await expectAsync(api.checkNodeAvailability(true)).toBeRejected();
     expect(settings.activateFailover).toHaveBeenCalledTimes(1);
