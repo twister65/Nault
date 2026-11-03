@@ -24,6 +24,7 @@ import {ManageRepresentativesComponent} from './components/manage-representative
 import { MultisigComponent } from './components/multisig/multisig.component';
 import { KeygeneratorComponent } from './components/keygenerator/keygenerator.component';
 import { AboutNaultComponent } from './components/about-nault/about-nault.component';
+import { walletConfiguredGuard } from './guards/wallet-configured.guard';
 
 const routes: Routes = [
   { path: '', component: WelcomeComponent },
@@ -37,8 +38,8 @@ const routes: Routes = [
   { path: 'import-wallet', component: ImportWalletComponent },
   { path: 'manage-wallet', component: ManageWalletComponent },
   { path: 'qr-scan', component: QrScanComponent },
-  { path: 'send', component: SendComponent },
-  { path: 'receive', component: ReceiveComponent },
+  { path: 'send', component: SendComponent, canActivate: [walletConfiguredGuard] },
+  { path: 'receive', component: ReceiveComponent, canActivate: [walletConfiguredGuard] },
   { path: 'representatives', component: RepresentativesComponent },
   { path: 'manage-representatives', component: ManageRepresentativesComponent },
   { path: 'transaction/:transaction', component: TransactionDetailsComponent },

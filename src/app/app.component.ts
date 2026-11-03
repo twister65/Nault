@@ -125,7 +125,12 @@ export class AppComponent implements OnInit {
     this.addressBook.loadAddressBook();
     this.workPool.loadWorkCache();
 
-    await this.walletService.loadStoredWallet();
+    try {
+      await this.walletService.loadStoredWallet();
+    } finally {
+      // Release guarded routes only after the persisted wallet has been read.
+      this.walletService.walletLoaded$.next(true);
+    }
     // Subscribe to any transaction tracking
     for (const entry of this.addressBook.addressBook) {
       if (entry.trackTransactions) {

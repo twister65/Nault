@@ -584,6 +584,15 @@
 				color: @global-primary-background;
 			}
 
+			&.wallet-action-disabled,
+			&.wallet-action-disabled:hover,
+			&.wallet-action-disabled:focus {
+				color: #9395A0;
+				border-left-color: transparent;
+				cursor: default;
+				pointer-events: none;
+			}
+
 			> .uk-grid-stack {
 				flex: 1;
 			}
@@ -900,6 +909,13 @@
           color: #2367AD;
           background: #DDEBFD;
           font-weight: 600;
+        }
+        &.wallet-action-disabled,
+        &.wallet-action-disabled:hover,
+        &.wallet-action-disabled:focus {
+          color: #7D8899;
+          background: transparent;
+          border-left-color: transparent;
         }
         &:focus-visible {
           outline: 2px solid #2367AD;
