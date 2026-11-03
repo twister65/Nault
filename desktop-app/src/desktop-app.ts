@@ -159,7 +159,11 @@ class AppUpdater {
     autoUpdater.on('update-downloaded', () => {
       isDownloading = false;
       showUpdateErrors = false;
-      autoUpdater.quitAndInstall(true, true);
+      // Native Linux package installations require explicit OS authentication.
+      // Do not request a silent installation for deb, rpm or pacman.
+      // AppImage updates keep their existing user-space install behavior.
+      const isNativeLinuxPackage = process.platform === 'linux' && !process.env.APPIMAGE;
+      autoUpdater.quitAndInstall(!isNativeLinuxPackage, true);
     });
 
     autoUpdater.on('download-progress', progressObj => {
