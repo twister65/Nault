@@ -301,7 +301,12 @@ export class AppComponent implements OnInit, OnDestroy {
     // Start WS first rather than serializing it behind RPC balance checks.
     // Account subscriptions are added during wallet restore and kept on reconnect.
     this.websocket.connect();
-    await this.walletService.loadStoredWallet();
+    try {
+      await this.walletService.loadStoredWallet();
+    } finally {
+      // Release guarded routes only after the persisted wallet has been read.
+      this.walletService.walletLoaded$.next(true);
+    }
     // Subscribe to any transaction tracking
     for (const entry of this.addressBook.addressBook) {
       if (entry.trackTransactions) {
