@@ -56,19 +56,30 @@ test('Spanish system locale has native labels and update messages', () => {
   assert.equal(es.update, 'Actualizar');
 });
 
-test('English and unknown system locales keep a complete English fallback', () => {
+test('German OS locale localizes the native menu, updater and Bluetooth prompts', () => {
+  const de = desktopLabels('de-DE');
+  assert.equal(de.help, 'Hilfe');
+  assert.equal(de.checkUpdates, 'Nach Updates suchen');
+  assert.equal(de.update, 'Aktualisieren');
+  assert.equal(de.reload, 'Neu laden');
+  assert.equal(de.cancel, 'Abbrechen');
+  assert.equal(de.pairLedger, 'Ledger koppeln');
+});
+
+test('English and unsupported system locales keep a complete English fallback', () => {
   const en = desktopLabels('en-US');
   assert.equal(en.checkUpdates, 'Check for Updates');
   assert.equal(en.help, 'Help');
-  assert.equal(desktopLabels('de-DE').checkUpdates, en.checkUpdates);
+  assert.equal(desktopLabels('it-IT').checkUpdates, en.checkUpdates);
   assert.equal(desktopLabels('').updateFailed, en.updateFailed);
   const fields = Object.keys(en).sort();
   assert.deepEqual(Object.keys(desktopLabels('fr')).sort(), fields);
   assert.deepEqual(Object.keys(desktopLabels('es')).sort(), fields);
+  assert.deepEqual(Object.keys(desktopLabels('de')).sort(), fields);
 });
 
 
-test('all Electron role commands have explicit EN/FR/ES labels while keeping their native roles', () => {
+test('all Electron role commands have explicit EN/FR/ES/DE labels while keeping their native roles', () => {
   const electronSource = fs.readFileSync(
     path.join(__dirname, '../desktop-app/src/desktop-app.ts'), 'utf8'
   );
@@ -76,7 +87,7 @@ test('all Electron role commands have explicit EN/FR/ES labels while keeping the
     .split('function loadExternal(')[0];
   const roleEntries = [...menuSource.matchAll(/\{role: '([a-z]+)'(?:, label: t\.([a-zA-Z]+))?\}/g)];
   assert.ok(roleEntries.length >= 28, 'all native menu commands should be covered');
-  const locales = ['en-US', 'fr-FR', 'es-ES'].map(locale => desktopLabels(locale));
+  const locales = ['en-US', 'fr-FR', 'es-ES', 'de-DE'].map(locale => desktopLabels(locale));
   for (const [, role, key] of roleEntries) {
     assert.ok(key, 'Electron role ' + role + ' is missing its explicit translated label');
     for (const labels of locales) {
@@ -93,6 +104,7 @@ test('all Electron role commands have explicit EN/FR/ES labels while keeping the
   assert.equal(fr.minimize, 'Réduire');
   assert.equal(fr.close, 'Fermer');
   assert.equal(desktopLabels('es-ES').reload, 'Recargar');
+  assert.equal(desktopLabels('de-DE').reload, 'Neu laden');
   assert.equal(desktopLabels('en-US').reload, 'Reload');
   // The native roles retain their accelerator/shortcut behavior.
   assert.match(menuSource, /\{role: 'reload', label: t\.reload\}/);
