@@ -63,21 +63,49 @@ jobs:
         run: node scripts/verify-linux-update-feed.cjs
       - name: Verify asset filename order and updater manifest
         run: node scripts/verify-release-asset-order.cjs
-      - name: Upload packages
+      - name: Upload Windows and macOS packages
+        if: runner.os != 'Linux'
         uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.os }}
           if-no-files-found: error
           path: |
-            desktop-app/build/*.AppImage
-            desktop-app/build/*.deb
-            desktop-app/build/*.rpm
-            desktop-app/build/*.pkg.tar.zst
             desktop-app/build/*.dmg
             desktop-app/build/*.zip
             desktop-app/build/*.exe
             desktop-app/build/*.yml
             desktop-app/build/*.blockmap
+      - name: Upload Linux AppImage and updater metadata
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-linux-appimage
+          if-no-files-found: error
+          path: |
+            desktop-app/build/*.AppImage
+            desktop-app/build/latest-linux.yml
+            desktop-app/build/*.blockmap
+      - name: Upload Linux DEB (Debian, Ubuntu, Mint)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-linux-deb
+          if-no-files-found: error
+          path: desktop-app/build/*.deb
+      - name: Upload Linux RPM (Fedora, openSUSE)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-linux-rpm
+          if-no-files-found: error
+          path: desktop-app/build/*.rpm
+      - name: Upload Linux Pacman (Arch, Manjaro)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-linux-pacman
+          if-no-files-found: error
+          path: desktop-app/build/*.pkg.tar.zst
   linux-install-smoke:
     name: Install / remove native package (${{ matrix.distro }})
     needs: release
@@ -89,21 +117,26 @@ jobs:
         include:
           - distro: ubuntu
             image: ubuntu:26.04
+            artifact: desktop-linux-deb
           - distro: debian
             image: debian:13
+            artifact: desktop-linux-deb
           - distro: fedora
             image: fedora:44
+            artifact: desktop-linux-rpm
           - distro: opensuse
             image: opensuse/leap:16.0
+            artifact: desktop-linux-rpm
           - distro: arch
             image: archlinux/archlinux:base
+            artifact: desktop-linux-pacman
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/download-artifact@v8
         with:
-          name: desktop-ubuntu-24.04
+          name: ${{ matrix.artifact }}
           path: packages
       - name: Install / inspect / remove package in isolated container
         shell: bash
