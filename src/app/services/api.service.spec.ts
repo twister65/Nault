@@ -447,6 +447,23 @@ describe('ApiService bounded secure requests', () => {
     expect((node as any).internetRecoveryPending).toBe(true);
   });
 
+  it('reports an RPC timeout as an RPC timeout after link recovery, never as a new Internet outage', fakeAsync(() => {
+    const { api, http, node, settings } = setup('rainstorm');
+    node.internetRecoveryPending = true;
+    node.internetInterruptionGeneration = 1;
+    http.post.and.returnValue(NEVER);
+    let error: any = null;
+    const interrupted = spyOn(node, 'markInternetInterrupted').and.callThrough();
+    api.checkNodeAvailability(true, false).catch(reason => { error = reason; });
+    tick(3000);
+    expect(error?.name).toBe('TimeoutError');
+    expect(node.internetRecoveryPending).toBe(true);
+    expect(node.internetInterruptionGeneration).toBe(1);
+    expect(interrupted).not.toHaveBeenCalled();
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+    expect(http.post).toHaveBeenCalledTimes(1);
+  }));
+
   it('does not activate delayed fallback after a cable-offline event', fakeAsync(() => {
     const { api, http, settings, node } = setup('spynano');
     const late = new Subject<any>();

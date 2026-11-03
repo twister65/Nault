@@ -52,6 +52,9 @@ export class AppComponent implements OnInit, OnDestroy {
       this.websocket.connectionFailure$.subscribe(wsUrl => {
         void this.probeRpcAfterWebsocketFailure(wsUrl);
       });
+      this.websocket.connected$.subscribe(() => {
+        void this.confirmInternetRestoredBySelectedWebsocket();
+      });
     }
 
   @ViewChild('selectButton') selectButton!: ElementRef<HTMLElement>;
@@ -86,6 +89,30 @@ export class AppComponent implements OnInit, OnDestroy {
   private nativeNetworkCheckInFlight = false;
   private lastNativeNetworkOnline: boolean | null = null;
   private readonly nativeNetworkPollMs = 3000;
+
+  // A fresh WebSocket handshake with the selected server after a link outage
+  // proves that local Internet connectivity has returned. It does NOT prove
+  // that the wallet RPC (accounts_balances) is healthy. Keep those states
+  // separate: never leave the no-failover guard latched because a synthetic
+  // RPC request times out while the WS responds to pings.
+  private async confirmInternetRestoredBySelectedWebsocket(): Promise<void> {
+    if (!this.nodeService.internetRecoveryPending || !this.settings.settings.serverWS) return;
+    const wsUrl = this.settings.settings.serverWS;
+    const generation = this.nodeService.internetInterruptionGeneration;
+    if ((await this.desktop.isNetworkOnline()) === false) return;
+    if (!this.nodeService.internetRecoveryPending ||
+        generation !== this.nodeService.internetInterruptionGeneration ||
+        wsUrl !== this.settings.settings.serverWS ||
+        !this.websocket.socket.connected) return;
+    this.nodeService.internetRecoveryPending = false;
+    console.info('[Nano network] Selected WebSocket reconnected; Internet restored (RPC not yet verified).');
+    if (!this.walletService.isConfigured()) {
+      // A new user has no balances to validate; do not keep firing the
+      // artificial burn-address accounts_balances request after a healthy WS.
+      this.nodeService.setLoading();
+      this.cancelNetworkRecovery();
+    }
+  }
 
   private async pollNativeNetwork(): Promise<void> {
     if (this.nativeNetworkCheckInFlight) return;
@@ -196,7 +223,15 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   @HostListener('window:online') onNetworkOnline(): void {
-    console.info('[Nano network] Connectivity restored; retrying the selected server.');
+    // Browser and Electron may both announce the same transition. Do not
+    // queue duplicate recovery attempts or misleading transition messages.
+    if (this.networkRecoveryInProgress || this.networkRecoveryTimer !== null) return;
+    if (this.nodeService.internetRecoveryPending) {
+      console.info('[Nano network] Link available; reconnecting the selected server.');
+      if (this.websocket.socket.connected) {
+        void this.confirmInternetRestoredBySelectedWebsocket();
+      }
+    }
     this.networkRecoveryAttempts = 0;
     this.scheduleNetworkRecovery(0);
   }
@@ -555,16 +590,19 @@ export class AppComponent implements OnInit, OnDestroy {
     this.networkRecoveryInProgress = true;
     const endpoint = this.settings.settings.serverAPI;
     try {
-      // A healthy WS plus no wallet is not an RPC outage. In particular,
-      // Android visibility/online events must not start gratuitous probes.
-      if (!this.walletService.isConfigured() && this.settings.settings.serverWS &&
-          this.websocket.socket.connected && !this.nodeService.internetRecoveryPending) {
-        // A merely open WS is enough to avoid gratuitous checks on a normal
-        // visibility event, but not after a real cable-disconnect event.
-        // Following a disconnection, verify the original RPC before releasing
-        // the failover guard.
-        this.nodeService.internetRecoveryPending = false;
-        this.networkRecoveryAttempts = 0;
+      // If the native link is definitely offline, defer recovery until its
+      // next positive transition. No other public node can help yet.
+      if ((await this.desktop.isNetworkOnline()) === false) return;
+      if (!this.walletService.isConfigured() && this.settings.settings.serverWS) {
+        if (this.websocket.socket.connected) {
+          await this.confirmInternetRestoredBySelectedWebsocket();
+          if (!this.nodeService.internetRecoveryPending) return;
+        }
+        // On an empty wallet, reconnect the original WS first. Do not
+        // repeatedly probe an artificial account when the RPC proxy is slow
+        // or refuses that request. WebSocket.connected$ clears the link guard.
+        console.info('[Nano network] Reconnecting selected WebSocket; keeping RPC health separate.');
+        this.websocket.forceReconnect();
         return;
       }
       // Prefer normal wallet reads: not every public RPC allows node statistics.

@@ -99,7 +99,12 @@ export class ApiService {
       // A backup from before the outage is stale even after original recovery.
       throw { isStaleFailover: true };
     }
-    if (this.node.internetRecoveryPending || await this.internetDisconnected()) {
+    if (this.node.internetRecoveryPending) {
+      // Failover stays blocked until the link recovery completes. This is not
+      // proof that the Internet is still disconnected.
+      throw { isStaleFailover: true };
+    }
+    if (await this.internetDisconnected()) {
       this.markInternetDisconnected();
       throw { status: 0, isInternetDisconnected: true };
     }
@@ -235,7 +240,10 @@ export class ApiService {
             if (this.node.internetInterruptionGeneration !== expectedNetworkGeneration) {
               throw { isStaleFailover: true };
             }
-            if (this.node.internetRecoveryPending || await this.internetDisconnected()) {
+            if (this.node.internetRecoveryPending) {
+              throw { isStaleFailover: true };
+            }
+            if (await this.internetDisconnected()) {
               this.markInternetDisconnected();
               throw { status: 0, isInternetDisconnected: true };
             }
@@ -285,11 +293,19 @@ export class ApiService {
           }
           // An Ethernet outage is not an RPC-node outage. Hold the current
           // server throughout this offline/online transition.
-          if (endpoint === apiUrl &&
-              (this.node.internetRecoveryPending || await this.internetDisconnected())) {
+          if (endpoint === apiUrl && await this.internetDisconnected()) {
             this.markInternetDisconnected();
             this.node.setOffline(silentOffline ? null : undefined);
             throw { status: 0, isInternetDisconnected: true };
+          }
+          if (endpoint === apiUrl && this.node.internetRecoveryPending) {
+            // Physical network has returned, but the selected RPC has not
+            // answered. Report the RPC error instead of asserting that the
+            // cable is still disconnected; recovery keeps the same endpoint.
+            if (healthProbe) console.info(
+              '[Nano RPC health] Selected RPC still unresponsive after link restoration:', endpoint);
+            this.node.setOffline(silentOffline ? null : undefined);
+            throw error;
           }
           if (healthProbe && endpoint === apiUrl && endpoints.length > 1 &&
               typeof validateResponse === 'function') {

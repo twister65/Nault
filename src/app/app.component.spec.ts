@@ -112,21 +112,40 @@ describe('AppComponent', () => {
     expect(check).toHaveBeenCalledTimes(2);
   }));
 
-  it('retains Rainstorm on cable loss and checks only Rainstorm on recovery', fakeAsync(() => {
+  it('retains Rainstorm on cable loss and restores its WebSocket without a synthetic RPC probe', fakeAsync(() => {
     const app = TestBed.inject(AppComponent);
     app.settings.settings.serverName = 'rainstorm';
     app.settings.settings.serverAPI = 'https://rainstorm.city/api';
     app.settings.settings.serverWS = 'wss://rainstorm.city/websocket';
     const probe = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.returnValue(Promise.resolve());
+    const ws = TestBed.inject(WebsocketService);
+    const reconnect = spyOn(ws, 'forceReconnect').and.stub();
     app.onNetworkOffline();
     expect(app.nodeService.internetRecoveryPending).toBe(true);
-    TestBed.inject(WebsocketService).connectionFailure$.next('wss://rainstorm.city/websocket');
+    ws.connectionFailure$.next('wss://rainstorm.city/websocket');
     expect(probe).not.toHaveBeenCalled();
     app.onNetworkOnline();
     tick(0);
-    expect(probe).toHaveBeenCalledOnceWith(true, false);
+    expect(reconnect).toHaveBeenCalledTimes(1);
+    expect(probe).not.toHaveBeenCalled();
+    ws.socket.connected = true;
+    ws.connected$.next();
+    tick(0);
     expect(app.settings.settings.serverName).toBe('rainstorm');
     expect(app.nodeService.internetRecoveryPending).toBe(false);
+    expect(probe).not.toHaveBeenCalled();
+  }));
+
+  it('does not clear Internet outage state when native network is still offline', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverWS = 'wss://rainstorm.city/websocket';
+    spyOn(TestBed.inject(DesktopService), 'isNetworkOnline').and.returnValue(Promise.resolve(false));
+    app.onNetworkOffline();
+    const ws = TestBed.inject(WebsocketService);
+    ws.socket.connected = true;
+    ws.connected$.next();
+    tick(0);
+    expect(app.nodeService.internetRecoveryPending).toBe(true);
   }));
 
   it('does not show the persistent node error during first-run network loss', () => {
@@ -181,10 +200,10 @@ describe('AppComponent', () => {
     expect(app.inactiveSeconds).toBe(0);
   });
 
-  it('checks wallet RPC and clears the offline alert after Wi-Fi returns', fakeAsync(() => {
+  it('checks an RPC-only server and clears the offline alert after Wi-Fi returns', fakeAsync(() => {
     const app = TestBed.inject(AppComponent);
     app.settings.settings.serverAPI = 'https://example.test/proxy';
-    app.settings.settings.serverWS = 'wss://example.test/ws';
+    app.settings.settings.serverWS = null;
     const rpc = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.callFake(async () => {
       app.nodeService.setOnline(); // ApiService does this when a real RPC succeeds.
       return;
@@ -201,9 +220,10 @@ describe('AppComponent', () => {
     expect(ws).toHaveBeenCalledTimes(1);
   }));
 
-  it('keeps the offline alert on an RPC failure and retries after a delay', fakeAsync(() => {
+  it('keeps the offline alert on an RPC-only failure and retries after a delay', fakeAsync(() => {
     const app = TestBed.inject(AppComponent);
     app.settings.settings.serverAPI = 'https://example.test/proxy';
+    app.settings.settings.serverWS = null;
     let calls = 0;
     const rpc = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.callFake(async () => {
       calls++;
