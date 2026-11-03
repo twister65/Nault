@@ -58,6 +58,8 @@ jobs:
       - name: Verify Linux update feed and SHA-512 for every package
         if: runner.os == 'Linux'
         run: node scripts/verify-linux-update-feed.cjs
+      - name: Verify asset filename order and updater manifest
+        run: node scripts/verify-release-asset-order.cjs
       - name: Upload packages
         uses: actions/upload-artifact@v7
         with:

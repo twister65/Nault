@@ -93,3 +93,21 @@ test('native distro packages declare cross-distribution Electron runtime depende
   assert.doesNotMatch(script, /\bfind \/packages\b/);
   assert.match(script, /ldd "\$launcher"/);
 });
+
+test('GitHub Release downloads sort Windows, macOS, Linux and preserve update channels', () => {
+  const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+  assert.equal(p.build.nsis.artifactName, '01-Windows-Nault-Setup-${version}.${ext}');
+  assert.equal(p.build.mac.artifactName, '02-macOS-Nault-${version}.${ext}');
+  assert.equal(p.build.linux.artifactName, '03-Linux-Nault-${version}-${arch}.${ext}');
+  assert.equal(p.build.pacman.artifactName, '03-Linux-Nault-${version}-${arch}.pkg.tar.zst');
+  assert.ok(p.build.nsis.artifactName < p.build.mac.artifactName);
+  assert.ok(p.build.mac.artifactName < p.build.linux.artifactName);
+  const w = fs.readFileSync('.github/workflows/electron_hash.yml', 'utf8');
+  assert.match(w, /node scripts\/verify-release-asset-order\.cjs/);
+  const s = fs.readFileSync('scripts/verify-release-asset-order.cjs', 'utf8');
+  for (const manifest of ['latest.yml', 'latest-mac.yml', 'latest-linux.yml'])
+    assert.ok(s.includes("'" + manifest + "'"), 'missing updater feed ' + manifest);
+  for (const prefix of ['01-Windows-', '02-macOS-', '03-Linux-'])
+    assert.ok(s.includes("'" + prefix + "'"));
+  assert.match(s, /createHash\('sha512'\)/);
+});

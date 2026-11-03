@@ -1,5 +1,7 @@
 # Nault Linux desktop packages
 
+GitHub sorts downloadable assets by filename, so installer artifacts use **01-Windows-**, **02-macOS-** and **03-Linux-** prefixes. Linux's four formats share the last prefix. Updater metadata filenames remain exactly `latest.yml`, `latest-mac.yml` and `latest-linux.yml`; CI verifies that their contents reference the renamed installers and matching SHA-512 and byte sizes. Existing installed releases can still discover updates through unchanged channel names.
+
 The tag-triggered **Electron App Release** workflow builds four Linux x64 formats from the same immutable release tag, alongside the existing Windows NSIS installer and macOS Intel DMG. A release is not published until artifacts for all platforms exist and SHA256 verification succeeds. This does not deploy the PWA.
 
 | Linux distribution | Artifact | Application menu |
@@ -18,10 +20,10 @@ Each release also installs the **real built native package** in separate disposa
 Download the release artifact for your distribution, verify its SHA256 against `SHA256SUMS`, then from the download directory run one of:
 
 ```bash
-sudo apt install ./nault*.deb          # Debian / Ubuntu / Mint
-sudo dnf install ./nault*.rpm          # Fedora
-sudo zypper install ./nault*.rpm       # openSUSE
-sudo pacman -U ./nault*.pkg.tar.zst    # Arch / Manjaro (beta)
+sudo apt install ./03-Linux-*.deb          # Debian / Ubuntu / Mint
+sudo dnf install ./03-Linux-*.rpm          # Fedora
+sudo zypper install ./03-Linux-*.rpm       # openSUSE
+sudo pacman -U ./03-Linux-*.pkg.tar.zst    # Arch / Manjaro (beta)
 ```
 
 Use the exact filename if the wildcard does not match one artifact. Installation and removal are handled by the distribution's normal package manager. The packaged launcher should appear as **Nault** in GNOME, KDE, Cinnamon and XFCE menus. For AppImage, execute the downloaded file directly (after making it executable); menu integration is a separate user step using AppImageLauncher or a manually installed launcher. It is **not automatic** just because a desktop file exists inside the AppImage.

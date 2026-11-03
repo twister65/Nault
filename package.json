@@ -145,7 +145,7 @@
       "app": "./"
     },
     "nsis": {
-      "artifactName": "Nault-Setup-${version}.${ext}"
+      "artifactName": "01-Windows-Nault-Setup-${version}.${ext}"
     },
     "mac": {
       "target": "dmg",
@@ -159,7 +159,8 @@
             ]
           }
         ]
-      }
+      },
+      "artifactName": "02-macOS-Nault-${version}.${ext}"
     },
     "linux": {
       "target": [
@@ -183,7 +184,8 @@
           "Terminal": "false"
         }
       },
-      "maintainer": "Twister32 <26852967+twister65@users.noreply.github.com>"
+      "maintainer": "Twister32 <26852967+twister65@users.noreply.github.com>",
+      "artifactName": "03-Linux-Nault-${version}-${arch}.${ext}"
     },
     "protocols": {
       "name": "nano",
@@ -199,7 +201,7 @@
     },
     "pacman": {
       "compression": "zstd",
-      "artifactName": "nault-${version}-${arch}.pkg.tar.zst",
+      "artifactName": "03-Linux-Nault-${version}-${arch}.pkg.tar.zst",
       "depends": [
         "gtk3",
         "libnotify",
