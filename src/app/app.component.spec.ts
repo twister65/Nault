@@ -220,7 +220,7 @@ describe('AppComponent', () => {
 
     expect(rpc).toHaveBeenCalledTimes(1);
     expect(app.nodeService.node.status).toBe(true);
-    expect(ws).toHaveBeenCalledTimes(1);
+    expect(ws).not.toHaveBeenCalled(); // No WebSocket is configured for RPC-only nodes.
   }));
 
   it('keeps the offline alert on an RPC-only failure and retries after a delay', fakeAsync(() => {
