@@ -196,6 +196,20 @@
         "nanoprocess"
       ],
       "role": "Viewer"
+    },
+    "pacman": {
+      "compression": "zstd",
+      "artifactName": "nault-${version}-${arch}.pkg.tar.zst",
+      "depends": [
+        "gtk3",
+        "libnotify",
+        "nss",
+        "libxss",
+        "libxtst",
+        "xdg-utils",
+        "at-spi2-core",
+        "libsecret"
+      ]
     }
   },
   "overrides": {
