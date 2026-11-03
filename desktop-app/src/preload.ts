@@ -24,6 +24,13 @@ contextBridge.exposeInMainWorld('naultDesktop', {
     ipcRenderer.send(channel, ...args);
     return true;
   },
+  // OS locale is read-only and used solely for the renderer's initial language.
+  getSystemLocale(): Promise<string> {
+    return ipcRenderer.invoke('app-system-locale');
+  },
+  isNetworkOnline(): Promise<boolean> {
+    return ipcRenderer.invoke('app-network-online');
+  },
   // A single privileged, allowlisted action. No generic invoke is exposed.
   releaseLedgerUsb(): Promise<boolean> {
     return ipcRenderer.invoke('ledger-release-usb');

@@ -865,6 +865,7 @@
     "ledger-user-rejected": "Transaction refusée sur la Ledger (0x6985).",
     "ledger-signing-busy": "La Ledger est occupée. Patientez un instant puis relancez manuellement la signature.",
     "ledger-signing-failed": "Échec de la signature sur la Ledger. Vérifiez la connexion, puis réessayez.",
+    "node-failover": "Le nœud RPC Nano {{previous}} est indisponible. Bascule automatique vers {{next}}.",
     "node-offline": "Impossible de se connecter au nœud Nano. Les soldes affichés peuvent être inexacts !",
     "ledger-pending-reconnect": "Des XNO sont en attente de réception. Déverrouillez votre Ledger, ouvrez l’application Nano, puis cliquez sur « Reconnecter » pour les recevoir.",
     "tracked-receivable": "L’adresse suivie {{account}} peut maintenant recevoir {{amount}} XNO.",
@@ -873,6 +874,7 @@
     "tracked-representative": "L’adresse suivie {{account}} a changé de représentant : {{representative}}.",
     "apply-update": "Appliquer maintenant",
     "update-signing-active": "Terminez la confirmation sur la Ledger avant d’appliquer la mise à jour.",
-    "update-activation-failed": "Impossible d’activer la mise à jour. Redémarrez Nault pour réessayer."
+    "update-activation-failed": "Impossible d’activer la mise à jour. Redémarrez Nault pour réessayer.",
+    "server-unavailable": "Le serveur sélectionné ne répond pas. Essayez un autre nœud Nano."
   }
 }
