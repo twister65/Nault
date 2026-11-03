@@ -536,14 +536,21 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
     this.node.setLoading(); // The next RPC read or probe determines the real node status.
 
-    // Restore notifications immediately, independently of slow/offline RPC reads.
+    // Restore notifications and refresh node statistics immediately.
+    // Previously, an empty-wallet synthetic accounts_balances probe could
+    // stall for 13 seconds before *any* node statistics were displayed, even
+    // though block_count/version on the selected RPC were responding.
     this.websocket.forceReconnect();
+    this.statsRefreshEnabled = true;
+    void this.updateNodeStats();
     try {
       if (this.walletService.wallet?.accounts?.length) {
         await this.walletService.reloadBalances();
-      } else if (this.appSettings.settings.serverAPI) {
-        // No wallet = no balance request. Probe the public burn address so an
-        // unavailable node still triggers automatic failover after Save.
+      } else if (this.appSettings.settings.serverAPI && !this.appSettings.settings.serverWS) {
+        // For RPC-only nodes, check availability without a configured wallet.
+        // With WS configured, wait for an actual WS failure before probing:
+        // the user's selected node may already be answering node stats, and
+        // a synthetic burn-account query is not a reliable failure signal.
         await this.api.checkNodeAvailability(!this.walletService.isConfigured());
       }
     } catch (_) {
@@ -562,8 +569,6 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     this.serverAPI = this.serverAPIUpdated;
     this.serverWS = this.appSettings.settings.serverWS;
     this.serverAuth = this.appSettings.settings.serverAuth;
-    this.statsRefreshEnabled = true;
-    this.updateNodeStats();
   }
 
   searchRepresentatives() {
