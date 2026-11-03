@@ -27,6 +27,7 @@ describe('ConfigureAppComponent', () => {
   });
 
   it('refreshes missing node statistics when WebSocket reconnects after offline startup', fakeAsync(() => {
+    (component as any).appSettings.settings.serverAPI = 'https://rainstorm.city/api';
     spyOn(component, 'loadFromSettings').and.stub();
     const stats = spyOn(component, 'updateNodeStats').and.returnValue(Promise.resolve());
     spyOn(component, 'populateRepresentativeList').and.returnValue(Promise.resolve());
