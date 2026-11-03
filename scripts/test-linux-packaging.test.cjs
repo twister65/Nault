@@ -67,17 +67,26 @@ test('release CI installs real packages in five isolated Linux distributions', (
   assert.match(script, /test ! -e "\$launcher"/);
 });
 
-test('native distro packages declare all Electron runtime libraries', () => {
+test('native distro packages declare cross-distribution Electron runtime dependencies', () => {
   const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-  for (const dep of ['default', 'libgbm1', 'libasound2']) {
-    assert.ok(pkg.build.deb.depends.includes(dep), 'DEB missing ' + dep);
-  }
-  for (const dep of ['default', 'libgbm.so.1()(64bit)', 'libasound.so.2()(64bit)']) {
-    assert.ok(pkg.build.rpm.depends.includes(dep), 'RPM missing ' + dep);
-  }
+  for (const dep of [
+    'libgtk-3-0', 'libnotify4', 'libnss3', 'libxss1', 'libxtst6',
+    'xdg-utils', 'libatspi2.0-0', 'libuuid1', 'libsecret-1-0', 'libgbm1', 'libasound2'
+  ]) assert.ok(pkg.build.deb.depends.includes(dep), 'DEB missing ' + dep);
+  for (const dep of [
+    'libgtk-3.so.0()(64bit)', 'libnotify.so.4()(64bit)',
+    'libnss3.so()(64bit)', 'libXss.so.1()(64bit)',
+    'libXtst.so.6()(64bit)', 'xdg-utils',
+    'libatspi.so.0()(64bit)', 'libuuid.so.1()(64bit)',
+    'libsecret-1.so.0()(64bit)',
+    'libgbm.so.1()(64bit)', 'libasound.so.2()(64bit)'
+  ]) assert.ok(pkg.build.rpm.depends.includes(dep), 'RPM missing ' + dep);
   for (const dep of ['alsa-lib', 'mesa']) {
     assert.ok(pkg.build.pacman.depends.includes(dep), 'Pacman missing ' + dep);
   }
+  // electron-builder 26 does NOT expand 'default' in target dependencies.
+  assert.ok(!pkg.build.deb.depends.includes('default'));
+  assert.ok(!pkg.build.rpm.depends.includes('default'));
   const script = fs.readFileSync('scripts/test-linux-install-container.sh', 'utf8');
   assert.match(script, /shopt -s nullglob/);
   assert.match(script, /matches=\(\/packages\/\*\.rpm\)/);
