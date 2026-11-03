@@ -28,7 +28,136 @@
     "you-have-marked-this-representative-as-trusted": "Sie haben diesen Repräsentanten als vertrauenswürdig markiert. Sein Status bleibt daher auch bei schwerwiegenden Problemen mit Verfügbarkeit oder Stimmgewicht „Gut“."
   },
   "configure-app": {
-    "language": "Sprache"
+    "advanced-options": "Erweiterte Optionen",
+    "allow-external-requests": "Externe Anfragen erlauben",
+    "api-server": "API-Server",
+    "app-display-settings-successfully-updated": "Anzeigeeinstellungen erfolgreich aktualisiert!",
+    "app-wallet-settings-successfully-updated": "Wallet-Einstellungen erfolgreich aktualisiert!",
+    "are-you-sure": "Sind Sie sicher?",
+    "authorization": "Autorisierung",
+    "change-if-your-wallet-should-be-locked-automatically-after": "Legen Sie fest, ob das Wallet nach einer Zeit ohne Aktivität automatisch gesperrt werden soll.",
+    "change-the-currency-pair-used-when-showing-fiat-values": "Ändern Sie das Währungspaar zur Anzeige von Fiat-Werten. Wählen Sie „Keine“, um Fiat-Werte auszublenden.",
+    "change-where-your-wallet-is-stored-if-you-select-none-your": "Ändern Sie den Speicherort des Wallets. Bei „Keine“ wird das Wallet bei jedem Neuladen zurückgesetzt.",
+    "change-which-server-is-used-to-communicate-with-the-nano": "Ändern Sie den Server für die Kommunikation mit dem Nano-Netzwerk.",
+    "clear-all-data": {
+      "1": "Sie sind dabei, alle in Nault gespeicherten Daten zu löschen, einschließlich der lokalen Wallet-Daten, sämtlicher Einträge in Adress- und Repräsentantenverzeichnissen sowie aller zwischengespeicherten Daten. Alle Einstellungen werden zurückgesetzt.",
+      "successfully-deleted-locally-stored-data-and-reset-the": "Lokale Daten erfolgreich gelöscht und Einstellungen zurückgesetzt!"
+    },
+    "clear-work-cache": "PoW-Cache leeren",
+    "click-to-refresh": "Zum Aktualisieren klicken",
+    "component": {
+      "wallet-storage": "Wallet-Speicher"
+    },
+    "configure-nault": "Nault konfigurieren",
+    "cpu-worker-support-not-available-set-pow-to-best": "CPU-Worker nicht verfügbar; PoW auf „Beste verfügbare Option“ gesetzt.",
+    "currencies": {
+      "none": "Keine"
+    },
+    "custom-api-server-has-an-invalid-address": "Die Adresse des benutzerdefinierten API-Servers ist ungültig.",
+    "custom-update-server-has-an-invalid-address": "Die Adresse des benutzerdefinierten Update-Servers ist ungültig.",
+    "decentralized-aliases": "Dezentrale Aliasse",
+    "decentralized-aliases-options": {
+      "disabled": "Deaktiviert",
+      "enabled": "Aktiviert – externe Anfragen an Alias-Domains erlauben"
+    },
+    "decentralized-aliases-require-external-requests": "Dezentrale Aliasse erfordern externe Anfragen an Alias-Domains. Wenn Sie die Adresse von @madeline@example.com nachschlagen, kann example.com Ihre IP-Adresse protokollieren.",
+    "default-representative": "Standard-Repräsentant",
+    "default-representative-is-not-a-valid-account": "Der Standard-Repräsentant ist kein gültiges Konto.",
+    "delete-all-data": "ALLE Daten löschen",
+    "delete-wallet-data": "Wallet-Daten löschen",
+    "display-settings": "Anzeigeeinstellungen",
+    "fiat-currency": "Fiat-Währung",
+    "for-example-using-basic-auth": "Zum Beispiel mit Basic Auth: Basic xyz",
+    "identicon-options": {
+      "1-hour": "1 Stunde",
+      "1-minute": "1 Minute",
+      "nanoidenticons-by-keerifox": "Nanoidenticons (von keerifox)",
+      "natricon-by-appditto": "Natricon (von Appditto)",
+      "never": "Nie",
+      "none": "Keine",
+      "x-hours": "{{ hours }} Stunden",
+      "x-minutes": "{{ minutes }} Minuten"
+    },
+    "identicons": "Identicons",
+    "if-automatically-receiving-incoming-transactions-with-the": "Wählen Sie, ob eingehende Transaktionen automatisch nach größtem Betrag oder chronologisch empfangen werden. Bei „Manuell“ wählen Sie Transaktionen selbst im Empfangsbereich aus.",
+    "language": "Sprache",
+    "leave-blank-to-accept-transactions-of-any-amount": "Leer lassen, um Transaktionen beliebiger Höhe zu akzeptieren.",
+    "leave-blank-to-use-a-recommended-one": "Leer lassen, um eine empfohlene Option zu verwenden.",
+    "lock-after-inactivity": "Nach Inaktivität sperren",
+    "min-receive-amount": "Mindestempfangsbetrag",
+    "minimum-nano-amount-to-receive-transactions-below-this": "Mindestbetrag in XNO für den Empfang. Transaktionen unter diesem Betrag werden beim Empfang und in der Transaktionsliste ignoriert. Leer lassen oder 0 eingeben, um alle Transaktionen zu akzeptieren.",
+    "multiplier-options": {
+      "default-1x-or-1-64x": "Standard (1x oder 1/64x)"
+    },
+    "night-mode": "Nachtmodus",
+    "night-mode-options": {
+      "disabled": "Deaktiviert",
+      "enabled": "Aktiviert"
+    },
+    "node-stats": "Knotenstatistik",
+    "note-since-this-server-only-notifies-about-new-transactions": "Hinweis: Da dieser Server nur neue Transaktionen meldet, funktionieren die meisten Wallet-Funktionen auch ohne ihn.",
+    "optional-increased-work-for-transaction-priority-during": "Optional höherer Arbeitsaufwand zur Priorisierung von Transaktionen bei Netzwerkauslastung. Überschreibt die Standard-Schwierigkeit von 1x beim Senden und 1/64x beim Empfangen.",
+    "pending-options": {
+      "automatic-largest-amount-first": "Automatisch – größter Betrag zuerst",
+      "automatic-oldest-transaction-first": "Automatisch – älteste Transaktion zuerst",
+      "manual": "Manuell"
+    },
+    "pow-multiplier": "PoW-Multiplikator",
+    "pow-options": {
+      "best-option-available": "Beste verfügbare Option",
+      "client-side-cpu-slowest": "Lokal – CPU (am langsamsten)",
+      "client-side-gpu-webgl": "Lokal – GPU/WebGL",
+      "external-custom-server": "Extern – benutzerdefinierter Server",
+      "external-selected-server": "Extern – ausgewählter Server"
+    },
+    "pow-source": "PoW-Quelle",
+    "random-server": "Zufälliger Server",
+    "receive-method": "Empfangsmethode",
+    "save-settings-to-update": "Einstellungen speichern, um Änderungen zu übernehmen.",
+    "server-configuration": "Serverkonfiguration",
+    "server-settings": "Servereinstellungen",
+    "server-settings-successfully-updated": "Servereinstellungen erfolgreich aktualisiert!",
+    "storage-options": {
+      "browser-local-storage": "Lokaler Browserspeicher",
+      "none": "Keine"
+    },
+    "successfully-cleared-the-work-cache": "PoW-Cache erfolgreich geleert!",
+    "successfully-deleted-all-wallet-data": "Alle Wallet-Daten erfolgreich gelöscht!",
+    "successfully-updated": "Erfolgreich aktualisiert!",
+    "switched-back-to-browser-local-storage-for-the-wallet-data": "Für Wallet-Daten wurde wieder „Lokaler Browserspeicher“ gewählt. Klicken Sie erneut auf die Schaltfläche, um andere Einstellungen zu speichern.",
+    "this-has-to-be-a-valid-authorization-header": "Dies muss ein gültiger Authorization-Header sein.",
+    "this-has-to-be-a-valid-rpc": {
+      "1": "Dies muss ein gültiger",
+      "3": "oder eine dazu kompatible API sein.",
+      "2-link-rpc": "Nano-RPC-Endpunkt"
+    },
+    "this-has-to-be-a-valid-websocket": {
+      "1": "Dies muss ein gültiger",
+      "3": "oder eine dazu kompatible WebSocket-API sein.",
+      "2-link-websocket": "Nano-Knoten-WebSocket"
+    },
+    "this-has-to-be-a-valid-work": {
+      "1": "Dies muss ein gültiger",
+      "3": "Endpunkt oder eine dazu kompatible API sein. Falls Ihr localhost-Server nicht funktioniert, versuchen Sie stattdessen die Desktop-App.",
+      "2-link-work": "Nano-Work-Server"
+    },
+    "this-representative-will-be-used-for-any-new-account": "Dieser Repräsentant wird für jedes neue Konto verwendet.",
+    "this-server-is-used-for-rpc-communication-with-the-nano-node": "Dieser Server dient zur RPC-Kommunikation mit dem Nano-Knoten.",
+    "this-server-is-used-to-notify-the-wallet-in-real-time-when": "Dieser Server benachrichtigt das Wallet in Echtzeit über neue Transaktionen.",
+    "this-will-delete-all-data-related-to-your-wallet-your-seed-a": "Dadurch werden alle Wallet-Daten (Seed und Konten) gelöscht.",
+    "this-will-delete-all-locally-cached-proof-of-work-values": "Dadurch werden alle lokal zwischengespeicherten PoW-Werte gelöscht.",
+    "this-will-delete-all-stored-data-and-reset-app-settings-incl": "Dadurch werden ALLE gespeicherten Daten einschließlich Wallet, Adressbuch und weiterer Daten gelöscht und die App-Einstellungen zurückgesetzt.",
+    "update-display-settings": "Anzeigeeinstellungen aktualisieren",
+    "update-server-settings": "Servereinstellungen aktualisieren",
+    "update-wallet-settings": "Wallet-Einstellungen aktualisieren",
+    "use-if-the-api-requires-authentication": "Verwenden, wenn die API eine Authentifizierung erfordert.",
+    "wallet-settings": "Wallet-Einstellungen",
+    "webgl-support-not-available-set-pow-to-best": "WebGL nicht verfügbar; PoW auf „Beste verfügbare Option“ gesetzt.",
+    "websocket-server": "WebSocket-Server",
+    "work-server": "Work-Server",
+    "you-are-about-to-delete-all-locally-cached-proof-of-work": "Sie sind dabei, alle lokal zwischengespeicherten Proof-of-Work-Werte zu löschen.",
+    "you-are-about-to-delete-all-locally-stored-data-about-your": "Sie sind dabei, alle lokal gespeicherten Daten Ihres aktuell eingerichteten Wallets zu löschen.",
+    "you-are-about-to-disable-storage-of-all-wallet-data-which": "Sie sind dabei, die Speicherung sämtlicher Wallet-Daten zu deaktivieren. Beim nächsten Start von Nault wird daher kein Wallet eingerichtet sein."
   },
   "ui-notifications": {
     "node-failover": "Der Nano-RPC-Knoten {{previous}} ist nicht erreichbar. Automatischer Wechsel zu {{next}}.",
@@ -37,17 +166,52 @@
   "general": {
     "account": "Konto",
     "accounts": "Konten",
+    "actions": "Aktionen",
+    "address": "Adresse",
     "address-book": "Adressbuch",
-    "app-settings": "App Einstellungen",
-    "loading": "Lade...",
+    "amount": "Betrag",
+    "app-settings": "App-Einstellungen",
+    "avoid": "Vermeiden",
+    "balance": "Guthaben",
+    "block": "Block",
+    "block-count": "Blockanzahl",
+    "blockactions": {
+      "ready-to-receive": "Empfangsbereit",
+      "received": "Empfangen",
+      "rep-change": "Repräsentantenwechsel",
+      "sent": "Gesendet",
+      "unknown-action": "Unbekannte Aktion"
+    },
+    "cancel": "Abbrechen",
+    "copy": "Kopieren",
+    "copy-to-clipboard": "In die Zwischenablage kopieren",
+    "date": "Datum",
+    "edit": "Bearbeiten",
+    "loading": "Wird geladen ...",
+    "name": "Name",
+    "network": "Netzwerk",
     "new": "Neu",
+    "no": "Nein",
+    "node-version": "Knotenversion",
+    "peers-stake-required": "Erforderliches Stimmgewicht der Peers",
+    "peers-stake-total": "Gesamtes Stimmgewicht der Peers",
     "receive": "Empfangen",
-    "representative": "Vertreter",
-    "representatives": "Vertreter",
-    "scan-qr-code": "QR Code scannen",
+    "reload": "Neu laden",
+    "representative": "Repräsentant",
+    "representatives": "Repräsentanten",
+    "save": "Speichern",
+    "scan-qr-code": "QR-Code scannen",
     "send": "Senden",
+    "server": "Server",
     "settings": "Einstellungen",
-    "unknown": "Unbekannt"
+    "show-more": "Mehr anzeigen",
+    "show-qr-code": "QR-Code anzeigen",
+    "successfully-copied-to-clipboard": "In die Zwischenablage kopiert!",
+    "uncemented-blocks": "Unbestätigte Blöcke",
+    "unknown": "Unbekannt",
+    "view-details": "Details anzeigen",
+    "view-on-network-explorer": "Im Netzwerk-Explorer anzeigen",
+    "yes": "Ja"
   },
   "about-nault": {
     "title": "Über Nault",
@@ -164,5 +328,44 @@
       "3": ".",
       "2-link": "hier klicken, um einen zu erstellen"
     }
+  },
+  "configure-wallet": {
+    "new-wallet": {
+      "copy-secret-recovery-mnemonic": "Geheime Wiederherstellungsphrase kopieren",
+      "copy-secret-recovery-seed": "Geheimen Wiederherstellungs-Seed kopieren",
+      "create-wallet": "Wallet erstellen",
+      "i-have-securely-stored-recovery-phrases": "Ich habe den geheimen Wiederherstellungs-Seed und/oder die Wiederherstellungsphrase sicher aufbewahrt.",
+      "please-take-some-time-to-write-down-recovery-phrases": "Nehmen Sie sich Zeit, den geheimen Wiederherstellungs-Seed und/oder die Wiederherstellungsphrase zu sichern, damit Sie künftig auf dieses Wallet zugreifen können.",
+      "recovery-phrases-alert": {
+        "1": {
+          "1": "Schreiben Sie Ihren Seed und/oder Ihre Wiederherstellungsphrase auf oder bewahren Sie sie sicher auf und ",
+          "3": "!",
+          "2-strong": "geben Sie sie niemals an andere weiter"
+        },
+        "2": "Dies ist der Hauptschlüssel für alle Ihre Konten und die einzige Möglichkeit, Ihr Guthaben im Notfall wiederherzustellen."
+      },
+      "recovery-phrases-for-new-wallet": "Wiederherstellungsdaten für neues Wallet",
+      "secret-recovery-mnemonic": "Geheime Wiederherstellungsphrase",
+      "secret-recovery-seed": "Geheimer Wiederherstellungs-Seed",
+      "successfully-copied-secret-recovery-mnemonic": "Geheime Wiederherstellungsphrase in die Zwischenablage kopiert!",
+      "successfully-copied-secret-recovery-seed": "Geheimer Wiederherstellungs-Seed in die Zwischenablage kopiert!"
+    },
+    "set-wallet-password": {
+      "choose-a-wallet-password-that-will-be-used-to-unlock-this-application": "Wählen Sie ein Wallet-Passwort zum Entsperren dieser Anwendung.",
+      "errors": {
+        "password-must-be-at-least-x-characters-long": "Das Passwort muss mindestens {{ minCharacters }} Zeichen lang sein.",
+        "passwords-do-not-match": "Die Passwörter stimmen nicht überein!"
+      },
+      "for-the-safety-of-your-funds-use-a-secure-password": "Verwenden Sie zum Schutz Ihres Guthabens ein sicheres Passwort.",
+      "set-wallet-password": "Wallet-Passwort festlegen",
+      "while-the-application-is-locked-the-secret-recovery-phrase-will-be-encrypted": "Solange die Anwendung gesperrt ist, wird die geheime Wiederherstellungsphrase verschlüsselt. Dadurch sind das Senden und Empfangen von Guthaben sowie die Kontoverwaltung gesperrt."
+    }
+  },
+  "representative-search": {
+    "representative-list-results": "Ergebnisse der Repräsentantensuche"
+  },
+  "reset-wallet": {
+    "before-continuing-make-sure-you-have-saved-the-nano-seed": "Bevor Sie fortfahren, stellen Sie sicher, dass Sie den geheimen Wiederherstellungs-Seed und/oder die Wiederherstellungsphrase Ihres aktuellen Wallets gesichert haben.",
+    "you-will-not-be-able-to-recover-the-funds-without-a-backup": "OHNE SICHERUNG Ihres aktuell eingerichteten Wallets KÖNNEN SIE IHR GUTHABEN NICHT WIEDERHERSTELLEN."
   }
 }
