@@ -171,8 +171,7 @@ export class ApiService {
       // candidates from the shuffled public pool.
       const candidates: string[] = [];
       for (const server of this.appSettings.serverOptions || []) {
-        // SpyNano is temporarily selectable as a failing test node but must
-        // never be chosen as a fallback target.
+        // Test-disabled and other ineligible nodes cannot be fallback targets.
         if (!server.allowFailover || server.failoverTarget === false || !server.api) continue;
         try {
           const candidate = secureEndpoint(server.api, 'rpc');

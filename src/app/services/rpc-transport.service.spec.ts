@@ -41,8 +41,20 @@ describe('RPC network boundary', () => {
     }
   });
 
-  it('switches actual saved SpyNano settings using available public RPC metadata', async () => {
+  it('switches test-only SpyNano settings using available public RPC metadata', async () => {
     const settings = new AppSettingsService({} as any);
+    // Keep the DNS outage fixture in tests only; no broken test server
+    // should appear in the production Server Configuration dropdown.
+    settings.serverOptions.push({
+      name: 'SpyNano test fixture',
+      value: 'spynano',
+      api: 'https://node.spynano.org/proxy',
+      ws: 'wss://node.spynano.org/websocket',
+      auth: null,
+      shouldRandom: false,
+      allowFailover: true,
+      failoverTarget: false
+    });
     const originalStored = localStorage.getItem(settings.storeKey);
     const apiTargets: string[] = [];
     const rpcActions: string[] = [];

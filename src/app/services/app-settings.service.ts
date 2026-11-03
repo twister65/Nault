@@ -101,8 +101,7 @@ export class AppSettingsService {
       shouldRandom: true,
       allowFailover: true,
     },
-    // SomeNano is retained as a manually selectable public node. Only
-    // SpyNano is temporary and must be removed before merging this PR.
+    // SomeNano remains available for manual selection and as a fallback.
     {
       name: 'SomeNano',
       value: 'somenano',
@@ -111,16 +110,6 @@ export class AppSettingsService {
       auth: null,
       shouldRandom: false,
       allowFailover: true,
-    },
-    {
-      name: 'SpyNano (failover test only)',
-      value: 'spynano',
-      api: 'https://node.spynano.org/proxy',
-      ws: 'wss://node.spynano.org/websocket',
-      auth: null,
-      shouldRandom: false,
-      allowFailover: true,
-      failoverTarget: false,
     },
     {
       // Preferred personal RsNano node, not included in random rotation.
