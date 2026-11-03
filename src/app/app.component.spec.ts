@@ -124,6 +124,9 @@ describe('AppComponent', () => {
     expect(app.nodeService.internetRecoveryPending).toBe(true);
     ws.connectionFailure$.next('wss://rainstorm.city/websocket');
     expect(probe).not.toHaveBeenCalled();
+    // The old socket can still appear connected after unplugging Ethernet.
+    // Recovery must force a fresh handshake rather than trusting that flag.
+    ws.socket.connected = true;
     app.onNetworkOnline();
     tick(0);
     expect(reconnect).toHaveBeenCalledTimes(1);

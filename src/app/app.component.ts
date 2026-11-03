@@ -227,10 +227,10 @@ export class AppComponent implements OnInit, OnDestroy {
     // queue duplicate recovery attempts or misleading transition messages.
     if (this.networkRecoveryInProgress || this.networkRecoveryTimer !== null) return;
     if (this.nodeService.internetRecoveryPending) {
+      // socket.connected may still describe an old TCP connection from
+      // before the cable was unplugged. Only connected$ after a fresh
+      // handshake can confirm recovery, never a stale socket flag.
       console.info('[Nano network] Link available; reconnecting the selected server.');
-      if (this.websocket.socket.connected) {
-        void this.confirmInternetRestoredBySelectedWebsocket();
-      }
     }
     this.networkRecoveryAttempts = 0;
     this.scheduleNetworkRecovery(0);
@@ -594,9 +594,10 @@ export class AppComponent implements OnInit, OnDestroy {
       // next positive transition. No other public node can help yet.
       if ((await this.desktop.isNetworkOnline()) === false) return;
       if (!this.walletService.isConfigured() && this.settings.settings.serverWS) {
-        if (this.websocket.socket.connected) {
-          await this.confirmInternetRestoredBySelectedWebsocket();
-          if (!this.nodeService.internetRecoveryPending) return;
+        if (!this.nodeService.internetRecoveryPending && this.websocket.socket.connected) {
+          // Ordinary visibility/online events need no additional I/O when
+          // the WS is already healthy and no cable interruption was observed.
+          return;
         }
         // On an empty wallet, reconnect the original WS first. Do not
         // repeatedly probe an artificial account when the RPC proxy is slow
