@@ -24,3 +24,10 @@ test('release CI verifies packages before publishing them', () => {
   assert.match(workflow, /bash scripts\/verify-linux-packages\.sh/);
   assert.match(workflow, /sha256sum --check SHA256SUMS/);
 });
+
+test('Linux archive validation materializes full manifests before grep', () => {
+  const script = fs.readFileSync('scripts/verify-linux-packages.sh', 'utf8');
+  assert.match(script, /rpm -qpl "\$rpm" > "\$tmp\/rpm-files\.txt"/);
+  assert.match(script, /tar -I zstd -tf "\$pacman" > "\$tmp\/pacman-files\.txt"/);
+  assert.doesNotMatch(script, /(?:tar -I zstd -tf|rpm -qpl)[^\n]*\|\s*grep/);
+});

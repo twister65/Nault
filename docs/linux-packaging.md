@@ -16,10 +16,10 @@ The native packages are produced using electron-builder's Linux targets. Nault u
 Download the release artifact for your distribution, verify its SHA256 against `SHA256SUMS`, then from the download directory run one of:
 
 ```bash
-sudo apt install ./Nault*.deb          # Debian / Ubuntu / Mint
-sudo dnf install ./Nault*.rpm          # Fedora
-sudo zypper install ./Nault*.rpm       # openSUSE
-sudo pacman -U ./Nault*.pkg.tar.zst    # Arch / Manjaro (beta)
+sudo apt install ./nault*.deb          # Debian / Ubuntu / Mint
+sudo dnf install ./nault*.rpm          # Fedora
+sudo zypper install ./nault*.rpm       # openSUSE
+sudo pacman -U ./nault*.pkg.tar.zst    # Arch / Manjaro (beta)
 ```
 
 Use the exact filename if the wildcard does not match one artifact. Installation and removal are handled by the distribution's normal package manager. The packaged launcher should appear as **Nault** in GNOME, KDE, Cinnamon and XFCE menus. For AppImage, execute the downloaded file directly (after making it executable); menu integration is a separate user step using AppImageLauncher or a manually installed launcher. It is **not automatic** just because a desktop file exists inside the AppImage.

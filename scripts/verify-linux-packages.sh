@@ -26,12 +26,16 @@ grep -Eq '^Exec=.*nault([[:space:]]|$)' "$desktop_file"
 grep -Eq '^Icon=[^[:space:]]+' "$desktop_file"
 grep -Eq '^Categories=.*Office' "$desktop_file"
 grep -Eq '^StartupWMClass=cc\.nault$' "$desktop_file"
-find "$tmp/deb/usr/share/icons" -type f -name '*.png' | grep -q .
+test -n "$(find "$tmp/deb/usr/share/icons" -type f -name '*.png' -print -quit)"
 dpkg-deb -f "$deb" Package Version Architecture
 
-rpm -qpl "$rpm" | grep -Eq '/usr/share/applications/cc\.nault\.desktop$'
-rpm -qpl "$rpm" | grep -Eq '/usr/share/icons/.+\.png$'
-tar -I zstd -tf "$pacman" | grep -Eq '(^|/)usr/share/applications/cc\.nault\.desktop$'
-tar -I zstd -tf "$pacman" | grep -Eq '(^|/)usr/share/icons/.+\.png$'
+# Materialize archive manifests first. With pipefail, grep -q can close
+# stdout before tar finishes reading the valid archive (SIGPIPE / exit 2).
+rpm -qpl "$rpm" > "$tmp/rpm-files.txt"
+tar -I zstd -tf "$pacman" > "$tmp/pacman-files.txt"
+grep -Eq '/usr/share/applications/cc\.nault\.desktop$' "$tmp/rpm-files.txt"
+grep -Eq '/usr/share/icons/.+\.png$' "$tmp/rpm-files.txt"
+grep -Eq '(^|/)usr/share/applications/cc\.nault\.desktop$' "$tmp/pacman-files.txt"
+grep -Eq '(^|/)usr/share/icons/.+\.png$' "$tmp/pacman-files.txt"
 
 echo "Linux AppImage, DEB, RPM, and Pacman launchers are present."

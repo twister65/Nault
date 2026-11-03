@@ -26,10 +26,10 @@ Then compare the output hash with the one listed in the corresponding checksums 
 
 **Linux installation:** Starting with releases built after this packaging change, download the package for your distribution from GitHub Releases. Native packages install Nault into the application menu (GNOME, KDE, Cinnamon and XFCE), using the Nault icon:
 
-- **Debian / Ubuntu / Linux Mint / Pop!_OS:** `sudo apt install ./Nault*.deb`
-- **Fedora:** `sudo dnf install ./Nault*.rpm`
-- **openSUSE:** `sudo zypper install ./Nault*.rpm`
-- **Arch Linux / Manjaro / EndeavourOS:** `sudo pacman -U ./Nault*.pkg.tar.zst` (pacman packaging is beta; verify on the target distribution)
+- **Debian / Ubuntu / Linux Mint / Pop!_OS:** `sudo apt install ./nault*.deb`
+- **Fedora:** `sudo dnf install ./nault*.rpm`
+- **openSUSE:** `sudo zypper install ./nault*.rpm`
+- **Arch Linux / Manjaro / EndeavourOS:** `sudo pacman -U ./nault*.pkg.tar.zst` (pacman packaging is beta; verify on the target distribution)
 - **Other Linux distributions:** the portable `.AppImage` remains available; it does **not** automatically add a menu item. Use AppImageLauncher or a manual `.desktop` entry for integration.
 
 Use the downloaded file's exact name if your shell does not expand the sample pattern. Native packages are updated by installing the next release package unless a package repository is configured; GitHub downloads alone do not set up an APT/DNF/Pacman repository. For verification and functional test guidance, see [Linux packaging](docs/linux-packaging.md).
