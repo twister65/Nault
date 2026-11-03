@@ -25,7 +25,8 @@ const feeds = {
 const allowed = name => name.endsWith('.exe') || name.endsWith('.dmg') ||
   name.endsWith('.zip') || name.endsWith('.AppImage') || name.endsWith('.deb') ||
   name.endsWith('.rpm') || name.endsWith('.pkg.tar.zst') ||
-  name.endsWith('.yml') || name.endsWith('.blockmap');
+  ['latest.yml', 'latest-linux.yml', 'latest-mac.yml'].includes(name) ||
+  name.endsWith('.blockmap');
 
 function hash(file, algo) {
   const h = crypto.createHash(algo);

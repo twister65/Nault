@@ -113,3 +113,69 @@ test('release notes group platforms and include macOS Apple Silicon plus distro 
   const validator = fs.readFileSync('scripts/verify-release-asset-order.cjs','utf8');
   for (const f of ['latest.yml','latest-mac.yml','latest-linux.yml']) assert.ok(validator.includes(f));
 });
+
+
+test('release assembler ignores builder-debug metadata and merges both Mac update feeds', () => {
+  const path = require('node:path');
+  const os = require('node:os');
+  const crypto = require('node:crypto');
+  const cp = require('node:child_process');
+  const yaml = require('js-yaml');
+  const version = require('../package.json').version;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'nault-release-preview-'));
+  const input = path.join(root, 'platforms');
+  const output = path.join(root, 'release');
+  const notes = path.join(root, 'downloads.md');
+  const artifacts = {
+    'desktop-windows-2022': ['Nault-Windows-Setup-' + version + '.exe'],
+    'desktop-macos-15-intel': [
+      'Nault-macOS-' + version + '-x64.dmg',
+      'Nault-macOS-' + version + '-x64.zip'
+    ],
+    'desktop-macos-15': [
+      'Nault-macOS-' + version + '-arm64.dmg',
+      'Nault-macOS-' + version + '-arm64.zip'
+    ],
+    'desktop-ubuntu-24.04': [
+      'Nault-Linux-Debian-Ubuntu-Mint-' + version + '-amd64.deb',
+      'Nault-Linux-Fedora-openSUSE-' + version + '-x86_64.rpm',
+      'Nault-Linux-Arch-Manjaro-' + version + '-x64.pkg.tar.zst',
+      'Nault-Linux-Portable-' + version + '-x86_64.AppImage'
+    ]
+  };
+  const feeds = {
+    'desktop-windows-2022': 'latest.yml',
+    'desktop-macos-15-intel': 'latest-mac.yml',
+    'desktop-macos-15': 'latest-mac.yml',
+    'desktop-ubuntu-24.04': 'latest-linux.yml'
+  };
+  try {
+    for (const [host, names] of Object.entries(artifacts)) {
+      const dir = path.join(input, host);
+      fs.mkdirSync(dir, {recursive: true});
+      const files = names.map(name => {
+        const content = Buffer.from('FAKE-ARTIFACT:' + name);
+        fs.writeFileSync(path.join(dir, name), content);
+        return {
+          url: name, size: content.length,
+          sha512: crypto.createHash('sha512').update(content).digest('base64')
+        };
+      });
+      fs.writeFileSync(path.join(dir, feeds[host]), yaml.dump({version, files}));
+      fs.writeFileSync(path.join(dir, 'builder-debug.yml'), 'internal debug data');
+    }
+    const run = cp.spawnSync(process.execPath, [
+      'scripts/assemble-release-assets.cjs', input, output, notes, ''
+    ], {encoding: 'utf8'});
+    assert.equal(run.status, 0, run.stderr + run.stdout);
+    const meta = yaml.load(fs.readFileSync(path.join(output, 'latest-mac.yml'), 'utf8'));
+    assert.equal(meta.files.length, 4);
+    assert.ok(meta.files.some(f => f.url.includes('-arm64.zip')));
+    assert.ok(meta.files.some(f => f.url.includes('-x64.zip')));
+    assert.ok(!fs.existsSync(path.join(output, 'builder-debug.yml')));
+    assert.ok(fs.readFileSync(notes, 'utf8').includes('### Windows'));
+    assert.ok(fs.readFileSync(notes, 'utf8').includes('### macOS'));
+    assert.ok(fs.readFileSync(notes, 'utf8').includes('### Linux'));
+    assert.ok(fs.existsSync(path.join(output, 'SHA256SUMS')));
+  } finally { fs.rmSync(root, {recursive: true, force: true}); }
+});
