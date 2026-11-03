@@ -162,8 +162,27 @@
       }
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "desktop-app/assets/linux"
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm",
+        "pacman"
+      ],
+      "icon": "desktop-app/assets/linux",
+      "executableName": "nault",
+      "category": "Office;Finance;",
+      "synopsis": "Nano cryptocurrency wallet",
+      "description": "Nault desktop wallet for Nano with Ledger USB and Bluetooth support",
+      "syncDesktopName": true,
+      "desktop": {
+        "entry": {
+          "Name": "Nault",
+          "GenericName": "Nano wallet",
+          "Comment": "Nano cryptocurrency wallet",
+          "Keywords": "Nano;XNO;Ledger;Wallet;",
+          "Terminal": "false"
+        }
+      }
     },
     "protocols": {
       "name": "nano",
@@ -221,5 +240,6 @@
   },
   "browser": {
     "stream": "stream-browserify"
-  }
+  },
+  "desktopName": "cc.nault.desktop"
 }

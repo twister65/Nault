@@ -24,6 +24,16 @@ If you want to verify the binary checksum there are plenty of apps to do this. O
 
 Then compare the output hash with the one listed in the corresponding checksums file that you download.
 
+**Linux installation:** Starting with releases built after this packaging change, download the package for your distribution from GitHub Releases. Native packages install Nault into the application menu (GNOME, KDE, Cinnamon and XFCE), using the Nault icon:
+
+- **Debian / Ubuntu / Linux Mint / Pop!_OS:** `sudo apt install ./Nault*.deb`
+- **Fedora:** `sudo dnf install ./Nault*.rpm`
+- **openSUSE:** `sudo zypper install ./Nault*.rpm`
+- **Arch Linux / Manjaro / EndeavourOS:** `sudo pacman -U ./Nault*.pkg.tar.zst` (pacman packaging is beta; verify on the target distribution)
+- **Other Linux distributions:** the portable `.AppImage` remains available; it does **not** automatically add a menu item. Use AppImageLauncher or a manual `.desktop` entry for integration.
+
+Use the downloaded file's exact name if your shell does not expand the sample pattern. Native packages are updated by installing the next release package unless a package repository is configured; GitHub downloads alone do not set up an APT/DNF/Pacman repository. For verification and functional test guidance, see [Linux packaging](docs/linux-packaging.md).
+
 #### Web App
 You can also use this Nault fork from any device on the web at [twister32.changeip.org](https://twister32.changeip.org/). Encrypted v2 wallet backup QR links created on this site point back to its own `/import-wallet` page. For recovery, also retain a securely stored offline seed or encrypted JSON backup; a QR link alone is not a durable backup.
 

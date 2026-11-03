@@ -35,7 +35,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+          sudo apt-get install -y build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev rpm zstd
       - name: Verify release tag matches package and lockfile versions
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
@@ -51,6 +51,10 @@ jobs:
         run: |
           npm run desktop:build
           npm run desktop:local
+      - name: Verify Linux packages and application-menu integration
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash scripts/verify-linux-packages.sh
       - name: Upload packages
         uses: actions/upload-artifact@v7
         with:
@@ -58,6 +62,9 @@ jobs:
           if-no-files-found: error
           path: |
             desktop-app/build/*.AppImage
+            desktop-app/build/*.deb
+            desktop-app/build/*.rpm
+            desktop-app/build/*.pkg.tar.zst
             desktop-app/build/*.dmg
             desktop-app/build/*.exe
             desktop-app/build/*.yml
@@ -97,6 +104,9 @@ jobs:
           fi
           # Only publish after every platform artifact exists and local digests verify.
           test "$(find packages -maxdepth 1 -type f -name '*.AppImage' | wc -l)" -ge 1
+          test "$(find packages -maxdepth 1 -type f -name '*.deb' | wc -l)" -ge 1
+          test "$(find packages -maxdepth 1 -type f -name '*.rpm' | wc -l)" -ge 1
+          test "$(find packages -maxdepth 1 -type f -name '*.pkg.tar.zst' | wc -l)" -ge 1
           test "$(find packages -maxdepth 1 -type f -name '*.exe' | wc -l)" -ge 1
           test "$(find packages -maxdepth 1 -type f -name '*.dmg' | wc -l)" -ge 1
           (cd packages && sha256sum * > SHA256SUMS && sha256sum --check SHA256SUMS)
