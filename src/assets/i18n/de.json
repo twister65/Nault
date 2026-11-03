@@ -491,13 +491,13 @@
     "any-device-anywhere": {
       "1": "Nault ist eine Webanwendung, die auf den meisten Desktop- und Mobilgeräten genutzt werden kann.",
       "2": {
-        "1": "Sie können auch die Desktop-Anwendung für Windows, Linux oder Mac verwenden. Sie steht zum Download bereit",
-        "3": " .",
+        "1": "Sie können auch die Desktop-Anwendung für Windows, Linux oder Mac verwenden. Den Download finden Sie",
+        "3": ".",
         "2-link-github-releases": "auf der GitHub-Releases-Seite"
       },
       "3": {
         "1": "Der gesamte Quellcode ist Open Source und",
-        "3": " .",
+        "3": ".",
         "2-link-github": "auf GitHub verfügbar"
       },
       "title": "Auf jedem Gerät, überall"
