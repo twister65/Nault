@@ -56,7 +56,7 @@ test('release CI installs real packages in five isolated Linux distributions', (
   assert.match(workflow, /name: desktop-ubuntu-24\.04/);
   assert.match(workflow, /docker run --rm --pull=always/);
   assert.match(workflow, /--security-opt no-new-privileges/);
-  assert.match(workflow, /needs: \[release, linux-install-smoke\]/);
+  assert.match(workflow, /needs: \[release-preview, linux-install-smoke\]/);
   const script = fs.readFileSync('scripts/test-linux-install-container.sh', 'utf8');
   for (const command of [
     'apt-get install', 'dnf install', 'zypper --non-interactive',
