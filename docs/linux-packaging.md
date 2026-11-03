@@ -24,14 +24,16 @@ sudo pacman -U ./nault*.pkg.tar.zst    # Arch / Manjaro (beta)
 
 Use the exact filename if the wildcard does not match one artifact. Installation and removal are handled by the distribution's normal package manager. The packaged launcher should appear as **Nault** in GNOME, KDE, Cinnamon and XFCE menus. For AppImage, execute the downloaded file directly (after making it executable); menu integration is a separate user step using AppImageLauncher or a manually installed launcher. It is **not automatic** just because a desktop file exists inside the AppImage.
 
-There is no APT/DNF/Pacman package repository in this change. Users install the next native package for updates. Do not claim unattended package-manager updates. electron-updater behaviour for installed native packages must be checked separately and must never alter wallet keys or trigger automatic Ledger signing.
+There is no APT/DNF/Pacman package repository in this change, so distribution package managers will **not** update Nault unattended. The app uses electron-updater 6.8.12 with a GitHub release feed for all four formats. It checks on launch and from Help > Check for Updates, asks before downloading, and uses a manifest checksum for the chosen artifact. AppImages can replace their user-owned file; deb/rpm/pacman require the normal privileged package install (pkexec/sudo, depending on the distribution) and may prompt for administrator authentication. Native Linux updates are explicitly non-silent. If authentication or the native updater fails, download the corresponding next release package and use the distribution's package manager to install it.
+
+The CI must verify `latest-linux.yml`, the matching release version and SHA-512 for each of AppImage, deb, rpm and pacman, and the packaged `resources/app-update.yml` must point at twister65/Nault. A draft release cannot be used as the update feed; publishing remains gated by normal release review. Checksums are not package signatures: test distribution-specific privilege prompts and policies before enabling real upgrades. Do not alter wallet keys or trigger automatic Ledger signing.
 
 ## Release validation
 
 1. Confirm `package.json`, `package-lock.json` and the Git tag agree on the version.
 2. Check that the merge gate, dependency audit and CodeQL checks pass.
-3. Verify the Linux workflow produces four nonempty artifacts, with the expected `.desktop` entry and icon, plus checksum verification and the Windows/macOS artifacts.
-4. On Ubuntu/Debian, Fedora/openSUSE and Arch/Manjaro, install the corresponding native package on test systems. Confirm the Nault menu entry and icon, launch, only one window, quit, reinstall/upgrade and uninstall.
+3. Verify the Linux workflow produces four nonempty artifacts with expected `.desktop` entries and icons; verify `latest-linux.yml` references all four archive types, matches SHA-512 checksums, and targets the maintained fork. Check Windows/macOS artifacts.
+4. On Ubuntu/Debian, Fedora/openSUSE and Arch/Manjaro, install native packages and confirm menu entries/icons. Once two adjacent published release versions exist, test Help > Check for Updates, GitHub detection, confirmation before download, GUI authentication, install, relaunch and refusal of authentication. On AppImage, check the APPIMAGE environment path and replacement of a user-writable file. Confirm upgrade preserves settings and uninstall works.
 5. With a Nano S Plus USB and Nano X USB/Bluetooth, validate connection, signing, user refusal, disconnect/reconnect and absence of unexpected device permissions. The CI cannot validate physical hardware.
 6. Check application version/commit and ensure an existing encrypted or Ledger wallet remains available after upgrade. Avoid handling real recovery seeds in CI.
 7. Only after release review, publish the GitHub Release; Apache/PWA deployment stays a separate manual step.

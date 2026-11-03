@@ -55,6 +55,9 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: bash scripts/verify-linux-packages.sh
+      - name: Verify Linux update feed and SHA-512 for every package
+        if: runner.os == 'Linux'
+        run: node scripts/verify-linux-update-feed.cjs
       - name: Upload packages
         uses: actions/upload-artifact@v7
         with:
@@ -107,6 +110,8 @@ jobs:
           test "$(find packages -maxdepth 1 -type f -name '*.deb' | wc -l)" -ge 1
           test "$(find packages -maxdepth 1 -type f -name '*.rpm' | wc -l)" -ge 1
           test "$(find packages -maxdepth 1 -type f -name '*.pkg.tar.zst' | wc -l)" -ge 1
+          # Every Linux updater needs the same manifest to choose its own package type.
+          test -s packages/latest-linux.yml
           test "$(find packages -maxdepth 1 -type f -name '*.exe' | wc -l)" -ge 1
           test "$(find packages -maxdepth 1 -type f -name '*.dmg' | wc -l)" -ge 1
           (cd packages && sha256sum * > SHA256SUMS && sha256sum --check SHA256SUMS)

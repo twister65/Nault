@@ -31,3 +31,17 @@ test('Linux archive validation materializes full manifests before grep', () => {
   assert.match(script, /tar -I zstd -tf "\$pacman" > "\$tmp\/pacman-files\.txt"/);
   assert.doesNotMatch(script, /(?:tar -I zstd -tf|rpm -qpl)[^\n]*\|\s*grep/);
 });
+
+test('Linux release validation requires a complete updater manifest', () => {
+  const workflow = fs.readFileSync('.github/workflows/electron_hash.yml', 'utf8');
+  assert.match(workflow, /node scripts\/verify-linux-update-feed\.cjs/);
+  assert.match(workflow, /test -s packages\/latest-linux\.yml/);
+  const verifier = fs.readFileSync('scripts/verify-linux-update-feed.cjs', 'utf8');
+  assert.match(verifier, /latest-linux\.yml/);
+  assert.match(verifier, /app-update\.yml/);
+  assert.match(verifier, /createHash\('sha512'\)/);
+  const main = fs.readFileSync('desktop-app/src/desktop-app.ts', 'utf8');
+  assert.match(main, /process\.platform === 'linux' && !process\.env\.APPIMAGE/);
+  assert.match(main, /autoUpdater\.quitAndInstall\(!isNativeLinuxPackage, true\)/);
+  assert.match(main, /autoUpdater\.autoDownload = false/);
+});
