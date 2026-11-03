@@ -112,6 +112,8 @@ function main() {
   const lines = [
     '## Downloads',
     '',
+    'Download the version that matches your operating system.',
+    '',
     !tag ? '**Preview only: these assets have NOT been published.**' : '',
     '',
     '### Windows',

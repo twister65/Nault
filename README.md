@@ -3,7 +3,7 @@
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/twister65/Nault)
 [![GitHub All Releases](https://img.shields.io/github/downloads/twister65/Nault/total)](https://github.com/twister65/Nault/releases/latest).
 
-Nault is a community-driven fork of the popular nano wallet [NanoVault](https://github.com/cronoh/nanovault) 💙
+This fork aims to improve Nault's stability, security, and portability across operating systems and Nano/RsNano nodes. It also maintains and tests hardware wallet compatibility with Ledger Nano S Plus and Nano X devices.
 
 It's a fully client-side signing wallet for sending and receiving [nano](https://github.com/nanocurrency/nano-node/) either directly in your browser at [twister32.changeip.org](https://twister32.changeip.org/) or with the [desktop app](https://github.com/twister65/Nault/releases/latest).
 

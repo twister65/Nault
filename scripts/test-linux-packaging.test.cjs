@@ -109,6 +109,8 @@ test('release notes group platforms and include macOS Apple Silicon plus distro 
   assert.ok(w.includes('needs: [release-preview, linux-install-smoke]'));
   const assembly = fs.readFileSync('scripts/assemble-release-assets.cjs','utf8');
   for (const heading of ['### Windows','### macOS','### Linux']) assert.ok(assembly.includes(heading));
+  assert.ok(assembly.includes('Download the version that matches your operating system.'));
+  assert.ok(!assembly.includes('Les noms de fichiers ne comportent plus de préfixe numérique.'));
   for (const arch of ['x64','arm64']) assert.ok(assembly.includes(arch));
   const validator = fs.readFileSync('scripts/verify-release-asset-order.cjs','utf8');
   for (const f of ['latest.yml','latest-mac.yml','latest-linux.yml']) assert.ok(validator.includes(f));
