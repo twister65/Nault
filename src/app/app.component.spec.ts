@@ -24,6 +24,34 @@ describe('AppComponent', () => {
   it('constructs the application with its real dependency graph', () => {
     expect(TestBed.createComponent(AppComponent).componentInstance).toBeTruthy();
   });
+  it('retries a failed initial price fetch and keeps refreshing after later errors', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    const price = spyOn(app.price, 'getPrice').and.returnValues(
+      Promise.reject(new Error('offline')), Promise.resolve(1)
+    );
+    void app.updateFiatPrices().catch(() => {});
+    tick(0);
+    expect(price).toHaveBeenCalledTimes(1);
+    tick(app.fiatTimeout);
+    expect(price).toHaveBeenCalledTimes(2);
+    app.ngOnDestroy();
+    tick(app.fiatTimeout);
+    expect(price).toHaveBeenCalledTimes(2);
+  }));
+
+  it('refreshes FIAT once after selected WS reconnects following offline startup', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    const refresh = spyOn(app, 'updateFiatPrices').and.returnValue(Promise.resolve());
+    app.settings.settings.serverWS = 'wss://rainstorm.city/websocket';
+    app.onNetworkOffline();
+    const ws = TestBed.inject(WebsocketService);
+    ws.socket.connected = true;
+    ws.connected$.next();
+    tick(0);
+    expect(app.nodeService.internetRecoveryPending).toBe(false);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  }));
+
   it('checks RPC immediately on WebSocket failure for a known built-in node', fakeAsync(() => {
     const app = TestBed.inject(AppComponent);
     const ws = TestBed.inject(WebsocketService);

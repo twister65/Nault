@@ -216,6 +216,16 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
       void this.updateNodeStats();
     }));
     this.updateNodeStats();
+    // On an offline first launch, every optional stats request may fail before
+    // the cable is reconnected. A fresh successful WS connection to the
+    // selected node is the right opportunity to reload the empty stats panel.
+    // Avoid extra metadata probes if values were already loaded.
+    this.failoverSubscription.add(this.websocket.connected$.subscribe(() => {
+      if (this.statsRefreshEnabled && !this.nodeBlockCount && !this.nodeVendor &&
+          this.appSettings.settings.serverAPI) {
+        void this.updateNodeStats();
+      }
+    }));
 
     setTimeout(() => this.populateRepresentativeList(), 500);
   }

@@ -64,6 +64,8 @@ export class AppComponent implements OnInit, OnDestroy {
   node = this.nodeService.node;
   nanoPrice = this.price.price;
   fiatTimeout = 5 * 60 * 1000; // Update fiat prices every 5 minutes
+  private fiatRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private fiatRefreshInFlight = false;
   inactiveSeconds = 0;
   innerWidth = 0;
   innerHeight = 0;
@@ -106,6 +108,10 @@ export class AppComponent implements OnInit, OnDestroy {
         !this.websocket.socket.connected) return;
     this.nodeService.internetRecoveryPending = false;
     console.info('[Nano network] Selected WebSocket reconnected; Internet restored (RPC not yet verified).');
+    // The initial FIAT request may have failed while Electron was offline.
+    // Retry it now and remove a stale price warning if it succeeds; this
+    // remains independent of RPC availability and the chosen server.
+    void this.updateFiatPrices().catch(() => {});
     if (!this.walletService.isConfigured()) {
       // A new user has no balances to validate; do not keep firing the
       // artificial burn-address accounts_balances request after a healthy WS.
@@ -152,6 +158,10 @@ export class AppComponent implements OnInit, OnDestroy {
       this.nativeNetworkTimer = null;
     }
     this.cancelNetworkRecovery();
+    if (this.fiatRefreshTimer !== null) {
+      clearTimeout(this.fiatRefreshTimer);
+      this.fiatRefreshTimer = null;
+    }
   }
 
   // WS can be unavailable while RPC still works (blocked WS port/proxy).
@@ -404,7 +414,15 @@ export class AppComponent implements OnInit, OnDestroy {
       if (!this.settings.settings.serverAPI) return;
       await this.updateFiatPrices();
     } catch (err) {
-      this.notifications.sendWarning(`There was an issue retrieving latest nano price.  Ensure your AdBlocker is disabled on this page then reload to see accurate FIAT values.`, { length: 0, identifier: `price-adblock` });
+      // A disconnected Internet connection is not evidence of an ad blocker.
+      // The recurring retry timer is set even after an initial failure.
+      const offline = (typeof navigator !== 'undefined' && !navigator.onLine) ||
+        this.nodeService.internetRecoveryPending ||
+        (await this.desktop.isNetworkOnline()) === false;
+      if (!offline) {
+        this.notifications.sendWarning(`There was an issue retrieving latest nano price. Ensure your AdBlocker is disabled on this page then reload to see accurate FIAT values.`,
+          { length: 0, identifier: 'price-adblock' });
+      }
     }
   }
 
@@ -648,10 +666,25 @@ export class AppComponent implements OnInit, OnDestroy {
     this.notifications.sendInfo(`Attempting to reconnect to nano node`);
   }
 
-  async updateFiatPrices() {
-    const displayCurrency = this.settings.getAppSetting(`displayCurrency`) || 'USD';
-    await this.price.getPrice(displayCurrency);
-    this.walletService.reloadFiatBalances();
-    setTimeout(() => this.updateFiatPrices(), this.fiatTimeout);
+  async updateFiatPrices(): Promise<void> {
+    if (this.fiatRefreshInFlight) return;
+    this.fiatRefreshInFlight = true;
+    try {
+      const displayCurrency = this.settings.getAppSetting('displayCurrency') || 'USD';
+      await this.price.getPrice(displayCurrency);
+      this.walletService.reloadFiatBalances();
+      this.notifications.removeNotification('price-adblock');
+    } finally {
+      this.fiatRefreshInFlight = false;
+      // Schedule periodic refresh even when the FIRST request failed offline.
+      // Keep one bounded timer, including after an immediate WS recovery retry.
+      if (this.fiatRefreshTimer !== null) clearTimeout(this.fiatRefreshTimer);
+      this.fiatRefreshTimer = setTimeout(() => {
+        this.fiatRefreshTimer = null;
+        void this.updateFiatPrices().catch(() => {
+          // A temporary CoinGecko failure must not stop future refreshes.
+        });
+      }, this.fiatTimeout);
+    }
   }
 }

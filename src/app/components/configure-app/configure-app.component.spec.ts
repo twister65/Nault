@@ -1,7 +1,8 @@
 import { ComponentTestModule, isolateConstructorIO } from '../../../testing/component-test.module';
-import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick, waitForAsync } from '@angular/core/testing';
 
 import { ConfigureAppComponent } from './configure-app.component';
+import { WebsocketService } from '../../services/websocket.service';
 
 describe('ConfigureAppComponent', () => {
   let component: ConfigureAppComponent;
@@ -24,6 +25,26 @@ describe('ConfigureAppComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+
+  it('refreshes missing node statistics when WebSocket reconnects after offline startup', fakeAsync(() => {
+    spyOn(component, 'loadFromSettings').and.stub();
+    const stats = spyOn(component, 'updateNodeStats').and.returnValue(Promise.resolve());
+    spyOn(component, 'populateRepresentativeList').and.returnValue(Promise.resolve());
+    void component.ngOnInit();
+    const ws = TestBed.inject(WebsocketService);
+    expect(stats).toHaveBeenCalledTimes(1);
+    // A failed initial stats request left the panel empty.
+    component.statsRefreshEnabled = true;
+    ws.connected$.next();
+    expect(stats).toHaveBeenCalledTimes(2);
+    component.nodeBlockCount = '123';
+    ws.connected$.next();
+    expect(stats).toHaveBeenCalledTimes(2);
+    component.ngOnDestroy();
+    ws.connected$.next();
+    expect(stats).toHaveBeenCalledTimes(2);
+    tick(500);
+  }));
 
   it('keeps selector labels as translation keys until Transloco has loaded', () => {
     // Do not eagerly call translate() in the component constructor: the
