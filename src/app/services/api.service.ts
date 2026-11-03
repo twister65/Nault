@@ -356,7 +356,7 @@ export class ApiService {
     const validateHealth = (res: any): { err: string | null } => ({
       err: silentOffline
         ? (res && (typeof res.count === 'string' || typeof res.count === 'number') &&
-            /^\\d+$/.test(String(res.count)) ? null : 'Invalid block_count response')
+            /^[0-9]+$/.test(String(res.count)) ? null : 'Invalid block_count response')
         : (res && res.balances && typeof res.balances === 'object' && !Array.isArray(res.balances)
             ? null : 'Invalid accounts_balances response'),
     });
