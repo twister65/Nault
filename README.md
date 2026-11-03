@@ -3,7 +3,7 @@
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/twister65/Nault)
 [![GitHub All Releases](https://img.shields.io/github/downloads/twister65/Nault/total)](https://github.com/twister65/Nault/releases/latest).
 
-Nault is a community-driven fork of the popular nano wallet [NanoVault](https://github.com/cronoh/nanovault) 💙
+This fork aims to improve Nault's stability, security, and portability across operating systems and Nano/RsNano nodes. It also maintains and tests hardware wallet compatibility with Ledger Nano S Plus and Nano X devices.
 
 It's a fully client-side signing wallet for sending and receiving [nano](https://github.com/nanocurrency/nano-node/) either directly in your browser at [twister32.changeip.org](https://twister32.changeip.org/) or with the [desktop app](https://github.com/twister65/Nault/releases/latest).
 
@@ -15,14 +15,24 @@ ___
 ## How To Use
 Nault comes in different flavors to suit your needs.
 #### Desktop App
-Available for Windows/Mac/Linux – just head over to the [latest release](https://github.com/twister65/Nault/releases/latest) and download the version for your OS.
+Available for Windows/Mac/Linux – just head over to the [latest release](https://github.com/twister65/Nault/releases/latest) and download the version for your OS. Release notes group downloads by **Windows, macOS (Intel / Apple Silicon), and Linux distribution**. GitHub's native Assets list cannot be manually grouped. Updater feeds (`latest*.yml`) retain their filenames.
 
 If you want to verify the binary checksum there are plenty of apps to do this. One way is using a powershell or bash terminal:
 
-* **Powershell:** `Get-FileHash -Path '.\Nault-Setup-x.x.x.exe' -Algorithm SHA256`
-* **Bash:** `openssl sha256 Nault-x.x.x.AppImage`
+* **Powershell:** `Get-FileHash -Path '.\Nault-Windows-Setup-x.x.x.exe' -Algorithm SHA256`
+* **Bash:** `openssl sha256 Nault-Linux-Portable-x.x.x-x86_64.AppImage`
 
 Then compare the output hash with the one listed in the corresponding checksums file that you download.
+
+**Linux installation:** Starting with releases built after this packaging change, download the package for your distribution from GitHub Releases. Native packages install Nault into the application menu (GNOME, KDE, Cinnamon and XFCE), using the Nault icon:
+
+- **Debian / Ubuntu / Linux Mint / Pop!_OS:** `sudo apt install ./Nault-Linux-Debian-Ubuntu-Mint-*.deb`
+- **Fedora:** `sudo dnf install ./Nault-Linux-Fedora-openSUSE-*.rpm`
+- **openSUSE:** `sudo zypper install ./03-Linux-*.rpm`
+- **Arch Linux / Manjaro / EndeavourOS:** `sudo pacman -U ./Nault-Linux-Arch-Manjaro-*.pkg.tar.zst` (pacman packaging is beta; verify on the target distribution)
+- **Other Linux distributions:** the portable `.AppImage` remains available; it does **not** automatically add a menu item. Use AppImageLauncher or a manual `.desktop` entry for integration.
+
+Use the downloaded file's exact name if your shell does not expand the sample pattern. Native packages are updated by installing the next release package unless a package repository is configured; GitHub downloads alone do not set up an APT/DNF/Pacman repository. For verification and functional test guidance, see [Linux packaging](docs/linux-packaging.md).
 
 #### Web App
 You can also use this Nault fork from any device on the web at [twister32.changeip.org](https://twister32.changeip.org/). Encrypted v2 wallet backup QR links created on this site point back to its own `/import-wallet` page. For recovery, also retain a securely stored offline seed or encrypted JSON backup; a QR link alone is not a durable backup.

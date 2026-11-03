@@ -1,6 +1,6 @@
 import 'core-js/stable';
 
-import { app, BrowserWindow, shell, Menu, screen, dialog, ipcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
+import { app, net, BrowserWindow, shell, Menu, screen, dialog, ipcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as url from 'url';
 import * as path from 'path';
@@ -159,7 +159,11 @@ class AppUpdater {
     autoUpdater.on('update-downloaded', () => {
       isDownloading = false;
       showUpdateErrors = false;
-      autoUpdater.quitAndInstall(true, true);
+      // Native Linux package installations require explicit OS authentication.
+      // Do not request a silent installation for deb, rpm or pacman.
+      // AppImage updates keep their existing user-space install behavior.
+      const isNativeLinuxPackage = process.platform === 'linux' && !process.env.APPIMAGE;
+      autoUpdater.quitAndInstall(!isNativeLinuxPackage, true);
     });
 
     autoUpdater.on('download-progress', progressObj => {
@@ -227,6 +231,18 @@ function isTrustedLedgerSender(event: IpcMainEvent | IpcMainInvokeEvent): boolea
 // and signing requests. This does not replace transaction confirmation on
 // the physical Ledger display.
 initialize(isTrustedLedgerSender);
+
+// Read-only desktop locale bridge. Enforce the same main-frame/file origin
+// restrictions as Ledger IPC; never expose Electron or general IPC to Angular.
+ipcMain.handle('app-system-locale', event => {
+  if (!isTrustedLedgerSender(event)) throw new Error('Untrusted locale request');
+  return app.getLocale();
+});
+// Read-only native connectivity hint. Never expose generic IPC.
+ipcMain.handle('app-network-online', event => {
+  if (!isTrustedLedgerSender(event)) throw new Error('Untrusted network status request');
+  return net.isOnline();
+});
 
 function createWindow () {
   // Get window state

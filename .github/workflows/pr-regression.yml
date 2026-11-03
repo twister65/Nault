@@ -48,6 +48,9 @@ jobs:
       - name: Verify patched electron-updater dependency chain
         run: npm run test:electron-updater-security
 
+      - name: Verify Linux release packaging policy
+        run: node --test scripts/test-linux-packaging.test.cjs
+
       - name: Verify native Desktop menu localization and updater fork feed
         run: node --test scripts/test-desktop-locale.test.cjs
 

@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { Subject } from 'rxjs';
 import * as url from 'url';
 import { TranslocoService, getBrowserCultureLang, getBrowserLang } from '@jsverse/transloco';
 
@@ -34,6 +35,7 @@ export interface AppSettings {
 @Injectable()
 export class AppSettingsService {
   storeKey = `nanovault-appsettings`;
+  readonly serverFailover$ = new Subject<{ previousName: string; nextName: string }>();
 
   settings: AppSettings = {
     language: '',
@@ -68,6 +70,8 @@ export class AppSettingsService {
     ws: string | null;
     auth: string | null;
     shouldRandom: boolean;
+    allowFailover?: boolean;
+    failoverTarget?: boolean;
     work?: string;
     supportsRepresentativesOnline?: boolean;
   }> = [
@@ -86,6 +90,7 @@ export class AppSettingsService {
       ws: 'wss://rainstorm.city/websocket',
       auth: null,
       shouldRandom: true,
+      allowFailover: true,
     },
     {
       name: 'NanOslo',
@@ -94,6 +99,17 @@ export class AppSettingsService {
       ws: 'wss://nanoslo.0x.no/websocket',
       auth: null,
       shouldRandom: true,
+      allowFailover: true,
+    },
+    // SomeNano remains available for manual selection and as a fallback.
+    {
+      name: 'SomeNano',
+      value: 'somenano',
+      api: 'https://node.somenano.com/proxy',
+      ws: 'wss://node.somenano.com/websocket',
+      auth: null,
+      shouldRandom: false,
+      allowFailover: true,
     },
     {
       // Preferred personal RsNano node, not included in random rotation.
@@ -105,6 +121,7 @@ export class AppSettingsService {
       work: 'https://twister32.changeip.net/pow',
       auth: null,
       shouldRandom: false,
+      allowFailover: true,
     },
     {
       name: 'Custom',
@@ -135,7 +152,7 @@ export class AppSettingsService {
     private translate: TranslocoService
   ) { }
 
-  loadAppSettings() {
+  loadAppSettings(systemLocale?: string | null) {
     let settings: AppSettings = this.settings;
     const settingsStore = localStorage.getItem(this.storeKey);
     if (settingsStore) {
@@ -149,25 +166,37 @@ export class AppSettingsService {
     }
     this.settings = Object.assign(this.settings, settings);
 
-    if (!this.settings.language) {
-      const browserCultureLang = getBrowserCultureLang();
-      const browserLang = getBrowserLang();
+    const supported = this.translate.getAvailableLangs().map(lang =>
+      typeof lang === 'string' ? lang : lang.id
+    );
+    const fallback = this.translate.getDefaultLang(); // English
+    const supportedLocale = (value: string | null | undefined): string | null => {
+      if (!value || typeof value !== 'string') return null;
+      const normalized = value.trim().toLowerCase().replace(/_/g, '-');
+      const base = normalized.split('-')[0];
+      return [normalized, base].find(lang => supported.includes(lang)) ?? null;
+    };
 
-      const availableLanguages = this.translate.getAvailableLangs();
-      const available = (language: string) => availableLanguages.some(
-        item => typeof item === 'string' ? item === language : item.id === language
-      );
-      if (browserCultureLang && available(browserCultureLang)) {
-        this.settings.language = browserCultureLang;
-      } else if (browserLang && available(browserLang)) {
-        this.settings.language = browserLang;
-      } else {
-        this.settings.language = this.translate.getDefaultLang();
-      }
+    // A saved user choice takes precedence over the OS locale. Obsolete or
+    // unsupported saved languages are explicitly reset to English.
+    if (this.settings.language) {
+      this.settings.language = supportedLocale(this.settings.language) ?? fallback;
+    } else if (systemLocale && systemLocale.trim()) {
+      // Electron provides the OS locale over the trusted read-only IPC bridge.
+      // Do not silently choose the browser language when the OS locale is unsupported.
+      this.settings.language = supportedLocale(systemLocale) ?? fallback;
+    } else {
+      // PWA (or unavailable Electron OS locale): use the browser language.
+      this.settings.language = supportedLocale(getBrowserCultureLang())
+        ?? supportedLocale(getBrowserLang()) ?? fallback;
+    }
 
-      console.log('No language configured, setting to: ' + this.settings.language);
-      console.log('Browser culture language: ' + browserCultureLang);
-      console.log('Browser language: ' + browserLang);
+    // Persist normalization only for an existing saved preference, without
+    // changing the user's server, PoW or wallet settings.
+    if (settingsStore && settings.language !== this.settings.language) {
+      localStorage.setItem(this.storeKey, JSON.stringify({
+        ...settings, language: this.settings.language
+      }));
     }
 
     this.loadServerSettings();
@@ -201,6 +230,23 @@ export class AppSettingsService {
       this.settings.serverAPI = matchingServerOption.api;
       this.settings.serverWS = matchingServerOption.ws;
     }
+  }
+
+  // A successful RPC failover updates persisted settings and announces its
+  // WebSocket endpoint. A stale in-flight request cannot undo another switch.
+  // Never rotate a user-configured private RPC or Offline Mode.
+  activateFailover(expectedName: string, expectedApi: string, nextApi: string): boolean {
+    if (expectedName === 'custom' || expectedName === 'offline') return false;
+    const previous = this.serverOptions.find(server => server.api === expectedApi && server.allowFailover);
+    const next = this.serverOptions.find(server => server.api === nextApi && server.allowFailover);
+    if (!previous || !next || !next.api || previous.value === next.value ||
+        (expectedName !== 'random' && previous.value !== expectedName) ||
+        this.settings.serverName !== expectedName || this.settings.serverAPI !== expectedApi ||
+        this.settings.serverAuth) return false;
+
+    this.setAppSettings({ serverName: next.value, serverAPI: next.api, serverWS: next.ws, serverAuth: null });
+    this.serverFailover$.next({ previousName: previous.name, nextName: next.name });
+    return true;
   }
 
   // Only use a dedicated PoW endpoint when the explicitly selected server
@@ -242,7 +288,7 @@ export class AppSettingsService {
   clearAppSettings() {
     localStorage.removeItem(this.storeKey);
     this.settings = {
-      language: 'en',
+      language: '',
       displayDenomination: 'mnano',
       // displayPrefix: 'xrb',
       walletStore: 'localStorage',

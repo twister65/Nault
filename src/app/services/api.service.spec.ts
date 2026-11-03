@@ -1,6 +1,6 @@
 import { ApiService } from './api.service';
 import { TxType } from './util.service';
-import { of, throwError, NEVER } from 'rxjs';
+import { of, throwError, NEVER, Subject } from 'rxjs';
 import { fakeAsync, tick } from '@angular/core/testing';
 
 describe('ApiService.process', () => {
@@ -137,7 +137,8 @@ describe('ApiService RPC proxy fallback', () => {
         if (payload.action === refusedAction) {
           return throwError({
             status: 500,
-            error: { error: refusalMessage || `Action ${refusedAction} not allowed` }
+            error: { error: refusalMessage || `Action ${refusedAction} not allowed` },
+            isRpcError: true
           });
         }
         return of({ blocks: {} });
@@ -205,7 +206,7 @@ describe('ApiService RPC proxy fallback', () => {
     expect(payloads.map(p => p.action)).toEqual(['accounts_receivable']);
   });
 
-  it('does not silently fall back on an unrelated HTTP 500 error', async () => {
+  it('does not silently fall back on an unrelated HTTP 500 JSON-RPC action error', async () => {
     const { api, payloads, node } = setupProxy('accounts_receivable', 'custom', 'Internal server error');
 
     let error: any;
@@ -217,7 +218,67 @@ describe('ApiService RPC proxy fallback', () => {
 
     expect(error).toBeDefined();
     expect(payloads.map(p => p.action)).toEqual(['accounts_receivable']);
-    expect(node.setOffline).toHaveBeenCalled();
+    expect(node.setOffline).not.toHaveBeenCalled();
+  });
+
+  it('retries accounts_pending on HTTP 200 JSON action denial without switching servers', async () => {
+    const { api, payloads, node, settings } = setupProxy(null, 'random');
+    const http = (api as any).http;
+    http.post.and.callFake((_url: string, payload: any) => {
+      payloads.push({ ...payload });
+      return of(payload.action === 'accounts_receivable'
+        ? { error: 'Action accounts_receivable not allowed' }
+        : { blocks: {} });
+    });
+    expect(await api.accountsPending(['nano_test'])).toEqual({ blocks: {} });
+    expect(payloads.map(p => p.action)).toEqual(['accounts_receivable', 'accounts_pending']);
+    expect(node.setOffline).not.toHaveBeenCalled();
+    expect(settings.loadServerSettings).not.toHaveBeenCalled();
+  });
+
+  it('retries pending on HTTP 200 JSON action denial on the same node', async () => {
+    const { api, payloads } = setupProxy(null);
+    const http = (api as any).http;
+    http.post.and.callFake((_url: string, payload: any) => {
+      payloads.push({ ...payload });
+      return of(payload.action === 'receivable'
+        ? { error: 'Action receivable not allowed' }
+        : { blocks: {} });
+    });
+    expect(await api.pending('nano_test', 5)).toEqual({ blocks: {} });
+    expect(payloads.map(p => p.action)).toEqual(['receivable', 'pending']);
+  });
+});
+
+describe('ApiService optional node statistics', () => {
+  it('does not treat denied public block_count statistics as a node outage', async () => {
+    const http = { post: jasmine.createSpy('post').and.returnValue(throwError({
+      status: 500, isRpcError: true, error: { error: 'Action block_count not allowed' }
+    })) };
+    const node = {
+      node: { status: true },
+      setOffline: jasmine.createSpy('setOffline'),
+      setOnline: jasmine.createSpy('setOnline')
+    };
+    const settings = {
+      settings: { serverName: 'spynano', serverAPI: 'https://example.org/proxy' },
+      serverOptions: [{ value: 'spynano', api: 'https://example.org/proxy', allowFailover: true }],
+      activateFailover: jasmine.createSpy('activateFailover')
+    };
+    const api = new ApiService(http as any, node as any, settings as any);
+    expect(await api.optionalBlockCount()).toBeNull();
+    expect(http.post).toHaveBeenCalledTimes(1);
+    expect(node.setOffline).not.toHaveBeenCalled();
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+  });
+
+  it('does not display unavailable statistics from HTTP 200 JSON RPC denial', async () => {
+    const http = { post: jasmine.createSpy('post').and.returnValue(of({ error: 'Action block_count not allowed' })) };
+    const node = { node: { status: true }, setOffline: jasmine.createSpy('setOffline'), setOnline: jasmine.createSpy('setOnline') };
+    const settings = { settings: { serverAPI: 'https://example.org/proxy', serverName: 'random' } };
+    const api = new ApiService(http as any, node as any, settings as any);
+    expect(await api.optionalBlockCount()).toBeNull();
+    expect(node.setOffline).not.toHaveBeenCalled();
   });
 });
 
@@ -279,13 +340,71 @@ describe('ApiService optional representative metadata', () => {
 describe('ApiService bounded secure requests', () => {
   function setup(serverName = 'random') {
     const http = { post: jasmine.createSpy('post').and.returnValue(throwError({ status: 503 })) };
-    const node = { node: { status: true }, setOnline: jasmine.createSpy(), setOffline: jasmine.createSpy(), setLoading: jasmine.createSpy() };
+    const node = {
+      node: { status: true },
+      internetRecoveryPending: false,
+      internetInterruptionGeneration: 0,
+      markInternetInterrupted() {
+        if (!this.internetRecoveryPending) this.internetInterruptionGeneration++;
+        this.internetRecoveryPending = true;
+      },
+      setOnline: jasmine.createSpy(), setOffline: jasmine.createSpy(), setLoading: jasmine.createSpy()
+    };
     const settings = {
       settings: { serverName, serverAPI: 'https://a.invalid/rpc', serverAuth: 'test-secret' },
-      serverOptions: ['a', 'b', 'b', 'c', 'd'].map(host => ({ api: `https://${host}.invalid/rpc`, shouldRandom: true }))
+      serverOptions: ['a', 'b', 'b', 'c', 'd'].map(host => ({ api: `https://${host}.invalid/rpc`, value: host === 'a' && serverName === 'spynano' ? 'spynano' : host, shouldRandom: true, allowFailover: true, failoverTarget: undefined as boolean | undefined })),
+      activateFailover: jasmine.createSpy('activateFailover').and.returnValue(true)
     };
-    return { http, node, settings, api: new ApiService(http as any, node as any, settings as any) };
+    const api = new ApiService(http as any, node as any, settings as any);
+    // Stable insertion order for existing tests; no global Math.random spy.
+    const randomIndex = spyOn<any>(api, 'randomFallbackIndex').and.callFake((lastIndex: number) => lastIndex);
+    return { http, node, settings, api, randomIndex };
   }
+  it('selects a different first fallback when the random draw changes', async () => {
+    const { api, http, settings } = setup();
+    http.post.and.returnValues(throwError({ status: 503 }), of({ balances: {} }));
+    expect(await api.accountsBalances([])).toEqual({ balances: {} });
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith('random', 'https://a.invalid/rpc', 'https://b.invalid/rpc');
+
+    const alternative = setup();
+    alternative.randomIndex.and.returnValue(0);
+    alternative.http.post.and.returnValues(throwError({ status: 503 }), of({ balances: {} }));
+    expect(await alternative.api.accountsBalances([])).toEqual({ balances: {} });
+    // With [b, c, d] shuffled using zero draws, c is first.
+    expect(alternative.settings.activateFailover).toHaveBeenCalledOnceWith(
+      'random', 'https://a.invalid/rpc', 'https://c.invalid/rpc'
+    );
+  });
+
+  it('never retries the selected node or duplicated/disabled/unsafe fallback targets', async () => {
+    const { api, http, settings } = setup('spynano');
+    settings.serverOptions.push(
+      { api: 'https://a.invalid/rpc', value: 'duplicate', shouldRandom: false, allowFailover: true, failoverTarget: undefined },
+      { api: 'https://spy.invalid/proxy', value: 'spynano', shouldRandom: false, allowFailover: true, failoverTarget: false },
+      { api: 'http://192.0.2.10:7076', value: 'unsafe', shouldRandom: false, allowFailover: true, failoverTarget: undefined }
+    );
+    await expectAsync(api.accountsBalances([])).toBeRejected();
+    expect(http.post.calls.allArgs().map(args => args[0])).toEqual([
+      'https://a.invalid/rpc', 'https://b.invalid/rpc', 'https://c.invalid/rpc'
+    ]);
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+  });
+
+  it('tries the next randomized candidate after a failure and persists only a healthy one', async () => {
+    const { api, http, settings, randomIndex } = setup();
+    randomIndex.and.returnValue(0);
+    http.post.and.returnValues(
+      throwError({ status: 0 }), throwError({ status: 503 }), of({ balances: {} })
+    );
+    expect(await api.accountsBalances([])).toEqual({ balances: {} });
+    expect(http.post.calls.allArgs().map(args => args[0])).toEqual([
+      'https://a.invalid/rpc', 'https://c.invalid/rpc', 'https://d.invalid/rpc'
+    ]);
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith(
+      'random', 'https://a.invalid/rpc', 'https://d.invalid/rpc'
+    );
+  });
+
   it('stops after three distinct endpoints and never forwards custom credentials in random mode', async () => {
     const { api, http, node } = setup();
     await expectAsync(api.accountsBalances([])).toBeRejected();
@@ -316,6 +435,86 @@ describe('ApiService bounded secure requests', () => {
     await expectAsync(api.accountsBalances([])).toBeRejected();
     expect(http.post).not.toHaveBeenCalled();
   });
+  it('never switches servers when Electron reports Internet disconnected', async () => {
+    const { api, http, settings, node } = setup('spynano');
+    (api as any).desktop = { isNetworkOnline: () => Promise.resolve(false) };
+    http.post.and.returnValue(throwError({ status: 0 }));
+    await expectAsync(api.checkNodeAvailability(true)).toBeRejectedWith(
+      jasmine.objectContaining({ isInternetDisconnected: true })
+    );
+    expect(http.post).toHaveBeenCalledTimes(1);
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+    expect((node as any).internetRecoveryPending).toBe(true);
+  });
+
+  it('reports an RPC timeout as an RPC timeout after link recovery, never as a new Internet outage', fakeAsync(() => {
+    const { api, http, node, settings } = setup('rainstorm');
+    node.internetRecoveryPending = true;
+    node.internetInterruptionGeneration = 1;
+    http.post.and.returnValue(NEVER);
+    let error: any = null;
+    const interrupted = spyOn(node, 'markInternetInterrupted').and.callThrough();
+    api.checkNodeAvailability(true, false).catch(reason => { error = reason; });
+    tick(3000);
+    expect(error?.name).toBe('TimeoutError');
+    expect(node.internetRecoveryPending).toBe(true);
+    expect(node.internetInterruptionGeneration).toBe(1);
+    expect(interrupted).not.toHaveBeenCalled();
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+    expect(http.post).toHaveBeenCalledTimes(1);
+  }));
+
+  it('does not activate delayed fallback after a cable-offline event', fakeAsync(() => {
+    const { api, http, settings, node } = setup('spynano');
+    const late = new Subject<any>();
+    http.post.and.returnValues(throwError({ status: 0 }), late, NEVER, NEVER);
+    let rejected = false;
+    api.checkNodeAvailability(true).catch(() => { rejected = true; });
+    tick(0);
+    expect(http.post).toHaveBeenCalledTimes(4);
+    // The network returned and the original server was restored before the
+    // previously scheduled backup completed: generation still invalidates it.
+    (node as any).internetInterruptionGeneration = 1;
+    (node as any).internetRecoveryPending = false;
+    late.next({ count: '123456789' });
+    late.complete();
+    tick(0);
+    expect(rejected).toBe(true);
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+    expect(node.internetRecoveryPending).toBe(false); // Late reply must not mark a fresh outage.
+    expect(node.setOffline).not.toHaveBeenCalled();
+  }));
+
+  it('uses lightweight RPC metadata for a walletless DNS failover on Windows', async () => {
+    const { api, http, settings } = setup('spynano');
+    // Regression from Windows HAR: accounts_balances timed out on Rainstorm,
+    // NanOslo, SomeNano and Twister32, but Rainstorm block_count returned 200.
+    http.post.and.returnValues(throwError({ status: 0 }), of({ count: '225964139' }), NEVER, NEVER);
+    await api.checkNodeAvailability(true);
+    expect(http.post).toHaveBeenCalledTimes(4);
+    for (const [, payload] of http.post.calls.allArgs()) {
+      expect(payload).toEqual({ action: 'block_count', include_cemented: 'true' });
+    }
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith(
+      'spynano', 'https://a.invalid/rpc', 'https://b.invalid/rpc'
+    );
+  });
+
+  it('keeps a working selected RPC even when its WebSocket is unavailable', async () => {
+    const { api, http, settings } = setup('spynano');
+    http.post.and.returnValue(of({ count: '225964139' }));
+    await api.checkNodeAvailability(true);
+    expect(http.post).toHaveBeenCalledTimes(1);
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed block_count without choosing a new node', async () => {
+    const { api, http, settings } = setup('spynano');
+    http.post.and.returnValue(of({ count: 'not-a-number' }));
+    await expectAsync(api.checkNodeAvailability(true)).toBeRejected();
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+  });
+
   it('limits authentication to the configured custom RPC, not an explicit PoW server', async () => {
     const { api, http } = setup('custom');
     http.post.and.returnValue(of({ work: 'A'.repeat(16) }));
@@ -349,12 +548,171 @@ describe('ApiService bounded secure requests', () => {
     expect(rejected).toBe(true);
     expect(http.post).toHaveBeenCalledTimes(1);
   }));
-  it('recovers on a second server without mutating the configured endpoint', async () => {
+  it('does not show an offline error on an unconfigured wallet health probe', async () => {
+    const { api, http, node } = setup('spynano');
+    http.post.and.returnValue(throwError({ status: 0 }));
+    await expectAsync(api.checkNodeAvailability(true)).toBeRejected();
+    expect(http.post).toHaveBeenCalledTimes(4);
+    expect(node.setOffline).toHaveBeenCalledWith(null);
+  });
+
+  it('still shows a node error on an explicit or configured-wallet health probe', async () => {
+    const { api, http, node } = setup('spynano');
+    http.post.and.returnValue(throwError({ status: 0 }));
+    await expectAsync(api.checkNodeAvailability()).toBeRejected();
+    expect(node.setOffline).toHaveBeenCalled();
+    expect(node.setOffline.calls.mostRecent().args[0]).not.toBeNull();
+  });
+
+  it('checks all distinct public candidates during an empty-wallet DNS outage', async () => {
+    const { api, http, settings, randomIndex } = setup('spynano');
+    randomIndex.and.callFake((lastIndex: number) => lastIndex);
+    http.post.and.returnValues(
+      throwError({ status: 0 }), throwError({ status: 502 }), throwError({ status: 503 }), of({ count: '225964139' })
+    );
+    await api.checkNodeAvailability(true);
+    expect(http.post.calls.allArgs().map(args => args[0])).toEqual([
+      'https://a.invalid/rpc', 'https://b.invalid/rpc', 'https://c.invalid/rpc', 'https://d.invalid/rpc'
+    ]);
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith(
+      'spynano', 'https://a.invalid/rpc', 'https://d.invalid/rpc'
+    );
+  });
+
+  it('keeps the three-attempt limit for normal wallet reads despite additional health candidates', async () => {
+    const { api, http } = setup('spynano');
+    await expectAsync(api.accountsBalances([])).toBeRejected();
+    expect(http.post).toHaveBeenCalledTimes(3);
+  });
+
+  it('ignores a healthy fallback result if the active node changed during the request', async () => {
+    const { api, http, settings } = setup('spynano');
+    http.post.and.returnValues(throwError({ status: 0 }), of({ count: '225964139' }), NEVER, NEVER);
+    settings.activateFailover.and.returnValue(false);
+    await expectAsync(api.checkNodeAvailability(true)).toBeRejected();
+    expect(settings.activateFailover).toHaveBeenCalledTimes(1);
+  });
+
+  it('times out the primary at three seconds and probes all backups in parallel for ten more', fakeAsync(() => {
+    const { api, http } = setup('spynano');
+    http.post.and.returnValue(NEVER);
+    let rejected = false;
+    api.checkNodeAvailability().catch(() => { rejected = true; });
+    expect(http.post).toHaveBeenCalledTimes(1);
+    tick(2999);
+    expect(http.post).toHaveBeenCalledTimes(1);
+    tick(1);
+    expect(http.post).toHaveBeenCalledTimes(4);
+    tick(9999);
+    expect(rejected).toBe(false);
+    tick(1);
+    expect(rejected).toBe(true);
+    expect(http.post).toHaveBeenCalledTimes(4);
+  }));
+
+  it('accepts a public fallback responding after three seconds and aborts slower candidates', fakeAsync(() => {
+    const { api, http, settings } = setup('spynano');
+    const late = new Subject<any>();
+    http.post.and.returnValues(
+      throwError({ status: 0 }), NEVER, late, NEVER
+    );
+    let completed = false;
+    api.checkNodeAvailability().then(() => { completed = true; });
+    tick(0); // Allow the first DNS error to schedule concurrent backup probes.
+    expect(http.post).toHaveBeenCalledTimes(4);
+    tick(4500);
+    late.next({ balances: {} });
+    late.complete();
+    tick(0);
+    expect(completed).toBe(true);
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith(
+      'spynano', 'https://a.invalid/rpc', 'https://c.invalid/rpc'
+    );
+  }));
+
+  it('moves to a working fallback after the first timed-out health probe', fakeAsync(() => {
+    const { api, http, settings } = setup('spynano');
+    http.post.and.returnValues(NEVER, of({ balances: {} }), NEVER, NEVER);
+    let completed = false;
+    api.checkNodeAvailability().then(() => { completed = true; });
+    tick(3000);
+    expect(completed).toBe(true);
+    expect(http.post).toHaveBeenCalledTimes(4);
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith(
+      'spynano', 'https://a.invalid/rpc', 'https://b.invalid/rpc'
+    );
+  }));
+
+  it('shares a pending availability check from WS and manual server save', async () => {
+    const { api, http } = setup('spynano');
+    const subject = new Subject<any>();
+    http.post.and.returnValue(subject);
+    const first = api.checkNodeAvailability();
+    const second = api.checkNodeAvailability();
+    expect(first).toBe(second);
+    expect(http.post).toHaveBeenCalledTimes(1);
+    subject.next({ balances: {} });
+    subject.complete();
+    await first;
+    // A completed Subject cannot emit a response for a subsequent new request.
+    // Use a fresh, valid RPC response to test that the completed check is
+    // evicted from the in-flight cache.
+    http.post.and.returnValue(of({ balances: {} }));
+    await api.checkNodeAvailability();
+    expect(http.post).toHaveBeenCalledTimes(2);
+  });
+
+  it('probes the public burn account when no wallet is configured', async () => {
+    const { api, http, settings } = setup('spynano');
+    // HTTP 504 from the selected node; a successful balances response from the
+    // next candidate proves failover works without wallet accounts.
+    http.post.and.returnValues(throwError({ status: 504 }), of({ balances: {} }), NEVER, NEVER);
+    await api.checkNodeAvailability();
+    const calls = http.post.calls.allArgs();
+    expect(calls.length).toBe(4);
+    expect(calls[0][1]).toEqual({ action: 'accounts_balances', accounts: [
+      'nano_1111111111111111111111111111111111111111111111111111hifc8npp'
+    ] });
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith('spynano', 'https://a.invalid/rpc', 'https://b.invalid/rpc');
+  });
+
+  it('does not accept a successful HTTP response with invalid RPC data', async () => {
+    const { api, http, settings } = setup('spynano');
+    http.post.and.returnValues(throwError({ status: 504 }),
+      of({ random_field: true }), of({ random_field: true }), of({ random_field: true }));
+    await expectAsync(api.checkNodeAvailability()).toBeRejected();
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+  });
+
+  it('activates a successful RPC fallback for persistence by settings', async () => {
     const { api, http, settings } = setup();
     http.post.and.returnValues(throwError({ status: 503 }), of({ balances: {} }));
     expect(await api.accountsBalances([])).toEqual({ balances: {} });
-    expect(settings.settings.serverAPI).toBe('https://a.invalid/rpc');
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith('random', 'https://a.invalid/rpc', 'https://b.invalid/rpc');
     expect(http.post).toHaveBeenCalledTimes(2);
+  });
+  it('never selects a fallback node on an HTTP 200 JSON-RPC error response', async () => {
+    const { api, http, settings } = setup();
+    http.post.and.returnValues(throwError({ status: 503 }), of({ error: 'Action accounts_balances not allowed' }), of({ balances: {} }));
+    await expectAsync(api.accountsBalances([])).toBeRejectedWith(jasmine.objectContaining({ isRpcError: true }));
+    expect(http.post).toHaveBeenCalledTimes(2);
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+  });
+
+  it('does not switch a built-in node on a JSON-RPC error with HTTP 500', async () => {
+    const { api, http, settings } = setup('a');
+    http.post.and.returnValues(throwError({
+      status: 500, error: { error: 'Action accounts_balances not allowed' }, isRpcError: true
+    }), of({ balances: {} }));
+    await expectAsync(api.accountsBalances([])).toBeRejected();
+    expect(http.post).toHaveBeenCalledTimes(1);
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+  });
+  it('does not rotate a custom server', async () => {
+    const { api, http, settings } = setup('custom');
+    await expectAsync(api.accountsBalances([])).toBeRejected();
+    expect(http.post).toHaveBeenCalledTimes(1);
+    expect(settings.activateFailover).not.toHaveBeenCalled();
   });
   it('counts legacy fallback against the same total attempt budget', async () => {
     const { api, http } = setup();

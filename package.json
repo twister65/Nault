@@ -145,10 +145,13 @@
       "app": "./"
     },
     "nsis": {
-      "artifactName": "Nault-Setup-${version}.${ext}"
+      "artifactName": "Nault-Windows-Setup-${version}.${ext}"
     },
     "mac": {
-      "target": "dmg",
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "category": "public.app-category.finance",
       "extendInfo": {
         "CFBundleURLTypes": [
@@ -159,11 +162,33 @@
             ]
           }
         ]
-      }
+      },
+      "artifactName": "Nault-macOS-${version}-${arch}.${ext}"
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "desktop-app/assets/linux"
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm",
+        "pacman"
+      ],
+      "icon": "desktop-app/assets/linux",
+      "executableName": "nault",
+      "category": "Office;Finance;",
+      "synopsis": "Nano cryptocurrency wallet",
+      "description": "Nault desktop wallet for Nano with Ledger USB and Bluetooth support",
+      "syncDesktopName": true,
+      "desktop": {
+        "entry": {
+          "Name": "Nault",
+          "GenericName": "Nano wallet",
+          "Comment": "Nano cryptocurrency wallet",
+          "Keywords": "Nano;XNO;Ledger;Wallet;",
+          "Terminal": "false"
+        }
+      },
+      "maintainer": "Twister32 <26852967+twister65@users.noreply.github.com>",
+      "artifactName": "Nault-Linux-${version}-${arch}.${ext}"
     },
     "protocols": {
       "name": "nano",
@@ -176,6 +201,57 @@
         "nanoprocess"
       ],
       "role": "Viewer"
+    },
+    "pacman": {
+      "compression": "zstd",
+      "artifactName": "Nault-Linux-Arch-Manjaro-${version}-${arch}.pkg.tar.zst",
+      "depends": [
+        "gtk3",
+        "libnotify",
+        "nss",
+        "libxss",
+        "libxtst",
+        "xdg-utils",
+        "at-spi2-core",
+        "libsecret",
+        "alsa-lib",
+        "mesa"
+      ]
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "libgbm1",
+        "libasound2"
+      ],
+      "artifactName": "Nault-Linux-Debian-Ubuntu-Mint-${version}-${arch}.${ext}"
+    },
+    "rpm": {
+      "depends": [
+        "libgtk-3.so.0()(64bit)",
+        "libnotify.so.4()(64bit)",
+        "libnss3.so()(64bit)",
+        "libXss.so.1()(64bit)",
+        "libXtst.so.6()(64bit)",
+        "xdg-utils",
+        "libatspi.so.0()(64bit)",
+        "libuuid.so.1()(64bit)",
+        "libsecret-1.so.0()(64bit)",
+        "libgbm.so.1()(64bit)",
+        "libasound.so.2()(64bit)"
+      ],
+      "artifactName": "Nault-Linux-Fedora-openSUSE-${version}-${arch}.${ext}"
+    },
+    "appImage": {
+      "artifactName": "Nault-Linux-Portable-${version}-${arch}.${ext}"
     }
   },
   "overrides": {
@@ -221,5 +297,6 @@
   },
   "browser": {
     "stream": "stream-browserify"
-  }
+  },
+  "desktopName": "cc.nault.desktop"
 }
