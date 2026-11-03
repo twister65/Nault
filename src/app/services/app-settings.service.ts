@@ -177,35 +177,37 @@ export class AppSettingsService {
     }
     this.settings = Object.assign(this.settings, settings);
 
-    if (!this.settings.language) {
-      const browserCultureLang = getBrowserCultureLang();
-      const browserLang = getBrowserLang();
-      // The Electron native menu already uses app.getLocale(). The renderer's
-      // navigator language may disagree with it (notably Linux/Windows).
-      // Use the OS locale only for first-run defaults; never overwrite a
-      // language explicitly saved by the user.
-      const osLanguage = typeof systemLocale === 'string'
-        ? systemLocale.toLowerCase().replace('_', '-') : '';
-      const osBaseLanguage = osLanguage.split('-')[0];
-      const availableLanguages = this.translate.getAvailableLangs();
-      const available = (language: string) => availableLanguages.some(
-        item => typeof item === 'string' ? item === language : item.id === language
-      );
-      if (osLanguage && available(osLanguage)) {
-        this.settings.language = osLanguage;
-      } else if (osBaseLanguage && available(osBaseLanguage)) {
-        this.settings.language = osBaseLanguage;
-      } else if (browserCultureLang && available(browserCultureLang)) {
-        this.settings.language = browserCultureLang;
-      } else if (browserLang && available(browserLang)) {
-        this.settings.language = browserLang;
-      } else {
-        this.settings.language = this.translate.getDefaultLang();
-      }
+    const supported = this.translate.getAvailableLangs().map(lang =>
+      typeof lang === 'string' ? lang : lang.id
+    );
+    const fallback = this.translate.getDefaultLang(); // English
+    const supportedLocale = (value: string | null | undefined): string | null => {
+      if (!value || typeof value !== 'string') return null;
+      const normalized = value.trim().toLowerCase().replace(/_/g, '-');
+      const base = normalized.split('-')[0];
+      return [normalized, base].find(lang => supported.includes(lang)) ?? null;
+    };
 
-      console.log('No language configured, setting to: ' + this.settings.language);
-      console.log('Browser culture language: ' + browserCultureLang);
-      console.log('Browser language: ' + browserLang);
+    // A saved user choice takes precedence over the OS locale. Obsolete or
+    // unsupported saved languages are explicitly reset to English.
+    if (this.settings.language) {
+      this.settings.language = supportedLocale(this.settings.language) ?? fallback;
+    } else if (systemLocale && systemLocale.trim()) {
+      // Electron provides the OS locale over the trusted read-only IPC bridge.
+      // Do not silently choose the browser language when the OS locale is unsupported.
+      this.settings.language = supportedLocale(systemLocale) ?? fallback;
+    } else {
+      // PWA (or unavailable Electron OS locale): use the browser language.
+      this.settings.language = supportedLocale(getBrowserCultureLang())
+        ?? supportedLocale(getBrowserLang()) ?? fallback;
+    }
+
+    // Persist normalization only for an existing saved preference, without
+    // changing the user's server, PoW or wallet settings.
+    if (settingsStore && settings.language !== this.settings.language) {
+      localStorage.setItem(this.storeKey, JSON.stringify({
+        ...settings, language: this.settings.language
+      }));
     }
 
     this.loadServerSettings();
