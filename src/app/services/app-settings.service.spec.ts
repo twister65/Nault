@@ -106,7 +106,7 @@ describe('AppSettingsService', () => {
     }
   }));
 
-  it('normalizes a saved German regional variant without ignoring the user's preference', inject([AppSettingsService], (service: AppSettingsService) => {
+  it("normalizes a saved German regional variant without ignoring the user preference", inject([AppSettingsService], (service: AppSettingsService) => {
     const saved = localStorage.getItem(service.storeKey);
     try {
       localStorage.setItem(service.storeKey, JSON.stringify({ ...service.settings, language: 'de-CH' }));
