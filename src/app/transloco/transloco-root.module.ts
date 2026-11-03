@@ -12,6 +12,7 @@ export class TranslocoHttpLoader implements TranslocoLoader {
     switch (lang) {
       case 'fr': return import('../../assets/i18n/fr.json').then(res => res.default);
       case 'es': return import('../../assets/i18n/es.json').then(res => res.default);
+      case 'de': return import('../../assets/i18n/de.json').then(res => res.default);
       default: return import('../../assets/i18n/en.json').then(res => res.default);
     }
   }
@@ -27,7 +28,8 @@ export class TranslocoHttpLoader implements TranslocoLoader {
         availableLangs: [
           { id: 'en', label: 'English' },
           { id: 'fr', label: 'Français' },
-          { id: 'es', label: 'Español' }
+          { id: 'es', label: 'Español' },
+          { id: 'de', label: 'Deutsch' }
         ],
         defaultLang: 'en',
         fallbackLang: 'en',

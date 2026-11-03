@@ -50,6 +50,9 @@ export class WebsocketService {
   newTransactions$ = new BehaviorSubject<NanoConfirmation | null>(null);
   // A new connection does not replay confirmations missed while offline.
   readonly connected$ = new Subject<void>();
+  // An early warning signal, NOT proof that the RPC endpoint is down.
+  // Consumers should check RPC before switching a server.
+  readonly connectionFailure$ = new Subject<string>();
 
   constructor(private appSettings: AppSettingsService) { }
 
@@ -88,8 +91,20 @@ export class WebsocketService {
     console.info('WebSocket connecting.');
     const ws = new WebSocket(wsUrl);
     this.socket.ws = ws;
+    // DNS/TLS/WebSocket errors can precede the ordinary RPC polling cycle.
+    // One signal per socket keeps onerror + onclose from issuing duplicate
+    // health checks, while the existing reconnect budget remains unchanged.
+    let failureReported = false;
+    const reportFailure = () => {
+      if (failureReported || this.socket.ws !== ws) return;
+      failureReported = true;
+      this.connectionFailure$.next(wsUrl);
+    };
     this.connectionTimer = setTimeout(() => {
-      if (this.socket.ws === ws && !this.socket.connected) this.disconnect(ws);
+      if (this.socket.ws === ws && !this.socket.connected) {
+        reportFailure();
+        this.disconnect(ws);
+      }
     }, 15000);
 
     ws.onopen = event => {
@@ -111,8 +126,12 @@ export class WebsocketService {
     };
     ws.onerror = event => {
       console.warn('WebSocket connection error.');
+      reportFailure();
     };
-    ws.onclose = () => this.disconnect(ws);
+    ws.onclose = () => {
+      reportFailure();
+      this.disconnect(ws);
+    };
     ws.onmessage = event => {
       if (this.socket.ws !== ws) return;
       try {

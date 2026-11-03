@@ -1,5 +1,5 @@
 import { secureEndpoint } from '../../services/endpoint-policy';
-import { Component, OnInit, Renderer2, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, Renderer2, ChangeDetectionStrategy } from '@angular/core';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {AppSettingsService, AppSettings, PoWSource} from '../../services/app-settings.service';
@@ -12,7 +12,7 @@ import {ApiService} from '../../services/api.service';
 import {WebsocketService} from '../../services/websocket.service';
 import {NodeService} from '../../services/node.service';
 import {UtilService} from '../../services/util.service';
-import {BehaviorSubject} from 'rxjs';
+import {BehaviorSubject, Subscription} from 'rxjs';
 import {RepresentativeService, StoredRepresentative} from '../../services/representative.service';
 import {NinjaService} from '../../services/ninja.service';
 import {QrModalService} from '../../services/qr-modal.service';
@@ -26,7 +26,8 @@ import { TranslocoService } from '@jsverse/transloco';
     standalone: false
 })
 
-export class ConfigureAppComponent implements OnInit {
+export class ConfigureAppComponent implements OnInit, OnDestroy {
+  private readonly failoverSubscription = new Subscription();
 
   constructor(
     private walletService: WalletService,
@@ -203,9 +204,34 @@ export class ConfigureAppComponent implements OnInit {
 
   async ngOnInit() {
     this.loadFromSettings();
+    this.failoverSubscription.add(this.appSettings.serverFailover$.subscribe(() => {
+      // Keep the visible Server Configuration in sync without discarding
+      // unrelated, unsaved form edits.
+      this.selectedServer = this.appSettings.settings.serverName;
+      this.serverAPI = this.appSettings.settings.serverAPI;
+      this.serverAPIUpdated = this.serverAPI;
+      this.serverWS = this.appSettings.settings.serverWS;
+      this.serverAuth = null;
+      this.resetNodeStats();
+      void this.updateNodeStats();
+    }));
     this.updateNodeStats();
+    // On an offline first launch, every optional stats request may fail before
+    // the cable is reconnected. A fresh successful WS connection to the
+    // selected node is the right opportunity to reload the empty stats panel.
+    // Avoid extra metadata probes if values were already loaded.
+    this.failoverSubscription.add(this.websocket.connected$.subscribe(() => {
+      if (this.statsRefreshEnabled && !this.nodeBlockCount && !this.nodeVendor &&
+          this.appSettings.settings.serverAPI) {
+        void this.updateNodeStats();
+      }
+    }));
 
     setTimeout(() => this.populateRepresentativeList(), 500);
+  }
+
+  ngOnDestroy(): void {
+    this.failoverSubscription.unsubscribe();
   }
 
   async populateRepresentativeList() {
@@ -248,7 +274,7 @@ export class ConfigureAppComponent implements OnInit {
     this.statsRefreshEnabled = false;
     try {
       try {
-        const blockCount = await this.api.blockCount();
+        const blockCount = await this.api.optionalBlockCount();
         if (!current()) return;
         this.nodeStatsServer = endpoint;
         if (blockCount) {
@@ -518,20 +544,41 @@ export class ConfigureAppComponent implements OnInit {
 
     this.notifications.sendSuccess(this.translocoService.translate('configure-app.server-settings-successfully-updated'));
 
-    this.node.node.status = false; // Directly set node to offline since API url changed.  Status will get set by reloadBalances
+    this.node.setLoading(); // The next RPC read or probe determines the real node status.
 
-    // Restore notifications immediately, independently of slow/offline RPC reads.
+    // Restore notifications and refresh node statistics immediately.
+    // Previously, an empty-wallet synthetic accounts_balances probe could
+    // stall for 13 seconds before *any* node statistics were displayed, even
+    // though block_count/version on the selected RPC were responding.
     this.websocket.forceReconnect();
+    this.statsRefreshEnabled = true;
+    void this.updateNodeStats();
     try {
-      await this.walletService.reloadBalances();
+      if (this.walletService.wallet?.accounts?.length) {
+        await this.walletService.reloadBalances();
+      } else if (this.appSettings.settings.serverAPI && !this.appSettings.settings.serverWS) {
+        // For RPC-only nodes, check availability without a configured wallet.
+        // With WS configured, wait for an actual WS failure before probing:
+        // the user's selected node may already be answering node stats, and
+        // a synthetic burn-account query is not a reliable failure signal.
+        await this.api.checkNodeAvailability(!this.walletService.isConfigured());
+      }
     } catch (_) {
-      this.notifications.sendWarning(this.translocoService.translate('ui-notifications.refresh-balance-server'));
+      // Updating server settings is an explicit user action. Report one
+      // actionable warning on failure, but not a persistent offline toast.
+      // No balances exist until a wallet is configured. Use a specific,
+      // localized server warning rather than claiming balance refresh failed.
+      const key = this.walletService.isConfigured()
+        ? 'ui-notifications.refresh-balance-server'
+        : 'ui-notifications.server-unavailable';
+      this.notifications.sendWarning(this.translocoService.translate(key));
     }
-    // this is updated after setting server to random and doing recheck of wallet balance
+    // Server selection may have changed automatically during the RPC refresh.
+    this.selectedServer = this.appSettings.settings.serverName;
     this.serverAPIUpdated = this.appSettings.settings.serverAPI;
     this.serverAPI = this.serverAPIUpdated;
-    this.statsRefreshEnabled = true;
-    this.updateNodeStats();
+    this.serverWS = this.appSettings.settings.serverWS;
+    this.serverAuth = this.appSettings.settings.serverAuth;
   }
 
   searchRepresentatives() {

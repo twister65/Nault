@@ -128,5 +128,36 @@ export function desktopLabels(locale: string) {
     pairLedger: 'Emparejar Ledger', confirmPinPrompt: '¿Tu Ledger muestra', pairPrompt: '¿Emparejar la Ledger seleccionada?',
     pairAdvice: 'Confirma solo si estás emparejando tu propia Ledger. Confirma también en el dispositivo cuando se solicite.', confirm: 'Confirmar',
   };
-  return language === 'fr' ? fr : language === 'es' ? es : en;
+  const de: typeof en = {
+    edit: 'Bearbeiten', view: 'Ansicht', window: 'Fenster', help: 'Hilfe',
+    undo: 'Rückgängig', redo: 'Wiederholen', cut: 'Ausschneiden',
+    copy: 'Kopieren', paste: 'Einfügen', pasteAndMatchStyle: 'Einfügen und Stil anpassen',
+    delete: 'Löschen', selectAll: 'Alles auswählen', reload: 'Neu laden',
+    forceReload: 'Erneut laden erzwingen', toggleDevTools: 'Entwicklertools umschalten',
+    resetZoom: 'Tatsächliche Größe', zoomIn: 'Vergrößern', zoomOut: 'Verkleinern',
+    toggleFullScreen: 'Vollbild umschalten', minimize: 'Minimieren',
+    close: 'Schließen', zoom: 'Zoom', front: 'Alle Fenster nach vorne',
+    about: 'Über Nault', hide: 'Nault ausblenden',
+    hideOthers: 'Andere ausblenden', unhide: 'Alle anzeigen', quit: 'Nault beenden',
+    startSpeaking: 'Sprachausgabe starten', stopSpeaking: 'Sprachausgabe stoppen',
+    docs: 'Nault-Hilfe', github: 'GitHub öffnen', bug: 'Problem melden',
+    releaseNotes: 'Versionshinweise', checkUpdates: 'Nach Updates suchen',
+    speech: 'Sprachausgabe', newVersion: 'Neue Version',
+    updateAvailable: 'Ein Nault-Update ist verfügbar!',
+    downloadPrompt: 'Version herunterladen und installieren',
+    update: 'Aktualisieren', askLater: 'Später',
+    upToDate: 'Aktuell', noUpdate: 'Nault ist bereits auf dem neuesten Stand.',
+    updateError: 'Update-Fehler', updateFailed: 'Nault konnte nicht aktualisiert werden.',
+    errorLog: 'Weitere Informationen im Protokoll unter:', ok: 'OK',
+    ledgerBluetoothTitle: 'Ledger über Bluetooth verbinden',
+    selectLedger: 'Wählen Sie Ihre Ledger aus',
+    searchLedger: 'Suche nach Ledger-Geräten …',
+    ledgerBluetoothAdvice: 'Entsperren Sie Ihre Ledger, aktivieren Sie Bluetooth und öffnen Sie die Nano-App. Klicken Sie auf Aktualisieren, falls Ihr Gerät fehlt. Prüfen Sie den Kopplungscode auf der Ledger.',
+    cancel: 'Abbrechen', refresh: 'Aktualisieren', unnamedDevice: 'Unbenanntes Gerät',
+    pairLedger: 'Ledger koppeln', confirmPinPrompt: 'Zeigt Ihre Ledger',
+    pairPrompt: 'Mit der ausgewählten Ledger koppeln?',
+    pairAdvice: 'Bestätigen Sie die Kopplung nur mit Ihrer eigenen Ledger. Bestätigen Sie bei Bedarf auch auf dem Gerät.',
+    confirm: 'Bestätigen',
+  };
+  return language === 'fr' ? fr : language === 'es' ? es : language === 'de' ? de : en;
 }

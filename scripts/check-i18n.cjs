@@ -22,7 +22,7 @@ const placeholders = text => [...text.matchAll(/{{\s*([^}]+?)\s*}}/g)]
   .map(match => match[1].trim()).sort();
 
 const en = flatten(read('en'));
-for (const language of ['fr', 'es']) {
+for (const language of ['fr', 'es', 'de']) {
   const translation = flatten(read(language));
   assert.deepEqual(Object.keys(translation).sort(), Object.keys(en).sort(), language + ': missing or extra translation keys');
   for (const [key, reference] of Object.entries(en)) {

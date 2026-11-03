@@ -1,7 +1,8 @@
 import { ComponentTestModule, isolateConstructorIO } from '../../../testing/component-test.module';
-import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick, waitForAsync } from '@angular/core/testing';
 
 import { ConfigureAppComponent } from './configure-app.component';
+import { WebsocketService } from '../../services/websocket.service';
 
 describe('ConfigureAppComponent', () => {
   let component: ConfigureAppComponent;
@@ -24,6 +25,27 @@ describe('ConfigureAppComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+
+  it('refreshes missing node statistics when WebSocket reconnects after offline startup', fakeAsync(() => {
+    (component as any).appSettings.settings.serverAPI = 'https://rainstorm.city/api';
+    spyOn(component, 'loadFromSettings').and.stub();
+    const stats = spyOn(component, 'updateNodeStats').and.returnValue(Promise.resolve());
+    spyOn(component, 'populateRepresentativeList').and.returnValue(Promise.resolve());
+    void component.ngOnInit();
+    const ws = TestBed.inject(WebsocketService);
+    expect(stats).toHaveBeenCalledTimes(1);
+    // A failed initial stats request left the panel empty.
+    component.statsRefreshEnabled = true;
+    ws.connected$.next();
+    expect(stats).toHaveBeenCalledTimes(2);
+    component.nodeBlockCount = '123';
+    ws.connected$.next();
+    expect(stats).toHaveBeenCalledTimes(2);
+    component.ngOnDestroy();
+    ws.connected$.next();
+    expect(stats).toHaveBeenCalledTimes(2);
+    tick(500);
+  }));
 
   it('keeps selector labels as translation keys until Transloco has loaded', () => {
     // Do not eagerly call translate() in the component constructor: the
@@ -53,13 +75,20 @@ describe('ConfigureAppComponent server settings', () => {
       settings: { serverAPI: 'https://saved.example/rpc' },
       setAppSettings: jasmine.createSpy(), loadAppSettings: jasmine.createSpy()
     };
+    settings.setAppSettings.and.callFake((values: any) => Object.assign(settings.settings, values));
     notifications = { sendWarning: jasmine.createSpy(), sendSuccess: jasmine.createSpy() };
     websocket = { forceReconnect: jasmine.createSpy() };
-    wallet = { reloadBalances: jasmine.createSpy().and.returnValue(Promise.resolve()) };
+    wallet = {
+      wallet: { accounts: [{ id: 'nano_test' }] },
+      isConfigured: jasmine.createSpy().and.returnValue(true),
+      reloadBalances: jasmine.createSpy().and.returnValue(Promise.resolve())
+    };
     Object.assign(component, {
       selectedServer: 'custom', serverAPI: 'https://new.example/rpc', serverWS: 'wss://new.example/ws',
       appSettings: settings, notifications, websocket, walletService: wallet,
-      translocoService: { translate: (key: string) => key }, node: { node: {} }, statsRequest: 0
+      api: { checkNodeAvailability: jasmine.createSpy().and.returnValue(Promise.resolve()) },
+      translocoService: { translate: (key: string) => key },
+      node: { setLoading: jasmine.createSpy(), node: {} }, statsRequest: 0
     });
     spyOn(component, 'updateNodeStats').and.returnValue(Promise.resolve());
   });
@@ -79,6 +108,49 @@ describe('ConfigureAppComponent server settings', () => {
     await saving;
     expect(websocket.forceReconnect).toHaveBeenCalledTimes(1);
   });
+  it('reports a single warning for an explicitly failed server change without a wallet', async () => {
+    wallet.wallet.accounts = [];
+    wallet.isConfigured.and.returnValue(false);
+    component.serverWS = ''; // RPC-only selection: explicit health check applies.
+    (component as any).api.checkNodeAvailability.and.returnValue(Promise.reject(new Error('offline')));
+    await component.updateServerSettings();
+    expect((component as any).api.checkNodeAvailability).toHaveBeenCalledWith(true);
+    expect(notifications.sendWarning).toHaveBeenCalledTimes(1);
+  });
+
+  it('probes after saving an RPC-only server without a configured wallet', async () => {
+    wallet.wallet.accounts = [];
+    wallet.isConfigured.and.returnValue(false);
+    component.serverWS = '';
+    await component.updateServerSettings();
+    expect(wallet.reloadBalances).not.toHaveBeenCalled();
+    expect((component as any).api.checkNodeAvailability).toHaveBeenCalledTimes(1);
+    expect(websocket.forceReconnect).toHaveBeenCalledTimes(1);
+  });
+  it('shows node stats immediately and does not probe a synthetic account with WS configured', async () => {
+    wallet.wallet.accounts = [];
+    wallet.isConfigured.and.returnValue(false);
+    await component.updateServerSettings();
+    expect(component.updateNodeStats).toHaveBeenCalledTimes(1);
+    expect((component as any).api.checkNodeAvailability).not.toHaveBeenCalled();
+    expect(websocket.forceReconnect).toHaveBeenCalledTimes(1);
+    expect(notifications.sendWarning).not.toHaveBeenCalled();
+  });
+
+  it('does not wait for an RPC-only availability check before requesting node stats', async () => {
+    wallet.wallet.accounts = [];
+    wallet.isConfigured.and.returnValue(false);
+    component.serverWS = '';
+    let finishProbe!: () => void;
+    const probe = new Promise<void>(resolve => { finishProbe = resolve; });
+    (component as any).api.checkNodeAvailability.and.returnValue(probe);
+    const saving = component.updateServerSettings();
+    expect((component as any).api.checkNodeAvailability).toHaveBeenCalledTimes(1);
+    expect(component.updateNodeStats).toHaveBeenCalledTimes(1);
+    finishProbe();
+    await saving;
+  });
+
   it('handles a failed refresh without retaining old statistics', async () => {
     component.nodeVendor = 'old server';
     wallet.reloadBalances.and.returnValue(Promise.reject(new Error('offline')));

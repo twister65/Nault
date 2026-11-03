@@ -13,14 +13,19 @@ const input = path.resolve(process.argv[2] || 'desktop-platforms');
 const output = path.resolve(process.argv[3] || 'release-ready');
 const notes = path.resolve(process.argv[4] || 'release-downloads.md');
 const tag = process.argv[5] || '';
+const linuxArtifacts = {
+  'desktop-linux-deb': '.deb',
+  'desktop-linux-rpm': '.rpm',
+  'desktop-linux-pacman': '.pkg.tar.zst',
+  'desktop-linux-appimage': '.AppImage'
+};
 const expected = ['desktop-windows-2022', 'desktop-macos-15-intel',
-  'desktop-macos-15', 'desktop-ubuntu-24.04'];
+  'desktop-macos-15', ...Object.keys(linuxArtifacts)];
 const macHosts = ['desktop-macos-15-intel', 'desktop-macos-15'];
 const feeds = {
   'desktop-windows-2022': 'latest.yml',
   'desktop-macos-15-intel': 'latest-mac.yml',
-  'desktop-macos-15': 'latest-mac.yml',
-  'desktop-ubuntu-24.04': 'latest-linux.yml'
+  'desktop-macos-15': 'latest-mac.yml'
 };
 const allowed = name => name.endsWith('.exe') || name.endsWith('.dmg') ||
   name.endsWith('.zip') || name.endsWith('.AppImage') || name.endsWith('.deb') ||
@@ -68,9 +73,24 @@ function main() {
   assert.ok(fs.existsSync(input), 'Missing downloaded platform artifacts');
   fs.mkdirSync(output, {recursive: true});
   for (const host of expected) {
-    assert.ok(fs.existsSync(path.join(input, host)), 'Missing CI platform ' + host);
-    validateFeed(path.join(input, host), feeds[host]);
+    const dir = path.join(input, host);
+    assert.ok(fs.existsSync(dir), 'Missing CI platform ' + host);
+    if (feeds[host]) validateFeed(dir, feeds[host]);
+    // Artifacts are intentionally per Linux package. Catch accidental
+    // cross-format uploads before assembling the complete release.
+    if (linuxArtifacts[host]) {
+      const extension = linuxArtifacts[host];
+      onlyFile(dir, extension);
+      for (const other of Object.values(linuxArtifacts).filter(x => x !== extension)) {
+        assert.ok(!fs.readdirSync(dir).some(name => name.endsWith(other)),
+          'Wrong package type in ' + host + ': ' + other);
+      }
+    }
   }
+  // The combined Linux update feed references *all four* installers, so it
+  // can only be validated after the separate artifacts have been assembled.
+  assert.ok(fs.existsSync(path.join(input, 'desktop-linux-appimage', 'latest-linux.yml')),
+    'Missing shared Linux updater manifest');
   for (const host of expected) {
     const dir = path.join(input, host);
     for (const name of fs.readdirSync(dir).filter(allowed)) {

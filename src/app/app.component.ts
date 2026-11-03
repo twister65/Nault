@@ -1,4 +1,4 @@
-import {Component, ElementRef, HostListener, OnInit, ViewChild, Renderer2, ChangeDetectionStrategy} from '@angular/core';
+import {Component, ElementRef, HostListener, OnInit, OnDestroy, ViewChild, Renderer2, ChangeDetectionStrategy} from '@angular/core';
 import {WalletService, WalletAccount} from './services/wallet.service';
 import {AddressBookService} from './services/address-book.service';
 import {AppSettingsService} from './services/app-settings.service';
@@ -25,7 +25,7 @@ import { TranslocoService } from '@jsverse/transloco';
     changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit, OnDestroy {
 
   constructor(
     public walletService: WalletService,
@@ -49,6 +49,12 @@ export class AppComponent implements OnInit {
       router.events.subscribe(() => {
         this.closeNav();
       });
+      this.websocket.connectionFailure$.subscribe(wsUrl => {
+        void this.probeRpcAfterWebsocketFailure(wsUrl);
+      });
+      this.websocket.connected$.subscribe(() => {
+        void this.confirmInternetRestoredBySelectedWebsocket();
+      });
     }
 
   @ViewChild('selectButton') selectButton!: ElementRef<HTMLElement>;
@@ -58,6 +64,8 @@ export class AppComponent implements OnInit {
   node = this.nodeService.node;
   nanoPrice = this.price.price;
   fiatTimeout = 5 * 60 * 1000; // Update fiat prices every 5 minutes
+  private fiatRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private fiatRefreshInFlight = false;
   inactiveSeconds = 0;
   innerWidth = 0;
   innerHeight = 0;
@@ -72,6 +80,141 @@ export class AppComponent implements OnInit {
   private networkRecoveryInProgress = false;
   private networkRecoveryAttempts = 0;
   private readonly maxNetworkRecoveryAttempts = 5;
+  private wsFailureProbeInFlight = false;
+  private lastWsFailureProbeEndpoint: string | null = null;
+  private lastWsFailureProbeAt = 0;
+  private readonly wsProbeCooldownMs = 30000;
+  // Electron's browser online/offline events can be missing on Linux,
+  // especially with a virtual network adapter. Poll the already-allowlisted
+  // native, read-only net.isOnline() bridge without making extra HTTP requests.
+  private nativeNetworkTimer: ReturnType<typeof setInterval> | null = null;
+  private nativeNetworkCheckInFlight = false;
+  private lastNativeNetworkOnline: boolean | null = null;
+  private readonly nativeNetworkPollMs = 3000;
+
+  // A fresh WebSocket handshake with the selected server after a link outage
+  // proves that local Internet connectivity has returned. It does NOT prove
+  // that the wallet RPC (accounts_balances) is healthy. Keep those states
+  // separate: never leave the no-failover guard latched because a synthetic
+  // RPC request times out while the WS responds to pings.
+  private async confirmInternetRestoredBySelectedWebsocket(): Promise<void> {
+    if (!this.nodeService.internetRecoveryPending || !this.settings.settings.serverWS) return;
+    const wsUrl = this.settings.settings.serverWS;
+    const generation = this.nodeService.internetInterruptionGeneration;
+    if ((await this.desktop.isNetworkOnline()) === false) return;
+    if (!this.nodeService.internetRecoveryPending ||
+        generation !== this.nodeService.internetInterruptionGeneration ||
+        wsUrl !== this.settings.settings.serverWS ||
+        !this.websocket.socket.connected) return;
+    this.nodeService.internetRecoveryPending = false;
+    console.info('[Nano network] Selected WebSocket reconnected; Internet restored (RPC not yet verified).');
+    // The initial FIAT request may have failed while Electron was offline.
+    // Retry it now and remove a stale price warning if it succeeds; this
+    // remains independent of RPC availability and the chosen server.
+    void this.updateFiatPrices().catch(() => {});
+    if (!this.walletService.isConfigured()) {
+      // A new user has no balances to validate; do not keep firing the
+      // artificial burn-address accounts_balances request after a healthy WS.
+      this.nodeService.setLoading();
+      this.cancelNetworkRecovery();
+    }
+  }
+
+  private async pollNativeNetwork(): Promise<void> {
+    if (this.nativeNetworkCheckInFlight) return;
+    this.nativeNetworkCheckInFlight = true;
+    try {
+      const online = await this.desktop.isNetworkOnline();
+      if (typeof online !== 'boolean' || online === this.lastNativeNetworkOnline) return;
+      const previous = this.lastNativeNetworkOnline;
+      this.lastNativeNetworkOnline = online;
+      console.info('[Nano network] Electron network state:', online
+        ? 'online (Internet access not guaranteed)' : 'offline');
+      if (!online) {
+        // One offline transition per interruption; the native poll and
+        // window offline event may report the same physical event.
+        if (!this.nodeService.internetRecoveryPending) this.onNetworkOffline();
+      } else if (previous === false) {
+        // A positive native signal is only an opportunity to retry the
+        // originally selected server, never a reason to rotate.
+        this.onNetworkOnline();
+      }
+    } finally {
+      this.nativeNetworkCheckInFlight = false;
+    }
+  }
+
+  private startNativeNetworkMonitor(): void {
+    if (this.nativeNetworkTimer !== null) return;
+    void this.pollNativeNetwork();
+    this.nativeNetworkTimer = setInterval(() => {
+      void this.pollNativeNetwork();
+    }, this.nativeNetworkPollMs);
+  }
+
+  ngOnDestroy(): void {
+    if (this.nativeNetworkTimer !== null) {
+      clearInterval(this.nativeNetworkTimer);
+      this.nativeNetworkTimer = null;
+    }
+    this.cancelNetworkRecovery();
+    if (this.fiatRefreshTimer !== null) {
+      clearTimeout(this.fiatRefreshTimer);
+      this.fiatRefreshTimer = null;
+    }
+  }
+
+  // WS can be unavailable while RPC still works (blocked WS port/proxy).
+  // A failed WS therefore triggers an immediate bounded RPC health check,
+  // never an unconditional switch. Only the RPC layer can select a fallback.
+  private async probeRpcAfterWebsocketFailure(failedWs: string): Promise<void> {
+    const settings = this.settings.settings;
+    if (!settings.serverAPI || settings.serverWS !== failedWs ||
+        settings.serverName === 'custom' || settings.serverName === 'offline' ||
+        this.nodeService.internetRecoveryPending ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)) return;
+    if (!this.settings.serverOptions.some(node =>
+      node.allowFailover && node.api === settings.serverAPI)) return;
+    if (this.wsFailureProbeInFlight) return;
+    const now = Date.now();
+    if (this.lastWsFailureProbeEndpoint === settings.serverAPI &&
+        now - this.lastWsFailureProbeAt < this.wsProbeCooldownMs) return;
+    this.wsFailureProbeInFlight = true;
+    this.lastWsFailureProbeEndpoint = settings.serverAPI;
+    this.lastWsFailureProbeAt = now;
+    try {
+      console.info('WebSocket connection failed; verifying Nano RPC before failover.');
+      await this.api.checkNodeAvailability(!this.walletService.isConfigured());
+    } catch (_) {
+      // ApiService retains the existing offline notice if no RPC works.
+    } finally {
+      this.wsFailureProbeInFlight = false;
+    }
+  }
+  // On a clean start there are no wallet accounts to load, and an available
+  // WebSocket already supplies a connection signal. Probing the public burn
+  // address here can falsely declare a working node offline when the RPC
+  // proxy needs more than 3 seconds or rejects that synthetic account.
+  // Let the WebSocket-failure handler validate RPC before any failover.
+  // RPC-only installations still benefit from a silent initial health check.
+  private probeInitialEmptyWalletRpc(): void {
+    if (!this.settings.settings.serverAPI || this.settings.settings.serverWS) return;
+    void this.api.checkNodeAvailability(!this.walletService.isConfigured()).catch(() => {
+      // Without a configured wallet, no persistent offline notification.
+    });
+  }
+
+  private handleServerFailover(previousName: string, nextName: string): void {
+    this.notifications.removeNotification('node-failover');
+    if (this.walletService.isConfigured()) {
+      this.notifications.sendWarning(this.translate.translate('ui-notifications.node-failover', {
+        previous: previousName, next: nextName,
+      }), { identifier: 'node-failover', length: 12000 });
+    }
+    // Reconnect notifications and account subscriptions even for an empty wallet.
+    this.websocket.forceReconnect();
+  }
+
   isConfigured = this.walletService.isConfigured;
   donationAccount = environment.donationAddress;
 
@@ -80,11 +223,25 @@ export class AppComponent implements OnInit {
   }
 
   @HostListener('window:offline') onNetworkOffline(): void {
+    if (this.nodeService.internetRecoveryPending) return;
+    this.nodeService.markInternetInterrupted();
+    console.info('[Nano network] Internet disconnected; preserving selected server.');
     this.cancelNetworkRecovery();
-    if (this.settings.settings.serverAPI) this.nodeService.setOffline();
+    if (this.settings.settings.serverAPI) {
+      this.nodeService.setOffline(this.walletService.isConfigured() ? undefined : null);
+    }
   }
 
   @HostListener('window:online') onNetworkOnline(): void {
+    // Browser and Electron may both announce the same transition. Do not
+    // queue duplicate recovery attempts or misleading transition messages.
+    if (this.networkRecoveryInProgress || this.networkRecoveryTimer !== null) return;
+    if (this.nodeService.internetRecoveryPending) {
+      // socket.connected may still describe an old TCP connection from
+      // before the cable was unplugged. Only connected$ after a fresh
+      // handshake can confirm recovery, never a stale socket flag.
+      console.info('[Nano network] Link available; reconnecting the selected server.');
+    }
     this.networkRecoveryAttempts = 0;
     this.scheduleNetworkRecovery(0);
   }
@@ -92,6 +249,11 @@ export class AppComponent implements OnInit {
   // Android does not always dispatch 'online' while the PWA is suspended.
   @HostListener('document:visibilitychange') onNetworkVisibilityChange(): void {
     if (document.visibilityState !== 'visible' || !navigator.onLine) return;
+    // Focus/DevTools visibility changes must not start unnecessary burn-account
+    // probes for an empty wallet while the WebSocket is already connected or
+    // performing its normal handshake. WS failures have a dedicated handler.
+    if (!this.walletService.isConfigured() && this.settings.settings.serverWS &&
+        this.websocket.socket.ws) return;
     if (this.nodeService.node.status !== true ||
         (this.settings.settings.serverWS && !this.websocket.socket.connected)) {
       this.networkRecoveryAttempts = 0;
@@ -112,7 +274,13 @@ export class AppComponent implements OnInit {
 
   async ngOnInit() {
     this.onWindowResize(window);
-    this.settings.loadAppSettings();
+    // Resolve Electron's native OS locale before choosing the initial Angular
+    // language. Browsers fall back to their navigator culture as before.
+    const nativeLocale = await this.desktop.getSystemLocale();
+    this.settings.loadAppSettings(nativeLocale);
+    // The PWA uses browser online/offline events; only the Electron renderer
+    // has an OS locale and the trusted native connectivity bridge.
+    if (nativeLocale !== null) this.startNativeNetworkMonitor();
 
     this.updateAppTheme();
 
@@ -122,9 +290,17 @@ export class AppComponent implements OnInit {
     // set translation language
     this.translate.setActiveLang(this.settings.settings.language);
 
+    // Align WebSocket subscriptions and the visible notice after an RPC switch.
+    this.settings.serverFailover$.subscribe(({ previousName, nextName }) => {
+      this.handleServerFailover(previousName, nextName);
+    });
+
     this.addressBook.loadAddressBook();
     this.workPool.loadWorkCache();
 
+    // Start WS first rather than serializing it behind RPC balance checks.
+    // Account subscriptions are added during wallet restore and kept on reconnect.
+    this.websocket.connect();
     await this.walletService.loadStoredWallet();
     // Subscribe to any transaction tracking
     for (const entry of this.addressBook.addressBook) {
@@ -148,7 +324,13 @@ export class AppComponent implements OnInit {
       this.wallet.selectedAccount = currentUpdatedAccount;
     }
 
-    await this.walletService.reloadBalances().catch(() => this.notifications.sendWarning('Unable to refresh balances. Check your connection.'));
+    if (this.wallet.accounts.length) {
+      await this.walletService.reloadBalances().catch(() => this.notifications.sendWarning('Unable to refresh balances. Check your connection.'));
+    } else {
+      // Do not probe a synthetic account on every fresh start with a working
+      // WebSocket. The first WS failure will trigger a real RPC health probe.
+      this.probeInitialEmptyWalletRpc();
+    }
 
     // Workaround fix for github pages when Nault is refreshed (or externally linked) and there is a subpath for example to the send screen.
     // This data is saved from the 404.html page
@@ -174,8 +356,6 @@ export class AppComponent implements OnInit {
         this.router.navigate([path], { replaceUrl: true });
       }
     }
-
-    this.websocket.connect();
 
     this.representative.loadRepresentativeList();
 
@@ -234,7 +414,15 @@ export class AppComponent implements OnInit {
       if (!this.settings.settings.serverAPI) return;
       await this.updateFiatPrices();
     } catch (err) {
-      this.notifications.sendWarning(`There was an issue retrieving latest nano price.  Ensure your AdBlocker is disabled on this page then reload to see accurate FIAT values.`, { length: 0, identifier: `price-adblock` });
+      // A disconnected Internet connection is not evidence of an ad blocker.
+      // The recurring retry timer is set even after an initial failure.
+      const offline = (typeof navigator !== 'undefined' && !navigator.onLine) ||
+        this.nodeService.internetRecoveryPending ||
+        (await this.desktop.isNetworkOnline()) === false;
+      if (!offline) {
+        this.notifications.sendWarning(`There was an issue retrieving latest nano price. Ensure your AdBlocker is disabled on this page then reload to see accurate FIAT values.`,
+          { length: 0, identifier: 'price-adblock' });
+      }
     }
   }
 
@@ -420,17 +608,38 @@ export class AppComponent implements OnInit {
     this.networkRecoveryInProgress = true;
     const endpoint = this.settings.settings.serverAPI;
     try {
+      // If the native link is definitely offline, defer recovery until its
+      // next positive transition. No other public node can help yet.
+      if ((await this.desktop.isNetworkOnline()) === false) return;
+      if (!this.walletService.isConfigured() && this.settings.settings.serverWS) {
+        if (!this.nodeService.internetRecoveryPending && this.websocket.socket.connected) {
+          // Ordinary visibility/online events need no additional I/O when
+          // the WS is already healthy and no cable interruption was observed.
+          return;
+        }
+        // On an empty wallet, reconnect the original WS first. Do not
+        // repeatedly probe an artificial account when the RPC proxy is slow
+        // or refuses that request. WebSocket.connected$ clears the link guard.
+        console.info('[Nano network] Reconnecting selected WebSocket; keeping RPC health separate.');
+        this.websocket.forceReconnect();
+        return;
+      }
       // Prefer normal wallet reads: not every public RPC allows node statistics.
       if (this.wallet.accounts.length) await this.walletService.reloadBalances();
-      // Check connectivity with the normal wallet RPC whitelist, not block_count,
-      // which privacy-preserving public nodes may intentionally deny.
-      if (this.nodeService.node.status !== true) await this.api.accountsBalances([]);
+      // Empty account arrays may be refused by healthy public RPC proxies.
+      // Use the wallet-independent health probe also on network recovery.
+      if (this.nodeService.node.status !== true) {
+        if (this.wallet.accounts.length) await this.api.accountsBalances(this.wallet.accounts.map(a => a.id));
+        else await this.api.checkNodeAvailability(!this.walletService.isConfigured(),
+          !this.nodeService.internetRecoveryPending);
+      }
 
       if (!navigator.onLine || this.settings.settings.serverAPI !== endpoint) return;
 
       // A WebSocket may have exhausted its retry budget while Android was offline.
       // Restoring it only follows successful RPC reads and never replays transactions.
       if (this.settings.settings.serverWS) this.websocket.forceReconnect();
+      this.nodeService.internetRecoveryPending = false;
       this.networkRecoveryAttempts = 0;
     } catch (_) {
       // Keep the node-offline notification until an RPC read succeeds.
@@ -457,10 +666,25 @@ export class AppComponent implements OnInit {
     this.notifications.sendInfo(`Attempting to reconnect to nano node`);
   }
 
-  async updateFiatPrices() {
-    const displayCurrency = this.settings.getAppSetting(`displayCurrency`) || 'USD';
-    await this.price.getPrice(displayCurrency);
-    this.walletService.reloadFiatBalances();
-    setTimeout(() => this.updateFiatPrices(), this.fiatTimeout);
+  async updateFiatPrices(): Promise<void> {
+    if (this.fiatRefreshInFlight) return;
+    this.fiatRefreshInFlight = true;
+    try {
+      const displayCurrency = this.settings.getAppSetting('displayCurrency') || 'USD';
+      await this.price.getPrice(displayCurrency);
+      this.walletService.reloadFiatBalances();
+      this.notifications.removeNotification('price-adblock');
+    } finally {
+      this.fiatRefreshInFlight = false;
+      // Schedule periodic refresh even when the FIRST request failed offline.
+      // Keep one bounded timer, including after an immediate WS recovery retry.
+      if (this.fiatRefreshTimer !== null) clearTimeout(this.fiatRefreshTimer);
+      this.fiatRefreshTimer = setTimeout(() => {
+        this.fiatRefreshTimer = null;
+        void this.updateFiatPrices().catch(() => {
+          // A temporary CoinGecko failure must not stop future refreshes.
+        });
+      }, this.fiatTimeout);
+    }
   }
 }
