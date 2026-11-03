@@ -66,3 +66,21 @@ test('release CI installs real packages in five isolated Linux distributions', (
   assert.match(script, /test ! -e "\$desktop"/);
   assert.match(script, /test ! -e "\$launcher"/);
 });
+
+test('native distro packages declare all Electron runtime libraries', () => {
+  const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+  for (const dep of ['default', 'libgbm1', 'libasound2']) {
+    assert.ok(pkg.build.deb.depends.includes(dep), 'DEB missing ' + dep);
+  }
+  for (const dep of ['default', 'libgbm.so.1()(64bit)', 'libasound.so.2()(64bit)']) {
+    assert.ok(pkg.build.rpm.depends.includes(dep), 'RPM missing ' + dep);
+  }
+  for (const dep of ['alsa-lib', 'mesa']) {
+    assert.ok(pkg.build.pacman.depends.includes(dep), 'Pacman missing ' + dep);
+  }
+  const script = fs.readFileSync('scripts/test-linux-install-container.sh', 'utf8');
+  assert.match(script, /shopt -s nullglob/);
+  assert.match(script, /matches=\(\/packages\/\*\.rpm\)/);
+  assert.doesNotMatch(script, /\bfind \/packages\b/);
+  assert.match(script, /ldd "\$launcher"/);
+});

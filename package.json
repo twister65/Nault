@@ -208,7 +208,23 @@
         "libxtst",
         "xdg-utils",
         "at-spi2-core",
-        "libsecret"
+        "libsecret",
+        "alsa-lib",
+        "mesa"
+      ]
+    },
+    "deb": {
+      "depends": [
+        "default",
+        "libgbm1",
+        "libasound2"
+      ]
+    },
+    "rpm": {
+      "depends": [
+        "default",
+        "libgbm.so.1()(64bit)",
+        "libasound.so.2()(64bit)"
       ]
     }
   },

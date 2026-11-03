@@ -11,7 +11,7 @@ The tag-triggered **Electron App Release** workflow builds four Linux x64 format
 
 The native packages are produced using electron-builder's Linux targets. Nault uses `cc.nault.desktop` with the Nault icon, a freedesktop `Office;Finance;` category, and an executable named `nault`. CI verifies the package contents and all four update archives.
 
-Each release also installs the **real built native package** in separate disposable Docker containers for Ubuntu 26.04, Debian 13, Fedora 44, openSUSE Leap 16.0 and Arch Linux. These five jobs test native dependency resolution, installed version, desktop launcher, icon, executable, shared libraries and package removal. Publication is blocked if any job fails. **These are non-graphical tests**; menu rendering, actual updater authorization and physical Ledger USB/Bluetooth need separate manual tests.
+Each release also installs the **real built native package** in separate disposable Docker containers for Ubuntu 26.04, Debian 13, Fedora 44, openSUSE Leap 16.0 and Arch Linux. These five jobs test native dependency resolution, installed version, desktop launcher, icon, executable, shared libraries and package removal. Native DEB/RPM/Pacman metadata explicitly declares libgbm and ALSA dependencies (in addition to the electron-builder defaults); missing system libraries fail the CI. Publication is blocked if any job fails. **These are non-graphical tests**; menu rendering, actual updater authorization and physical Ledger USB/Bluetooth need separate manual tests.
 
 ## Install
 

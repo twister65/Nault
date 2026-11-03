@@ -13,7 +13,13 @@ case "$DISTRO" in
   *) echo "Unknown distribution: $DISTRO" >&2; exit 2 ;;
 esac
 
-mapfile -t matches < <(find /packages -maxdepth 1 -type f -name "$pattern" -print)
+# Minimal distro images (notably Leap) need not ship findutils.
+shopt -s nullglob
+case "$DISTRO" in
+  ubuntu|debian) matches=(/packages/*.deb) ;;
+  fedora|opensuse) matches=(/packages/*.rpm) ;;
+  arch) matches=(/packages/*.pkg.tar.zst) ;;
+esac
 if [[ "${#matches[@]}" -ne 1 ]]; then
   echo "Expected one $pattern file; got ${#matches[@]}" >&2
   exit 1
@@ -69,8 +75,9 @@ else
 fi
 echo "Desktop executable: $launcher"
 
-icon="$(find /usr/share/icons -type f -iname '*nault*.png' -print -quit)"
-test -n "$icon"
+icons=(/usr/share/icons/hicolor/*/apps/*nault*.png)
+test "${#icons[@]}" -gt 0
+icon="${icons[0]}"
 test -s "$icon"
 echo "Installed icon: $icon"
 
