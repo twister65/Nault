@@ -41,18 +41,20 @@ describe('RPC network boundary', () => {
     }
   });
 
-  it('switches actual saved SpyNano settings after trying the entire eligible public pool', async () => {
+  it('switches actual saved SpyNano settings using available public RPC metadata', async () => {
     const settings = new AppSettingsService({} as any);
     const originalStored = localStorage.getItem(settings.storeKey);
     const apiTargets: string[] = [];
-    spyOn(window, 'fetch').and.callFake(input => {
+    const rpcActions: string[] = [];
+    spyOn(window, 'fetch').and.callFake((input, init) => {
       const target = String(input);
       apiTargets.push(target);
+      rpcActions.push(JSON.parse(String(init?.body)).action);
       if (target === 'https://node.spynano.org/proxy') {
         return Promise.reject(new TypeError('net::ERR_NAME_NOT_RESOLVED'));
       }
       if (target === 'https://rainstorm.city/api') {
-        return Promise.resolve(new Response(JSON.stringify({ balances: {} }), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify({ count: '225964139' }), { status: 200 }));
       }
       return Promise.resolve(new Response(JSON.stringify({ error: 'Bad Gateway' }), { status: 502 }));
     });
@@ -69,6 +71,7 @@ describe('RPC network boundary', () => {
         .checkNodeAvailability(true);
       expect(apiTargets[0]).toBe('https://node.spynano.org/proxy');
       expect(apiTargets).toContain('https://rainstorm.city/api');
+      expect(rpcActions).toEqual(apiTargets.map(() => 'block_count'));
       expect(apiTargets.length).toBeLessThanOrEqual(5);
       expect(settings.settings.serverName).toBe('rainstorm');
       expect(settings.settings.serverWS).toBe('wss://rainstorm.city/websocket');
