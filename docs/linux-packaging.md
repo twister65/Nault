@@ -9,7 +9,9 @@ The tag-triggered **Electron App Release** workflow builds four Linux x64 format
 | Arch Linux, Manjaro, EndeavourOS | Pacman package (beta) | Automatically installed |
 | Other compatible x86_64 Linux | AppImage | Optional, e.g. AppImageLauncher |
 
-The native packages are produced using electron-builder's Linux targets. Nault uses `cc.nault.desktop` with the Nault icon, a freedesktop `Office;Finance;` category, and an executable named `nault`. The CI script `scripts/verify-linux-packages.sh` checks the DEB launcher fields/icons and that RPM/Pacman packages contain the launcher/icons. **These are archive checks, not full installation or hardware tests.**
+The native packages are produced using electron-builder's Linux targets. Nault uses `cc.nault.desktop` with the Nault icon, a freedesktop `Office;Finance;` category, and an executable named `nault`. CI verifies the package contents and all four update archives.
+
+Each release also installs the **real built native package** in separate disposable Docker containers for Ubuntu 26.04, Debian 13, Fedora 44, openSUSE Leap 16.0 and Arch Linux. These five jobs test native dependency resolution, installed version, desktop launcher, icon, executable, shared libraries and package removal. Publication is blocked if any job fails. **These are non-graphical tests**; menu rendering, actual updater authorization and physical Ledger USB/Bluetooth need separate manual tests.
 
 ## Install
 
@@ -33,8 +35,8 @@ The CI must verify `latest-linux.yml`, the matching release version and SHA-512 
 1. Confirm `package.json`, `package-lock.json` and the Git tag agree on the version.
 2. Check that the merge gate, dependency audit and CodeQL checks pass.
 3. Verify the Linux workflow produces four nonempty artifacts with expected `.desktop` entries and icons; verify `latest-linux.yml` references all four archive types, matches SHA-512 checksums, and targets the maintained fork. Check Windows/macOS artifacts.
-4. On Ubuntu/Debian, Fedora/openSUSE and Arch/Manjaro, install native packages and confirm menu entries/icons. Once two adjacent published release versions exist, test Help > Check for Updates, GitHub detection, confirmation before download, GUI authentication, install, relaunch and refusal of authentication. On AppImage, check the APPIMAGE environment path and replacement of a user-writable file. Confirm upgrade preserves settings and uninstall works.
-5. With a Nano S Plus USB and Nano X USB/Bluetooth, validate connection, signing, user refusal, disconnect/reconnect and absence of unexpected device permissions. The CI cannot validate physical hardware.
+4. Require all five isolated Linux installation/removal jobs to pass. Then visually inspect the real GNOME/KDE/Cinnamon desktop menu and icon on representative Linux desktops. Once two adjacent published release versions exist, manually test Help > Check for Updates, GitHub detection, confirmation before download, GUI authentication, install, relaunch and refusal of authentication. For AppImage, check the APPIMAGE environment path and replacement of a user-writable file. Confirm upgrade preserves settings.
+5. On a physical Linux test machine, validate Nano S Plus USB and Nano X USB connection, signing, refusal and reconnect behaviour. Bluetooth is intentionally excluded from Linux acceptance tests while its platform issues remain unresolved. CI cannot test physical hardware.
 6. Check application version/commit and ensure an existing encrypted or Ledger wallet remains available after upgrade. Avoid handling real recovery seeds in CI.
 7. Only after release review, publish the GitHub Release; Apache/PWA deployment stays a separate manual step.
 

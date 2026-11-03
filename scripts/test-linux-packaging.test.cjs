@@ -45,3 +45,24 @@ test('Linux release validation requires a complete updater manifest', () => {
   assert.match(main, /autoUpdater\.quitAndInstall\(!isNativeLinuxPackage, true\)/);
   assert.match(main, /autoUpdater\.autoDownload = false/);
 });
+
+test('release CI installs real packages in five isolated Linux distributions', () => {
+  const workflow = fs.readFileSync('.github/workflows/electron_hash.yml', 'utf8');
+  assert.match(workflow, /linux-install-smoke:/);
+  for (const image of [
+    'ubuntu:26.04', 'debian:13', 'fedora:44',
+    'opensuse/leap:16.0', 'archlinux/archlinux:base'
+  ]) assert.ok(workflow.includes('image: ' + image), 'missing CI image ' + image);
+  assert.match(workflow, /name: desktop-ubuntu-24\.04/);
+  assert.match(workflow, /docker run --rm --pull=always/);
+  assert.match(workflow, /--security-opt no-new-privileges/);
+  assert.match(workflow, /needs: \[release, linux-install-smoke\]/);
+  const script = fs.readFileSync('scripts/test-linux-install-container.sh', 'utf8');
+  for (const command of [
+    'apt-get install', 'dnf install', 'zypper --non-interactive',
+    'pacman -U', 'desktop-file-validate', 'ldd "$launcher"',
+    'apt-get purge', 'dnf remove', 'zypper --non-interactive remove', 'pacman -R'
+  ]) assert.ok(script.includes(command), 'missing test operation: ' + command);
+  assert.match(script, /test ! -e "\$desktop"/);
+  assert.match(script, /test ! -e "\$launcher"/);
+});

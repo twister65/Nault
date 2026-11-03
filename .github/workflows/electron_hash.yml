@@ -72,9 +72,51 @@ jobs:
             desktop-app/build/*.exe
             desktop-app/build/*.yml
             desktop-app/build/*.blockmap
+  linux-install-smoke:
+    name: Install / remove native package (${{ matrix.distro }})
+    needs: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: ubuntu
+            image: ubuntu:26.04
+          - distro: debian
+            image: debian:13
+          - distro: fedora
+            image: fedora:44
+          - distro: opensuse
+            image: opensuse/leap:16.0
+          - distro: arch
+            image: archlinux/archlinux:base
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: desktop-ubuntu-24.04
+          path: packages
+      - name: Install / inspect / remove package in isolated container
+        shell: bash
+        env:
+          DISTRO: ${{ matrix.distro }}
+          DISTRO_IMAGE: ${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          docker run --rm --pull=always \
+            --security-opt no-new-privileges \
+            --mount "type=bind,source=$PWD/packages,target=/packages,readonly" \
+            --mount "type=bind,source=$PWD/scripts/test-linux-install-container.sh,target=/test-linux-install.sh,readonly" \
+            --env DISTRO="$DISTRO" --env EXPECTED_VERSION="$version" \
+            "$DISTRO_IMAGE" /bin/bash /test-linux-install.sh
+
   draft-release:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: release
+    needs: [release, linux-install-smoke]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
