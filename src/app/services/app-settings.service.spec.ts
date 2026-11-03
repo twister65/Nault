@@ -45,6 +45,80 @@ describe('AppSettingsService', () => {
     }
   }));
 
+  it('uses German and regional language codes from the OS locale', inject([AppSettingsService], (service: AppSettingsService) => {
+    const saved = localStorage.getItem(service.storeKey);
+    try {
+      localStorage.removeItem(service.storeKey);
+      for (const [locale, expected] of [['de-DE', 'de'], ['de_AT', 'de'], ['es-MX', 'es'], ['fr-CA', 'fr']]) {
+        service.settings.language = '';
+        service.loadAppSettings(locale);
+        expect(service.settings.language).toBe(expected);
+      }
+    } finally {
+      if (saved === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, saved);
+    }
+  }));
+
+  it('defaults to English for an unsupported OS locale instead of choosing the browser language', inject([AppSettingsService], (service: AppSettingsService) => {
+    const saved = localStorage.getItem(service.storeKey);
+    try {
+      localStorage.removeItem(service.storeKey);
+      service.settings.language = '';
+      service.loadAppSettings('it-IT');
+      expect(service.settings.language).toBe('en');
+      service.settings.language = '';
+      service.loadAppSettings('ja-JP');
+      expect(service.settings.language).toBe('en');
+    } finally {
+      if (saved === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, saved);
+    }
+  }));
+
+  it('preserves a supported saved language over the OS locale', inject([AppSettingsService], (service: AppSettingsService) => {
+    const saved = localStorage.getItem(service.storeKey);
+    try {
+      localStorage.setItem(service.storeKey, JSON.stringify({ ...service.settings, language: 'es' }));
+      service.loadAppSettings('de-DE');
+      expect(service.settings.language).toBe('es');
+    } finally {
+      if (saved === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, saved);
+    }
+  }));
+
+  it('normalizes an obsolete saved language to English without losing other settings', inject([AppSettingsService], (service: AppSettingsService) => {
+    const saved = localStorage.getItem(service.storeKey);
+    try {
+      localStorage.setItem(service.storeKey, JSON.stringify({
+        ...service.settings, language: 'it-IT', displayCurrency: 'EUR'
+      }));
+      service.loadAppSettings('de-DE');
+      expect(service.settings.language).toBe('en');
+      expect(service.settings.displayCurrency).toBe('EUR');
+      const restored = JSON.parse(localStorage.getItem(service.storeKey) || '{}');
+      expect(restored.language).toBe('en');
+      expect(restored.displayCurrency).toBe('EUR');
+    } finally {
+      if (saved === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, saved);
+    }
+  }));
+
+  it('normalizes a saved German regional variant without ignoring the user's preference', inject([AppSettingsService], (service: AppSettingsService) => {
+    const saved = localStorage.getItem(service.storeKey);
+    try {
+      localStorage.setItem(service.storeKey, JSON.stringify({ ...service.settings, language: 'de-CH' }));
+      service.loadAppSettings('fr-FR');
+      expect(service.settings.language).toBe('de');
+      expect(JSON.parse(localStorage.getItem(service.storeKey) || '{}').language).toBe('de');
+    } finally {
+      if (saved === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, saved);
+    }
+  }));
+
   it('lists Twister32 RsNano but never selects it at random', inject([AppSettingsService], (service: AppSettingsService) => {
     const server = service.serverOptions.find(option => option.value === 'twister32-rsnano');
     expect(server).toBeTruthy();
