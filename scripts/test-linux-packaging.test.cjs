@@ -94,20 +94,22 @@ test('native distro packages declare cross-distribution Electron runtime depende
   assert.match(script, /ldd "\$launcher"/);
 });
 
-test('GitHub Release downloads sort Windows, macOS, Linux and preserve update channels', () => {
-  const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-  assert.equal(p.build.nsis.artifactName, '01-Windows-Nault-Setup-${version}.${ext}');
-  assert.equal(p.build.mac.artifactName, '02-macOS-Nault-${version}.${ext}');
-  assert.equal(p.build.linux.artifactName, '03-Linux-Nault-${version}-${arch}.${ext}');
-  assert.equal(p.build.pacman.artifactName, '03-Linux-Nault-${version}-${arch}.pkg.tar.zst');
-  assert.ok(p.build.nsis.artifactName < p.build.mac.artifactName);
-  assert.ok(p.build.mac.artifactName < p.build.linux.artifactName);
-  const w = fs.readFileSync('.github/workflows/electron_hash.yml', 'utf8');
-  assert.match(w, /node scripts\/verify-release-asset-order\.cjs/);
-  const s = fs.readFileSync('scripts/verify-release-asset-order.cjs', 'utf8');
-  for (const manifest of ['latest.yml', 'latest-mac.yml', 'latest-linux.yml'])
-    assert.ok(s.includes("'" + manifest + "'"), 'missing updater feed ' + manifest);
-  for (const prefix of ['01-Windows-', '02-macOS-', '03-Linux-'])
-    assert.ok(s.includes("'" + prefix + "'"));
-  assert.match(s, /createHash\('sha512'\)/);
+test('release notes group platforms and include macOS Apple Silicon plus distro names', () => {
+  const p = JSON.parse(fs.readFileSync('package.json','utf8'));
+  assert.equal(p.build.nsis.artifactName, 'Nault-Windows-Setup-${version}.${ext}');
+  assert.equal(p.build.mac.artifactName, 'Nault-macOS-${version}-${arch}.${ext}');
+  assert.deepEqual(p.build.mac.target, ['dmg','zip']);
+  assert.equal(p.build.appImage.artifactName, 'Nault-Linux-Portable-${version}-${arch}.${ext}');
+  assert.equal(p.build.deb.artifactName, 'Nault-Linux-Debian-Ubuntu-Mint-${version}-${arch}.${ext}');
+  assert.equal(p.build.rpm.artifactName, 'Nault-Linux-Fedora-openSUSE-${version}-${arch}.${ext}');
+  assert.equal(p.build.pacman.artifactName, 'Nault-Linux-Arch-Manjaro-${version}-${arch}.pkg.tar.zst');
+  const w = fs.readFileSync('.github/workflows/electron_hash.yml','utf8');
+  assert.ok(w.includes('macos-15-intel, macos-15'));
+  assert.ok(w.includes('node scripts/assemble-release-assets.cjs'));
+  assert.ok(w.includes('needs: [release-preview, linux-install-smoke]'));
+  const assembly = fs.readFileSync('scripts/assemble-release-assets.cjs','utf8');
+  for (const heading of ['### Windows','### macOS','### Linux']) assert.ok(assembly.includes(heading));
+  for (const arch of ['x64','arm64']) assert.ok(assembly.includes(arch));
+  const validator = fs.readFileSync('scripts/verify-release-asset-order.cjs','utf8');
+  for (const f of ['latest.yml','latest-mac.yml','latest-linux.yml']) assert.ok(validator.includes(f));
 });

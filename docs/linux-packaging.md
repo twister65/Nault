@@ -1,8 +1,8 @@
 # Nault Linux desktop packages
 
-GitHub sorts downloadable assets by filename, so installer artifacts use **01-Windows-**, **02-macOS-** and **03-Linux-** prefixes. Linux's four formats share the last prefix. Updater metadata filenames remain exactly `latest.yml`, `latest-mac.yml` and `latest-linux.yml`; CI verifies that their contents reference the renamed installers and matching SHA-512 and byte sizes. Existing installed releases can still discover updates through unchanged channel names.
+GitHub's raw Assets list cannot be grouped manually. Instead, release notes group the downloads under **Windows**, **macOS (Intel / Apple Silicon)** and **Linux**, without numeric prefixes. Linux installer names identify Debian/Ubuntu/Mint, Fedora/openSUSE, Arch/Manjaro or portable AppImage. Two native macOS runners generate x64 and arm64 DMG/ZIP packages; a release-assembly job merges their verified update entries into one `latest-mac.yml`. The updater metadata filenames `latest.yml`, `latest-mac.yml` and `latest-linux.yml` remain unchanged.
 
-The tag-triggered **Electron App Release** workflow builds four Linux x64 formats from the same immutable release tag, alongside the existing Windows NSIS installer and macOS Intel DMG. A release is not published until artifacts for all platforms exist and SHA256 verification succeeds. This does not deploy the PWA.
+The tag-triggered **Electron App Release** workflow builds four Linux x64 formats from the same immutable release tag, alongside Windows NSIS and native macOS Intel and Apple Silicon DMG/ZIP archives. A release is not published until artifacts for all platforms exist and SHA256 verification succeeds. This does not deploy the PWA.
 
 | Linux distribution | Artifact | Application menu |
 | --- | --- | --- |
@@ -20,10 +20,10 @@ Each release also installs the **real built native package** in separate disposa
 Download the release artifact for your distribution, verify its SHA256 against `SHA256SUMS`, then from the download directory run one of:
 
 ```bash
-sudo apt install ./03-Linux-*.deb          # Debian / Ubuntu / Mint
-sudo dnf install ./03-Linux-*.rpm          # Fedora
-sudo zypper install ./03-Linux-*.rpm       # openSUSE
-sudo pacman -U ./03-Linux-*.pkg.tar.zst    # Arch / Manjaro (beta)
+sudo apt install ./Nault-Linux-Debian-Ubuntu-Mint-*.deb          # Debian / Ubuntu / Mint
+sudo dnf install ./Nault-Linux-Fedora-openSUSE-*.rpm          # Fedora
+sudo zypper install ./Nault-Linux-Fedora-openSUSE-*.rpm       # openSUSE
+sudo pacman -U ./Nault-Linux-Arch-Manjaro-*.pkg.tar.zst    # Arch / Manjaro (beta)
 ```
 
 Use the exact filename if the wildcard does not match one artifact. Installation and removal are handled by the distribution's normal package manager. The packaged launcher should appear as **Nault** in GNOME, KDE, Cinnamon and XFCE menus. For AppImage, execute the downloaded file directly (after making it executable); menu integration is a separate user step using AppImageLauncher or a manually installed launcher. It is **not automatic** just because a desktop file exists inside the AppImage.
@@ -31,6 +31,8 @@ Use the exact filename if the wildcard does not match one artifact. Installation
 There is no APT/DNF/Pacman package repository in this change, so distribution package managers will **not** update Nault unattended. The app uses electron-updater 6.8.12 with a GitHub release feed for all four formats. It checks on launch and from Help > Check for Updates, asks before downloading, and uses a manifest checksum for the chosen artifact. AppImages can replace their user-owned file; deb/rpm/pacman require the normal privileged package install (pkexec/sudo, depending on the distribution) and may prompt for administrator authentication. Native Linux updates are explicitly non-silent. If authentication or the native updater fails, download the corresponding next release package and use the distribution's package manager to install it.
 
 The CI must verify `latest-linux.yml`, the matching release version and SHA-512 for each of AppImage, deb, rpm and pacman, and the packaged `resources/app-update.yml` must point at twister65/Nault. A draft release cannot be used as the update feed; publishing remains gated by normal release review. Checksums are not package signatures: test distribution-specific privilege prompts and policies before enabling real upgrades. Do not alter wallet keys or trigger automatic Ledger signing.
+
+**macOS updates:** the ZIP archives are required for Squirrel.Mac. CI verifies the merged update feed and file hashes, but macOS requires Apple code signing before in-app installation can work. The current unsigned builds must not be described as tested automatic upgrades.
 
 ## Release validation
 

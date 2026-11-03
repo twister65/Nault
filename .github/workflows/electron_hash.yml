@@ -10,14 +10,14 @@ jobs:
   release:
     name: Package (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    timeout-minutes: 55
     env:
       NODE_OPTIONS: --openssl-legacy-provider
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15-intel, windows-2022]
+        os: [ubuntu-24.04, macos-15-intel, macos-15, windows-2022]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -71,6 +71,7 @@ jobs:
             desktop-app/build/*.rpm
             desktop-app/build/*.pkg.tar.zst
             desktop-app/build/*.dmg
+            desktop-app/build/*.zip
             desktop-app/build/*.exe
             desktop-app/build/*.yml
             desktop-app/build/*.blockmap
@@ -116,9 +117,47 @@ jobs:
             --env DISTRO="$DISTRO" --env EXPECTED_VERSION="$version" \
             "$DISTRO_IMAGE" /bin/bash /test-linux-install.sh
 
+  release-preview:
+    name: Verify and preview OS-grouped downloads
+    needs: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install metadata parser from lockfile
+        run: npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: desktop-*
+          path: desktop-platforms
+      - name: Assemble assets and the OS-grouped release preview
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          node scripts/assemble-release-assets.cjs desktop-platforms release-ready release-downloads.md "$RELEASE_TAG"
+          cat release-downloads.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-ready-assets
+          if-no-files-found: error
+          path: release-ready/*
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-preview-notes
+          if-no-files-found: error
+          path: release-downloads.md
+          retention-days: 7
   draft-release:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [release, linux-install-smoke]
+    needs: [release-preview, linux-install-smoke]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -128,9 +167,12 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v8
         with:
-          pattern: desktop-*
+          name: release-ready-assets
           path: packages
-          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-preview-notes
+          path: .
       - name: Create or update a draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -139,15 +181,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          notes_file="docs/releases/${RELEASE_TAG}.md"
+          if test -s "$notes_file"; then
+            cp "$notes_file" prepared-notes.md
+          else
+            printf '%s\n' 'Desktop build artifacts; validation required before publication.' > prepared-notes.md
+          fi
+          printf '\n' >> prepared-notes.md
+          cat release-downloads.md >> prepared-notes.md
           if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > draft-state; then
             test "$(cat draft-state)" = true
+            gh release edit "$RELEASE_TAG" --notes-file prepared-notes.md
           else
-            notes_file="docs/releases/${RELEASE_TAG}.md"
-            if test -s "$notes_file"; then
-              gh release create "$RELEASE_TAG" --verify-tag --draft --title "${RELEASE_TAG#v} (twister65 fork)" --notes-file "$notes_file"
-            else
-              gh release create "$RELEASE_TAG" --verify-tag --draft --title "${RELEASE_TAG#v} (twister65 fork)" --notes 'Desktop build artifacts; validation required before publication.'
-            fi
+            gh release create "$RELEASE_TAG" --verify-tag --draft --title "${RELEASE_TAG#v} (twister65 fork)" --notes-file prepared-notes.md
           fi
           # Only publish after every platform artifact exists and local digests verify.
           test "$(find packages -maxdepth 1 -type f -name '*.AppImage' | wc -l)" -ge 1
@@ -157,7 +203,10 @@ jobs:
           # Every Linux updater needs the same manifest to choose its own package type.
           test -s packages/latest-linux.yml
           test "$(find packages -maxdepth 1 -type f -name '*.exe' | wc -l)" -ge 1
-          test "$(find packages -maxdepth 1 -type f -name '*.dmg' | wc -l)" -ge 1
-          (cd packages && sha256sum * > SHA256SUMS && sha256sum --check SHA256SUMS)
+          test "$(find packages -maxdepth 1 -type f -name '*.dmg' | wc -l)" -eq 2
+          test "$(find packages -maxdepth 1 -type f -name '*.zip' | wc -l)" -eq 2
+          test -s packages/latest-mac.yml
+          test -s packages/latest.yml
+          (cd packages && sha256sum --check SHA256SUMS)
           gh release upload "$RELEASE_TAG" packages/* --clobber
           gh release edit "$RELEASE_TAG" --draft=false

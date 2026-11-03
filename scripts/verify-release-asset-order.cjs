@@ -1,54 +1,50 @@
 #!/usr/bin/env node
 'use strict';
-// GitHub sorts assets by name; numeric prefixes present Windows, macOS, Linux.
-// Leave updater channel names intact, and verify every referenced artifact.
+// Validate real native platform artifacts, not the GitHub Assets display order.
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const crypto = require('node:crypto');
 const yaml = require('js-yaml');
-
-const config = {
-  win32: { prefix: '01-Windows-', feed: 'latest.yml', formats: ['.exe'] },
-  darwin: { prefix: '02-macOS-', feed: 'latest-mac.yml', formats: ['.dmg'] },
-  linux: {
-    prefix: '03-Linux-', feed: 'latest-linux.yml',
-    formats: ['.AppImage', '.deb', '.rpm', '.pkg.tar.zst']
-  }
-};
-const target = config[process.platform];
-assert.ok(target, 'Unsupported release OS: ' + process.platform);
+const pkg = require('../package.json');
 const dir = path.resolve(__dirname, '../desktop-app/build');
-async function sha512(file) {
+const formats = {
+  win32: [['.exe', /^Nault-Windows-Setup-/]],
+  darwin: [['.dmg', /^Nault-macOS-/], ['.zip', /^Nault-macOS-/]],
+  linux: [
+    ['.AppImage', /^Nault-Linux-Portable-/],
+    ['.deb', /^Nault-Linux-Debian-Ubuntu-Mint-/],
+    ['.rpm', /^Nault-Linux-Fedora-openSUSE-/],
+    ['.pkg.tar.zst', /^Nault-Linux-Arch-Manjaro-/]
+  ]
+};
+const feeds = {win32: 'latest.yml', darwin: 'latest-mac.yml', linux: 'latest-linux.yml'};
+async function digest(file) {
   const hash = crypto.createHash('sha512');
-  for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
+  for await (const data of fs.createReadStream(file)) hash.update(data);
   return hash.digest('base64');
 }
 async function main() {
-  const manifest = path.join(dir, target.feed);
-  assert.ok(fs.existsSync(manifest), 'Missing updater feed ' + target.feed);
-  const metadata = yaml.load(fs.readFileSync(manifest, 'utf8'));
-  const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf8'));
-  assert.equal(metadata.version, pkg.version, 'Feed version mismatch');
-  assert.ok(Array.isArray(metadata.files), 'Missing updater files list');
-  const entries = fs.readdirSync(dir);
-
-  for (const ext of target.formats) {
-    const found = entries.filter(name => name.endsWith(ext));
-    assert.equal(found.length, 1, 'Expected a single ' + ext + ' artifact: ' + found.join(', '));
-    const filename = found[0];
-    assert.ok(filename.startsWith(target.prefix), 'Wrong release sort prefix: ' + filename);
-    assert.ok(filename.includes(pkg.version), 'Installer version not encoded: ' + filename);
-    const matches = metadata.files.filter(f => f.url === filename);
-    assert.equal(matches.length, 1, 'Updater does not reference ' + filename);
-    const entry = matches[0];
-    const full = path.join(dir, filename);
-    assert.equal(entry.size, fs.statSync(full).size, 'Artifact size mismatch: ' + filename);
-    assert.equal(entry.sha512, await sha512(full), 'Artifact SHA512 mismatch: ' + filename);
-    console.log('PASS ' + target.feed + ' -> ' + filename);
+  const target = formats[process.platform];
+  assert.ok(target, 'Unsupported platform: ' + process.platform);
+  const feed = feeds[process.platform];
+  const info = yaml.load(fs.readFileSync(path.join(dir, feed), 'utf8'));
+  assert.equal(info.version, pkg.version);
+  assert.ok(Array.isArray(info.files));
+  const names = fs.readdirSync(dir);
+  for (const [extension, prefix] of target) {
+    const found = names.filter(name => name.endsWith(extension));
+    assert.equal(found.length, 1, 'Expected one ' + extension + ', got ' + found);
+    const name = found[0];
+    assert.match(name, prefix);
+    assert.ok(name.includes(pkg.version));
+    if (process.platform === 'darwin') assert.ok(name.includes(process.arch), 'Wrong Mac architecture ' + name);
+    const entries = info.files.filter(entry => entry.url === name);
+    assert.equal(entries.length, 1, 'Missing/ambiguous updater entry for ' + name);
+    const file = path.join(dir, name);
+    assert.equal(entries[0].size, fs.statSync(file).size, name + ' size');
+    assert.equal(entries[0].sha512, await digest(file), name + ' checksum');
+    console.log('PASS ' + feed + ' -> ' + name);
   }
 }
-main().catch(err => {
-  console.error('::error::Release asset naming/update-feed validation: ' + err.message);
-  process.exitCode = 1;
-});
+main().catch(err => { console.error('::error::' + err.message); process.exitCode = 1; });

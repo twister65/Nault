@@ -104,5 +104,5 @@ test('Help menu links to maintained fork and omits upstream Discord', () => {
 
 test('Windows release NSIS installer uses a hyphenated filename', () => {
   const pkg = require('../package.json');
-  assert.equal(pkg.build.nsis.artifactName, '01-Windows-Nault-Setup-${version}.${ext}');
+  assert.equal(pkg.build.nsis.artifactName, 'Nault-Windows-Setup-${version}.${ext}');
 });

@@ -145,10 +145,13 @@
       "app": "./"
     },
     "nsis": {
-      "artifactName": "01-Windows-Nault-Setup-${version}.${ext}"
+      "artifactName": "Nault-Windows-Setup-${version}.${ext}"
     },
     "mac": {
-      "target": "dmg",
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "category": "public.app-category.finance",
       "extendInfo": {
         "CFBundleURLTypes": [
@@ -160,7 +163,7 @@
           }
         ]
       },
-      "artifactName": "02-macOS-Nault-${version}.${ext}"
+      "artifactName": "Nault-macOS-${version}-${arch}.${ext}"
     },
     "linux": {
       "target": [
@@ -185,7 +188,7 @@
         }
       },
       "maintainer": "Twister32 <26852967+twister65@users.noreply.github.com>",
-      "artifactName": "03-Linux-Nault-${version}-${arch}.${ext}"
+      "artifactName": "Nault-Linux-${version}-${arch}.${ext}"
     },
     "protocols": {
       "name": "nano",
@@ -201,7 +204,7 @@
     },
     "pacman": {
       "compression": "zstd",
-      "artifactName": "03-Linux-Nault-${version}-${arch}.pkg.tar.zst",
+      "artifactName": "Nault-Linux-Arch-Manjaro-${version}-${arch}.pkg.tar.zst",
       "depends": [
         "gtk3",
         "libnotify",
@@ -228,7 +231,8 @@
         "libsecret-1-0",
         "libgbm1",
         "libasound2"
-      ]
+      ],
+      "artifactName": "Nault-Linux-Debian-Ubuntu-Mint-${version}-${arch}.${ext}"
     },
     "rpm": {
       "depends": [
@@ -243,7 +247,11 @@
         "libsecret-1.so.0()(64bit)",
         "libgbm.so.1()(64bit)",
         "libasound.so.2()(64bit)"
-      ]
+      ],
+      "artifactName": "Nault-Linux-Fedora-openSUSE-${version}-${arch}.${ext}"
+    },
+    "appImage": {
+      "artifactName": "Nault-Linux-Portable-${version}-${arch}.${ext}"
     }
   },
   "overrides": {
