@@ -106,18 +106,22 @@ export class AppComponent implements OnInit, OnDestroy {
         generation !== this.nodeService.internetInterruptionGeneration ||
         wsUrl !== this.settings.settings.serverWS ||
         !this.websocket.socket.connected) return;
-    this.nodeService.internetRecoveryPending = false;
-    console.info('[Nano network] Selected WebSocket reconnected; Internet restored (RPC not yet verified).');
-    // The initial FIAT request may have failed while Electron was offline.
-    // Retry it now and remove a stale price warning if it succeeds; this
-    // remains independent of RPC availability and the chosen server.
+    // A WS handshake proves the physical link is available, but NOT that
+    // accounts_balances / accounts_frontiers can read the selected RPC node.
+    // Keep failover locked for an existing wallet until its RPC refresh succeeds.
+    // Otherwise the first transient post-airplane-mode balance error can rotate
+    // away from a perfectly healthy user-selected node.
+    console.info('[Nano network] Selected WebSocket reconnected; checking original RPC before unlocking failover.');
     void this.updateFiatPrices().catch(() => {});
-    if (!this.walletService.isConfigured()) {
-      // A new user has no balances to validate; do not keep firing the
-      // artificial burn-address accounts_balances request after a healthy WS.
-      this.nodeService.setLoading();
-      this.cancelNetworkRecovery();
+    if (this.walletService.isConfigured()) {
+      this.scheduleNetworkRecovery(0);
+      return;
     }
+    this.nodeService.internetRecoveryPending = false;
+    // A new user has no balances to validate; do not keep firing the
+    // artificial burn-address accounts_balances request after a healthy WS.
+    this.nodeService.setLoading();
+    this.cancelNetworkRecovery();
   }
 
   private async pollNativeNetwork(): Promise<void> {
@@ -630,12 +634,14 @@ export class AppComponent implements OnInit, OnDestroy {
         return;
       }
       // Prefer normal wallet reads: not every public RPC allows node statistics.
-      if (this.wallet.accounts.length) await this.walletService.reloadBalances();
-      // Empty account arrays may be refused by healthy public RPC proxies.
-      // Use the wallet-independent health probe also on network recovery.
-      if (this.nodeService.node.status !== true) {
-        if (this.wallet.accounts.length) await this.api.accountsBalances(this.wallet.accounts.map(a => a.id));
-        else await this.api.checkNodeAvailability(!this.walletService.isConfigured(),
+      if (this.wallet.accounts.length) {
+        // A successful normal refresh validates both balances and frontiers
+        // on the ORIGINAL RPC, while failover is still locked. Do not fire a
+        // redundant second accounts_balances request during reconnection.
+        await this.walletService.reloadBalances();
+      } else if (this.nodeService.node.status !== true) {
+        // Empty account arrays may be refused by healthy public RPC proxies.
+        await this.api.checkNodeAvailability(!this.walletService.isConfigured(),
           !this.nodeService.internetRecoveryPending);
       }
 
