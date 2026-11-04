@@ -279,6 +279,29 @@ describe('ApiService optional node statistics', () => {
     const api = new ApiService(http as any, node as any, settings as any);
     expect(await api.optionalBlockCount()).toBeNull();
     expect(node.setOffline).not.toHaveBeenCalled();
+    expect(node.setOnline).not.toHaveBeenCalled();
+  });
+
+  it('keeps node health unchanged when optional statistics succeed', async () => {
+    const http = { post: jasmine.createSpy('post').and.returnValue(of({
+      count: '225972210', cemented: '225972210', unchecked: '0'
+    })) };
+    const node = {
+      node: { status: false },
+      setOnline: jasmine.createSpy('setOnline'),
+      setOffline: jasmine.createSpy('setOffline'),
+      setLoading: jasmine.createSpy('setLoading')
+    };
+    const settings = {
+      settings: { serverAPI: 'https://twister32.changeip.net/proxy', serverName: 'twister32-rsnano' }
+    };
+    const api = new ApiService(http as any, node as any, settings as any);
+    expect(await api.optionalBlockCount()).toEqual({
+      count: '225972210', cemented: '225972210', unchecked: '0'
+    } as any);
+    expect(node.setOnline).not.toHaveBeenCalled();
+    expect(node.setOffline).not.toHaveBeenCalled();
+    expect(node.node.status).toBeFalse();
   });
 });
 
