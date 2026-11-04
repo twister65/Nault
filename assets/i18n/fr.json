@@ -872,6 +872,7 @@
     "tracked-sent": "L’adresse suivie {{account}} a envoyé {{amount}} XNO.",
     "tracked-received": "L’adresse suivie {{account}} a reçu {{amount}} XNO.",
     "tracked-representative": "L’adresse suivie {{account}} a changé de représentant : {{representative}}.",
+    "pwa-update-ready": "Une mise à jour a été installée en arrière-plan et sera appliquée au prochain démarrage.",
     "apply-update": "Appliquer maintenant",
     "update-signing-active": "Terminez la confirmation sur la Ledger avant d’appliquer la mise à jour.",
     "update-activation-failed": "Impossible d’activer la mise à jour. Redémarrez Nault pour réessayer.",
