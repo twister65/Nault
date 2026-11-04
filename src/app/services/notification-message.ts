@@ -5,6 +5,8 @@ export type NotificationTranslator = (key: string, params?: Record<string, strin
 
 export function localizeNotificationMessage(message: string, translate: NotificationTranslator): string {
   switch (message) {
+    case 'An update was installed in the background and will be applied on next launch.':
+      return translate('ui-notifications.pwa-update-ready');
     case 'Unable to connect to the nano node, your balances may be inaccurate!':
       return translate('ui-notifications.node-offline');
     case 'Unable to refresh balances. Check your connection.':
