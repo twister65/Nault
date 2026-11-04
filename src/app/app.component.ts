@@ -80,6 +80,10 @@ export class AppComponent implements OnInit, OnDestroy {
   private networkRecoveryInProgress = false;
   private networkRecoveryAttempts = 0;
   private readonly maxNetworkRecoveryAttempts = 5;
+  // A fresh WS handshake received during an Internet interruption already
+  // restored account subscriptions. Do not force a second reconnect after
+  // wallet RPC recovers, since that queues another balance read.
+  private wsRestoredDuringInterruption = false;
   private wsFailureProbeInFlight = false;
   private lastWsFailureProbeEndpoint: string | null = null;
   private lastWsFailureProbeAt = 0;
@@ -112,6 +116,7 @@ export class AppComponent implements OnInit, OnDestroy {
     // Otherwise the first transient post-airplane-mode balance error can rotate
     // away from a perfectly healthy user-selected node.
     console.info('[Nano network] Selected WebSocket reconnected; checking original RPC before unlocking failover.');
+    this.wsRestoredDuringInterruption = true;
     void this.updateFiatPrices().catch(() => {});
     if (this.walletService.isConfigured()) {
       this.scheduleNetworkRecovery(0);
@@ -229,6 +234,7 @@ export class AppComponent implements OnInit, OnDestroy {
   @HostListener('window:offline') onNetworkOffline(): void {
     if (this.nodeService.internetRecoveryPending) return;
     this.nodeService.markInternetInterrupted();
+    this.wsRestoredDuringInterruption = false;
     console.info('[Nano network] Internet disconnected; preserving selected server.');
     this.cancelNetworkRecovery();
     if (this.settings.settings.serverAPI) {
@@ -647,9 +653,14 @@ export class AppComponent implements OnInit, OnDestroy {
 
       if (!navigator.onLine || this.settings.settings.serverAPI !== endpoint) return;
 
-      // A WebSocket may have exhausted its retry budget while Android was offline.
-      // Restoring it only follows successful RPC reads and never replays transactions.
-      if (this.settings.settings.serverWS) this.websocket.forceReconnect();
+      // A fresh WS handshake during this outage already restored subscriptions
+      // and triggered a balance read. Reconnecting it a second time can create
+      // overlapping RPC loads and spurious timeout-based failovers.
+      // If the WS exhausted its retry budget, still force a fresh connection.
+      if (this.settings.settings.serverWS && !this.wsRestoredDuringInterruption) {
+        this.websocket.forceReconnect();
+      }
+      this.wsRestoredDuringInterruption = false;
       this.nodeService.internetRecoveryPending = false;
       this.networkRecoveryAttempts = 0;
     } catch (_) {
