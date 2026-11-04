@@ -150,10 +150,14 @@ export class ApiService {
     // A request can finish after a local Internet interruption or after
     // another RPC request has switched the selected node. Its result must
     // never mark the new/current node online or offline.
-    const obsoleteSelectedRequest = (): boolean => !url && (
-      this.appSettings.settings.serverAPI !== firstUrl ||
-      this.node.internetInterruptionGeneration !== expectedNetworkGeneration
-    );
+    // A signed process response may prove publication even if the user loses
+    // connectivity immediately afterwards. Never discard that result or
+    // encourage manual resubmission because of a later network transition.
+    const obsoleteSelectedRequest = (): boolean =>
+      !url && action !== 'process' && action !== 'work_generate' && (
+        this.appSettings.settings.serverAPI !== firstUrl ||
+        this.node.internetInterruptionGeneration !== expectedNetworkGeneration
+      );
     if (!firstUrl) {
       this.node.setOffline(null);
       return;
