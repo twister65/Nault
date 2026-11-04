@@ -465,6 +465,20 @@ describe('ApiService bounded secure requests', () => {
     expect(http.post).toHaveBeenCalledTimes(1);
   });
 
+  it('still returns a signed process result from the pre-outage node without replaying it', async () => {
+    const { api, http, node } = setup('spynano');
+    const pending = new Subject<any>();
+    http.post.and.returnValue(pending);
+    const signed = api.process({ signature: 'test' }, TxType.send);
+
+    node.markInternetInterrupted();
+    pending.next({ hash: 'published_block_hash' });
+    pending.complete();
+
+    expect(await signed).toEqual({ hash: 'published_block_hash' });
+    expect(http.post).toHaveBeenCalledTimes(1);
+  });
+
   it('ignores a stale RPC failure after a concurrent request switched the node', async () => {
     const { api, http, node, settings } = setup('spynano');
     const pending = new Subject<any>();
