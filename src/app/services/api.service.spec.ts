@@ -447,6 +447,42 @@ describe('ApiService bounded secure requests', () => {
     expect((node as any).internetRecoveryPending).toBe(true);
   });
 
+  it('ignores a successful RPC response from before an airplane-mode interruption', async () => {
+    const { api, http, node, settings } = setup('spynano');
+    const pending = new Subject<any>();
+    http.post.and.returnValue(pending);
+    const read = api.accountsBalances(['nano_test']);
+
+    // The old response arrives after the network generation has changed.
+    node.markInternetInterrupted();
+    pending.next({ balances: {} });
+    pending.complete();
+
+    await expectAsync(read).toBeRejectedWith(jasmine.objectContaining({ isStaleFailover: true }));
+    expect(node.setOnline).not.toHaveBeenCalled();
+    expect(node.setOffline).not.toHaveBeenCalled();
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+    expect(http.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a stale RPC failure after a concurrent request switched the node', async () => {
+    const { api, http, node, settings } = setup('spynano');
+    const pending = new Subject<any>();
+    http.post.and.returnValue(pending);
+    const read = api.accountsBalances(['nano_test']);
+
+    // The selected node has already changed through another healthy request.
+    settings.settings.serverName = 'b';
+    settings.settings.serverAPI = 'https://b.invalid/rpc';
+    pending.error({ status: 0 });
+
+    await expectAsync(read).toBeRejectedWith(jasmine.objectContaining({ isStaleFailover: true }));
+    expect(node.setOnline).not.toHaveBeenCalled();
+    expect(node.setOffline).not.toHaveBeenCalled();
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+    expect(http.post).toHaveBeenCalledTimes(1);
+  });
+
   it('reports an RPC timeout as an RPC timeout after link recovery, never as a new Internet outage', fakeAsync(() => {
     const { api, http, node, settings } = setup('rainstorm');
     node.internetRecoveryPending = true;
