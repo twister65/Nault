@@ -147,6 +147,13 @@ export class ApiService {
     const settings = { ...this.appSettings.settings };
     const expectedNetworkGeneration = this.node.internetInterruptionGeneration;
     const firstUrl = url || settings.serverAPI;
+    // A request can finish after a local Internet interruption or after
+    // another RPC request has switched the selected node. Its result must
+    // never mark the new/current node online or offline.
+    const obsoleteSelectedRequest = (): boolean => !url && (
+      this.appSettings.settings.serverAPI !== firstUrl ||
+      this.node.internetInterruptionGeneration !== expectedNetworkGeneration
+    );
     if (!firstUrl) {
       this.node.setOffline(null);
       return;
@@ -215,6 +222,10 @@ export class ApiService {
           const remaining = deadline - Date.now();
           const res = await this.http.post(endpoint, { ...data, action: requestAction }, options)
             .pipe(timeout(Math.max(1, Math.min(action === 'work_generate' ? 120000 : perAttemptTimeoutMs, remaining)))).toPromise();
+          if (obsoleteSelectedRequest()) {
+            if (skipError) return;
+            throw { isStaleFailover: true };
+          }
           // Older public Nano nodes may reject the new RPC action in a JSON
           // response with HTTP 200. Retry its legacy alias on this same node;
           // never confuse a JSON RPC error with transport unavailability.
@@ -260,6 +271,10 @@ export class ApiService {
           return res;
         } catch (error) {
           lastError = error;
+          if (obsoleteSelectedRequest()) {
+            if (skipError) return;
+            throw { isStaleFailover: true };
+          }
           if (skipError) return;
           const legacy = this.legacyReceivableAction(requestAction, error);
           if (legacy && attempts < 3) {
@@ -322,8 +337,9 @@ export class ApiService {
             } catch (fallbackError) {
               // A late backup from an old network generation must not mark a
               // successfully recovered original node offline again.
-              if (!(fallbackError && typeof fallbackError === 'object' &&
-                'isStaleFailover' in fallbackError && fallbackError.isStaleFailover)) {
+              if (!obsoleteSelectedRequest() &&
+                  !(fallbackError && typeof fallbackError === 'object' &&
+                    'isStaleFailover' in fallbackError && fallbackError.isStaleFailover)) {
                 this.node.setOffline(silentOffline ? null : undefined);
               }
               throw fallbackError;
@@ -333,6 +349,7 @@ export class ApiService {
         }
       }
     }
+    if (obsoleteSelectedRequest()) throw { isStaleFailover: true };
     this.node.setOffline(silentOffline ? null : (lastError && lastError.status === 429
       ? 'Too Many Requests to the node. Try again later or choose a different node.'
       : 'RPC unavailable. Retry later or choose another node.'));
