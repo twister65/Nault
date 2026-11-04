@@ -245,7 +245,9 @@ export class ApiService {
             if (typeof validateResponse === 'function') {
               throw { isRpcError: true, error: res.error };
             }
-            this.node.setOnline();
+            // Optional metadata/statistics can succeed even while wallet RPC
+            // calls fail. Never use them as proof that balances are reachable.
+            if (!skipError) this.node.setOnline();
             return res;
           }
           if (typeof validateResponse === 'function' && validateResponse(res).err != null) {
@@ -269,9 +271,13 @@ export class ApiService {
               console.info('[Nano RPC health] Backup responded but saved server changed; ignoring stale result.');
               throw { isStaleFailover: true };
             }
-            if (healthProbe) console.info('[Nano RPC health] Failover activated:', endpoint);
+            console.info('[Nano RPC health] Failover activated:', {
+              from: settings.serverName, to: endpoint, action,
+            });
           }
-          this.node.setOnline();
+          // A successful optional statistics call must not override the
+          // wallet's node-offline status or clear its persistent warning.
+          if (!skipError) this.node.setOnline();
           return res;
         } catch (error) {
           lastError = error;
@@ -288,6 +294,19 @@ export class ApiService {
           const failure = error && typeof error === 'object'
             ? error as { isValidationFailure?: boolean; isRpcError?: boolean; isStaleFailover?: boolean; status?: number; name?: string }
             : {};
+          if (endpoint === apiUrl && !skipError &&
+              (action === 'accounts_balances' || action === 'accounts_frontiers')) {
+            // Log the failing action and transport status without exposing
+            // account addresses, RPC payloads, credentials or block contents.
+            console.info('[Nano RPC health] Wallet read failure:', {
+              action, selected: settings.serverName, status: failure.status ?? null,
+              reason: failure.name === 'TimeoutError' ? 'timeout' :
+                failure.isRpcError ? 'rpc-error' :
+                failure.isValidationFailure ? 'invalid-response' : 'network',
+              recoveryPending: this.node.internetRecoveryPending,
+              fallbackEligible: endpoints.length > 1
+            });
+          }
           if (healthProbe) {
             console.info('[Nano RPC health] Probe failed:', endpoint, {
               status: failure.status ?? null,
