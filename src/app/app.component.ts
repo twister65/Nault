@@ -425,16 +425,29 @@ export class AppComponent implements OnInit, OnDestroy {
       }
     }, 1000);
 
+    await this.loadInitialFiatPrice();
+  }
+
+  // Price discovery may fail on first launch (e.g. CoinGecko rate limiting).
+  // Do not present a persistent FIAT warning before a wallet exists: a new
+  // user has no FIAT balances to display. Keep the periodic retry unchanged,
+  // so FIAT prices are available after a wallet is configured.
+  private async loadInitialFiatPrice(): Promise<void> {
+    if (!this.settings.settings.serverAPI) return;
     try {
-      if (!this.settings.settings.serverAPI) return;
       await this.updateFiatPrices();
-    } catch (err) {
-      // A disconnected Internet connection is not evidence of an ad blocker.
-      // The recurring retry timer is set even after an initial failure.
+    } catch (_error) {
+      if (!this.walletService.isConfigured()) {
+        this.notifications.removeNotification('price-adblock');
+        return;
+      }
+      // An Internet outage is not evidence of an ad blocker. Check wallet
+      // state again after the asynchronous connectivity test, in case it was
+      // reset while the price request was pending.
       const offline = (typeof navigator !== 'undefined' && !navigator.onLine) ||
         this.nodeService.internetRecoveryPending ||
         (await this.desktop.isNetworkOnline()) === false;
-      if (!offline) {
+      if (!offline && this.walletService.isConfigured()) {
         this.notifications.sendWarning(`There was an issue retrieving latest nano price. Ensure your AdBlocker is disabled on this page then reload to see accurate FIAT values.`,
           { length: 0, identifier: 'price-adblock' });
       }

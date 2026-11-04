@@ -39,6 +39,81 @@ describe('AppComponent', () => {
     expect(price).toHaveBeenCalledTimes(2);
   }));
 
+  it('keeps a failed FIAT price request silent on first launch without a wallet', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://example.test/proxy';
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(false);
+    const fetch = spyOn(app, 'updateFiatPrices').and.returnValue(Promise.reject(new Error('CoinGecko unavailable')));
+    const notifications = TestBed.inject(NotificationService);
+    const warn = spyOn(notifications, 'sendWarning');
+    const clear = spyOn(notifications, 'removeNotification');
+    const network = spyOn(TestBed.inject(DesktopService), 'isNetworkOnline');
+
+    void (app as any).loadInitialFiatPrice();
+    tick(0);
+
+    expect(fetch).toHaveBeenCalledTimes(1); // The price retry policy remains unchanged.
+    expect(warn).not.toHaveBeenCalled();
+    expect(clear).toHaveBeenCalledWith('price-adblock');
+    expect(network).not.toHaveBeenCalled(); // No connectivity probe is needed for onboarding.
+  }));
+
+  it('still warns about failed FIAT prices for a configured wallet while online', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://example.test/proxy';
+    app.nodeService.internetRecoveryPending = false;
+    spyOnProperty(navigator, 'onLine', 'get').and.returnValue(true);
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(true);
+    spyOn(app, 'updateFiatPrices').and.returnValue(Promise.reject(new Error('CoinGecko unavailable')));
+    const network = spyOn(TestBed.inject(DesktopService), 'isNetworkOnline').and.returnValue(Promise.resolve(true));
+    const warn = spyOn(TestBed.inject(NotificationService), 'sendWarning');
+
+    void (app as any).loadInitialFiatPrice();
+    tick(0);
+
+    expect(network).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      jasmine.stringMatching(/issue retrieving latest nano price/),
+      jasmine.objectContaining({ identifier: 'price-adblock' })
+    );
+  }));
+
+  it('does not report an ad blocker if the configured wallet is offline', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://example.test/proxy';
+    app.nodeService.internetRecoveryPending = true;
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(true);
+    spyOn(app, 'updateFiatPrices').and.returnValue(Promise.reject(new Error('offline')));
+    const warn = spyOn(TestBed.inject(NotificationService), 'sendWarning');
+
+    void (app as any).loadInitialFiatPrice();
+    tick(0);
+
+    expect(warn).not.toHaveBeenCalled();
+  }));
+
+  it('does not show a stale FIAT warning if the wallet is removed during the connectivity check', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://example.test/proxy';
+    app.nodeService.internetRecoveryPending = false;
+    spyOnProperty(navigator, 'onLine', 'get').and.returnValue(true);
+    const configured = spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(true);
+    spyOn(app, 'updateFiatPrices').and.returnValue(Promise.reject(new Error('CoinGecko unavailable')));
+    let resolveOnline: (online: boolean) => void = () => {};
+    spyOn(TestBed.inject(DesktopService), 'isNetworkOnline').and.returnValue(
+      new Promise<boolean>(resolve => { resolveOnline = resolve; })
+    );
+    const warn = spyOn(TestBed.inject(NotificationService), 'sendWarning');
+
+    void (app as any).loadInitialFiatPrice();
+    tick(0);
+    configured.and.returnValue(false);
+    resolveOnline(true);
+    tick(0);
+
+    expect(warn).not.toHaveBeenCalled();
+  }));
+
   it('refreshes FIAT once after selected WS reconnects following offline startup', fakeAsync(() => {
     const app = TestBed.inject(AppComponent);
     const refresh = spyOn(app, 'updateFiatPrices').and.returnValue(Promise.resolve());
