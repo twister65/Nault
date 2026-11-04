@@ -167,6 +167,66 @@ describe('AppComponent', () => {
     expect(probe).not.toHaveBeenCalled();
   }));
 
+  it('keeps a configured wallet on its original RPC until balance recovery completes', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverName = 'twister32-rsnano';
+    app.settings.settings.serverAPI = 'https://twister32.changeip.net/proxy';
+    app.settings.settings.serverWS = 'wss://twister32.changeip.net/ws';
+    const wallet = TestBed.inject(WalletService);
+    spyOn(wallet, 'isConfigured').and.returnValue(true);
+    app.wallet.accounts = [{ id: 'nano_test' } as any];
+    let finishRefresh: () => void = () => {};
+    const refresh = spyOn(wallet, 'reloadBalances').and.returnValue(
+      new Promise<void>(resolve => { finishRefresh = resolve; })
+    );
+    const api = TestBed.inject(ApiService);
+    const fallback = spyOn(api, 'checkNodeAvailability');
+    const ws = TestBed.inject(WebsocketService);
+    const reconnect = spyOn(ws, 'forceReconnect').and.stub();
+
+    app.onNetworkOffline();
+    ws.socket.connected = true;
+    ws.connected$.next();
+    tick(0);
+    expect(app.nodeService.internetRecoveryPending).toBeTrue();
+    expect(app.settings.settings.serverName).toBe('twister32-rsnano');
+    expect(fallback).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalled();
+
+    // A WS handshake alone did not clear the guard. A real RPC refresh does.
+    app.nodeService.setOnline();
+    finishRefresh();
+    tick(0);
+    expect(app.nodeService.internetRecoveryPending).toBeFalse();
+    expect(app.settings.settings.serverName).toBe('twister32-rsnano');
+    expect(reconnect).toHaveBeenCalledTimes(1);
+    app.ngOnDestroy();
+  }));
+
+  it('does not rotate the selected wallet node on the first RPC failure after airplane mode', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverName = 'rainstorm';
+    app.settings.settings.serverAPI = 'https://rainstorm.city/api';
+    app.settings.settings.serverWS = 'wss://rainstorm.city/websocket';
+    const wallet = TestBed.inject(WalletService);
+    spyOn(wallet, 'isConfigured').and.returnValue(true);
+    app.wallet.accounts = [{ id: 'nano_test' } as any];
+    const refresh = spyOn(wallet, 'reloadBalances').and.returnValue(Promise.reject(new Error('transient RPC timeout')));
+    const api = TestBed.inject(ApiService);
+    const fallback = spyOn(api, 'checkNodeAvailability');
+    const ws = TestBed.inject(WebsocketService);
+    spyOn(ws, 'forceReconnect').and.stub();
+
+    app.onNetworkOffline();
+    app.onNetworkOnline();
+    tick(0);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(app.nodeService.internetRecoveryPending).toBeTrue();
+    expect(app.settings.settings.serverName).toBe('rainstorm');
+    expect(fallback).not.toHaveBeenCalled();
+    app.ngOnDestroy();
+  }));
+
   it('does not clear Internet outage state when native network is still offline', fakeAsync(() => {
     const app = TestBed.inject(AppComponent);
     app.settings.settings.serverWS = 'wss://rainstorm.city/websocket';
