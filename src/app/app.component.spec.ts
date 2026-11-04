@@ -211,7 +211,7 @@ describe('AppComponent', () => {
     const wallet = TestBed.inject(WalletService);
     spyOn(wallet, 'isConfigured').and.returnValue(true);
     app.wallet.accounts = [{ id: 'nano_test' } as any];
-    const refresh = spyOn(wallet, 'reloadBalances').and.returnValue(Promise.reject(new Error('transient RPC timeout')));
+    const refresh = spyOn(wallet, 'reloadBalances').and.callFake(() => Promise.reject(new Error('transient RPC timeout')));
     const api = TestBed.inject(ApiService);
     const fallback = spyOn(api, 'checkNodeAvailability');
     const ws = TestBed.inject(WebsocketService);
