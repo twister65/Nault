@@ -199,7 +199,31 @@ describe('AppComponent', () => {
     tick(0);
     expect(app.nodeService.internetRecoveryPending).toBeFalse();
     expect(app.settings.settings.serverName).toBe('twister32-rsnano');
+    // The WS already completed a fresh handshake: a second forced reconnect
+    // would generate a redundant wallet balance read and another failure cycle.
+    expect(reconnect).not.toHaveBeenCalled();
+    app.ngOnDestroy();
+  }));
+
+  it('reopens an exhausted WS after wallet RPC recovers without a fresh handshake', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverName = 'twister32-rsnano';
+    app.settings.settings.serverAPI = 'https://twister32.changeip.net/proxy';
+    app.settings.settings.serverWS = 'wss://twister32.changeip.net/ws';
+    const wallet = TestBed.inject(WalletService);
+    spyOn(wallet, 'isConfigured').and.returnValue(true);
+    app.wallet.accounts = [{ id: 'nano_test' } as any];
+    const refresh = spyOn(wallet, 'reloadBalances').and.returnValue(Promise.resolve());
+    const ws = TestBed.inject(WebsocketService);
+    const reconnect = spyOn(ws, 'forceReconnect').and.stub();
+
+    app.onNetworkOffline();
+    app.onNetworkOnline();
+    tick(0);
+    expect(refresh).toHaveBeenCalledTimes(1);
     expect(reconnect).toHaveBeenCalledTimes(1);
+    expect(app.nodeService.internetRecoveryPending).toBeFalse();
+    expect(app.settings.settings.serverName).toBe('twister32-rsnano');
     app.ngOnDestroy();
   }));
 
