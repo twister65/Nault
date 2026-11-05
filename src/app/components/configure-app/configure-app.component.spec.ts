@@ -73,9 +73,23 @@ describe('ConfigureAppComponent server settings', () => {
     component = Object.create(ConfigureAppComponent.prototype);
     settings = {
       settings: { serverAPI: 'https://saved.example/rpc' },
-      setAppSettings: jasmine.createSpy(), loadAppSettings: jasmine.createSpy()
+      serverOptions: [{ value: 'custom', name: 'New', isLocal: false }],
+      setAppSettings: jasmine.createSpy(), loadAppSettings: jasmine.createSpy(),
+      saveLocalNode: jasmine.createSpy('saveLocalNode')
     };
     settings.setAppSettings.and.callFake((values: any) => Object.assign(settings.settings, values));
+    settings.saveLocalNode.and.callFake((_name: string, api: string, ws: string | null) => {
+      settings.serverOptions = [
+        { value: 'custom', name: 'New', isLocal: false },
+        { value: 'local-test', name: 'My node', isLocal: true, api, ws }
+      ];
+      return 'local-test';
+    });
+    settings.loadAppSettings.and.callFake(() => {
+      const node = settings.serverOptions.find((item: any) => item.value === settings.settings.serverName);
+      settings.settings.serverAPI = node?.api || null;
+      settings.settings.serverWS = node?.ws || null;
+    });
     notifications = { sendWarning: jasmine.createSpy(), sendSuccess: jasmine.createSpy() };
     websocket = { forceReconnect: jasmine.createSpy() };
     wallet = {
