@@ -218,6 +218,7 @@
     "scanning-nodes": "Vérification en arrière-plan de la synchronisation et de la latence RPC…",
     "no-healthy-node": "Aucun nœud adapté pour le moment",
     "delete-local-node": "Supprimer le nœud local",
+    "local-node-label": "local",
     "delete-local-node-confirm": "Supprimer le nœud local sélectionné ?",
     "node-health": {"synchronized":"Synchronisé","lagging":"Non synchronisé","unavailable":"Indisponible","unverified":"Synchronisation non vérifiée"},
     "node-stats": "Statistiques du nœud",
