@@ -279,7 +279,7 @@
     "this-will-delete-all-locally-cached-proof-of-work-values": "Se eliminarán todos los valores de prueba de trabajo (PoW) almacenados en caché",
     "this-will-delete-all-stored-data-and-reset-app-settings-incl": "Se eliminarán TODOS los datos guardados y se restablecerán los ajustes, incluidos la cartera, la libreta de direcciones y más",
     "update-display-settings": "Actualizar apariencia",
-    "update-server-settings": "Actualizar servidores",
+    "update-server-settings": "Actualizar servidor",
     "update-wallet-settings": "Actualizar cartera",
     "use-if-the-api-requires-authentication": "Utiliza esta opción si la API requiere autenticación",
     "wallet-settings": "Configuración de la cartera",
