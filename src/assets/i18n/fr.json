@@ -220,6 +220,8 @@
     "delete-local-node": "Supprimer le nœud local",
     "local-node-label": "local",
     "local-node-to-delete": "Nœud local à gérer",
+    "server-mode": "Mode de connexion",
+    "choose-server-node": "Choisir un nœud Nano",
     "choose-local-node": "Choisir un nœud local",
     "delete-local-node-confirm": "Supprimer le nœud local sélectionné ?",
     "node-health": {"synchronized":"Synchronisé","lagging":"Non synchronisé","unavailable":"Indisponible","unverified":"Synchronisation non vérifiée"},
