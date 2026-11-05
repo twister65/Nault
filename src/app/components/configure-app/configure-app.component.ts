@@ -539,8 +539,12 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
         return this.notifications.sendWarning(this.translocoService.translate('configure-app.custom-api-server-has-an-invalid-address'));
       }
       try {
+        // Validate before writing local storage or updating the live connection.
+        // The Settings service validates as a second boundary as well.
+        const rpc = secureEndpoint(this.serverAPI, 'rpc');
+        const ws = this.serverWS?.trim() ? secureEndpoint(this.serverWS, 'ws') : null;
         newSettings.serverName = this.appSettings.saveLocalNode(
-          this.serverNodeName, this.serverAPI, this.serverWS,
+          this.serverNodeName, rpc, ws,
           this.serverAuth && this.serverAuth.trim().length > 1 ? this.serverAuth : null,
           this.selectedLocalNode()?.value
         );
