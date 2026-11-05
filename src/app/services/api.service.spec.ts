@@ -768,7 +768,7 @@ describe('ApiService bounded secure requests', () => {
     const { api, http, node } = setup('custom');
     http.post.and.returnValues(throwError({ status: 400 }), of({ balances: [] }));
     await expectAsync(api.accountsBalances([])).toBeRejected();
-    await expectAsync((api as any).request('accounts_balances', { accounts: [] }, false, '', res =>
+    await expectAsync((api as any).request('accounts_balances', { accounts: [] }, false, '', (res: { balances: unknown }) =>
       ({ err: Array.isArray(res.balances) ? 'invalid balances' : null }))).toBeRejected();
     expect(node.setOffline).not.toHaveBeenCalled();
   });
