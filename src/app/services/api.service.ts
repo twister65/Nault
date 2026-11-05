@@ -357,28 +357,23 @@ export class ApiService {
     throw lastError || new Error('RPC request deadline exceeded.');
   }
 
-  // A first-run wallet has no actual accounts to read. Its synthetic burn
-  // address accounts_balances checks consistently timed out on *all* public
-  // backups in the Windows HAR despite healthy block_count/version replies.
-  // For silent (unconfigured-wallet) checks, test light RPC availability with
-  // block_count instead. This checks endpoint liveness, NOT wallet capabilities:
-  // real configured-wallet reads still require validated accounts_balances.
-  // Neither check sends wallet data, credentials or signed transactions.
+  // Bounded transport/availability check on the selected RPC, independent
+  // of the wallet. Never send an artificial account or wallet data to peers.
+  // Real account RPCs are validated separately by the wallet service.
   checkNodeAvailability(silentOffline = false, allowFailover = true): Promise<void> {
     const endpoint = this.appSettings.settings.serverAPI;
     if (allowFailover && this.pendingHealthCheck?.endpoint === endpoint) return this.pendingHealthCheck.promise;
-    const burnAccount = 'nano_1111111111111111111111111111111111111111111111111111hifc8npp';
-    const healthAction = silentOffline ? 'block_count' : 'accounts_balances';
-    const healthArgs = silentOffline ? { include_cemented: 'true' } : { accounts: [burnAccount] };
+    // A WebSocket outage does not imply the wallet RPC is unavailable.
+    // Never probe an artificial account here: some healthy proxies reject it
+    // or take too long, producing a false offline warning 30–60s after start.
+    // Real wallet reads still validate accounts_balances with real accounts.
     const validateHealth = (res: any): { err: string | null } => ({
-      err: silentOffline
-        ? (res && (typeof res.count === 'string' || typeof res.count === 'number') &&
-            /^[0-9]+$/.test(String(res.count)) ? null : 'Invalid block_count response')
-        : (res && res.balances && typeof res.balances === 'object' && !Array.isArray(res.balances)
-            ? null : 'Invalid accounts_balances response'),
+      err: res && (typeof res.count === 'string' || typeof res.count === 'number') &&
+        /^[0-9]+$/.test(String(res.count)) ? null : 'Invalid block_count response'
     });
-    const promise = this.request(healthAction, healthArgs, false, '', validateHealth,
-      3000, silentOffline, true, allowFailover).then(() => undefined);
+    const promise = this.request('block_count', { include_cemented: 'true' },
+      false, '', validateHealth, 5000, silentOffline, true, allowFailover)
+      .then(() => undefined);
     const pending = { endpoint, promise };
     if (allowFailover) this.pendingHealthCheck = pending;
     // Never create an unhandled rejection from a .finally() cleanup.
