@@ -4,7 +4,8 @@ import { RpcNodeRankingService } from './rpc-node-ranking.service';
 describe('RpcNodeRankingService', () => {
   function setup(counts: Record<string, string | { count: string; cemented?: string } | null>) {
     const servers = Object.keys(counts).map(value => ({
-      name: value, value, api: 'https://' + value + '.example/rpc', ws: null,
+      name: value, value, api: 'https://' + value + '.example/rpc',
+      ws: value === 'rpc-only' ? null : 'wss://' + value + '.example/ws',
       auth: null, allowFailover: true, shouldRandom: false
     }));
     const settings = {
@@ -84,6 +85,16 @@ describe('RpcNodeRankingService', () => {
     await ranking.refresh();
     expect(ranking.measurements.find(node => node.value === 'only')?.health).toBe('unverified');
     expect(settings.setRankedEndpoints).toHaveBeenCalledOnceWith(['https://only.example/rpc']);
+  });
+
+  it('never probes or ranks a public node that has no WebSocket', async () => {
+    const { ranking, settings, transport } = setup({
+      alpha: '200000000', beta: '200000000', 'rpc-only': '200000000'
+    });
+    await ranking.refresh();
+    expect(transport.post.calls.allArgs().some(args => args[0] === 'https://rpc-only.example/rpc')).toBeFalse();
+    expect(settings.setRankedEndpoints.calls.mostRecent().args[0]).not.toContain('https://rpc-only.example/rpc');
+    expect(ranking.measurements.some(node => node.value === 'rpc-only')).toBeFalse();
   });
 
   it('returns no candidates when every public node is unreachable', async () => {
