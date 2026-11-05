@@ -104,6 +104,8 @@
     "delete-local-node": "Lokalen Knoten löschen",
     "local-node-label": "lokal",
     "local-node-to-delete": "Lokalen Knoten verwalten",
+    "server-mode": "Verbindungsmodus",
+    "choose-server-node": "Nano-Knoten auswählen",
     "choose-local-node": "Lokalen Knoten auswählen",
     "delete-local-node-confirm": "Ausgewählten lokalen Knoten löschen?",
     "node-health": {"synchronized":"Synchronisiert","lagging":"Nicht synchronisiert","unavailable":"Nicht verfügbar","unverified":"Synchronisierung nicht bestätigt"},
