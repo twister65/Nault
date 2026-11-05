@@ -176,7 +176,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   localNodeToDeleteId = '';
   localNodes = () => this.serverOptions.filter(server => server.isLocal);
   localNodeToDelete = () => this.localNodes().find(server =>
-    server.value === (this.localNodeToDeleteId || this.selectedLocalNode()?.value));
+    server.value === this.localNodeToDeleteId);
 
   defaultRepresentative: string | null = null;
   representativeResults$ = new BehaviorSubject<StoredRepresentative[]>([]);
@@ -357,6 +357,8 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
     this.serverOptions = this.appSettings.serverOptions;
     this.selectedServer = settings.serverName;
+    this.localNodeToDeleteId = this.serverOptions.find(server =>
+      server.value === settings.serverName && server.isLocal)?.value || '';
     this.serverNodeName = this.serverOptions.find(server => server.value === settings.serverName && server.isLocal)?.name || '';
     this.serverAPI = settings.serverAPI;
     this.serverAPIUpdated = this.serverAPI;
@@ -601,6 +603,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     this.serverWS = this.appSettings.settings.serverWS;
     this.serverAuth = this.appSettings.settings.serverAuth;
     this.serverNodeName = this.selectedLocalNode()?.name || '';
+    if (this.selectedLocalNode()) this.localNodeToDeleteId = this.selectedLocalNode()!.value;
   }
 
   async deleteLocalNode() {
@@ -703,6 +706,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   serverConfigChange(newServer: string) {
     const custom = this.serverOptions.find(c => c.value === newServer);
     if (custom) {
+      if (custom.isLocal) this.localNodeToDeleteId = custom.value;
       this.serverAPI = custom.api;
       this.serverNodeName = custom.isLocal ? custom.name : '';
       this.serverAPIUpdated = null;
