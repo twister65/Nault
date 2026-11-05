@@ -304,7 +304,14 @@ export class ApiService {
              (typeof failure.status === 'number' && failure.status >= 500) ||
              failure.name === 'TimeoutError' || error instanceof TypeError);
           if (!retryable) {
-            if (!failure.isRpcError && !failure.isStaleFailover) {
+            // A valid HTTP error response (authorization, unsupported action,
+            // malformed RPC payload) is not proof that the node is offline.
+            // The caller still receives the failure and can warn that wallet
+            // balances need refreshing, but we do not show a false DNS alert.
+            const remoteResponded = failure.isRpcError || failure.isValidationFailure ||
+              (typeof failure.status === 'number' &&
+                failure.status >= 400 && failure.status < 500);
+            if (!remoteResponded && !failure.isStaleFailover) {
               this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
             }
             throw error;
