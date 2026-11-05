@@ -2,7 +2,7 @@ import { of, throwError } from 'rxjs';
 import { RpcNodeRankingService } from './rpc-node-ranking.service';
 
 describe('RpcNodeRankingService', () => {
-  function setup(counts: Record<string, string | null>) {
+  function setup(counts: Record<string, string | { count: string; cemented?: string } | null>) {
     const servers = Object.keys(counts).map(value => ({
       name: value, value, api: 'https://' + value + '.example/rpc', ws: null,
       auth: null, allowFailover: true, shouldRandom: false
@@ -18,7 +18,8 @@ describe('RpcNodeRankingService', () => {
       post: jasmine.createSpy('post').and.callFake((endpoint: string) => {
         const name = endpoint.match(/^https:\/\/([^.]*)/)?.[1];
         const count = name ? counts[name] : null;
-        return count === null ? throwError({ status: 503 }) : of({ count });
+        return count === null ? throwError({ status: 503 })
+          : of(typeof count === 'string' ? { count } : count);
       })
     };
     const ranking = new RpcNodeRankingService(transport as any, settings as any);
@@ -40,6 +41,42 @@ describe('RpcNodeRankingService', () => {
     expect(rank).not.toContain('https://offline.example/rpc');
     expect(transport.post.calls.allArgs().some(args => args[0] === 'https://private.example/rpc')).toBeFalse();
     expect(transport.post.calls.allArgs().every(args => args[1].action === 'block_count')).toBeTrue();
+  });
+
+  it('keeps SomeNano synchronized when its unconfirmed count differs but cemented matches peers', async () => {
+    const { ranking, settings } = setup({
+      somenano: { count: '226014800', cemented: '226014479' },
+      rainstorm: { count: '226014474', cemented: '226014474' },
+      nanoslo: { count: '226014477', cemented: '226014476' },
+    });
+    await ranking.refresh();
+    expect(ranking.measurements.find(node => node.value === 'somenano')?.health).toBe('synchronized');
+    expect(ranking.measurements.find(node => node.value === 'rainstorm')?.health).toBe('synchronized');
+    expect(ranking.measurements.find(node => node.value === 'nanoslo')?.health).toBe('synchronized');
+    const candidates = settings.setRankedEndpoints.calls.mostRecent().args[0] as string[];
+    expect(candidates).toContain('https://somenano.example/rpc');
+  });
+
+  it('does not compare a count-only gateway against cemented counts from other peers', async () => {
+    const { ranking } = setup({
+      a: { count: '226015000', cemented: '226014480' },
+      b: { count: '226014481', cemented: '226014481' },
+      countonly: { count: '226014000' }
+    });
+    await ranking.refresh();
+    expect(ranking.measurements.find(node => node.value === 'countonly')?.health).toBe('unverified');
+  });
+
+  it('marks a strongly higher outlier unverified rather than falsely lagging', async () => {
+    const { ranking, settings } = setup({
+      a: { count: '220000000', cemented: '220000000' },
+      b: { count: '220000001', cemented: '220000001' },
+      outlier: { count: '221000000', cemented: '221000000' }
+    });
+    await ranking.refresh();
+    expect(ranking.measurements.find(node => node.value === 'outlier')?.health).toBe('unverified');
+    const candidates = settings.setRankedEndpoints.calls.mostRecent().args[0] as string[];
+    expect(candidates[candidates.length - 1]).toBe('https://outlier.example/rpc');
   });
 
   it('does not claim synchronization without sufficient peers', async () => {
