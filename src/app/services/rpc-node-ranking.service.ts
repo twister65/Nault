@@ -11,7 +11,8 @@ export interface RpcNodeMeasurement {
   value: string;
   name: string;
   api: string;
-  count: number | null;
+  count: number | null; // Total blocks in local ledger, including unconfirmed blocks.
+  cemented: number | null; // Confirmed blocks: preferred synchronization comparison.
   rttMs: number | null;
   health: RpcNodeHealth;
 }
@@ -38,10 +39,17 @@ export class RpcNodeRankingService {
     return this.pending;
   }
 
+  private parseCount(value: unknown): number | null {
+    if (typeof value !== 'string' && typeof value !== 'number') return null;
+    if (!/^[0-9]+$/.test(String(value))) return null;
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+  }
+
   private async probe(server: RpcServerOption): Promise<RpcNodeMeasurement> {
     const unavailable: RpcNodeMeasurement = {
       value: server.value, name: server.name, api: server.api!,
-      count: null, rttMs: null, health: 'unavailable'
+      count: null, cemented: null, rttMs: null, health: 'unavailable'
     };
     try {
       const endpoint = secureEndpoint(server.api!, 'rpc');
@@ -49,10 +57,13 @@ export class RpcNodeRankingService {
       const response = await firstValueFrom(this.transport.post(endpoint,
         { action: 'block_count', include_cemented: 'true' }, {}).pipe(timeout(5000)));
       const elapsed = performance.now() - start;
-      if (!response || response.error || !/^[0-9]+$/.test(String(response.count))) return unavailable;
-      const count = Number(response.count);
-      if (!Number.isSafeInteger(count) || count < 0) return unavailable;
-      return { ...unavailable, count, rttMs: elapsed, health: 'unverified' };
+      if (!response || response.error) return unavailable;
+      // Standard Nano RPC uses count/cemented. Some compatible gateways use
+      // block_count/cemented_count; never mix the two metrics in a comparison.
+      const count = this.parseCount(response.count ?? response.block_count);
+      const cemented = this.parseCount(response.cemented ?? response.cemented_count);
+      if (count === null || (cemented !== null && cemented > count)) return unavailable;
+      return { ...unavailable, count, cemented, rttMs: elapsed, health: 'unverified' };
     } catch (_) {
       return unavailable;
     }
@@ -63,27 +74,39 @@ export class RpcNodeRankingService {
       node.allowFailover && node.failoverTarget !== false && !node.isLocal && !!node.api && !node.auth
     );
     const results = await Promise.all(nodes.map(node => this.probe(node)));
-    const counts = results.filter(node => node.count !== null).map(node => node.count!);
-    if (counts.length >= 3) {
-      // Relative agreement between peers, rather than a hard-coded blockchain
-      // height. The median resists a single node claiming an inflated height;
-      // median absolute deviation adapts to normal differences in block counts.
+
+    // Nano does not have one linear chain height. Total ledger counts include
+    // unconfirmed blocks and can differ substantially between fully usable
+    // nodes: compare *cemented* block totals, when at least two offer them.
+    // Never compare a total from one node to a cemented count from another.
+    const withCemented = results.filter(node => node.cemented !== null);
+    const compareCemented = withCemented.length >= 2;
+    const cohort = compareCemented
+      ? withCemented
+      : results.filter(node => node.cemented === null && node.count !== null);
+    const metric = (node: RpcNodeMeasurement): number =>
+      (compareCemented ? node.cemented : node.count)!;
+
+    if (cohort.length >= 3) {
+      const counts = cohort.map(metric);
       const reference = this.median(counts);
       const deviation = this.median(counts.map(count => Math.abs(count - reference)));
-      const agreementWindow = Math.max(2, 3 * deviation);
-      for (const node of results) {
-        if (node.count === null) continue;
-        node.health = Math.abs(node.count - reference) <= agreementWindow
-          ? 'synchronized' : 'lagging';
+      // A small discrepancy during concurrent probes is normal. Cap a
+      // dispersion-based window so grossly stale peers cannot inflate it.
+      const agreementWindow = Math.max(10, Math.min(500, 3 * deviation));
+      for (const node of cohort) {
+        const delta = metric(node) - reference;
+        node.health = Math.abs(delta) <= agreementWindow
+          ? 'synchronized'
+          : delta < 0 ? 'lagging' : 'unverified';
       }
-    } else if (counts.length === 2 && counts[0] === counts[1]) {
-      results.forEach(node => {
-        if (node.count !== null) node.health = 'synchronized';
-      });
+    } else if (cohort.length === 2 && Math.abs(metric(cohort[0]) - metric(cohort[1])) <= 10) {
+      cohort.forEach(node => { node.health = 'synchronized'; });
     }
-    // A single available RPC (or disagreeing pair) cannot prove network
-    // synchronization. Keep its status explicitly unverified rather than
-    // falsely declaring it synchronized or filtering every working fallback.
+    // One surviving node (or two divergent peers) cannot independently prove
+    // sync. Mark it unverified, not falsely lagging or synchronized.
+    // A greater total than peers is not evidence of being behind.
+
     const ranked = results.filter(node =>
       node.health === 'synchronized' || node.health === 'unverified')
       .sort((a, b) =>
