@@ -176,3 +176,106 @@ describe('ConfigureAppComponent server settings', () => {
     expect(websocket.forceReconnect).toHaveBeenCalled();
   });
 });
+
+describe('ConfigureAppComponent local-node management with The best selected', () => {
+  let component: ConfigureAppComponent;
+  let settings: any;
+  let websocket: any;
+  let wallet: any;
+  let previousUIkit: any;
+
+  beforeEach(() => {
+    const local = {
+      name: 'Nano.to (local)', value: 'local-nano-to', isLocal: true,
+      api: 'https://rpc.nano.to/', ws: 'wss://ws.nano.to/'
+    };
+    settings = {
+      settings: {
+        serverName: 'random', serverAPI: 'https://rainstorm.city/api',
+        serverWS: 'wss://rainstorm.city/websocket'
+      },
+      serverOptions: [local, {
+        name: 'Rainstorm City', value: 'rainstorm', isLocal: false,
+        api: 'https://rainstorm.city/api', ws: 'wss://rainstorm.city/websocket'
+      }],
+      removeLocalNode: jasmine.createSpy('removeLocalNode').and.callFake((id: string) => {
+        settings.serverOptions = settings.serverOptions.filter((node: any) => node.value !== id);
+      }),
+      setAppSettings: jasmine.createSpy('setAppSettings').and.callFake((updates: any) =>
+        Object.assign(settings.settings, updates)),
+      loadServerSettings: jasmine.createSpy('loadServerSettings').and.callFake(() => {
+        settings.settings.serverAPI = 'https://twister32.changeip.net/proxy';
+        settings.settings.serverWS = 'wss://twister32.changeip.net/ws';
+      }),
+      saveAppSettings: jasmine.createSpy('saveAppSettings')
+    };
+    websocket = { forceReconnect: jasmine.createSpy('forceReconnect') };
+    wallet = {
+      wallet: { accounts: [{ id: 'nano_test' }] },
+      reloadBalances: jasmine.createSpy('reloadBalances').and.returnValue(Promise.resolve())
+    };
+    component = Object.create(ConfigureAppComponent.prototype);
+    Object.assign(component, {
+      serverOptions: settings.serverOptions,
+      selectedServer: 'random',
+      localNodeToDeleteId: '',
+      appSettings: settings,
+      websocket, walletService: wallet,
+      translocoService: { translate: (key: string) => key },
+      notifications: { sendWarning: jasmine.createSpy('sendWarning') },
+      rpcRanking: { refresh: jasmine.createSpy('refresh').and.returnValue(Promise.resolve()) },
+      localNodes: () => component.serverOptions.filter(node => node.isLocal),
+      localNodeToDelete: () => component.localNodes().find(node => node.value === component.localNodeToDeleteId),
+      serverConfigChange: jasmine.createSpy('serverConfigChange'),
+      resetNodeStats: jasmine.createSpy('resetNodeStats'),
+      updateNodeStats: jasmine.createSpy('updateNodeStats').and.returnValue(Promise.resolve())
+    });
+    previousUIkit = (window as any).UIkit;
+    (window as any).UIkit = {
+      modal: { confirm: jasmine.createSpy('confirm').and.returnValue(Promise.resolve()) }
+    };
+  });
+
+  afterEach(() => {
+    (window as any).UIkit = previousUIkit;
+  });
+
+  it('exposes the local-node deletion picker even when The best is selected', () => {
+    expect(component.selectedServer).toBe('random');
+    expect(component.localNodes().length).toBe(1);
+    expect(component.localNodeToDelete()).toBeUndefined();
+    component.localNodeToDeleteId = 'local-nano-to';
+    expect(component.localNodeToDelete()?.name).toBe('Nano.to (local)');
+  });
+
+  it('does not delete anything without an explicit local-node target', async () => {
+    await component.deleteLocalNode();
+    expect(settings.removeLocalNode).not.toHaveBeenCalled();
+  });
+
+  it('deletes an inactive local node without changing The best or reconnecting', async () => {
+    component.localNodeToDeleteId = 'local-nano-to';
+    await component.deleteLocalNode();
+    expect(settings.removeLocalNode).toHaveBeenCalledOnceWith('local-nano-to');
+    expect(component.selectedServer).toBe('random');
+    expect(settings.settings.serverName).toBe('random');
+    expect(settings.loadServerSettings).not.toHaveBeenCalled();
+    expect(websocket.forceReconnect).not.toHaveBeenCalled();
+    expect(wallet.reloadBalances).not.toHaveBeenCalled();
+    expect(component.localNodes().length).toBe(0);
+    expect(component.localNodeToDeleteId).toBe('');
+  });
+
+  it('switches to RsNano safely when the local node being deleted was active', async () => {
+    settings.settings.serverName = 'local-nano-to';
+    settings.settings.serverAPI = 'https://rpc.nano.to/';
+    settings.settings.serverWS = 'wss://ws.nano.to/';
+    component.selectedServer = 'local-nano-to';
+    component.localNodeToDeleteId = 'local-nano-to';
+    await component.deleteLocalNode();
+    expect(settings.settings.serverName).toBe('twister32-rsnano');
+    expect(component.selectedServer).toBe('twister32-rsnano');
+    expect(websocket.forceReconnect).toHaveBeenCalledTimes(1);
+    expect(wallet.reloadBalances).toHaveBeenCalledTimes(1);
+  });
+});
