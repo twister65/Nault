@@ -635,7 +635,8 @@ describe('ApiService bounded secure requests', () => {
     expect(http.post).toHaveBeenCalledTimes(1);
     tick(1);
     expect(http.post).toHaveBeenCalledTimes(4);
-    tick(8999);
+    // Primary (5s) plus the ranked-backup budget (10s).
+    tick(9999);
     expect(rejected).toBe(false);
     tick(1);
     expect(rejected).toBe(true);
