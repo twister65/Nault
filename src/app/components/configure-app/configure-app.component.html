@@ -309,11 +309,31 @@
               <div class="uk-margin">
                 <label class="uk-form-label" for="form-horizontal-select">{{ 'configure-app.server-configuration' | transloco }} <span uk-icon="icon: info;" uk-tooltip [title]="t('configure-app.change-which-server-is-used-to-communicate-with-the-nano')"></span></label>
                 <div class="uk-form-controls">
-                  <select class="uk-select" [(ngModel)]="selectedServer" (change)="serverConfigChange(selectedServer)" id="form-horizontal-select">
-                    @for (server of serverOptions; track server) {
-                      <option [value]="server.value">{{ server.value === 'random' ? ('configure-app.the-best' | transloco) : server.value === 'custom' ? ('configure-app.new-node' | transloco) : server.value === 'offline' ? ('configure-app.offline' | transloco) : server.name }}</option>
+                  <select class="uk-select" id="form-horizontal-select"
+                    [ngModel]="selectedServerIsNode() ? selectedServer : ''"
+                    (ngModelChange)="selectServerNode($event)">
+                    <option value="">{{ 'configure-app.choose-server-node' | transloco }}</option>
+                    @for (server of availableServerNodes(); track server.value) {
+                      <option [value]="server.value">{{ server.name }}</option>
                     }
                   </select>
+                  <div class="server-selection-modes" role="group" [attr.aria-label]="'configure-app.server-mode' | transloco">
+                    <button type="button" class="uk-button"
+                      [class.uk-button-primary]="selectedServer === 'random'"
+                      [class.uk-button-default]="selectedServer !== 'random'"
+                      [attr.aria-pressed]="selectedServer === 'random'"
+                      (click)="selectServerMode('random')">{{ 'configure-app.the-best' | transloco }}</button>
+                    <button type="button" class="uk-button"
+                      [class.uk-button-primary]="selectedServer === 'custom'"
+                      [class.uk-button-default]="selectedServer !== 'custom'"
+                      [attr.aria-pressed]="selectedServer === 'custom'"
+                      (click)="selectServerMode('custom')">{{ 'configure-app.new-node' | transloco }}</button>
+                    <button type="button" class="uk-button"
+                      [class.uk-button-primary]="selectedServer === 'offline'"
+                      [class.uk-button-default]="selectedServer !== 'offline'"
+                      [attr.aria-pressed]="selectedServer === 'offline'"
+                      (click)="selectServerMode('offline')">{{ 'configure-app.offline' | transloco }}</button>
+                  </div>
                   @if (selectedServer === 'random') {
                     <div class="uk-text-meta uk-margin-small-top">
                       @if (!rpcRanking.ready) {
