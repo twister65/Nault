@@ -248,7 +248,7 @@ describe('AppSettingsService', () => {
     expect(selection).toHaveBeenCalledTimes(1);
   }));
 
-  it('stores New nodes locally across reloads and never makes them automatic fallback candidates', inject([AppSettingsService], (service: AppSettingsService) => {
+  it('persists a public-compatible local WSS node and allows ranking and failover', inject([AppSettingsService], (service: AppSettingsService) => {
     const id = service.saveLocalNode('My node', 'https://mine.example/rpc', 'wss://mine.example/ws', null);
     try {
       service.setAppSettings({ serverName: id });
@@ -256,11 +256,31 @@ describe('AppSettingsService', () => {
       expect(service.settings.serverName).toBe(id);
       expect(service.settings.serverAPI).toBe('https://mine.example/rpc');
       expect(service.serverOptions.find(node => node.value === id)?.isLocal).toBeTrue();
-      expect(service.serverOptions.find(node => node.value === id)?.allowFailover).not.toBeTrue();
+      expect(service.serverOptions.find(node => node.value === id)?.allowFailover).toBeTrue();
+      service.setRankedEndpoints(['https://mine.example/rpc', 'https://rainstorm.city/api']);
+      expect(service.getRankedFallbackEndpoints('https://twister32.changeip.net/proxy'))
+        .toContain('https://mine.example/rpc');
       service.removeLocalNode(id);
       expect(service.serverOptions.some(node => node.value === id)).toBeFalse();
+      expect(service.getRankedFallbackEndpoints('https://twister32.changeip.net/proxy'))
+        .not.toContain('https://mine.example/rpc');
     } finally {
       service.removeLocalNode(id);
+    }
+  }));
+
+  it('keeps private or RPC-only local nodes out of automatic ranking', inject([AppSettingsService], (service: AppSettingsService) => {
+    const privateId = service.saveLocalNode('Authenticated', 'https://private.example/rpc', 'wss://private.example/ws', 'Bearer private');
+    const rpcOnlyId = service.saveLocalNode('RPC only', 'https://rpc-only.example/rpc', null, null);
+    try {
+      service.loadAppSettings();
+      expect(service.serverOptions.find(node => node.value === privateId)?.allowFailover).toBeFalse();
+      expect(service.serverOptions.find(node => node.value === rpcOnlyId)?.allowFailover).toBeFalse();
+      service.setRankedEndpoints(['https://private.example/rpc', 'https://rpc-only.example/rpc']);
+      expect(service.getRankedFallbackEndpoints('')).toEqual([]);
+    } finally {
+      service.removeLocalNode(privateId);
+      service.removeLocalNode(rpcOnlyId);
     }
   }));
 });
