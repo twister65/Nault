@@ -54,3 +54,24 @@
         width: 100%;
     }
 }
+
+/* Server modes are actions, not entries in the RPC-node list. */
+.server-selection-modes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.server-selection-modes .uk-button {
+    min-width: 0;
+    line-height: 1.35;
+    white-space: normal;
+    padding: 11px 8px;
+}
+
+@media (max-width: 520px) {
+    .server-selection-modes {
+        grid-template-columns: 1fr;
+    }
+}
