@@ -311,14 +311,44 @@
                 <div class="uk-form-controls">
                   <select class="uk-select" [(ngModel)]="selectedServer" (change)="serverConfigChange(selectedServer)" id="form-horizontal-select">
                     @for (server of serverOptions; track server) {
-                      <option [value]="server.value">{{ server.name }}</option>
+                      <option [value]="server.value">{{ server.value === 'random' ? ('configure-app.the-best' | transloco) : server.value === 'custom' ? ('configure-app.new-node' | transloco) : server.value === 'offline' ? ('configure-app.offline' | transloco) : server.name }}</option>
                     }
                   </select>
+                  @if (selectedServer === 'random') {
+                    <div class="uk-text-meta uk-margin-small-top">
+                      @if (!rpcRanking.ready) {
+                        {{ 'configure-app.scanning-nodes' | transloco }}
+                      } @else {
+                        <strong>{{ 'configure-app.best-node' | transloco }}: {{ rpcRanking.best?.name || ('configure-app.no-healthy-node' | transloco) }}</strong>
+                        <ul class="uk-list uk-list-small">
+                          @for (measurement of rpcRanking.measurements; track measurement.value) {
+                            <li>{{ measurement.name }} — {{ ('configure-app.node-health.' + measurement.health) | transloco }}
+                              @if (measurement.rttMs !== null) {
+                                ({{ measurement.rttMs | number:'1.0-0' }} ms)
+                              }
+                            </li>
+                          }
+                        </ul>
+                      }
+                    </div>
+                  }
                 </div>
               </div>
 
             </div>
           </div>
+
+          @if (showServerConfigs()) {
+            <div class="uk-width-1-1">
+              <div class="uk-form-horizontal">
+                <label class="uk-form-label">{{ 'configure-app.node-name' | transloco }}</label>
+                <div class="uk-form-controls">
+                  <input [(ngModel)]="serverNodeName" class="uk-input" type="text" maxlength="100"
+                    [placeholder]="'configure-app.node-name' | transloco">
+                </div>
+              </div>
+            </div>
+          }
 
           @if (showServerValues()) {
             <div class="uk-width-1-1">
@@ -484,6 +514,11 @@
         </div>
       </div>
       <div class="uk-card-footer uk-text-right@s uk-text-center">
+        @if (selectedLocalNode()) {
+          <button type="button" (click)="deleteLocalNode()" class="uk-button uk-button-danger uk-margin-small-right">
+            {{ 'configure-app.delete-local-node' | transloco }}
+          </button>
+        }
         <button (click)="updateServerSettings()" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1">{{ 'configure-app.update-server-settings' | transloco }}</button>
       </div>
     </div>
