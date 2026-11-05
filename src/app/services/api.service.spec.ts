@@ -405,6 +405,23 @@ describe('ApiService bounded secure requests', () => {
     );
   });
 
+  it('uses the best ranked node for the existing SpyNano health-check failover', async () => {
+    const { api, http, settings } = setup('spynano');
+    settings.getRankedFallbackEndpoints.and.returnValue([
+      'https://d.invalid/rpc', 'https://b.invalid/rpc'
+    ]);
+    http.post.and.returnValues(
+      throwError({ status: 502 }), of({ count: '240000000' })
+    );
+    await api.checkNodeAvailability(true);
+    expect(http.post.calls.allArgs().map(args => args[0])).toEqual([
+      'https://a.invalid/rpc', 'https://d.invalid/rpc'
+    ]);
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith(
+      'spynano', 'https://a.invalid/rpc', 'https://d.invalid/rpc'
+    );
+  });
+
   it('never falls back to nodes excluded as out-of-sync by the background scan', async () => {
     const { api, http, settings } = setup();
     settings.getRankedFallbackEndpoints.and.returnValue([]);
