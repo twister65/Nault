@@ -9,6 +9,7 @@ import {WorkPoolService} from '../../services/work-pool.service';
 import {AddressBookService} from '../../services/address-book.service';
 import type {QRType} from '../qr-modal/qr-modal.component';
 import {ApiService} from '../../services/api.service';
+import {RpcNodeRankingService} from '../../services/rpc-node-ranking.service';
 import {WebsocketService} from '../../services/websocket.service';
 import {NodeService} from '../../services/node.service';
 import {UtilService} from '../../services/util.service';
@@ -36,6 +37,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     private addressBook: AddressBookService,
     private pow: PowService,
     private api: ApiService,
+    public rpcRanking: RpcNodeRankingService,
     private websocket: WebsocketService,
     private workPool: WorkPoolService,
     private repService: RepresentativeService,
@@ -169,6 +171,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
   serverOptions: AppSettingsService['serverOptions'] = [];
   selectedServer: string | null = null;
+  serverNodeName = '';
 
   defaultRepresentative: string | null = null;
   representativeResults$ = new BehaviorSubject<StoredRepresentative[]>([]);
@@ -200,7 +203,10 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
   showServerValues = () => this.selectedServer && this.selectedServer !== 'random' && this.selectedServer !== 'offline';
   showStatValues = () => this.selectedServer && this.selectedServer !== 'offline';
-  showServerConfigs = () => this.selectedServer && this.selectedServer === 'custom';
+  showServerConfigs = () => !!this.selectedServer && (this.selectedServer === 'custom' ||
+    !!this.serverOptions.find(server => server.value === this.selectedServer && server.isLocal));
+  selectedLocalNode = () => this.serverOptions.find(server =>
+    server.value === this.selectedServer && server.isLocal);
 
   async ngOnInit() {
     this.loadFromSettings();
@@ -346,6 +352,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
     this.serverOptions = this.appSettings.serverOptions;
     this.selectedServer = settings.serverName;
+    this.serverNodeName = this.serverOptions.find(server => server.value === settings.serverName && server.isLocal)?.name || '';
     this.serverAPI = settings.serverAPI;
     this.serverAPIUpdated = this.serverAPI;
     this.serverWS = settings.serverWS;
@@ -519,27 +526,32 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
   async updateServerSettings() {
     const newSettings: Partial<AppSettings> = {
-      serverName: this.selectedServer ?? 'random',
-      serverAPI: null,
-      serverWS: null,
-      serverAuth: null,
+      serverName: this.selectedServer ?? 'twister32-rsnano',
+      serverAPI: null, serverWS: null, serverAuth: null
     };
-
-    if (this.selectedServer === 'custom') {
+    if (this.selectedServer === 'random') {
+      // Only an explicit user selection waits for the background results.
+      // The regular first launch NEVER waits for a ranking.
+      await this.rpcRanking.refresh();
+    }
+    if (this.showServerConfigs()) {
+      if (!this.serverAPI?.trim()) {
+        return this.notifications.sendWarning(this.translocoService.translate('configure-app.custom-api-server-has-an-invalid-address'));
+      }
       try {
-        if (this.serverAPI && this.serverAPI.trim()) newSettings.serverAPI = secureEndpoint(this.serverAPI, 'rpc');
-        if (this.serverWS && this.serverWS.trim()) newSettings.serverWS = secureEndpoint(this.serverWS, 'ws');
+        newSettings.serverName = this.appSettings.saveLocalNode(
+          this.serverNodeName, this.serverAPI, this.serverWS,
+          this.serverAuth && this.serverAuth.trim().length > 1 ? this.serverAuth : null,
+          this.selectedLocalNode()?.value
+        );
       } catch (_) {
         return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.endpoint-server-secure'));
       }
     }
 
-    if (this.selectedServer === 'custom' && this.serverAuth != null && this.serverAuth.trim().length > 1) {
-      newSettings.serverAuth = this.serverAuth;
-    }
-
     this.appSettings.setAppSettings(newSettings);
     this.appSettings.loadAppSettings();
+    this.serverOptions = this.appSettings.serverOptions;
     this.resetNodeStats();
 
     this.notifications.sendSuccess(this.translocoService.translate('configure-app.server-settings-successfully-updated'));
@@ -579,6 +591,21 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     this.serverAPI = this.serverAPIUpdated;
     this.serverWS = this.appSettings.settings.serverWS;
     this.serverAuth = this.appSettings.settings.serverAuth;
+    this.serverNodeName = this.selectedLocalNode()?.name || '';
+  }
+
+  async deleteLocalNode() {
+    const selected = this.selectedLocalNode();
+    if (!selected) return;
+    const UIkit = (window as unknown as {UIkit: {modal: {confirm(message: string): Promise<void>}}}).UIkit;
+    try {
+      await UIkit.modal.confirm(this.translocoService.translate('configure-app.delete-local-node-confirm', { name: selected.name }));
+    } catch (_) { return; }
+    this.appSettings.removeLocalNode(selected.value);
+    this.selectedServer = 'twister32-rsnano';
+    this.serverOptions = this.appSettings.serverOptions;
+    this.serverConfigChange(this.selectedServer);
+    await this.updateServerSettings();
   }
 
   searchRepresentatives() {
@@ -630,6 +657,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     const custom = this.serverOptions.find(c => c.value === newServer);
     if (custom) {
       this.serverAPI = custom.api;
+      this.serverNodeName = custom.isLocal ? custom.name : '';
       this.serverAPIUpdated = null;
       this.serverWS = custom.ws;
       this.serverAuth = custom.auth;
