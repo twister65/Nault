@@ -220,6 +220,21 @@ describe('AppSettingsService', () => {
       .toEqual(['https://rainstorm.city/api']);
   }));
 
+  it('applies a saved best-mode choice once when background checks complete', inject([AppSettingsService], (service: AppSettingsService) => {
+    service.settings.serverName = 'random';
+    service.loadServerSettings(); // ranking still pending: temporary RsNano
+    expect(service.settings.serverAPI).toBe('https://twister32.changeip.net/proxy');
+    const selection = jasmine.createSpy('bestSelected');
+    service.serverBestSelected$.subscribe(selection);
+    service.setRankedEndpoints(['https://nanoslo.0x.no/proxy', 'https://rainstorm.city/api']);
+    expect(service.settings.serverName).toBe('random');
+    expect(service.settings.serverAPI).toBe('https://nanoslo.0x.no/proxy');
+    expect(selection).toHaveBeenCalledTimes(1);
+    service.setRankedEndpoints(['https://rainstorm.city/api']);
+    expect(service.settings.serverAPI).toBe('https://nanoslo.0x.no/proxy');
+    expect(selection).toHaveBeenCalledTimes(1);
+  }));
+
   it('stores New nodes locally across reloads and never makes them automatic fallback candidates', inject([AppSettingsService], (service: AppSettingsService) => {
     const id = service.saveLocalNode('My node', 'https://mine.example/rpc', 'wss://mine.example/ws', null);
     try {
