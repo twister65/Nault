@@ -125,8 +125,11 @@ export class AppSettingsService {
         } catch (_) { return false; }
       }).map(node => ({
         name: node.name, value: node.value, api: node.api, ws: node.ws || null,
-        auth: typeof node.auth === 'string' ? node.auth : null,
-        shouldRandom: false, isLocal: true
+        auth: typeof node.auth === 'string' && node.auth.trim() ? node.auth : null,
+        shouldRandom: false, isLocal: true,
+        // Treat a configured local public-compatible node like an official
+        // candidate, but NEVER probe or fail over to an authenticated RPC.
+        allowFailover: !!node.ws && !node.auth
       }));
     } catch (_) { this.localNodes = []; }
     this.serverOptions = this.buildServerOptions();
@@ -140,7 +143,8 @@ export class AppSettingsService {
     const entry: RpcServerOption = {
       name: name.trim() || new URL(rpc).hostname,
       value: id, api: rpc, ws: websocket, auth: auth || null,
-      shouldRandom: false, isLocal: true
+      shouldRandom: false, isLocal: true,
+      allowFailover: !!websocket && !auth
     };
     this.localNodes = [...this.localNodes.filter(node => node.value !== id), entry];
     localStorage.setItem(this.localNodeStoreKey, JSON.stringify(this.localNodes));
@@ -163,7 +167,8 @@ export class AppSettingsService {
     // hopping during later network recovery scans.
     if (this.pendingBestStartupSelection && this.settings.serverName === 'random' && endpoints.length) {
       this.pendingBestStartupSelection = false;
-      const best = this.officialNodes.find(node => node.api === endpoints[0]);
+      const best = this.serverOptions.find(node =>
+        node.api === endpoints[0] && node.allowFailover && !!node.ws && !node.auth);
       if (best && this.settings.serverAPI !== best.api) {
         this.setAppSettings({ serverAPI: best.api, serverWS: best.ws, serverAuth: null });
         this.serverBestSelected$.next();
@@ -174,7 +179,8 @@ export class AppSettingsService {
   getRankedFallbackEndpoints(excluding: string): string[] | null {
     if (this.rankedEndpoints === null) return null;
     return this.rankedEndpoints.filter(endpoint => endpoint !== excluding &&
-      this.officialNodes.some(node => node.api === endpoint && node.allowFailover && node.failoverTarget !== false));
+      this.serverOptions.some(node => node.api === endpoint && node.allowFailover &&
+        node.failoverTarget !== false && !!node.ws && !node.auth));
   }
 
   // Simplified list for comparison in other classes
@@ -251,7 +257,8 @@ export class AppSettingsService {
     const matching = this.serverOptions.find(node => node.value === this.settings.serverName);
     if (this.settings.serverName === 'random') {
       this.pendingBestStartupSelection = !this.rankedEndpoints?.length;
-      const best = this.officialNodes.find(node => node.api === this.rankedEndpoints?.[0]) ||
+      const best = this.serverOptions.find(node =>
+        node.api === this.rankedEndpoints?.[0] && node.allowFailover && !!node.ws && !node.auth) ||
         this.officialNodes.find(node => node.value === 'twister32-rsnano');
       this.settings.serverAPI = best?.api || null;
       this.settings.serverWS = best?.ws || null;
@@ -283,9 +290,11 @@ export class AppSettingsService {
   // Never rotate a user-configured private RPC or Offline Mode.
   activateFailover(expectedName: string, expectedApi: string, nextApi: string): boolean {
     if (expectedName === 'custom' || expectedName === 'offline') return false;
-    const previous = this.serverOptions.find(server => server.api === expectedApi && server.allowFailover);
-    const next = this.serverOptions.find(server => server.api === nextApi && server.allowFailover);
-    if (!previous || !next || !next.api || previous.value === next.value ||
+    const previous = this.serverOptions.find(server => server.api === expectedApi &&
+      server.allowFailover && (expectedName === 'random' || server.value === expectedName));
+    const next = this.serverOptions.find(server => server.api === nextApi &&
+      server.allowFailover && !!server.ws && !server.auth);
+    if (!previous || !next || !next.api || previous.api === next.api ||
         (expectedName !== 'random' && previous.value !== expectedName) ||
         this.settings.serverName !== expectedName || this.settings.serverAPI !== expectedApi ||
         this.settings.serverAuth) return false;
