@@ -6,8 +6,22 @@
 .node-stats-disabled {
     color: #bbb;
 }
+#node-stats-table {
+    max-width: 100%;
+    table-layout: auto;
+}
+
 #node-stats-table td {
-    padding-right: 20px;
+    padding-right: 12px;
+}
+
+#node-stats-table td:first-child {
+    white-space: nowrap;
+}
+
+#node-stats-table td:last-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 /* Separate the destructive local-node action from the save action on touch devices. */
