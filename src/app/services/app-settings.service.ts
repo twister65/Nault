@@ -191,12 +191,9 @@ export class AppSettingsService {
     const settingsStore = localStorage.getItem(this.storeKey);
     if (settingsStore) {
       settings = JSON.parse(settingsStore);
-      // Migrate only the legacy pair of defaults from pre-Twister32 installs.
-      // Keep any other user-selected RPC or PoW preference unchanged.
-      if (settings.serverName === 'random' && settings.powSource === 'best') {
-        settings = { ...settings, serverName: 'twister32-rsnano', powSource: 'server' };
-        localStorage.setItem(this.storeKey, JSON.stringify(settings));
-      }
+      // Preserve explicit The best node selections independently of the
+      // (unrelated) PoW "best" setting. The initial default is RsNano already,
+      // so the old random+best legacy migration would now erase a real choice.
     }
     this.settings = Object.assign(this.settings, settings);
     this.loadLocalNodes();
