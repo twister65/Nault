@@ -101,7 +101,7 @@ describe('RPC network boundary', () => {
         return Promise.reject(firstError);
       }
       if (String(input) === 'https://rainstorm.city/api') {
-        return Promise.resolve(new Response(JSON.stringify({ balances: {} }), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify({ count: '225964139' }), { status: 200 }));
       }
       return Promise.reject(new Error('Unexpected RPC node'));
     });
@@ -114,11 +114,17 @@ describe('RPC network boundary', () => {
     const settings = {
       settings: { serverName: 'spynano', serverAPI: 'https://node.spynano.org/proxy', serverAuth: null },
       serverOptions: [
-        { value: 'spynano', api: 'https://node.spynano.org/proxy', allowFailover: true, failoverTarget: false },
-        { value: 'rainstorm', api: 'https://rainstorm.city/api', allowFailover: true },
+        { value: 'spynano', api: 'https://node.spynano.org/proxy', ws: 'wss://node.spynano.org/websocket', allowFailover: true, failoverTarget: false },
+        { value: 'rainstorm', api: 'https://rainstorm.city/api', ws: 'wss://rainstorm.city/websocket', allowFailover: true },
       ],
       activateFailover: jasmine.createSpy('activateFailover').and.returnValue(true),
     };
+    // Mirror the real AppSettingsService: a successful failover updates the
+    // selected RPC before ApiService announces the connection as healthy.
+    settings.activateFailover.and.callFake((_previous: string, _url: string, next: string) => {
+      settings.settings.serverAPI = next;
+      return true;
+    });
     await new ApiService(new RpcTransportService(), node as any, settings as any).checkNodeAvailability();
     expect(fetchSpy.calls.allArgs().map(args => String(args[0]))).toEqual([
       'https://node.spynano.org/proxy', 'https://rainstorm.city/api'
@@ -161,7 +167,7 @@ describe('RPC network boundary', () => {
         return Promise.resolve(new Response(JSON.stringify({ error: 'Bad Gateway' }), { status: 502 }));
       }
       if (String(input) === 'https://nanoslo.0x.no/proxy') {
-        return Promise.resolve(new Response(JSON.stringify({ balances: {} }), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify({ count: '225964139' }), { status: 200 }));
       }
       return Promise.reject(new Error('Unexpected endpoint'));
     });
@@ -174,11 +180,17 @@ describe('RPC network boundary', () => {
     const settings = {
       settings: { serverName: 'somenano', serverAPI: 'https://node.somenano.com/proxy', serverAuth: null },
       serverOptions: [
-        { value: 'somenano', api: 'https://node.somenano.com/proxy', allowFailover: true },
-        { value: 'nanoslo', api: 'https://nanoslo.0x.no/proxy', allowFailover: true }
+        { value: 'somenano', api: 'https://node.somenano.com/proxy', ws: 'wss://node.somenano.com/websocket', allowFailover: true },
+        { value: 'nanoslo', api: 'https://nanoslo.0x.no/proxy', ws: 'wss://nanoslo.0x.no/websocket', allowFailover: true }
       ],
       activateFailover: jasmine.createSpy('activateFailover').and.returnValue(true)
     };
+    // Mirror the real AppSettingsService: a successful failover updates the
+    // selected RPC before ApiService announces the connection as healthy.
+    settings.activateFailover.and.callFake((_previous: string, _url: string, next: string) => {
+      settings.settings.serverAPI = next;
+      return true;
+    });
     await new ApiService(new RpcTransportService(), node as any, settings as any).checkNodeAvailability();
     expect(fetchSpy.calls.allArgs().map(args => String(args[0]))).toEqual([
       'https://node.somenano.com/proxy', 'https://nanoslo.0x.no/proxy'
@@ -256,7 +268,7 @@ describe('RPC network boundary', () => {
         return Promise.resolve(new Response('<html>Gateway Timeout</html>', { status: 504 }));
       }
       if (String(input) === 'https://rainstorm.city/api') {
-        return Promise.resolve(new Response(JSON.stringify({ balances: {} }), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify({ count: '225964139' }), { status: 200 }));
       }
       return Promise.reject(new Error('Unexpected endpoint'));
     });
@@ -269,11 +281,17 @@ describe('RPC network boundary', () => {
     const settings = {
       settings: { serverName: 'spynano', serverAPI: 'https://node.spynano.org/proxy', serverAuth: null },
       serverOptions: [
-        { value: 'spynano', api: 'https://node.spynano.org/proxy', allowFailover: true, failoverTarget: false },
-        { value: 'rainstorm', api: 'https://rainstorm.city/api', allowFailover: true }
+        { value: 'spynano', api: 'https://node.spynano.org/proxy', ws: 'wss://node.spynano.org/websocket', allowFailover: true, failoverTarget: false },
+        { value: 'rainstorm', api: 'https://rainstorm.city/api', ws: 'wss://rainstorm.city/websocket', allowFailover: true }
       ],
       activateFailover: jasmine.createSpy('activateFailover').and.returnValue(true)
     };
+    // Mirror the real AppSettingsService: a successful failover updates the
+    // selected RPC before ApiService announces the connection as healthy.
+    settings.activateFailover.and.callFake((_previous: string, _url: string, next: string) => {
+      settings.settings.serverAPI = next;
+      return true;
+    });
     await new ApiService(new RpcTransportService(), node as any, settings as any).checkNodeAvailability();
     expect(fetchSpy.calls.allArgs().map(args => String(args[0]))).toEqual([
       'https://node.spynano.org/proxy', 'https://rainstorm.city/api'
