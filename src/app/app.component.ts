@@ -12,6 +12,7 @@ import {SwUpdate} from '@angular/service-worker';
 import {RepresentativeService} from './services/representative.service';
 import {NodeService} from './services/node.service';
 import {ApiService} from './services/api.service';
+import {RpcNodeRankingService} from './services/rpc-node-ranking.service';
 import { DesktopService, LedgerService } from './services';
 import { environment } from 'environments/environment';
 import { DeeplinkService } from './services/deeplink.service';
@@ -33,6 +34,7 @@ export class AppComponent implements OnInit, OnDestroy {
     public settings: AppSettingsService,
     private websocket: WebsocketService,
     private api: ApiService,
+    private rpcRanking: RpcNodeRankingService,
     private notifications: NotificationService,
     public nodeService: NodeService,
     private representative: RepresentativeService,
@@ -278,6 +280,11 @@ export class AppComponent implements OnInit, OnDestroy {
     // language. Browsers fall back to their navigator culture as before.
     const nativeLocale = await this.desktop.getSystemLocale();
     this.settings.loadAppSettings(nativeLocale);
+    // Never await this diagnostic on startup: first-run RsNano and the wallet
+    // UI must be usable immediately, even if every other public RPC is slow.
+    void this.rpcRanking.refresh().catch(() => {
+      console.info('[Nano RPC ranking] Background node scan unavailable.');
+    });
     // The PWA uses browser online/offline events; only the Electron renderer
     // has an OS locale and the trusted native connectivity bridge.
     if (nativeLocale !== null) this.startNativeNetworkMonitor();
