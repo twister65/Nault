@@ -410,12 +410,15 @@ describe('ApiService bounded secure requests', () => {
     settings.getRankedFallbackEndpoints.and.returnValue([
       'https://d.invalid/rpc', 'https://b.invalid/rpc'
     ]);
+    // Backups are constructed as cold Observables in ranked order. Both
+    // appear in the transport spy, but the lower-ranked one is never subscribed
+    // after the best candidate succeeds.
     http.post.and.returnValues(
-      throwError({ status: 502 }), of({ count: '240000000' })
+      throwError({ status: 502 }), of({ count: '240000000' }), NEVER
     );
     await api.checkNodeAvailability(true);
     expect(http.post.calls.allArgs().map(args => args[0])).toEqual([
-      'https://a.invalid/rpc', 'https://d.invalid/rpc'
+      'https://a.invalid/rpc', 'https://d.invalid/rpc', 'https://b.invalid/rpc'
     ]);
     expect(settings.activateFailover).toHaveBeenCalledOnceWith(
       'spynano', 'https://a.invalid/rpc', 'https://d.invalid/rpc'
