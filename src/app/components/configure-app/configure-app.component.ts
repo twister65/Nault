@@ -219,6 +219,11 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   selectServerMode(mode: 'random' | 'custom' | 'offline') {
     this.selectedServer = mode;
     this.serverConfigChange(mode);
+    if (mode === 'random') {
+      // The user can inspect fresh results before applying the choice.
+      // The scan is independent of wallet state and never blocks the UI.
+      void this.rpcRanking.refresh().catch(() => {});
+    }
   }
   selectServerNode(value: string) {
     if (!value || !this.availableServerNodes().some(server => server.value === value)) return;
