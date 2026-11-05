@@ -220,6 +220,19 @@ describe('AppSettingsService', () => {
       .toEqual(['https://rainstorm.city/api']);
   }));
 
+  it('keeps an explicitly saved The best RPC selection even with Best PoW', inject([AppSettingsService], (service: AppSettingsService) => {
+    const previous = localStorage.getItem(service.storeKey);
+    try {
+      service.setAppSettings({ serverName: 'random', powSource: 'best' });
+      service.loadAppSettings('en');
+      expect(service.settings.serverName).toBe('random');
+      expect(service.settings.powSource).toBe('best');
+    } finally {
+      if (previous === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, previous);
+    }
+  }));
+
   it('applies a saved best-mode choice once when background checks complete', inject([AppSettingsService], (service: AppSettingsService) => {
     service.settings.serverName = 'random';
     service.loadServerSettings(); // ranking still pending: temporary RsNano
