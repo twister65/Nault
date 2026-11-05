@@ -87,6 +87,40 @@ describe('RpcNodeRankingService', () => {
     expect(settings.setRankedEndpoints).toHaveBeenCalledOnceWith(['https://only.example/rpc']);
   });
 
+  it('shows a locally saved WSS node in The best results without probing a duplicate URL twice', async () => {
+    const { ranking, settings, transport } = setup({
+      rainstorm: '226014480', 'nano-to': '226014480'
+    });
+    settings.serverOptions.push({
+      name: 'Nano.to (local)', value: 'local-nano-to', isLocal: true,
+      api: 'https://nano-to.example/rpc', ws: 'wss://nano-to.example/ws',
+      auth: null, allowFailover: true, shouldRandom: false
+    });
+    await ranking.refresh();
+    expect(transport.post.calls.count()).toBe(2);
+    expect(ranking.measurements.find(node => node.value === 'local-nano-to')).toEqual(jasmine.objectContaining({
+      name: 'Nano.to (local)', isLocal: true, health: 'synchronized'
+    }));
+    expect(ranking.measurements.length).toBe(3);
+    const candidates = settings.setRankedEndpoints.calls.mostRecent().args[0] as string[];
+    expect(candidates.length).toBe(2);
+    expect(candidates).toContain('https://nano-to.example/rpc');
+  });
+
+  it('includes a distinct locally saved WSS endpoint in rankings', async () => {
+    const { ranking, settings, transport } = setup({ rainstorm: '100', nanoslo: '100', localnode: '100' });
+    settings.serverOptions = settings.serverOptions.filter(node => node.value !== 'localnode');
+    settings.serverOptions.push({
+      name: 'My Nano node', value: 'localnode', isLocal: true,
+      api: 'https://localnode.example/rpc', ws: 'wss://localnode.example/ws',
+      auth: null, allowFailover: true, shouldRandom: false
+    });
+    await ranking.refresh();
+    expect(transport.post.calls.count()).toBe(3);
+    expect(ranking.measurements.find(node => node.value === 'localnode')?.health).toBe('synchronized');
+    expect(settings.setRankedEndpoints.calls.mostRecent().args[0]).toContain('https://localnode.example/rpc');
+  });
+
   it('never probes or ranks a public node that has no WebSocket', async () => {
     const { ranking, settings, transport } = setup({
       alpha: '200000000', beta: '200000000', 'rpc-only': '200000000'
