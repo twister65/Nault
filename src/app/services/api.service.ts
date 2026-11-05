@@ -1,8 +1,8 @@
 import { Injectable, Optional } from '@angular/core';
 import { RpcTransportService } from './rpc-transport.service';
 import { secureEndpoint } from './endpoint-policy';
-import { catchError, map, timeout } from 'rxjs/operators';
-import { EMPTY, firstValueFrom, merge } from 'rxjs';
+import { catchError, map, takeUntil, timeout } from 'rxjs/operators';
+import { EMPTY, concat, firstValueFrom, timer } from 'rxjs';
 import { HttpHeaders } from '@angular/common/http';
 import {NodeService} from './node.service';
 import {AppSettingsService} from './app-settings.service';
@@ -36,16 +36,9 @@ export class ApiService {
     console.info('[Nano RPC health] Internet disconnected; preserving selected server.');
   }
 
-  // Kept separate to test selection deterministically without mocking
-  // Math.random globally (which can disrupt Jasmine and Zone.js internals).
-  private randomFallbackIndex(lastIndex: number): number {
-    return Math.floor(Math.random() * (lastIndex + 1));
-  }
-
-  // Only anonymous, synthetic availability checks may run concurrently.
-  // Aborts pending backup requests as soon as the first valid response wins.
-  // Normal wallet RPC (including signed process and PoW) remains sequential
-  // with its established attempt budget and cannot enter this method.
+  // Try scored nodes in rank order. If the best RPC rejects this wallet
+  // action, try the next; never select the fastest response of an unranked
+  // race. Normal wallet RPC, signed process and PoW retain their safeguards.
   private async probeHealthyBackup(
     candidates: string[],
     requestAction: string,
@@ -58,7 +51,7 @@ export class ApiService {
     let lastFailure: any = new Error('No responsive Nano RPC fallback');
     const sources = candidates.map(endpoint => this.http.post(endpoint,
       { ...requestData, action: requestAction }, { responseType: 'json' } as any).pipe(
-      timeout(10000),
+      timeout(3000),
       map(res => {
         if (res && typeof res.error === 'string') {
           throw { isRpcError: true, error: res.error };
@@ -85,11 +78,10 @@ export class ApiService {
     for (const endpoint of candidates) {
       console.info('[Nano RPC health] Trying fallback:', endpoint);
     }
-    // firstValueFrom unsubscribes the other requests on the first valid
-    // response. A single 10-second budget covers every public fallback.
+    // A single 10-second budget bounds all ranked fallback attempts.
     let selected: { endpoint: string; response: any };
     try {
-      selected = await firstValueFrom(merge(...sources));
+      selected = await firstValueFrom(concat(...sources).pipe(takeUntil(timer(10000))));
     } catch (_) {
       throw lastFailure;
     }
@@ -165,26 +157,21 @@ export class ApiService {
     if (!url && !skipError && allowFailover && !this.node.internetRecoveryPending &&
         action !== 'process' && action !== 'work_generate' &&
         knownSource && (settings.serverName === 'random' || settings.serverName === knownSource.value)) {
-      // Do not give the first entry in serverOptions an artificial priority.
-      // Pick a randomized order without replacement for this failover cycle.
-      // Keep the current server first, and exclude it and disabled/unsafe
-      // candidates from the shuffled public pool.
       const candidates: string[] = [];
       for (const server of this.appSettings.serverOptions || []) {
-        // Test-disabled and other ineligible nodes cannot be fallback targets.
         if (!server.allowFailover || server.failoverTarget === false || !server.api) continue;
         try {
           const candidate = secureEndpoint(server.api, 'rpc');
           if (candidate !== apiUrl && !candidates.includes(candidate)) candidates.push(candidate);
-        } catch (_) { /* Ignore insecure built-in candidates. */ }
+        } catch (_) { /* Ignore insecure or invalid candidates. */ }
       }
-      // Fisher-Yates shuffle: each distinct eligible fallback can be tried
-      // first, regardless of its order in serverOptions.
-      for (let i = candidates.length - 1; i > 0; i--) {
-        const j = this.randomFallbackIndex(i);
-        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
-      }
-      endpoints.push(...candidates);
+      // The scan runs in the background and does not hold up first launch.
+      // Until it completes, retain deterministic candidate order. Afterward,
+      // only proven or explicitly unverified (insufficient peers) candidates
+      // may be selected; never fall back randomly to a known lagging node.
+      const ranked = this.appSettings.getRankedFallbackEndpoints?.(apiUrl);
+      endpoints.push(...(ranked === null || ranked === undefined
+        ? candidates : ranked.filter(endpoint => candidates.includes(endpoint))));
     }
     if (healthProbe) {
       // Public endpoint counts only, not wallet data or RPC authentication.
