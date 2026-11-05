@@ -102,7 +102,7 @@
     "scanning-nodes": "Synchronisierung und RPC-Latenz werden im Hintergrund geprüft…",
     "no-healthy-node": "Noch kein geeigneter Knoten",
     "delete-local-node": "Lokalen Knoten löschen",
-    "delete-local-node-confirm": "Lokalen Knoten {{name}} löschen?",
+    "delete-local-node-confirm": "Ausgewählten lokalen Knoten löschen?",
     "node-health": {"synchronized":"Synchronisiert","lagging":"Nicht synchronisiert","unavailable":"Nicht verfügbar","unverified":"Synchronisierung nicht bestätigt"},
     "node-stats": "Knotenstatistik",
     "note-since-this-server-only-notifies-about-new-transactions": "Hinweis: Da dieser Server nur neue Transaktionen meldet, funktionieren die meisten Wallet-Funktionen auch ohne ihn.",
