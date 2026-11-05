@@ -240,6 +240,35 @@ describe('ConfigureAppComponent local-node management with The best selected', (
     (window as any).UIkit = previousUIkit;
   });
 
+  it('lists only actual RPC nodes and switches connection modes outside the list', () => {
+    const actionModes = [
+      { value: 'random', api: null, name: 'The best' },
+      { value: 'custom', api: null, name: 'New' },
+      { value: 'offline', api: null, name: 'Offline' }
+    ];
+    component.serverOptions = [...settings.serverOptions, ...actionModes] as any;
+    // Angular class-field initializers are not run by this prototype harness.
+    component.availableServerNodes = () => component.serverOptions.filter(server =>
+      !!server.api && server.value !== 'custom');
+    component.selectedServerIsNode = () => component.availableServerNodes().some(server =>
+      server.value === component.selectedServer);
+    const nodes = component.availableServerNodes();
+    expect(nodes.map(node => node.value)).toEqual(['local-nano-to', 'rainstorm']);
+    expect(component.selectedServerIsNode()).toBeFalse();
+
+    component.selectServerNode('rainstorm');
+    expect(component.selectedServer).toBe('rainstorm');
+    expect(component.selectedServerIsNode()).toBeTrue();
+
+    component.selectServerMode('random');
+    expect(component.selectedServerIsNode()).toBeFalse();
+    component.selectServerMode('custom');
+    expect(component.selectedServer).toBe('custom');
+    component.selectServerMode('offline');
+    expect(component.selectedServer).toBe('offline');
+    expect(component.serverConfigChange).toHaveBeenCalledTimes(4);
+  });
+
   it('exposes the local-node deletion picker even when The best is selected', () => {
     expect(component.selectedServer).toBe('random');
     expect(component.localNodes().length).toBe(1);
