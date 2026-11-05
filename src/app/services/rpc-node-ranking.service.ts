@@ -15,6 +15,7 @@ export interface RpcNodeMeasurement {
   cemented: number | null; // Confirmed blocks: preferred synchronization comparison.
   rttMs: number | null;
   health: RpcNodeHealth;
+  isLocal?: boolean;
 }
 
 // Observes public metadata only. No wallet addresses, secrets, authorization
@@ -35,6 +36,7 @@ export class RpcNodeRankingService {
 
   async refresh(): Promise<void> {
     if (this.pending) return this.pending;
+    this.ready = false;
     this.pending = this.scan().finally(() => { this.pending = null; });
     return this.pending;
   }
@@ -70,11 +72,19 @@ export class RpcNodeRankingService {
   }
 
   private async scan(): Promise<void> {
+    // Locally saved public nodes may join The best and automatic failover when
+    // they provide WSS and need no authorization. Never send auth credentials
+    // during the public metadata scan.
     const nodes = this.settings.serverOptions.filter(node =>
-      node.allowFailover && node.failoverTarget !== false && !node.isLocal &&
+      node.allowFailover && node.failoverTarget !== false &&
       !!node.api && !!node.ws && !node.auth
     );
-    const results = await Promise.all(nodes.map(node => this.probe(node)));
+    // An endpoint may be listed both officially and as a user's local entry.
+    // Probe it only once; duplicate measurements must not count as independent
+    // peers when deciding whether the Nano ledger is synchronized.
+    const unique = nodes.filter((node, index) =>
+      nodes.findIndex(other => other.api === node.api) === index);
+    const results = await Promise.all(unique.map(node => this.probe(node)));
 
     // Nano does not have one linear chain height. Total ledger counts include
     // unconfirmed blocks and can differ substantially between fully usable
@@ -113,9 +123,14 @@ export class RpcNodeRankingService {
       .sort((a, b) =>
         (a.health === 'synchronized' ? 0 : 1) - (b.health === 'synchronized' ? 0 : 1) ||
         (a.rttMs ?? Infinity) - (b.rttMs ?? Infinity));
-    this.measurements = results;
-    this.ready = true;
+    // Show both official and local labels in the diagnostics, sharing the
+    // measured health/RTT when they point to the same underlying RPC endpoint.
+    this.measurements = nodes.map(node => {
+      const measured = results.find(result => result.api === node.api)!;
+      return { ...measured, value: node.value, name: node.name, isLocal: !!node.isLocal };
+    });
     this.settings.setRankedEndpoints(ranked.map(node => node.api));
+    this.ready = true;
   }
 
   get best(): RpcNodeMeasurement | null {
