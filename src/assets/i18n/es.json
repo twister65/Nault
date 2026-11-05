@@ -218,7 +218,7 @@
     "scanning-nodes": "Comprobando sincronización y latencia RPC en segundo plano…",
     "no-healthy-node": "Todavía no hay ningún nodo adecuado",
     "delete-local-node": "Eliminar nodo local",
-    "delete-local-node-confirm": "¿Eliminar el nodo local {{name}}?",
+    "delete-local-node-confirm": "¿Eliminar el nodo local seleccionado?",
     "node-health": {"synchronized":"Sincronizado","lagging":"No sincronizado","unavailable":"No disponible","unverified":"Sin verificar sincronización"},
     "node-stats": "Estadísticas del nodo",
     "note-since-this-server-only-notifies-about-new-transactions": "Nota: este servidor solo avisa de nuevas transacciones, por lo que la mayoría de las funciones de la cartera pueden usarse sin él.",
