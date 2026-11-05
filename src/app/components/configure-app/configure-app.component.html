@@ -492,16 +492,6 @@
                               {{nodeNetwork || 'N/A'}}
                             </td>
                           </tr>
-                          @if (showServerValues() && !showServerConfigs()) {
-                            <tr>
-                              <td>
-                                <strong>{{ 'configure-app.random-server' | transloco }}</strong>
-                              </td>
-                              <td>
-                                {{shouldRandom || ('general.no' | transloco)}}
-                              </td>
-                            </tr>
-                          }
                         </table>
                       </span>
                     </div>
