@@ -3,7 +3,7 @@ name: Windows Web Bluetooth test build
 on:
   workflow_dispatch:
   push:
-    branches: [fix/ledger-bluetooth, fix/ledger-usb-reconnect]
+    branches: [fix/ledger-bluetooth, fix/ledger-usb-reconnect, maintenance/electron-45]
     paths:
       - '.github/workflows/windows-bluetooth.yml'
       - 'desktop-app/windows-bluetooth.json'
