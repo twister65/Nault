@@ -195,7 +195,10 @@ export class ApiService {
         attempts++;
         const options: any = { responseType: 'json' };
         // Explicit work servers never inherit RPC credentials, even at the same origin.
-        if (!url && settings.serverName === 'custom' && endpoint === apiUrl && settings.serverAuth) {
+        const localSelection = this.appSettings.serverOptions?.some(server =>
+          server.value === settings.serverName && server.isLocal);
+        if (!url && (settings.serverName === 'custom' || localSelection) &&
+            endpoint === apiUrl && settings.serverAuth) {
           options.headers = new HttpHeaders().set('Authorization', settings.serverAuth);
         }
         try {
