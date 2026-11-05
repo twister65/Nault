@@ -49,7 +49,7 @@
     "name": "Nano.to",
     "value": "nano-to",
     "api": "https://rpc.nano.to/",
-    "ws": null,
+    "ws": "wss://ws.nano.to",
     "auth": null,
     "shouldRandom": false,
     "allowFailover": true
