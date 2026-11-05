@@ -65,5 +65,10 @@ test('Ledger native HID remains isolated in a worker and packaging targets stay 
     'Unexpected macOS packaging target');
   assert.equal(build.publish.owner, 'twister65');
   assert.equal(build.publish.repo, 'Nault');
-  assert.equal(build.nsis.artifactName, 'Nault-Setup-${version}.${ext}');
+  // master adds the platform label; both names preserve the updater-safe
+  // hyphenated installer name and the version/extension placeholders.
+  assert.ok([
+    'Nault-Setup-${version}.${ext}',
+    'Nault-Windows-Setup-${version}.${ext}',
+  ].includes(build.nsis.artifactName), 'Unexpected Windows installer artifact name');
 });
