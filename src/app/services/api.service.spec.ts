@@ -353,25 +353,23 @@ describe('ApiService bounded secure requests', () => {
     const settings = {
       settings: { serverName, serverAPI: 'https://a.invalid/rpc', serverAuth: 'test-secret' },
       serverOptions: ['a', 'b', 'b', 'c', 'd'].map(host => ({ api: `https://${host}.invalid/rpc`, value: host === 'a' && serverName === 'spynano' ? 'spynano' : host, shouldRandom: true, allowFailover: true, failoverTarget: undefined as boolean | undefined })),
-      activateFailover: jasmine.createSpy('activateFailover').and.returnValue(true)
+      activateFailover: jasmine.createSpy('activateFailover').and.returnValue(true),
+      getRankedFallbackEndpoints: jasmine.createSpy('getRankedFallbackEndpoints').and.returnValue(null)
     };
     const api = new ApiService(http as any, node as any, settings as any);
-    // Stable insertion order for existing tests; no global Math.random spy.
-    const randomIndex = spyOn<any>(api, 'randomFallbackIndex').and.callFake((lastIndex: number) => lastIndex);
-    return { http, node, settings, api, randomIndex };
+    return { http, node, settings, api };
   }
-  it('selects a different first fallback when the random draw changes', async () => {
+  it('uses the best ranked fallback instead of choosing one at random', async () => {
     const { api, http, settings } = setup();
+    settings.getRankedFallbackEndpoints.and.returnValue([
+      'https://c.invalid/rpc', 'https://b.invalid/rpc'
+    ]);
     http.post.and.returnValues(throwError({ status: 503 }), of({ balances: {} }));
     expect(await api.accountsBalances([])).toEqual({ balances: {} });
-    expect(settings.activateFailover).toHaveBeenCalledOnceWith('random', 'https://a.invalid/rpc', 'https://b.invalid/rpc');
-
-    const alternative = setup();
-    alternative.randomIndex.and.returnValue(0);
-    alternative.http.post.and.returnValues(throwError({ status: 503 }), of({ balances: {} }));
-    expect(await alternative.api.accountsBalances([])).toEqual({ balances: {} });
-    // With [b, c, d] shuffled using zero draws, c is first.
-    expect(alternative.settings.activateFailover).toHaveBeenCalledOnceWith(
+    expect(http.post.calls.allArgs().map(args => args[0])).toEqual([
+      'https://a.invalid/rpc', 'https://c.invalid/rpc'
+    ]);
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith(
       'random', 'https://a.invalid/rpc', 'https://c.invalid/rpc'
     );
   });
@@ -390,9 +388,11 @@ describe('ApiService bounded secure requests', () => {
     expect(settings.activateFailover).not.toHaveBeenCalled();
   });
 
-  it('tries the next randomized candidate after a failure and persists only a healthy one', async () => {
-    const { api, http, settings, randomIndex } = setup();
-    randomIndex.and.returnValue(0);
+  it('tries the next ranked node after the best one fails', async () => {
+    const { api, http, settings } = setup();
+    settings.getRankedFallbackEndpoints.and.returnValue([
+      'https://c.invalid/rpc', 'https://d.invalid/rpc'
+    ]);
     http.post.and.returnValues(
       throwError({ status: 0 }), throwError({ status: 503 }), of({ balances: {} })
     );
@@ -403,6 +403,14 @@ describe('ApiService bounded secure requests', () => {
     expect(settings.activateFailover).toHaveBeenCalledOnceWith(
       'random', 'https://a.invalid/rpc', 'https://d.invalid/rpc'
     );
+  });
+
+  it('never falls back to nodes excluded as out-of-sync by the background scan', async () => {
+    const { api, http, settings } = setup();
+    settings.getRankedFallbackEndpoints.and.returnValue([]);
+    await expectAsync(api.accountsBalances([])).toBeRejected();
+    expect(http.post.calls.allArgs().map(args => args[0])).toEqual(['https://a.invalid/rpc']);
+    expect(settings.activateFailover).not.toHaveBeenCalled();
   });
 
   it('stops after three distinct endpoints and never forwards custom credentials in random mode', async () => {
@@ -565,8 +573,7 @@ describe('ApiService bounded secure requests', () => {
   });
 
   it('checks all distinct public candidates during an empty-wallet DNS outage', async () => {
-    const { api, http, settings, randomIndex } = setup('spynano');
-    randomIndex.and.callFake((lastIndex: number) => lastIndex);
+    const { api, http, settings } = setup('spynano');
     http.post.and.returnValues(
       throwError({ status: 0 }), throwError({ status: 502 }), throwError({ status: 503 }), of({ count: '225964139' })
     );
@@ -593,7 +600,7 @@ describe('ApiService bounded secure requests', () => {
     expect(settings.activateFailover).toHaveBeenCalledTimes(1);
   });
 
-  it('times out the primary at three seconds and probes all backups in parallel for ten more', fakeAsync(() => {
+  it('keeps the ordered health-probe attempts within a bounded deadline', fakeAsync(() => {
     const { api, http } = setup('spynano');
     http.post.and.returnValue(NEVER);
     let rejected = false;
@@ -603,7 +610,7 @@ describe('ApiService bounded secure requests', () => {
     expect(http.post).toHaveBeenCalledTimes(1);
     tick(1);
     expect(http.post).toHaveBeenCalledTimes(4);
-    tick(9999);
+    tick(8999);
     expect(rejected).toBe(false);
     tick(1);
     expect(rejected).toBe(true);
@@ -618,7 +625,7 @@ describe('ApiService bounded secure requests', () => {
     );
     let completed = false;
     api.checkNodeAvailability().then(() => { completed = true; });
-    tick(0); // Allow the first DNS error to schedule concurrent backup probes.
+    tick(0); // Allow the first DNS error to schedule ordered backup probes.
     expect(http.post).toHaveBeenCalledTimes(4);
     tick(4500);
     late.next({ balances: {} });
