@@ -1,9 +1,10 @@
 import { of, throwError } from 'rxjs';
 import { RpcNodeRankingService } from './rpc-node-ranking.service';
+import { RpcServerOption } from './app-settings.service';
 
 describe('RpcNodeRankingService', () => {
   function setup(counts: Record<string, string | { count: string; cemented?: string } | null>) {
-    const servers = Object.keys(counts).map(value => ({
+    const servers: RpcServerOption[] = Object.keys(counts).map(value => ({
       name: value, value, api: 'https://' + value + '.example/rpc',
       ws: value === 'rpc-only' ? null : 'wss://' + value + '.example/ws',
       auth: null, allowFailover: true, shouldRandom: false
