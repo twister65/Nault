@@ -279,7 +279,7 @@
     "this-will-delete-all-locally-cached-proof-of-work-values": "Toutes les preuves de travail (PoW) mises en cache localement seront supprimées",
     "this-will-delete-all-stored-data-and-reset-app-settings-incl": "TOUTES les données enregistrées seront supprimées et les paramètres réinitialisés, y compris le portefeuille, le carnet d'adresses et davantage",
     "update-display-settings": "Mettre à jour l'affichage",
-    "update-server-settings": "Mettre à jour les serveurs",
+    "update-server-settings": "Mettre à jour le serveur",
     "update-wallet-settings": "Mettre à jour le portefeuille",
     "use-if-the-api-requires-authentication": "À utiliser si l'API nécessite une authentification",
     "wallet-settings": "Paramètres du portefeuille",
