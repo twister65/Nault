@@ -212,6 +212,19 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     !!this.serverOptions.find(server => server.value === this.selectedServer && server.isLocal));
   selectedLocalNode = () => this.serverOptions.find(server =>
     server.value === this.selectedServer && server.isLocal);
+  // The node dropdown only lists RPC nodes; these are independent actions.
+  availableServerNodes = () => this.serverOptions.filter(server => !!server.api && server.value !== 'custom');
+  selectedServerIsNode = () => this.availableServerNodes().some(server =>
+    server.value === this.selectedServer);
+  selectServerMode(mode: 'random' | 'custom' | 'offline') {
+    this.selectedServer = mode;
+    this.serverConfigChange(mode);
+  }
+  selectServerNode(value: string) {
+    if (!value || !this.availableServerNodes().some(server => server.value === value)) return;
+    this.selectedServer = value;
+    this.serverConfigChange(value);
+  }
 
   async ngOnInit() {
     this.loadFromSettings();
