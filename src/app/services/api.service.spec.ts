@@ -751,18 +751,42 @@ describe('ApiService bounded secure requests', () => {
     expect(http.post).toHaveBeenCalledTimes(1);
     expect(await api.accountsFrontiers([])).toEqual({ frontiers: {} });
     expect(node.setOnline).toHaveBeenCalled();
-    delayed.error({ status: 400 }); // The old request fails after the success.
+    delayed.error({ status: 503 }); // The old request times out/fails after the success.
     await expectAsync(oldRead).toBeRejected();
     expect(node.setOffline).not.toHaveBeenCalled();
     expect(settings.activateFailover).not.toHaveBeenCalled();
   });
 
-  it('continues warning for a genuine current RPC failure without newer success', async () => {
+  it('continues warning for a genuine current RPC outage without newer success', async () => {
     const { api, http, node } = setup('custom');
-    http.post.and.returnValue(throwError({ status: 400 }));
+    http.post.and.returnValue(throwError({ status: 503 }));
     await expectAsync(api.accountsBalances([])).toBeRejected();
     expect(node.setOffline).toHaveBeenCalled();
   });
+
+  it('does not claim an RPC outage after an HTTP 400 or invalid application response', async () => {
+    const { api, http, node } = setup('custom');
+    http.post.and.returnValues(throwError({ status: 400 }), of({ balances: [] }));
+    await expectAsync(api.accountsBalances([])).toBeRejected();
+    await expectAsync((api as any).request('accounts_balances', { accounts: [] }, false, '', res =>
+      ({ err: Array.isArray(res.balances) ? 'invalid balances' : null }))).toBeRejected();
+    expect(node.setOffline).not.toHaveBeenCalled();
+  });
+
+  it('ignores a delayed 15-second transport timeout after another request succeeded', fakeAsync(() => {
+    const { api, http, node } = setup('custom');
+    http.post.and.callFake((_url: string, payload: any) =>
+      payload.action === 'accounts_balances' ? NEVER : of({ frontiers: {} }));
+    let rejected = false;
+    api.accountsBalances([]).catch(() => { rejected = true; });
+    api.accountsFrontiers([]).then(() => {});
+    tick(16000);
+    expect(rejected).toBeTrue();
+    expect(node.setOnline).toHaveBeenCalled();
+    expect(node.setOffline).not.toHaveBeenCalled();
+    tick(60000); // Remain stable throughout a longer idle tablet session.
+    expect(node.setOffline).not.toHaveBeenCalled();
+  }));
 
   it('does not rotate a custom server', async () => {
     const { api, http, settings } = setup('custom');
