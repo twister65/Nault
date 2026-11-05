@@ -257,8 +257,9 @@ export class AppSettingsService {
     const matching = this.serverOptions.find(node => node.value === this.settings.serverName);
     if (this.settings.serverName === 'random') {
       this.pendingBestStartupSelection = !this.rankedEndpoints?.length;
+      const availableRank = this.getRankedFallbackEndpoints('');
       const best = this.serverOptions.find(node =>
-        node.api === this.rankedEndpoints?.[0] && node.allowFailover && !!node.ws && !node.auth) ||
+        node.api === availableRank?.[0] && node.allowFailover && !!node.ws && !node.auth) ||
         this.officialNodes.find(node => node.value === 'twister32-rsnano');
       this.settings.serverAPI = best?.api || null;
       this.settings.serverWS = best?.ws || null;
