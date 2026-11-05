@@ -599,7 +599,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     if (!selected) return;
     const UIkit = (window as unknown as {UIkit: {modal: {confirm(message: string): Promise<void>}}}).UIkit;
     try {
-      await UIkit.modal.confirm(this.translocoService.translate('configure-app.delete-local-node-confirm', { name: selected.name }));
+      await UIkit.modal.confirm(this.translocoService.translate('configure-app.delete-local-node-confirm'));
     } catch (_) { return; }
     this.appSettings.removeLocalNode(selected.value);
     this.selectedServer = 'twister32-rsnano';
