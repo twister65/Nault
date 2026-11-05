@@ -218,6 +218,7 @@
     "scanning-nodes": "Checking synchronization and RPC latency in the background…",
     "no-healthy-node": "No suitable node yet",
     "delete-local-node": "Delete local node",
+    "local-node-label": "local",
     "delete-local-node-confirm": "Delete the selected local node?",
     "node-health": {"synchronized":"Synchronized","lagging":"Out of sync","unavailable":"Unavailable","unverified":"Synchronization unverified"},
     "node-stats": "Node Stats",
