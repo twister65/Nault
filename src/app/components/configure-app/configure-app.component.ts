@@ -172,6 +172,11 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   serverOptions: AppSettingsService['serverOptions'] = [];
   selectedServer: string | null = null;
   serverNodeName = '';
+  // Local-node management is independent of the active RPC selection.
+  localNodeToDeleteId = '';
+  localNodes = () => this.serverOptions.filter(server => server.isLocal);
+  localNodeToDelete = () => this.localNodes().find(server =>
+    server.value === (this.localNodeToDeleteId || this.selectedLocalNode()?.value));
 
   defaultRepresentative: string | null = null;
   representativeResults$ = new BehaviorSubject<StoredRepresentative[]>([]);
@@ -599,17 +604,55 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
 
   async deleteLocalNode() {
-    const selected = this.selectedLocalNode();
+    // The server dropdown may be set to The best, Offline or another node:
+    // deletion always targets the explicit local-node management selection.
+    const selected = this.localNodeToDelete();
     if (!selected) return;
     const UIkit = (window as unknown as {UIkit: {modal: {confirm(message: string): Promise<void>}}}).UIkit;
     try {
       await UIkit.modal.confirm(this.translocoService.translate('configure-app.delete-local-node-confirm'));
     } catch (_) { return; }
+
+    const activeBefore = this.appSettings.settings.serverAPI;
+    const wsBefore = this.appSettings.settings.serverWS;
+    const savedMode = this.appSettings.settings.serverName;
+    const selectedWasDeleted = this.selectedServer === selected.value;
     this.appSettings.removeLocalNode(selected.value);
-    this.selectedServer = 'twister32-rsnano';
     this.serverOptions = this.appSettings.serverOptions;
-    this.serverConfigChange(this.selectedServer);
-    await this.updateServerSettings();
+    this.localNodeToDeleteId = '';
+
+    if (savedMode === selected.value) {
+      // Removing the actual configured endpoint requires a safe fallback.
+      this.appSettings.setAppSettings({ serverName: 'twister32-rsnano' });
+      this.appSettings.loadServerSettings();
+      this.appSettings.saveAppSettings();
+    } else if (savedMode === 'random') {
+      // An explicitly selected The best mode may currently be using this
+      // endpoint. Re-evaluate only that mode; keep other selections intact.
+      this.appSettings.loadServerSettings();
+      if (activeBefore !== this.appSettings.settings.serverAPI ||
+          wsBefore !== this.appSettings.settings.serverWS) {
+        this.appSettings.saveAppSettings();
+      }
+    }
+
+    if (selectedWasDeleted || savedMode === selected.value) {
+      this.selectedServer = this.appSettings.settings.serverName;
+      this.serverConfigChange(this.selectedServer);
+    }
+
+    if (activeBefore !== this.appSettings.settings.serverAPI ||
+        wsBefore !== this.appSettings.settings.serverWS) {
+      this.websocket.forceReconnect();
+      this.resetNodeStats();
+      void this.updateNodeStats();
+      if (this.walletService.wallet?.accounts?.length) {
+        void this.walletService.reloadBalances().catch(() =>
+          this.notifications.sendWarning(this.translocoService.translate('ui-notifications.refresh-balance-failed')));
+      }
+    }
+    // Refresh the visible audit so deleted local nodes no longer appear.
+    void this.rpcRanking.refresh();
   }
 
   searchRepresentatives() {
