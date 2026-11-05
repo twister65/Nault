@@ -635,8 +635,9 @@ describe('ApiService bounded secure requests', () => {
     expect(http.post).toHaveBeenCalledTimes(1);
     tick(1);
     expect(http.post).toHaveBeenCalledTimes(4);
-    // Primary (5s) plus the ranked-backup budget (10s).
-    tick(9999);
+    // Primary 5s + three 3s sequential probes = 14s. This finishes
+    // before the outer 15s safety deadline, not exactly at that deadline.
+    tick(8999);
     expect(rejected).toBe(false);
     tick(1);
     expect(rejected).toBe(true);
