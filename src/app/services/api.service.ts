@@ -19,6 +19,9 @@ export class ApiService {
   // background health probe may check every eligible built-in fallback so
   // random choice does not omit the only working node.
   private readonly maxHealthProbeEndpoints = 5;
+  // Parallel wallet reads, WS-triggered probes and optional node statistics may
+  // settle out of order. A late failure must not undo a newer successful RPC.
+  private successfulRpcResponses = 0;
   constructor(private http: RpcTransportService, private node: NodeService,
     private appSettings: AppSettingsService, @Optional() private desktop?: DesktopService) { }
 
@@ -34,6 +37,26 @@ export class ApiService {
   private markInternetDisconnected(): void {
     this.node.markInternetInterrupted();
     console.info('[Nano RPC health] Internet disconnected; preserving selected server.');
+  }
+
+  private noteRpcSuccess(endpoint: string, generation: number): void {
+    if (this.appSettings.settings.serverAPI !== endpoint ||
+        this.node.internetInterruptionGeneration !== generation) return;
+    this.successfulRpcResponses++;
+    this.node.setOnline();
+  }
+
+  private noteRpcFailure(
+    endpoint: string, generation: number, successVersionAtStart: number,
+    message?: string | null
+  ): void {
+    if (this.appSettings.settings.serverAPI !== endpoint ||
+        this.node.internetInterruptionGeneration !== generation ||
+        this.successfulRpcResponses !== successVersionAtStart) {
+      console.info('[Nano RPC health] Ignoring stale failure after RPC success, network or server change.');
+      return;
+    }
+    this.node.setOffline(message);
   }
 
   // Try scored nodes in rank order. If the best RPC rejects this wallet
@@ -105,7 +128,7 @@ export class ApiService {
       throw { isStaleFailover: true };
     }
     console.info('[Nano RPC health] Failover activated:', selected.endpoint);
-    this.node.setOnline();
+    this.noteRpcSuccess(selected.endpoint, expectedNetworkGeneration);
     return selected.response;
   }
 
@@ -138,6 +161,7 @@ export class ApiService {
     // Snapshot settings: a pending request must not acquire another server's credentials.
     const settings = { ...this.appSettings.settings };
     const expectedNetworkGeneration = this.node.internetInterruptionGeneration;
+    const successVersionAtStart = this.successfulRpcResponses;
     const firstUrl = url || settings.serverAPI;
     if (!firstUrl) {
       this.node.setOffline(null);
@@ -145,7 +169,7 @@ export class ApiService {
     }
     let apiUrl: string;
     try { apiUrl = secureEndpoint(firstUrl, 'rpc'); } catch (error) {
-      this.node.setOffline(silentOffline ? null : 'Unsafe server address: use HTTPS (HTTP is allowed only on loopback).');
+      this.noteRpcFailure(firstUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : 'Unsafe server address: use HTTPS (HTTP is allowed only on loopback).');
       if (skipError) return;
       throw error;
     }
@@ -224,7 +248,7 @@ export class ApiService {
             if (typeof validateResponse === 'function') {
               throw { isRpcError: true, error: res.error };
             }
-            this.node.setOnline();
+            this.noteRpcSuccess(endpoint, expectedNetworkGeneration);
             return res;
           }
           if (typeof validateResponse === 'function' && validateResponse(res).err != null) {
@@ -250,7 +274,7 @@ export class ApiService {
             }
             if (healthProbe) console.info('[Nano RPC health] Failover activated:', endpoint);
           }
-          this.node.setOnline();
+          this.noteRpcSuccess(endpoint, expectedNetworkGeneration);
           return res;
         } catch (error) {
           lastError = error;
@@ -281,7 +305,7 @@ export class ApiService {
              failure.name === 'TimeoutError' || error instanceof TypeError);
           if (!retryable) {
             if (!failure.isRpcError && !failure.isStaleFailover) {
-              this.node.setOffline(silentOffline ? null : undefined);
+              this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
             }
             throw error;
           }
@@ -289,7 +313,7 @@ export class ApiService {
           // server throughout this offline/online transition.
           if (endpoint === apiUrl && await this.internetDisconnected()) {
             this.markInternetDisconnected();
-            this.node.setOffline(silentOffline ? null : undefined);
+            this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
             throw { status: 0, isInternetDisconnected: true };
           }
           if (endpoint === apiUrl && this.node.internetRecoveryPending) {
@@ -298,7 +322,7 @@ export class ApiService {
             // cable is still disconnected; recovery keeps the same endpoint.
             if (healthProbe) console.info(
               '[Nano RPC health] Selected RPC still unresponsive after link restoration:', endpoint);
-            this.node.setOffline(silentOffline ? null : undefined);
+            this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
             throw error;
           }
           if (healthProbe && endpoint === apiUrl && endpoints.length > 1 &&
@@ -318,7 +342,7 @@ export class ApiService {
               // successfully recovered original node offline again.
               if (!(fallbackError && typeof fallbackError === 'object' &&
                 'isStaleFailover' in fallbackError && fallbackError.isStaleFailover)) {
-                this.node.setOffline(silentOffline ? null : undefined);
+                this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
               }
               throw fallbackError;
             }
@@ -327,8 +351,8 @@ export class ApiService {
         }
       }
     }
-    this.node.setOffline(silentOffline ? null : (lastError && lastError.status === 429
-      ? 'Too Many Requests to the node. Try again later or choose a different node.'
+    this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : (lastError && lastError.status === 429
+      ? 'Too Many Requests to the node. Try again later or choose another node.'
       : 'RPC unavailable. Retry later or choose another node.'));
     throw lastError || new Error('RPC request deadline exceeded.');
   }
