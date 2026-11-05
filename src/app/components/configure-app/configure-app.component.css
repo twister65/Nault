@@ -10,18 +10,47 @@
     padding-right: 20px;
 }
 
-/* Keep destructive and save actions comfortably separated on touch devices. */
-.server-action-buttons {
+/* Separate the destructive local-node action from the save action on touch devices. */
+.server-action-buttons,
+.local-node-delete-controls {
     display: flex;
     flex-direction: column;
     align-items: stretch;
     gap: 16px;
 }
 
-@media (min-width: 640px) {
+.local-node-delete-controls {
+    min-width: 0;
+    gap: 12px;
+}
+
+.local-node-delete-controls .uk-form-label {
+    text-align: left;
+}
+
+@media (min-width: 960px) {
     .server-action-buttons {
         flex-direction: row;
-        align-items: center;
+        align-items: flex-end;
         justify-content: flex-end;
+        flex-wrap: wrap;
+    }
+
+    .local-node-delete-controls {
+        display: grid;
+        grid-template-columns: minmax(180px, 260px) auto;
+        column-gap: 16px;
+        align-items: end;
+    }
+
+    .local-node-delete-controls .uk-form-label {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 959px) {
+    .server-action-buttons > .uk-button,
+    .local-node-delete-controls > .uk-button {
+        width: 100%;
     }
 }
