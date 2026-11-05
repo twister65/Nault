@@ -9,3 +9,19 @@
 #node-stats-table td {
     padding-right: 20px;
 }
+
+/* Keep destructive and save actions comfortably separated on touch devices. */
+.server-action-buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+}
+
+@media (min-width: 640px) {
+    .server-action-buttons {
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-end;
+    }
+}
