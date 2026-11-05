@@ -629,9 +629,9 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
       this.appSettings.setAppSettings({ serverName: 'twister32-rsnano' });
       this.appSettings.loadServerSettings();
       this.appSettings.saveAppSettings();
-    } else if (savedMode === 'random') {
-      // An explicitly selected The best mode may currently be using this
-      // endpoint. Re-evaluate only that mode; keep other selections intact.
+    } else if (savedMode === 'random' && activeBefore === selected.api) {
+      // Re-evaluate The best only if the deleted local node is actually
+      // active. Removing an unrelated entry must not switch the RPC server.
       this.appSettings.loadServerSettings();
       if (activeBefore !== this.appSettings.settings.serverAPI ||
           wsBefore !== this.appSettings.settings.serverWS) {
