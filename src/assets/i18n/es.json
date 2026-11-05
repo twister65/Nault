@@ -219,6 +219,8 @@
     "no-healthy-node": "Todavía no hay ningún nodo adecuado",
     "delete-local-node": "Eliminar nodo local",
     "local-node-label": "local",
+    "local-node-to-delete": "Nodo local que gestionar",
+    "choose-local-node": "Seleccionar un nodo local",
     "delete-local-node-confirm": "¿Eliminar el nodo local seleccionado?",
     "node-health": {"synchronized":"Sincronizado","lagging":"No sincronizado","unavailable":"No disponible","unverified":"Sin verificar sincronización"},
     "node-stats": "Estadísticas del nodo",
