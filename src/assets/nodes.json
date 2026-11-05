@@ -37,15 +37,6 @@
     "allowFailover": true
   },
   {
-    "name": "Natrium",
-    "value": "natrium",
-    "api": "https://app.natrium.io/api",
-    "ws": null,
-    "auth": null,
-    "shouldRandom": false,
-    "allowFailover": true
-  },
-  {
     "name": "Nano.to",
     "value": "nano-to",
     "api": "https://rpc.nano.to/",
