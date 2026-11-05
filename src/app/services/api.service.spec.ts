@@ -488,7 +488,7 @@ describe('ApiService bounded secure requests', () => {
     let error: any = null;
     const interrupted = spyOn(node, 'markInternetInterrupted').and.callThrough();
     api.checkNodeAvailability(true, false).catch(reason => { error = reason; });
-    tick(3000);
+    tick(5000);
     expect(error?.name).toBe('TimeoutError');
     expect(node.internetRecoveryPending).toBe(true);
     expect(node.internetInterruptionGeneration).toBe(1);
@@ -631,7 +631,7 @@ describe('ApiService bounded secure requests', () => {
     let rejected = false;
     api.checkNodeAvailability().catch(() => { rejected = true; });
     expect(http.post).toHaveBeenCalledTimes(1);
-    tick(2999);
+    tick(4999);
     expect(http.post).toHaveBeenCalledTimes(1);
     tick(1);
     expect(http.post).toHaveBeenCalledTimes(4);
@@ -653,7 +653,7 @@ describe('ApiService bounded secure requests', () => {
     tick(0); // Allow the first DNS error to schedule ordered backup probes.
     expect(http.post).toHaveBeenCalledTimes(4);
     tick(4500);
-    late.next({ balances: {} });
+    late.next({ count: '225964139' });
     late.complete();
     tick(0);
     expect(completed).toBe(true);
@@ -664,10 +664,10 @@ describe('ApiService bounded secure requests', () => {
 
   it('moves to a working fallback after the first timed-out health probe', fakeAsync(() => {
     const { api, http, settings } = setup('spynano');
-    http.post.and.returnValues(NEVER, of({ balances: {} }), NEVER, NEVER);
+    http.post.and.returnValues(NEVER, of({ count: '225964139' }), NEVER, NEVER);
     let completed = false;
     api.checkNodeAvailability().then(() => { completed = true; });
-    tick(3000);
+    tick(5000);
     expect(completed).toBe(true);
     expect(http.post).toHaveBeenCalledTimes(4);
     expect(settings.activateFailover).toHaveBeenCalledOnceWith(
@@ -683,29 +683,31 @@ describe('ApiService bounded secure requests', () => {
     const second = api.checkNodeAvailability();
     expect(first).toBe(second);
     expect(http.post).toHaveBeenCalledTimes(1);
-    subject.next({ balances: {} });
+    subject.next({ count: '225964139' });
     subject.complete();
     await first;
     // A completed Subject cannot emit a response for a subsequent new request.
     // Use a fresh, valid RPC response to test that the completed check is
     // evicted from the in-flight cache.
-    http.post.and.returnValue(of({ balances: {} }));
+    http.post.and.returnValue(of({ count: '225964139' }));
     await api.checkNodeAvailability();
     expect(http.post).toHaveBeenCalledTimes(2);
   });
 
-  it('probes the public burn account when no wallet is configured', async () => {
+  it('uses wallet-independent RPC metadata after WS failure even with a configured wallet', async () => {
     const { api, http, settings } = setup('spynano');
-    // HTTP 504 from the selected node; a successful balances response from the
-    // next candidate proves failover works without wallet accounts.
-    http.post.and.returnValues(throwError({ status: 504 }), of({ balances: {} }), NEVER, NEVER);
-    await api.checkNodeAvailability();
+    // The synthetic burn account is not a connectivity oracle: a healthy RPC
+    // proxy may reject accounts_balances or answer slowly after minutes of use.
+    http.post.and.returnValues(throwError({ status: 504 }), of({ count: '225964139' }), NEVER, NEVER);
+    await api.checkNodeAvailability(false);
     const calls = http.post.calls.allArgs();
     expect(calls.length).toBe(4);
-    expect(calls[0][1]).toEqual({ action: 'accounts_balances', accounts: [
-      'nano_1111111111111111111111111111111111111111111111111111hifc8npp'
-    ] });
-    expect(settings.activateFailover).toHaveBeenCalledOnceWith('spynano', 'https://a.invalid/rpc', 'https://b.invalid/rpc');
+    calls.forEach(args => expect(args[1]).toEqual({
+      action: 'block_count', include_cemented: 'true'
+    }));
+    expect(settings.activateFailover).toHaveBeenCalledOnceWith(
+      'spynano', 'https://a.invalid/rpc', 'https://b.invalid/rpc'
+    );
   });
 
   it('does not accept a successful HTTP response with invalid RPC data', async () => {
@@ -740,6 +742,28 @@ describe('ApiService bounded secure requests', () => {
     expect(http.post).toHaveBeenCalledTimes(1);
     expect(settings.activateFailover).not.toHaveBeenCalled();
   });
+  it('does not let an older failed wallet read override a newer healthy RPC result', async () => {
+    const { api, http, node, settings } = setup('custom');
+    const delayed = new Subject<any>();
+    http.post.and.callFake((_endpoint: string, payload: any) =>
+      payload.action === 'accounts_balances' ? delayed : of({ frontiers: {} }));
+    const oldRead = api.accountsBalances([]);
+    expect(http.post).toHaveBeenCalledTimes(1);
+    expect(await api.accountsFrontiers([])).toEqual({ frontiers: {} });
+    expect(node.setOnline).toHaveBeenCalled();
+    delayed.error({ status: 400 }); // The old request fails after the success.
+    await expectAsync(oldRead).toBeRejected();
+    expect(node.setOffline).not.toHaveBeenCalled();
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+  });
+
+  it('continues warning for a genuine current RPC failure without newer success', async () => {
+    const { api, http, node } = setup('custom');
+    http.post.and.returnValue(throwError({ status: 400 }));
+    await expectAsync(api.accountsBalances([])).toBeRejected();
+    expect(node.setOffline).toHaveBeenCalled();
+  });
+
   it('does not rotate a custom server', async () => {
     const { api, http, settings } = setup('custom');
     await expectAsync(api.accountsBalances([])).toBeRejected();
