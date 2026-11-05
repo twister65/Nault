@@ -99,6 +99,8 @@ describe('ConfigureAppComponent server settings', () => {
     };
     Object.assign(component, {
       selectedServer: 'custom', serverAPI: 'https://new.example/rpc', serverWS: 'wss://new.example/ws',
+      serverOptions: settings.serverOptions, serverNodeName: 'My node',
+      showServerConfigs: () => true, selectedLocalNode: () => null,
       appSettings: settings, notifications, websocket, walletService: wallet,
       api: { checkNodeAvailability: jasmine.createSpy().and.returnValue(Promise.resolve()) },
       translocoService: { translate: (key: string) => key },
