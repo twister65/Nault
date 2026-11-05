@@ -2,6 +2,7 @@ import { localizeNotificationMessage } from './notification-message';
 
 describe('localizeNotificationMessage', () => {
   const messages: Record<string, string> = {
+    'ui-notifications.pwa-update-ready': 'Une mise à jour a été installée en arrière-plan et sera appliquée au prochain démarrage.',
     'ui-notifications.node-offline': 'Impossible de se connecter au nœud Nano. Les soldes affichés peuvent être inexacts !',
     'ui-notifications.refresh-balance-failed': 'Impossible d’actualiser les soldes. Vérifiez votre connexion.',
     'ui-notifications.nano-price-unavailable': 'Impossible de récupérer le dernier cours du Nano. Vérifiez votre connexion Internet ou les paramètres de votre bloqueur de publicités, puis actualisez la page pour afficher des montants en monnaie fiduciaire à jour.',
@@ -26,6 +27,12 @@ describe('localizeNotificationMessage', () => {
   };
   const translate = (key: string, params?: Record<string, string>) =>
     (messages[key] || key).replace(/{{(\w+)}}/g, (_, name: string) => params?.[name] || '');
+
+  it('localizes the PWA update-ready notice independently from its translated Apply now button', () => {
+    expect(localizeNotificationMessage(
+      'An update was installed in the background and will be applied on next launch.', translate
+    )).toBe('Une mise à jour a été installée en arrière-plan et sera appliquée au prochain démarrage.');
+  });
 
   it('localizes the persistent node-offline warning', () => {
     expect(localizeNotificationMessage(

@@ -223,9 +223,13 @@
 
         <ul role="navigation" aria-label="Main" class="uk-nav uk-nav-default uk-nav-parent-icon left-nav" uk-nav>
           <li><a routerLink="/accounts" routerLinkActive="active"><div class="label">{{ 'general.accounts' | transloco }}</div></a></li>
-          <li><a routerLink="/send" routerLinkActive="active"><div class="label">{{ 'general.send' | transloco }}</div></a></li>
+          <li><a [routerLink]="isConfigured() ? '/send' : null" routerLinkActive="active"
+            [class.wallet-action-disabled]="!isConfigured()" [attr.aria-disabled]="!isConfigured()"
+            [attr.tabindex]="isConfigured() ? null : -1"><div class="label">{{ 'general.send' | transloco }}</div></a></li>
           <li>
-            <a routerLink="/receive" routerLinkActive="active">
+            <a [routerLink]="isConfigured() ? '/receive' : null" routerLinkActive="active"
+              [class.wallet-action-disabled]="!isConfigured()" [attr.aria-disabled]="!isConfigured()"
+              [attr.tabindex]="isConfigured() ? null : -1">
               <div uk-grid>
                 <div class="uk-width-3-4">
                   <div class="label">{{ 'general.receive' | transloco }}</div>

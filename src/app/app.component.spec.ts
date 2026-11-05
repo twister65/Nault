@@ -39,6 +39,81 @@ describe('AppComponent', () => {
     expect(price).toHaveBeenCalledTimes(2);
   }));
 
+  it('keeps a failed FIAT price request silent on first launch without a wallet', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://example.test/proxy';
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(false);
+    const fetch = spyOn(app, 'updateFiatPrices').and.returnValue(Promise.reject(new Error('CoinGecko unavailable')));
+    const notifications = TestBed.inject(NotificationService);
+    const warn = spyOn(notifications, 'sendWarning');
+    const clear = spyOn(notifications, 'removeNotification');
+    const network = spyOn(TestBed.inject(DesktopService), 'isNetworkOnline');
+
+    void (app as any).loadInitialFiatPrice();
+    tick(0);
+
+    expect(fetch).toHaveBeenCalledTimes(1); // The price retry policy remains unchanged.
+    expect(warn).not.toHaveBeenCalled();
+    expect(clear).toHaveBeenCalledWith('price-adblock');
+    expect(network).not.toHaveBeenCalled(); // No connectivity probe is needed for onboarding.
+  }));
+
+  it('still warns about failed FIAT prices for a configured wallet while online', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://example.test/proxy';
+    app.nodeService.internetRecoveryPending = false;
+    spyOnProperty(navigator, 'onLine', 'get').and.returnValue(true);
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(true);
+    spyOn(app, 'updateFiatPrices').and.returnValue(Promise.reject(new Error('CoinGecko unavailable')));
+    const network = spyOn(TestBed.inject(DesktopService), 'isNetworkOnline').and.returnValue(Promise.resolve(true));
+    const warn = spyOn(TestBed.inject(NotificationService), 'sendWarning');
+
+    void (app as any).loadInitialFiatPrice();
+    tick(0);
+
+    expect(network).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      jasmine.stringMatching(/issue retrieving latest nano price/),
+      jasmine.objectContaining({ identifier: 'price-adblock' })
+    );
+  }));
+
+  it('does not report an ad blocker if the configured wallet is offline', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://example.test/proxy';
+    app.nodeService.internetRecoveryPending = true;
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(true);
+    spyOn(app, 'updateFiatPrices').and.returnValue(Promise.reject(new Error('offline')));
+    const warn = spyOn(TestBed.inject(NotificationService), 'sendWarning');
+
+    void (app as any).loadInitialFiatPrice();
+    tick(0);
+
+    expect(warn).not.toHaveBeenCalled();
+  }));
+
+  it('does not show a stale FIAT warning if the wallet is removed during the connectivity check', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://example.test/proxy';
+    app.nodeService.internetRecoveryPending = false;
+    spyOnProperty(navigator, 'onLine', 'get').and.returnValue(true);
+    const configured = spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(true);
+    spyOn(app, 'updateFiatPrices').and.returnValue(Promise.reject(new Error('CoinGecko unavailable')));
+    let resolveOnline: (online: boolean) => void = () => {};
+    spyOn(TestBed.inject(DesktopService), 'isNetworkOnline').and.returnValue(
+      new Promise<boolean>(resolve => { resolveOnline = resolve; })
+    );
+    const warn = spyOn(TestBed.inject(NotificationService), 'sendWarning');
+
+    void (app as any).loadInitialFiatPrice();
+    tick(0);
+    configured.and.returnValue(false);
+    resolveOnline(true);
+    tick(0);
+
+    expect(warn).not.toHaveBeenCalled();
+  }));
+
   it('refreshes FIAT once after selected WS reconnects following offline startup', fakeAsync(() => {
     const app = TestBed.inject(AppComponent);
     const refresh = spyOn(app, 'updateFiatPrices').and.returnValue(Promise.resolve());
@@ -165,6 +240,90 @@ describe('AppComponent', () => {
     expect(app.settings.settings.serverName).toBe('rainstorm');
     expect(app.nodeService.internetRecoveryPending).toBe(false);
     expect(probe).not.toHaveBeenCalled();
+  }));
+
+  it('keeps a configured wallet on its original RPC until balance recovery completes', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverName = 'twister32-rsnano';
+    app.settings.settings.serverAPI = 'https://twister32.changeip.net/proxy';
+    app.settings.settings.serverWS = 'wss://twister32.changeip.net/ws';
+    const wallet = TestBed.inject(WalletService);
+    spyOn(wallet, 'isConfigured').and.returnValue(true);
+    app.wallet.accounts = [{ id: 'nano_test' } as any];
+    let finishRefresh: () => void = () => {};
+    const refresh = spyOn(wallet, 'reloadBalances').and.returnValue(
+      new Promise<void>(resolve => { finishRefresh = resolve; })
+    );
+    const api = TestBed.inject(ApiService);
+    const fallback = spyOn(api, 'checkNodeAvailability');
+    const ws = TestBed.inject(WebsocketService);
+    const reconnect = spyOn(ws, 'forceReconnect').and.stub();
+
+    app.onNetworkOffline();
+    ws.socket.connected = true;
+    ws.connected$.next();
+    tick(0);
+    expect(app.nodeService.internetRecoveryPending).toBeTrue();
+    expect(app.settings.settings.serverName).toBe('twister32-rsnano');
+    expect(fallback).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalled();
+
+    // A WS handshake alone did not clear the guard. A real RPC refresh does.
+    app.nodeService.setOnline();
+    finishRefresh();
+    tick(0);
+    expect(app.nodeService.internetRecoveryPending).toBeFalse();
+    expect(app.settings.settings.serverName).toBe('twister32-rsnano');
+    // The WS already completed a fresh handshake: a second forced reconnect
+    // would generate a redundant wallet balance read and another failure cycle.
+    expect(reconnect).not.toHaveBeenCalled();
+    app.ngOnDestroy();
+  }));
+
+  it('reopens an exhausted WS after wallet RPC recovers without a fresh handshake', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverName = 'twister32-rsnano';
+    app.settings.settings.serverAPI = 'https://twister32.changeip.net/proxy';
+    app.settings.settings.serverWS = 'wss://twister32.changeip.net/ws';
+    const wallet = TestBed.inject(WalletService);
+    spyOn(wallet, 'isConfigured').and.returnValue(true);
+    app.wallet.accounts = [{ id: 'nano_test' } as any];
+    const refresh = spyOn(wallet, 'reloadBalances').and.returnValue(Promise.resolve());
+    const ws = TestBed.inject(WebsocketService);
+    const reconnect = spyOn(ws, 'forceReconnect').and.stub();
+
+    app.onNetworkOffline();
+    app.onNetworkOnline();
+    tick(0);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(reconnect).toHaveBeenCalledTimes(1);
+    expect(app.nodeService.internetRecoveryPending).toBeFalse();
+    expect(app.settings.settings.serverName).toBe('twister32-rsnano');
+    app.ngOnDestroy();
+  }));
+
+  it('does not rotate the selected wallet node on the first RPC failure after airplane mode', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverName = 'rainstorm';
+    app.settings.settings.serverAPI = 'https://rainstorm.city/api';
+    app.settings.settings.serverWS = 'wss://rainstorm.city/websocket';
+    const wallet = TestBed.inject(WalletService);
+    spyOn(wallet, 'isConfigured').and.returnValue(true);
+    app.wallet.accounts = [{ id: 'nano_test' } as any];
+    const refresh = spyOn(wallet, 'reloadBalances').and.callFake(() => Promise.reject(new Error('transient RPC timeout')));
+    const api = TestBed.inject(ApiService);
+    const fallback = spyOn(api, 'checkNodeAvailability');
+    const ws = TestBed.inject(WebsocketService);
+    spyOn(ws, 'forceReconnect').and.stub();
+
+    app.onNetworkOffline();
+    app.onNetworkOnline();
+    tick(0);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(app.nodeService.internetRecoveryPending).toBeTrue();
+    expect(app.settings.settings.serverName).toBe('rainstorm');
+    expect(fallback).not.toHaveBeenCalled();
+    app.ngOnDestroy();
   }));
 
   it('does not clear Internet outage state when native network is still offline', fakeAsync(() => {

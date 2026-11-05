@@ -163,6 +163,17 @@ export class ApiService {
     const expectedNetworkGeneration = this.node.internetInterruptionGeneration;
     const successVersionAtStart = this.successfulRpcResponses;
     const firstUrl = url || settings.serverAPI;
+    // A request can finish after a local Internet interruption or after
+    // another RPC request has switched the selected node. Its result must
+    // never mark the new/current node online or offline.
+    // A signed process response may prove publication even if the user loses
+    // connectivity immediately afterwards. Never discard that result or
+    // encourage manual resubmission because of a later network transition.
+    const obsoleteSelectedRequest = (): boolean =>
+      !url && action !== 'process' && action !== 'work_generate' && (
+        this.appSettings.settings.serverAPI !== firstUrl ||
+        this.node.internetInterruptionGeneration !== expectedNetworkGeneration
+      );
     if (!firstUrl) {
       this.node.setOffline(null);
       return;
@@ -233,6 +244,10 @@ export class ApiService {
           const remaining = deadline - Date.now();
           const res = await this.http.post(endpoint, { ...data, action: requestAction }, options)
             .pipe(timeout(Math.max(1, Math.min(action === 'work_generate' ? 120000 : perAttemptTimeoutMs, remaining)))).toPromise();
+          if (obsoleteSelectedRequest()) {
+            if (skipError) return;
+            throw { isStaleFailover: true };
+          }
           // Older public Nano nodes may reject the new RPC action in a JSON
           // response with HTTP 200. Retry its legacy alias on this same node;
           // never confuse a JSON RPC error with transport unavailability.
@@ -248,7 +263,8 @@ export class ApiService {
             if (typeof validateResponse === 'function') {
               throw { isRpcError: true, error: res.error };
             }
-            this.noteRpcSuccess(endpoint, expectedNetworkGeneration);
+            // An optional statistics RPC is not proof wallet reads work.
+            if (!skipError) this.noteRpcSuccess(endpoint, expectedNetworkGeneration);
             return res;
           }
           if (typeof validateResponse === 'function' && validateResponse(res).err != null) {
@@ -272,12 +288,19 @@ export class ApiService {
               console.info('[Nano RPC health] Backup responded but saved server changed; ignoring stale result.');
               throw { isStaleFailover: true };
             }
-            if (healthProbe) console.info('[Nano RPC health] Failover activated:', endpoint);
+            console.info('[Nano RPC health] Failover activated:', {
+              from: settings.serverName, to: endpoint, action,
+            });
           }
-          this.noteRpcSuccess(endpoint, expectedNetworkGeneration);
+          // An optional statistics RPC is not proof wallet reads work.
+          if (!skipError) this.noteRpcSuccess(endpoint, expectedNetworkGeneration);
           return res;
         } catch (error) {
           lastError = error;
+          if (obsoleteSelectedRequest()) {
+            if (skipError) return;
+            throw { isStaleFailover: true };
+          }
           if (skipError) return;
           const legacy = this.legacyReceivableAction(requestAction, error);
           if (legacy && attempts < 3) {
@@ -287,6 +310,19 @@ export class ApiService {
           const failure = error && typeof error === 'object'
             ? error as { isValidationFailure?: boolean; isRpcError?: boolean; isStaleFailover?: boolean; status?: number; name?: string }
             : {};
+          if (endpoint === apiUrl && !skipError &&
+              (action === 'accounts_balances' || action === 'accounts_frontiers')) {
+            // Log the failing action and transport status without exposing
+            // account addresses, RPC payloads, credentials or block contents.
+            console.info('[Nano RPC health] Wallet read failure:', {
+              action, selected: settings.serverName, status: failure.status ?? null,
+              reason: failure.name === 'TimeoutError' ? 'timeout' :
+                failure.isRpcError ? 'rpc-error' :
+                failure.isValidationFailure ? 'invalid-response' : 'network',
+              recoveryPending: this.node.internetRecoveryPending,
+              fallbackEligible: endpoints.length > 1
+            });
+          }
           if (healthProbe) {
             console.info('[Nano RPC health] Probe failed:', endpoint, {
               status: failure.status ?? null,
@@ -347,8 +383,9 @@ export class ApiService {
             } catch (fallbackError) {
               // A late backup from an old network generation must not mark a
               // successfully recovered original node offline again.
-              if (!(fallbackError && typeof fallbackError === 'object' &&
-                'isStaleFailover' in fallbackError && fallbackError.isStaleFailover)) {
+              if (!obsoleteSelectedRequest() &&
+                  !(fallbackError && typeof fallbackError === 'object' &&
+                    'isStaleFailover' in fallbackError && fallbackError.isStaleFailover)) {
                 this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
               }
               throw fallbackError;
@@ -358,6 +395,7 @@ export class ApiService {
         }
       }
     }
+    if (obsoleteSelectedRequest()) throw { isStaleFailover: true };
     this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : (lastError && lastError.status === 429
       ? 'Too Many Requests to the node. Try again later or choose another node.'
       : 'RPC unavailable. Retry later or choose another node.'));

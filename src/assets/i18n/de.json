@@ -284,6 +284,7 @@
     "tracked-sent": "Überwachte Adresse {{account}} hat {{amount}} XNO gesendet.",
     "tracked-received": "Überwachte Adresse {{account}} hat {{amount}} XNO empfangen.",
     "tracked-representative": "Überwachte Adresse {{account}} hat ihren Repräsentanten zu {{representative}} geändert.",
+    "pwa-update-ready": "Ein Update wurde im Hintergrund installiert und wird beim nächsten Start angewendet.",
     "apply-update": "Jetzt anwenden",
     "update-signing-active": "Schließen Sie die Bestätigung auf der Ledger ab, bevor Sie das Update anwenden.",
     "update-activation-failed": "Das Update konnte nicht aktiviert werden. Starten Sie Nault neu, um es erneut zu versuchen.",

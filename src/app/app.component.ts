@@ -82,6 +82,10 @@ export class AppComponent implements OnInit, OnDestroy {
   private networkRecoveryInProgress = false;
   private networkRecoveryAttempts = 0;
   private readonly maxNetworkRecoveryAttempts = 5;
+  // A fresh WS handshake received during an Internet interruption already
+  // restored account subscriptions. Do not force a second reconnect after
+  // wallet RPC recovers, since that queues another balance read.
+  private wsRestoredDuringInterruption = false;
   private wsFailureProbeInFlight = false;
   private lastWsFailureProbeEndpoint: string | null = null;
   private lastWsFailureProbeAt = 0;
@@ -108,18 +112,23 @@ export class AppComponent implements OnInit, OnDestroy {
         generation !== this.nodeService.internetInterruptionGeneration ||
         wsUrl !== this.settings.settings.serverWS ||
         !this.websocket.socket.connected) return;
-    this.nodeService.internetRecoveryPending = false;
-    console.info('[Nano network] Selected WebSocket reconnected; Internet restored (RPC not yet verified).');
-    // The initial FIAT request may have failed while Electron was offline.
-    // Retry it now and remove a stale price warning if it succeeds; this
-    // remains independent of RPC availability and the chosen server.
+    // A WS handshake proves the physical link is available, but NOT that
+    // accounts_balances / accounts_frontiers can read the selected RPC node.
+    // Keep failover locked for an existing wallet until its RPC refresh succeeds.
+    // Otherwise the first transient post-airplane-mode balance error can rotate
+    // away from a perfectly healthy user-selected node.
+    console.info('[Nano network] Selected WebSocket reconnected; checking original RPC before unlocking failover.');
+    this.wsRestoredDuringInterruption = true;
     void this.updateFiatPrices().catch(() => {});
-    if (!this.walletService.isConfigured()) {
-      // A new user has no balances to validate; do not keep firing the
-      // artificial burn-address accounts_balances request after a healthy WS.
-      this.nodeService.setLoading();
-      this.cancelNetworkRecovery();
+    if (this.walletService.isConfigured()) {
+      this.scheduleNetworkRecovery(0);
+      return;
     }
+    this.nodeService.internetRecoveryPending = false;
+    // A new user has no balances to validate; do not keep firing the
+    // artificial burn-address accounts_balances request after a healthy WS.
+    this.nodeService.setLoading();
+    this.cancelNetworkRecovery();
   }
 
   private async pollNativeNetwork(): Promise<void> {
@@ -227,6 +236,7 @@ export class AppComponent implements OnInit, OnDestroy {
   @HostListener('window:offline') onNetworkOffline(): void {
     if (this.nodeService.internetRecoveryPending) return;
     this.nodeService.markInternetInterrupted();
+    this.wsRestoredDuringInterruption = false;
     console.info('[Nano network] Internet disconnected; preserving selected server.');
     this.cancelNetworkRecovery();
     if (this.settings.settings.serverAPI) {
@@ -320,7 +330,12 @@ export class AppComponent implements OnInit, OnDestroy {
     // Start WS first rather than serializing it behind RPC balance checks.
     // Account subscriptions are added during wallet restore and kept on reconnect.
     this.websocket.connect();
-    await this.walletService.loadStoredWallet();
+    try {
+      await this.walletService.loadStoredWallet();
+    } finally {
+      // Release guarded routes only after the persisted wallet has been read.
+      this.walletService.walletLoaded$.next(true);
+    }
     // Subscribe to any transaction tracking
     for (const entry of this.addressBook.addressBook) {
       if (entry.trackTransactions) {
@@ -429,16 +444,29 @@ export class AppComponent implements OnInit, OnDestroy {
       }
     }, 1000);
 
+    await this.loadInitialFiatPrice();
+  }
+
+  // Price discovery may fail on first launch (e.g. CoinGecko rate limiting).
+  // Do not present a persistent FIAT warning before a wallet exists: a new
+  // user has no FIAT balances to display. Keep the periodic retry unchanged,
+  // so FIAT prices are available after a wallet is configured.
+  private async loadInitialFiatPrice(): Promise<void> {
+    if (!this.settings.settings.serverAPI) return;
     try {
-      if (!this.settings.settings.serverAPI) return;
       await this.updateFiatPrices();
-    } catch (err) {
-      // A disconnected Internet connection is not evidence of an ad blocker.
-      // The recurring retry timer is set even after an initial failure.
+    } catch (_error) {
+      if (!this.walletService.isConfigured()) {
+        this.notifications.removeNotification('price-adblock');
+        return;
+      }
+      // An Internet outage is not evidence of an ad blocker. Check wallet
+      // state again after the asynchronous connectivity test, in case it was
+      // reset while the price request was pending.
       const offline = (typeof navigator !== 'undefined' && !navigator.onLine) ||
         this.nodeService.internetRecoveryPending ||
         (await this.desktop.isNetworkOnline()) === false;
-      if (!offline) {
+      if (!offline && this.walletService.isConfigured()) {
         this.notifications.sendWarning(`There was an issue retrieving latest nano price. Ensure your AdBlocker is disabled on this page then reload to see accurate FIAT values.`,
           { length: 0, identifier: 'price-adblock' });
       }
@@ -644,20 +672,27 @@ export class AppComponent implements OnInit, OnDestroy {
         return;
       }
       // Prefer normal wallet reads: not every public RPC allows node statistics.
-      if (this.wallet.accounts.length) await this.walletService.reloadBalances();
-      // Empty account arrays may be refused by healthy public RPC proxies.
-      // Use the wallet-independent health probe also on network recovery.
-      if (this.nodeService.node.status !== true) {
-        if (this.wallet.accounts.length) await this.api.accountsBalances(this.wallet.accounts.map(a => a.id));
-        else await this.api.checkNodeAvailability(!this.walletService.isConfigured(),
+      if (this.wallet.accounts.length) {
+        // A successful normal refresh validates both balances and frontiers
+        // on the ORIGINAL RPC, while failover is still locked. Do not fire a
+        // redundant second accounts_balances request during reconnection.
+        await this.walletService.reloadBalances();
+      } else if (this.nodeService.node.status !== true) {
+        // Empty account arrays may be refused by healthy public RPC proxies.
+        await this.api.checkNodeAvailability(!this.walletService.isConfigured(),
           !this.nodeService.internetRecoveryPending);
       }
 
       if (!navigator.onLine || this.settings.settings.serverAPI !== endpoint) return;
 
-      // A WebSocket may have exhausted its retry budget while Android was offline.
-      // Restoring it only follows successful RPC reads and never replays transactions.
-      if (this.settings.settings.serverWS) this.websocket.forceReconnect();
+      // A fresh WS handshake during this outage already restored subscriptions
+      // and triggered a balance read. Reconnecting it a second time can create
+      // overlapping RPC loads and spurious timeout-based failovers.
+      // If the WS exhausted its retry budget, still force a fresh connection.
+      if (this.settings.settings.serverWS && !this.wsRestoredDuringInterruption) {
+        this.websocket.forceReconnect();
+      }
+      this.wsRestoredDuringInterruption = false;
       this.nodeService.internetRecoveryPending = false;
       this.networkRecoveryAttempts = 0;
     } catch (_) {

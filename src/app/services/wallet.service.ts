@@ -100,6 +100,9 @@ export class WalletService {
   // Contains only ciphertext. Never serialize the unlocked software seed.
   private walletCiphertext: string | null = null;
 
+  // Route guards wait until the app has restored any persisted wallet.
+  readonly walletLoaded$ = new BehaviorSubject<boolean>(false);
+
   wallet: FullWallet = {
     type: 'seed',
     ledgerDeviceModel: null,
