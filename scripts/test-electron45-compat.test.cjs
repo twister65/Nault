@@ -53,8 +53,16 @@ test('Ledger native HID remains isolated in a worker and packaging targets stay 
   assert.match(worker, /@ledgerhq\/hw-transport-node-hid-noevents/);
   assert.match(worker, /readTimeout\(100\)/);
   const build = manifest.build;
-  assert.deepEqual(build.linux.target, ['AppImage', 'deb', 'rpm', 'pacman']);
-  assert.equal(build.mac.target, 'dmg');
+  // The branch may be tested directly or via GitHub's merge ref with master,
+  // which additionally publishes native Linux packages and a macOS ZIP.
+  const linuxTargets = Array.isArray(build.linux.target) ? build.linux.target : [build.linux.target];
+  const macTargets = Array.isArray(build.mac.target) ? build.mac.target : [build.mac.target];
+  assert.ok(linuxTargets.includes('AppImage'), 'Linux AppImage must remain available');
+  assert.ok(linuxTargets.every(target => ['AppImage', 'deb', 'rpm', 'pacman'].includes(target)),
+    'Unexpected Linux packaging target');
+  assert.ok(macTargets.includes('dmg'), 'macOS DMG must remain available');
+  assert.ok(macTargets.every(target => ['dmg', 'zip'].includes(target)),
+    'Unexpected macOS packaging target');
   assert.equal(build.publish.owner, 'twister65');
   assert.equal(build.publish.repo, 'Nault');
   assert.equal(build.nsis.artifactName, 'Nault-Setup-${version}.${ext}');
