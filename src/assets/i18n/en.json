@@ -220,6 +220,8 @@
     "delete-local-node": "Delete local node",
     "local-node-label": "local",
     "local-node-to-delete": "Local node to manage",
+    "server-mode": "Connection mode",
+    "choose-server-node": "Choose a Nano node",
     "choose-local-node": "Choose a local node",
     "delete-local-node-confirm": "Delete the selected local node?",
     "node-health": {"synchronized":"Synchronized","lagging":"Out of sync","unavailable":"Unavailable","unverified":"Synchronization unverified"},
