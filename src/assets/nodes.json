@@ -1,0 +1,48 @@
+[
+  {
+    "name": "Rainstorm City",
+    "value": "rainstorm",
+    "api": "https://rainstorm.city/api",
+    "ws": "wss://rainstorm.city/websocket",
+    "auth": null,
+    "shouldRandom": true,
+    "allowFailover": true
+  },
+  {
+    "name": "NanOslo",
+    "value": "nanoslo",
+    "api": "https://nanoslo.0x.no/proxy",
+    "ws": "wss://nanoslo.0x.no/websocket",
+    "auth": null,
+    "shouldRandom": true,
+    "allowFailover": true
+  },
+  {
+    "name": "SomeNano",
+    "value": "somenano",
+    "api": "https://node.somenano.com/proxy",
+    "ws": "wss://node.somenano.com/websocket",
+    "auth": null,
+    "shouldRandom": false,
+    "allowFailover": true
+  },
+  {
+    "name": "Twister32 RsNano",
+    "value": "twister32-rsnano",
+    "api": "https://twister32.changeip.net/proxy",
+    "ws": "wss://twister32.changeip.net/ws",
+    "work": "https://twister32.changeip.net/pow",
+    "auth": null,
+    "shouldRandom": false,
+    "allowFailover": true
+  },
+  {
+    "name": "Nano.to",
+    "value": "nano-to",
+    "api": "https://rpc.nano.to/",
+    "ws": "wss://ws.nano.to",
+    "auth": null,
+    "shouldRandom": false,
+    "allowFailover": true
+  }
+]

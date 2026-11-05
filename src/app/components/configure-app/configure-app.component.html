@@ -309,16 +309,66 @@
               <div class="uk-margin">
                 <label class="uk-form-label" for="form-horizontal-select">{{ 'configure-app.server-configuration' | transloco }} <span uk-icon="icon: info;" uk-tooltip [title]="t('configure-app.change-which-server-is-used-to-communicate-with-the-nano')"></span></label>
                 <div class="uk-form-controls">
-                  <select class="uk-select" [(ngModel)]="selectedServer" (change)="serverConfigChange(selectedServer)" id="form-horizontal-select">
-                    @for (server of serverOptions; track server) {
+                  <select class="uk-select" id="form-horizontal-select"
+                    [ngModel]="selectedServerIsNode() ? selectedServer : ''"
+                    (ngModelChange)="selectServerNode($event)">
+                    <option value="">{{ 'configure-app.choose-server-node' | transloco }}</option>
+                    @for (server of availableServerNodes(); track server.value) {
                       <option [value]="server.value">{{ server.name }}</option>
                     }
                   </select>
+                  <div class="server-selection-modes" role="group" [attr.aria-label]="'configure-app.server-mode' | transloco">
+                    <button type="button" class="uk-button"
+                      [class.uk-button-primary]="selectedServer === 'random'"
+                      [class.uk-button-default]="selectedServer !== 'random'"
+                      [attr.aria-pressed]="selectedServer === 'random'"
+                      (click)="selectServerMode('random')">{{ 'configure-app.the-best' | transloco }}</button>
+                    <button type="button" class="uk-button"
+                      [class.uk-button-primary]="selectedServer === 'custom'"
+                      [class.uk-button-default]="selectedServer !== 'custom'"
+                      [attr.aria-pressed]="selectedServer === 'custom'"
+                      (click)="selectServerMode('custom')">{{ 'configure-app.new-node' | transloco }}</button>
+                    <button type="button" class="uk-button"
+                      [class.uk-button-primary]="selectedServer === 'offline'"
+                      [class.uk-button-default]="selectedServer !== 'offline'"
+                      [attr.aria-pressed]="selectedServer === 'offline'"
+                      (click)="selectServerMode('offline')">{{ 'configure-app.offline' | transloco }}</button>
+                  </div>
+                  @if (selectedServer === 'random') {
+                    <div class="uk-text-meta uk-margin-small-top">
+                      @if (!rpcRanking.ready) {
+                        {{ 'configure-app.scanning-nodes' | transloco }}
+                      } @else {
+                        <strong>{{ 'configure-app.best-node' | transloco }}: {{ rpcRanking.best?.name || ('configure-app.no-healthy-node' | transloco) }}</strong>
+                        <ul class="uk-list uk-list-small">
+                          @for (measurement of rpcRanking.measurements; track measurement.value) {
+                            <li>{{ measurement.name }} @if (measurement.isLocal) { ({{ 'configure-app.local-node-label' | transloco }}) } — {{ ('configure-app.node-health.' + measurement.health) | transloco }}
+                              @if (measurement.rttMs !== null) {
+                                ({{ measurement.rttMs | number:'1.0-0' }} ms)
+                              }
+                            </li>
+                          }
+                        </ul>
+                      }
+                    </div>
+                  }
                 </div>
               </div>
 
             </div>
           </div>
+
+          @if (showServerConfigs()) {
+            <div class="uk-width-1-1">
+              <div class="uk-form-horizontal">
+                <label class="uk-form-label">{{ 'configure-app.node-name' | transloco }}</label>
+                <div class="uk-form-controls">
+                  <input [(ngModel)]="serverNodeName" class="uk-input" type="text" maxlength="100"
+                    [placeholder]="'configure-app.node-name' | transloco">
+                </div>
+              </div>
+            </div>
+          }
 
           @if (showServerValues()) {
             <div class="uk-width-1-1">
@@ -462,16 +512,6 @@
                               {{nodeNetwork || 'N/A'}}
                             </td>
                           </tr>
-                          @if (showServerValues() && !showServerConfigs()) {
-                            <tr>
-                              <td>
-                                <strong>{{ 'configure-app.random-server' | transloco }}</strong>
-                              </td>
-                              <td>
-                                {{shouldRandom || ('general.no' | transloco)}}
-                              </td>
-                            </tr>
-                          }
                         </table>
                       </span>
                     </div>
@@ -483,8 +523,24 @@
 
         </div>
       </div>
-      <div class="uk-card-footer uk-text-right@s uk-text-center">
-        <button (click)="updateServerSettings()" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1">{{ 'configure-app.update-server-settings' | transloco }}</button>
+      <div class="uk-card-footer">
+        <div class="server-action-buttons">
+          @if (localNodes().length) {
+            <div class="local-node-delete-controls">
+              <label for="local-node-to-delete" class="uk-form-label">{{ 'configure-app.local-node-to-delete' | transloco }}</label>
+              <select id="local-node-to-delete" class="uk-select" [(ngModel)]="localNodeToDeleteId">
+                <option value="">{{ 'configure-app.choose-local-node' | transloco }}</option>
+                @for (local of localNodes(); track local.value) {
+                  <option [value]="local.value">{{ local.name }}</option>
+                }
+              </select>
+              <button type="button" (click)="deleteLocalNode()" [disabled]="!localNodeToDelete()" class="uk-button uk-button-danger uk-width-auto@s uk-width-1-1">
+                {{ 'configure-app.delete-local-node' | transloco }}
+              </button>
+            </div>
+          }
+          <button type="button" (click)="updateServerSettings()" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1">{{ 'configure-app.update-server-settings' | transloco }}</button>
+        </div>
       </div>
     </div>
 

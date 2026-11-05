@@ -9,6 +9,7 @@ import {WorkPoolService} from '../../services/work-pool.service';
 import {AddressBookService} from '../../services/address-book.service';
 import type {QRType} from '../qr-modal/qr-modal.component';
 import {ApiService} from '../../services/api.service';
+import {RpcNodeRankingService} from '../../services/rpc-node-ranking.service';
 import {WebsocketService} from '../../services/websocket.service';
 import {NodeService} from '../../services/node.service';
 import {UtilService} from '../../services/util.service';
@@ -36,6 +37,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     private addressBook: AddressBookService,
     private pow: PowService,
     private api: ApiService,
+    public rpcRanking: RpcNodeRankingService,
     private websocket: WebsocketService,
     private workPool: WorkPoolService,
     private repService: RepresentativeService,
@@ -169,6 +171,12 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
   serverOptions: AppSettingsService['serverOptions'] = [];
   selectedServer: string | null = null;
+  serverNodeName = '';
+  // Local-node management is independent of the active RPC selection.
+  localNodeToDeleteId = '';
+  localNodes = () => this.serverOptions.filter(server => server.isLocal);
+  localNodeToDelete = () => this.localNodes().find(server =>
+    server.value === this.localNodeToDeleteId);
 
   defaultRepresentative: string | null = null;
   representativeResults$ = new BehaviorSubject<StoredRepresentative[]>([]);
@@ -200,7 +208,28 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
   showServerValues = () => this.selectedServer && this.selectedServer !== 'random' && this.selectedServer !== 'offline';
   showStatValues = () => this.selectedServer && this.selectedServer !== 'offline';
-  showServerConfigs = () => this.selectedServer && this.selectedServer === 'custom';
+  showServerConfigs = () => !!this.selectedServer && (this.selectedServer === 'custom' ||
+    !!this.serverOptions.find(server => server.value === this.selectedServer && server.isLocal));
+  selectedLocalNode = () => this.serverOptions.find(server =>
+    server.value === this.selectedServer && server.isLocal);
+  // The node dropdown only lists RPC nodes; these are independent actions.
+  availableServerNodes = () => this.serverOptions.filter(server => !!server.api && server.value !== 'custom');
+  selectedServerIsNode = () => this.availableServerNodes().some(server =>
+    server.value === this.selectedServer);
+  selectServerMode(mode: 'random' | 'custom' | 'offline') {
+    this.selectedServer = mode;
+    this.serverConfigChange(mode);
+    if (mode === 'random') {
+      // The user can inspect fresh results before applying the choice.
+      // The scan is independent of wallet state and never blocks the UI.
+      void this.rpcRanking.refresh().catch(() => {});
+    }
+  }
+  selectServerNode(value: string) {
+    if (!value || !this.availableServerNodes().some(server => server.value === value)) return;
+    this.selectedServer = value;
+    this.serverConfigChange(value);
+  }
 
   async ngOnInit() {
     this.loadFromSettings();
@@ -346,6 +375,9 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
     this.serverOptions = this.appSettings.serverOptions;
     this.selectedServer = settings.serverName;
+    this.localNodeToDeleteId = this.serverOptions.find(server =>
+      server.value === settings.serverName && server.isLocal)?.value || '';
+    this.serverNodeName = this.serverOptions.find(server => server.value === settings.serverName && server.isLocal)?.name || '';
     this.serverAPI = settings.serverAPI;
     this.serverAPIUpdated = this.serverAPI;
     this.serverWS = settings.serverWS;
@@ -519,27 +551,36 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
   async updateServerSettings() {
     const newSettings: Partial<AppSettings> = {
-      serverName: this.selectedServer ?? 'random',
-      serverAPI: null,
-      serverWS: null,
-      serverAuth: null,
+      serverName: this.selectedServer ?? 'twister32-rsnano',
+      serverAPI: null, serverWS: null, serverAuth: null
     };
-
-    if (this.selectedServer === 'custom') {
+    if (this.selectedServer === 'random') {
+      // Only an explicit user selection waits for the background results.
+      // The regular first launch NEVER waits for a ranking.
+      await this.rpcRanking.refresh();
+    }
+    if (this.showServerConfigs()) {
+      if (!this.serverAPI?.trim()) {
+        return this.notifications.sendWarning(this.translocoService.translate('configure-app.custom-api-server-has-an-invalid-address'));
+      }
       try {
-        if (this.serverAPI && this.serverAPI.trim()) newSettings.serverAPI = secureEndpoint(this.serverAPI, 'rpc');
-        if (this.serverWS && this.serverWS.trim()) newSettings.serverWS = secureEndpoint(this.serverWS, 'ws');
+        // Validate before writing local storage or updating the live connection.
+        // The Settings service validates as a second boundary as well.
+        const rpc = secureEndpoint(this.serverAPI, 'rpc');
+        const ws = this.serverWS?.trim() ? secureEndpoint(this.serverWS, 'ws') : null;
+        newSettings.serverName = this.appSettings.saveLocalNode(
+          this.serverNodeName, rpc, ws,
+          this.serverAuth && this.serverAuth.trim().length > 1 ? this.serverAuth : null,
+          this.selectedLocalNode()?.value
+        );
       } catch (_) {
         return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.endpoint-server-secure'));
       }
     }
 
-    if (this.selectedServer === 'custom' && this.serverAuth != null && this.serverAuth.trim().length > 1) {
-      newSettings.serverAuth = this.serverAuth;
-    }
-
     this.appSettings.setAppSettings(newSettings);
     this.appSettings.loadAppSettings();
+    this.serverOptions = this.appSettings.serverOptions;
     this.resetNodeStats();
 
     this.notifications.sendSuccess(this.translocoService.translate('configure-app.server-settings-successfully-updated'));
@@ -579,6 +620,60 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     this.serverAPI = this.serverAPIUpdated;
     this.serverWS = this.appSettings.settings.serverWS;
     this.serverAuth = this.appSettings.settings.serverAuth;
+    this.serverNodeName = this.selectedLocalNode()?.name || '';
+    if (this.selectedLocalNode()) this.localNodeToDeleteId = this.selectedLocalNode()!.value;
+  }
+
+  async deleteLocalNode() {
+    // The server dropdown may be set to The best, Offline or another node:
+    // deletion always targets the explicit local-node management selection.
+    const selected = this.localNodeToDelete();
+    if (!selected) return;
+    const UIkit = (window as unknown as {UIkit: {modal: {confirm(message: string): Promise<void>}}}).UIkit;
+    try {
+      await UIkit.modal.confirm(this.translocoService.translate('configure-app.delete-local-node-confirm'));
+    } catch (_) { return; }
+
+    const activeBefore = this.appSettings.settings.serverAPI;
+    const wsBefore = this.appSettings.settings.serverWS;
+    const savedMode = this.appSettings.settings.serverName;
+    const selectedWasDeleted = this.selectedServer === selected.value;
+    this.appSettings.removeLocalNode(selected.value);
+    this.serverOptions = this.appSettings.serverOptions;
+    this.localNodeToDeleteId = '';
+
+    if (savedMode === selected.value) {
+      // Removing the actual configured endpoint requires a safe fallback.
+      this.appSettings.setAppSettings({ serverName: 'twister32-rsnano' });
+      this.appSettings.loadServerSettings();
+      this.appSettings.saveAppSettings();
+    } else if (savedMode === 'random' && activeBefore === selected.api) {
+      // Re-evaluate The best only if the deleted local node is actually
+      // active. Removing an unrelated entry must not switch the RPC server.
+      this.appSettings.loadServerSettings();
+      if (activeBefore !== this.appSettings.settings.serverAPI ||
+          wsBefore !== this.appSettings.settings.serverWS) {
+        this.appSettings.saveAppSettings();
+      }
+    }
+
+    if (selectedWasDeleted || savedMode === selected.value) {
+      this.selectedServer = this.appSettings.settings.serverName;
+      this.serverConfigChange(this.selectedServer);
+    }
+
+    if (activeBefore !== this.appSettings.settings.serverAPI ||
+        wsBefore !== this.appSettings.settings.serverWS) {
+      this.websocket.forceReconnect();
+      this.resetNodeStats();
+      void this.updateNodeStats();
+      if (this.walletService.wallet?.accounts?.length) {
+        void this.walletService.reloadBalances().catch(() =>
+          this.notifications.sendWarning(this.translocoService.translate('ui-notifications.refresh-balance-failed')));
+      }
+    }
+    // Refresh the visible audit so deleted local nodes no longer appear.
+    void this.rpcRanking.refresh();
   }
 
   searchRepresentatives() {
@@ -629,7 +724,9 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   serverConfigChange(newServer: string) {
     const custom = this.serverOptions.find(c => c.value === newServer);
     if (custom) {
+      if (custom.isLocal) this.localNodeToDeleteId = custom.value;
       this.serverAPI = custom.api;
+      this.serverNodeName = custom.isLocal ? custom.name : '';
       this.serverAPIUpdated = null;
       this.serverWS = custom.ws;
       this.serverAuth = custom.auth;

@@ -6,6 +6,86 @@
 .node-stats-disabled {
     color: #bbb;
 }
+#node-stats-table {
+    max-width: 100%;
+    table-layout: auto;
+}
+
 #node-stats-table td {
-    padding-right: 20px;
+    padding-right: 12px;
+}
+
+#node-stats-table td:first-child {
+    white-space: nowrap;
+}
+
+#node-stats-table td:last-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* Separate the destructive local-node action from the save action on touch devices. */
+.server-action-buttons,
+.local-node-delete-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+}
+
+.local-node-delete-controls {
+    min-width: 0;
+    gap: 12px;
+}
+
+.local-node-delete-controls .uk-form-label {
+    text-align: left;
+}
+
+@media (min-width: 960px) {
+    .server-action-buttons {
+        flex-direction: row;
+        align-items: flex-end;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+    }
+
+    .local-node-delete-controls {
+        display: grid;
+        grid-template-columns: minmax(180px, 260px) auto;
+        column-gap: 16px;
+        align-items: end;
+    }
+
+    .local-node-delete-controls .uk-form-label {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 959px) {
+    .server-action-buttons > .uk-button,
+    .local-node-delete-controls > .uk-button {
+        width: 100%;
+    }
+}
+
+/* Server modes are actions, not entries in the RPC-node list. */
+.server-selection-modes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.server-selection-modes .uk-button {
+    min-width: 0;
+    line-height: 1.35;
+    white-space: normal;
+    padding: 11px 8px;
+}
+
+@media (max-width: 520px) {
+    .server-selection-modes {
+        grid-template-columns: 1fr;
+    }
 }

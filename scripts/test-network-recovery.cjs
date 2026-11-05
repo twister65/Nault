@@ -96,7 +96,15 @@ async function main() {
   let reconnects = 0, notices = 0;
   Object.assign(c, {
     selectedServer: 'custom', serverAPI: 'https://example.org', serverWS: '', serverAuth: null,
-    appSettings: { settings: { serverAPI: 'https://example.org' }, setAppSettings() {}, loadAppSettings() {} },
+    serverOptions: [{ value: 'custom', name: 'New' }], serverNodeName: 'Example',
+    showServerConfigs: () => true, selectedLocalNode: () => null,
+    appSettings: {
+      settings: { serverAPI: 'https://example.org', serverWS: null, serverName: 'custom' },
+      serverOptions: [{ value: 'custom', name: 'New' }],
+      saveLocalNode() { return 'local-test'; },
+      setAppSettings(values) { Object.assign(this.settings, values); },
+      loadAppSettings() { this.settings.serverAPI = 'https://example.org'; }
+    },
     notifications: { sendSuccess() {}, sendWarning() { notices++; } },
     translocoService: { translate: x => x }, node: { node: {}, setLoading() {} },
     walletService: { wallet: { accounts: [{ id: 'nano_test' }] }, isConfigured: () => true, reloadBalances: async () => { throw new Error('offline'); } },
