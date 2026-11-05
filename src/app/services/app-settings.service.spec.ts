@@ -119,7 +119,7 @@ describe('AppSettingsService', () => {
     }
   }));
 
-  it('lists Twister32 RsNano but never selects it at random', inject([AppSettingsService], (service: AppSettingsService) => {
+  it('lists Twister32 RsNano as the first-launch default', inject([AppSettingsService], (service: AppSettingsService) => {
     const server = service.serverOptions.find(option => option.value === 'twister32-rsnano');
     expect(server).toBeTruthy();
     if (!server) throw new Error('Twister32 RsNano must be listed in serverOptions');
@@ -139,7 +139,7 @@ describe('AppSettingsService', () => {
     });
   }));
 
-  it('only rotates among tested public nodes', inject([AppSettingsService], (service: AppSettingsService) => {
+  it('keeps the former random flags without using random selection', inject([AppSettingsService], (service: AppSettingsService) => {
     const active = service.serverOptions.filter(server => server.shouldRandom).map(server => server.value);
     expect(active).toEqual(['rainstorm', 'nanoslo']);
     expect(service.serverOptions.some(server => server.value === 'berrypay')).toBe(false);
@@ -185,22 +185,54 @@ describe('AppSettingsService', () => {
   }));
 
   it('removes Berry Pay and falls back safely for previously saved selections', inject([AppSettingsService], (service: AppSettingsService) => {
-    const retainedPublicServers = ['rainstorm', 'nanoslo'];
-    const retainedEndpoints = service.serverOptions
-      .filter(server => retainedPublicServers.includes(server.value))
-      .map(server => server.api);
-
     for (const removedServer of ['berrypay']) {
       expect(service.serverOptions.some(server => server.value === removedServer)).toBe(false);
 
       service.settings.serverName = removedServer;
       service.loadServerSettings();
 
-      expect(service.settings.serverName).toBe('random');
-      expect(retainedEndpoints).toContain(service.settings.serverAPI);
+      expect(service.settings.serverName).toBe('twister32-rsnano');
+      expect(service.settings.serverAPI).toBe('https://twister32.changeip.net/proxy');
     }
 
     expect(service.knownApiEndpoints).toContain('node.somenano.com/proxy');
     expect(service.knownApiEndpoints).not.toContain('xno-rpc.berrypay.org/proxy');
+  }));
+  it('never waits for ranking or changes RsNano on a fresh first start', inject([AppSettingsService], (service: AppSettingsService) => {
+    const previous = localStorage.getItem(service.storeKey);
+    try {
+      localStorage.removeItem(service.storeKey);
+      service.loadAppSettings('en');
+      expect(service.settings.serverName).toBe('twister32-rsnano');
+      expect(service.settings.serverAPI).toBe('https://twister32.changeip.net/proxy');
+    } finally {
+      if (previous === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, previous);
+    }
+  }));
+
+  it('uses the fastest validated candidate only when The best is selected', inject([AppSettingsService], (service: AppSettingsService) => {
+    service.setRankedEndpoints(['https://nanoslo.0x.no/proxy', 'https://rainstorm.city/api']);
+    service.settings.serverName = 'random'; // persisted legacy identifier
+    service.loadServerSettings();
+    expect(service.settings.serverAPI).toBe('https://nanoslo.0x.no/proxy');
+    expect(service.getRankedFallbackEndpoints('https://nanoslo.0x.no/proxy'))
+      .toEqual(['https://rainstorm.city/api']);
+  }));
+
+  it('stores New nodes locally across reloads and never makes them automatic fallback candidates', inject([AppSettingsService], (service: AppSettingsService) => {
+    const id = service.saveLocalNode('My node', 'https://mine.example/rpc', 'wss://mine.example/ws', null);
+    try {
+      service.setAppSettings({ serverName: id });
+      service.loadAppSettings();
+      expect(service.settings.serverName).toBe(id);
+      expect(service.settings.serverAPI).toBe('https://mine.example/rpc');
+      expect(service.serverOptions.find(node => node.value === id)?.isLocal).toBeTrue();
+      expect(service.serverOptions.find(node => node.value === id)?.allowFailover).not.toBeTrue();
+      service.removeLocalNode(id);
+      expect(service.serverOptions.some(node => node.value === id)).toBeFalse();
+    } finally {
+      service.removeLocalNode(id);
+    }
   }));
 });
