@@ -284,6 +284,14 @@ export class AppComponent implements OnInit, OnDestroy {
     // language. Browsers fall back to their navigator culture as before.
     const nativeLocale = await this.desktop.getSystemLocale();
     this.settings.loadAppSettings(nativeLocale);
+    // Completing a previously saved "The best" choice is not failover.
+    // Reconnect only once when the first ranked result becomes available.
+    this.settings.serverBestSelected$.subscribe(() => {
+      this.websocket.forceReconnect();
+      if (this.walletService.isConfigured()) {
+        void this.walletService.reloadBalances().catch(() => {});
+      }
+    });
     // Never await this diagnostic on startup: first-run RsNano and the wallet
     // UI must be usable immediately, even if every other public RPC is slow.
     void this.rpcRanking.refresh().catch(() => {
