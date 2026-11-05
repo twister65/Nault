@@ -150,16 +150,20 @@ export class ApiService {
       throw error;
     }
     const endpoints = [apiUrl];
-    // Rotate only trusted built-in RPC nodes on retryable network failures.
-    // Never replay signed blocks, work generation, optional calls or custom RPC.
+    // Rotate known built-in or locally saved WSS-capable unauthenticated
+    // endpoints. Never replay signed blocks, work generation or optional calls;
+    // authenticated local RPCs must remain pinned to their selected endpoint.
     const knownSource = this.appSettings.serverOptions?.find(server =>
-      server.allowFailover && server.api === firstUrl);
+      server.allowFailover && !!server.ws && !server.auth &&
+      server.api === firstUrl &&
+      (settings.serverName === 'random' || server.value === settings.serverName));
     if (!url && !skipError && allowFailover && !this.node.internetRecoveryPending &&
         action !== 'process' && action !== 'work_generate' &&
         knownSource && (settings.serverName === 'random' || settings.serverName === knownSource.value)) {
       const candidates: string[] = [];
       for (const server of this.appSettings.serverOptions || []) {
-        if (!server.allowFailover || server.failoverTarget === false || !server.api) continue;
+        if (!server.allowFailover || server.failoverTarget === false ||
+            !server.api || !server.ws || server.auth) continue;
         try {
           const candidate = secureEndpoint(server.api, 'rpc');
           if (candidate !== apiUrl && !candidates.includes(candidate)) candidates.push(candidate);
