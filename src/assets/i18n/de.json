@@ -102,6 +102,7 @@
     "scanning-nodes": "Synchronisierung und RPC-Latenz werden im Hintergrund geprüft…",
     "no-healthy-node": "Noch kein geeigneter Knoten",
     "delete-local-node": "Lokalen Knoten löschen",
+    "local-node-label": "lokal",
     "delete-local-node-confirm": "Ausgewählten lokalen Knoten löschen?",
     "node-health": {"synchronized":"Synchronisiert","lagging":"Nicht synchronisiert","unavailable":"Nicht verfügbar","unverified":"Synchronisierung nicht bestätigt"},
     "node-stats": "Knotenstatistik",
