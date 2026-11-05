@@ -773,7 +773,7 @@ describe('ApiService bounded secure requests', () => {
     expect(node.setOffline).not.toHaveBeenCalled();
   });
 
-  it('ignores a delayed 15-second transport timeout after another request succeeded', fakeAsync(() => {
+  it('ignores a delayed transport timeout through a ten-minute tablet idle simulation', fakeAsync(() => {
     const { api, http, node } = setup('custom');
     http.post.and.callFake((_url: string, payload: any) =>
       payload.action === 'accounts_balances' ? NEVER : of({ frontiers: {} }));
@@ -784,7 +784,7 @@ describe('ApiService bounded secure requests', () => {
     expect(rejected).toBeTrue();
     expect(node.setOnline).toHaveBeenCalled();
     expect(node.setOffline).not.toHaveBeenCalled();
-    tick(60000); // Remain stable throughout a longer idle tablet session.
+    tick(10 * 60 * 1000); // Simulate a full ten-minute idle tablet session.
     expect(node.setOffline).not.toHaveBeenCalled();
   }));
 
