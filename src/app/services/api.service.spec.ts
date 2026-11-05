@@ -352,7 +352,12 @@ describe('ApiService bounded secure requests', () => {
     };
     const settings = {
       settings: { serverName, serverAPI: 'https://a.invalid/rpc', serverAuth: 'test-secret' },
-      serverOptions: ['a', 'b', 'b', 'c', 'd'].map(host => ({ api: `https://${host}.invalid/rpc`, value: host === 'a' && serverName === 'spynano' ? 'spynano' : host, shouldRandom: true, allowFailover: true, failoverTarget: undefined as boolean | undefined })),
+      serverOptions: ['a', 'b', 'b', 'c', 'd'].map(host => ({
+        api: `https://${host}.invalid/rpc`, ws: `wss://${host}.invalid/ws`,
+        value: host === 'a' && serverName === 'spynano' ? 'spynano' : host,
+        auth: null as string | null, shouldRandom: true, allowFailover: true,
+        failoverTarget: undefined as boolean | undefined
+      })),
       activateFailover: jasmine.createSpy('activateFailover').and.returnValue(true),
       getRankedFallbackEndpoints: jasmine.createSpy('getRankedFallbackEndpoints').and.returnValue(null)
     };
@@ -377,9 +382,9 @@ describe('ApiService bounded secure requests', () => {
   it('never retries the selected node or duplicated/disabled/unsafe fallback targets', async () => {
     const { api, http, settings } = setup('spynano');
     settings.serverOptions.push(
-      { api: 'https://a.invalid/rpc', value: 'duplicate', shouldRandom: false, allowFailover: true, failoverTarget: undefined },
-      { api: 'https://spy.invalid/proxy', value: 'spynano', shouldRandom: false, allowFailover: true, failoverTarget: false },
-      { api: 'http://192.0.2.10:7076', value: 'unsafe', shouldRandom: false, allowFailover: true, failoverTarget: undefined }
+      { api: 'https://a.invalid/rpc', ws: 'wss://a.invalid/ws', auth: null, value: 'duplicate', shouldRandom: false, allowFailover: true, failoverTarget: undefined },
+      { api: 'https://spy.invalid/proxy', ws: 'wss://spy.invalid/ws', auth: null, value: 'spynano', shouldRandom: false, allowFailover: true, failoverTarget: false },
+      { api: 'http://192.0.2.10:7076', ws: 'ws://192.0.2.10:7078', auth: null, value: 'unsafe', shouldRandom: false, allowFailover: true, failoverTarget: undefined }
     );
     await expectAsync(api.accountsBalances([])).toBeRejected();
     expect(http.post.calls.allArgs().map(args => args[0])).toEqual([
