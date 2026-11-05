@@ -85,9 +85,11 @@ export class AppSettingsService {
   private readonly officialNodes: RpcServerOption[] = (officialNodeRegistry as RpcServerOption[])
     .filter(server => {
       try {
-        return !!server.name && !!server.value && !!server.api &&
+        // Public registry nodes require both RPC and WSS so automatic
+        // selection never produces a wallet with no confirmation stream.
+        return !!server.name && !!server.value && !!server.api && !!server.ws &&
           secureEndpoint(server.api, 'rpc') === server.api &&
-          (!server.ws || secureEndpoint(server.ws, 'ws') === server.ws) &&
+          secureEndpoint(server.ws, 'ws') === server.ws &&
           (!server.work || secureEndpoint(server.work, 'rpc') === server.work);
       } catch (_) { return false; }
     });
