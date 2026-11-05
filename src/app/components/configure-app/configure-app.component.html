@@ -322,7 +322,7 @@
                         <strong>{{ 'configure-app.best-node' | transloco }}: {{ rpcRanking.best?.name || ('configure-app.no-healthy-node' | transloco) }}</strong>
                         <ul class="uk-list uk-list-small">
                           @for (measurement of rpcRanking.measurements; track measurement.value) {
-                            <li>{{ measurement.name }} — {{ ('configure-app.node-health.' + measurement.health) | transloco }}
+                            <li>{{ measurement.name }} @if (measurement.isLocal) { ({{ 'configure-app.local-node-label' | transloco }}) } — {{ ('configure-app.node-health.' + measurement.health) | transloco }}
                               @if (measurement.rttMs !== null) {
                                 ({{ measurement.rttMs | number:'1.0-0' }} ms)
                               }
@@ -503,13 +503,15 @@
 
         </div>
       </div>
-      <div class="uk-card-footer uk-text-right@s uk-text-center">
-        @if (selectedLocalNode()) {
-          <button type="button" (click)="deleteLocalNode()" class="uk-button uk-button-danger uk-margin-small-right">
-            {{ 'configure-app.delete-local-node' | transloco }}
-          </button>
-        }
-        <button (click)="updateServerSettings()" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1">{{ 'configure-app.update-server-settings' | transloco }}</button>
+      <div class="uk-card-footer">
+        <div class="server-action-buttons">
+          @if (selectedLocalNode()) {
+            <button type="button" (click)="deleteLocalNode()" class="uk-button uk-button-danger uk-width-auto@s uk-width-1-1">
+              {{ 'configure-app.delete-local-node' | transloco }}
+            </button>
+          }
+          <button type="button" (click)="updateServerSettings()" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1">{{ 'configure-app.update-server-settings' | transloco }}</button>
+        </div>
       </div>
     </div>
 
