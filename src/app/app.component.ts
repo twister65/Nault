@@ -238,6 +238,10 @@ export class AppComponent implements OnInit, OnDestroy {
     // Browser and Electron may both announce the same transition. Do not
     // queue duplicate recovery attempts or misleading transition messages.
     if (this.networkRecoveryInProgress || this.networkRecoveryTimer !== null) return;
+    // A scan performed while the device was offline has no viable backups.
+    // Refresh the public-node ranking in the background on connectivity return,
+    // without switching away from the user's previously selected RPC.
+    void this.rpcRanking.refresh().catch(() => {});
     if (this.nodeService.internetRecoveryPending) {
       // socket.connected may still describe an old TCP connection from
       // before the cable was unplugged. Only connected$ after a fresh
