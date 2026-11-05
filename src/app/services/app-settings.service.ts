@@ -52,6 +52,8 @@ export interface AppSettings {
 export class AppSettingsService {
   storeKey = `nanovault-appsettings`;
   readonly serverFailover$ = new Subject<{ previousName: string; nextName: string }>();
+  // Explicit best-mode completion is not a failure and must not show a failover warning.
+  readonly serverBestSelected$ = new Subject<void>();
 
   settings: AppSettings = {
     language: '',
@@ -92,6 +94,7 @@ export class AppSettingsService {
   private readonly localNodeStoreKey = 'nanovault-rpc-local-nodes';
   private localNodes: RpcServerOption[] = [];
   private rankedEndpoints: string[] | null = null;
+  private pendingBestStartupSelection = false;
   serverOptions: RpcServerOption[] = this.buildServerOptions();
 
   private buildServerOptions(): RpcServerOption[] {
@@ -153,6 +156,17 @@ export class AppSettingsService {
   // candidates. Neither case authorizes random selection of stale nodes.
   setRankedEndpoints(endpoints: string[]): void {
     this.rankedEndpoints = [...endpoints];
+    // If The best was persisted between sessions, start immediately on RsNano
+    // while checks run. Apply the highest-ranked result once, without repeated
+    // hopping during later network recovery scans.
+    if (this.pendingBestStartupSelection && this.settings.serverName === 'random' && endpoints.length) {
+      this.pendingBestStartupSelection = false;
+      const best = this.officialNodes.find(node => node.api === endpoints[0]);
+      if (best && this.settings.serverAPI !== best.api) {
+        this.setAppSettings({ serverAPI: best.api, serverWS: best.ws, serverAuth: null });
+        this.serverBestSelected$.next();
+      }
+    }
   }
 
   getRankedFallbackEndpoints(excluding: string): string[] | null {
@@ -237,21 +251,25 @@ export class AppSettingsService {
   loadServerSettings() {
     const matching = this.serverOptions.find(node => node.value === this.settings.serverName);
     if (this.settings.serverName === 'random') {
+      this.pendingBestStartupSelection = !this.rankedEndpoints?.length;
       const best = this.officialNodes.find(node => node.api === this.rankedEndpoints?.[0]) ||
         this.officialNodes.find(node => node.value === 'twister32-rsnano');
       this.settings.serverAPI = best?.api || null;
       this.settings.serverWS = best?.ws || null;
       this.settings.serverAuth = null;
     } else if (matching?.isLocal) {
+      this.pendingBestStartupSelection = false;
       this.settings.serverAPI = matching.api;
       this.settings.serverWS = matching.ws;
       this.settings.serverAuth = matching.auth;
     } else if (matching?.value === 'custom') {
+      this.pendingBestStartupSelection = false;
       // An unsaved New form is not an active server.
       this.settings.serverAPI = null;
       this.settings.serverWS = null;
       this.settings.serverAuth = null;
     } else {
+      this.pendingBestStartupSelection = false;
       // Unknown removed nodes go back to RsNano, never random selection.
       const selected = matching || this.officialNodes.find(node => node.value === 'twister32-rsnano');
       this.settings.serverName = selected?.value || 'offline';
@@ -320,6 +338,7 @@ export class AppSettingsService {
     this.localNodes = [];
     this.serverOptions = this.buildServerOptions();
     this.rankedEndpoints = null;
+    this.pendingBestStartupSelection = false;
     this.settings = {
       language: '',
       displayDenomination: 'mnano',
