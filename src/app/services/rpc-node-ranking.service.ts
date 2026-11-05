@@ -71,7 +71,8 @@ export class RpcNodeRankingService {
 
   private async scan(): Promise<void> {
     const nodes = this.settings.serverOptions.filter(node =>
-      node.allowFailover && node.failoverTarget !== false && !node.isLocal && !!node.api && !node.auth
+      node.allowFailover && node.failoverTarget !== false && !node.isLocal &&
+      !!node.api && !!node.ws && !node.auth
     );
     const results = await Promise.all(nodes.map(node => this.probe(node)));
 
