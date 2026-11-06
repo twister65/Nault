@@ -7,6 +7,7 @@ import {PriceService} from './services/price.service';
 import {UtilService} from './services/util.service';
 import {NotificationService} from './services/notification.service';
 import {WorkPoolService} from './services/work-pool.service';
+import {PowService} from './services/pow.service';
 import {Router} from '@angular/router';
 import {SwUpdate} from '@angular/service-worker';
 import {RepresentativeService} from './services/representative.service';
@@ -41,6 +42,7 @@ export class AppComponent implements OnInit, OnDestroy {
     private router: Router,
     public updates: SwUpdate,
     private workPool: WorkPoolService,
+    private pow: PowService,
     public price: PriceService,
     private util: UtilService,
     private desktop: DesktopService,
@@ -307,6 +309,9 @@ export class AppComponent implements OnInit, OnDestroy {
     void this.rpcRanking.refresh().catch(() => {
       console.info('[Nano RPC ranking] Background node scan unavailable.');
     });
+    // Only installed Android PWAs preselect a proven external work server at
+    // startup. This is independent of the wallet RPC and never blocks the UI.
+    void this.pow.initializeAndroidPwaExternalPoW();
     // The PWA uses browser online/offline events; only the Electron renderer
     // has an OS locale and the trusted native connectivity bridge.
     if (nativeLocale !== null) this.startNativeNetworkMonitor();

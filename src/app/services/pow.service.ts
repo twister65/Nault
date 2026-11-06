@@ -54,6 +54,7 @@ export class PowService {
   cpuWorkerResolve: (() => void) | null = null; // worker cancellation control
   cpuWorkerReject: ((reason?: unknown) => void) | null = null;
   shouldAbortGpuPow = false; // set to true to abort GPU pow
+  private androidPowStartup: Promise<void> | null = null;
 
   constructor(
     private appSettings: AppSettingsService,
@@ -63,8 +64,68 @@ export class PowService {
     private ranking: RpcNodeRankingService
   ) { }
 
+  private isAndroidInstalledPwa(): boolean {
+    // Android Chrome tabs, Chromebook PWAs, iOS and Electron keep the
+    // established PoW selection. Only an installed Android PWA opts in.
+    return typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent) &&
+      typeof window !== 'undefined' && typeof window.matchMedia === 'function' &&
+      (window.matchMedia('(display-mode: standalone)').matches ||
+       window.matchMedia('(display-mode: fullscreen)').matches);
+  }
+
+  // Run concurrently with the existing app-startup node ranking. Never block
+  // the wallet UI; only the first Android PWA PoW request awaits discovery.
+  // The selected work provider is session-only and independent of RPC settings.
+  initializeAndroidPwaExternalPoW(): Promise<void> {
+    if (!this.isAndroidInstalledPwa() ||
+        (this.appSettings.settings.powSource !== 'server' &&
+         this.appSettings.settings.powSource !== 'best')) return Promise.resolve();
+    if (!this.androidPowStartup) {
+      this.androidPowStartup = this.ranking.refresh()
+        .then(() => {
+          const selected = this.ranking.getExternalPoWTargets()[0];
+          console.info('[Nano PoW] Android PWA external work:', selected ? 'ready' : 'no verified provider');
+        })
+        .catch(() => { console.info('[Nano PoW] External work scan unavailable.'); });
+    }
+    return this.androidPowStartup;
+  }
+
+  private async getAndroidPwaExternalPoW(
+    hash: string, multiplier: number, saved: AppSettingsService['settings']
+  ): Promise<{ handled: boolean; work: string | null }> {
+    // Respect explicitly configured private/authenticated or offline nodes
+    // and user-selected custom, CPU or WebGL PoW sources.
+    if (!this.isAndroidInstalledPwa() || saved.serverAuth ||
+        saved.serverName === 'custom' || saved.serverName === 'offline' ||
+        (saved.powSource !== 'server' && saved.powSource !== 'best')) {
+      return { handled: false, work: null };
+    }
+    await this.initializeAndroidPwaExternalPoW();
+    const targets = this.ranking.getExternalPoWTargets().slice(0, 3);
+    if (!targets.length) return { handled: false, work: null };
+
+    for (let i = 0; i < targets.length; i++) {
+      if (!this.shouldContinueQueue ||
+          (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+          saved.serverAPI !== this.appSettings.settings.serverAPI ||
+          saved.powSource !== this.appSettings.settings.powSource) {
+        return { handled: true, work: null };
+      }
+      const { api, workUrl } = targets[i];
+      // A proven provider gets first attempt; the remaining public providers
+      // are fallbacks for the very same PoW root, never for signed process.
+      const work = await this.getHashServer(hash, multiplier, workUrl, i === 0 ? 30000 : 20000);
+      this.ranking.recordPoWResult(api, !!work);
+      if (work) return { handled: true, work };
+    }
+    return { handled: true, work: null };
+  }
+
   private async getServerPoWWithFallback(hash: string, multiplier: number, selectedWorkUrl: string): Promise<string | null> {
     const saved = { ...this.appSettings.settings };
+    const android = await this.getAndroidPwaExternalPoW(hash, multiplier, saved);
+    if (android.handled) return android.work;
     const primary = this.appSettings.serverOptions.find(node =>
       node.api && node.api === saved.serverAPI &&
       (saved.serverName === 'random' || node.value === saved.serverName));

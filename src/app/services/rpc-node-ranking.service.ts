@@ -108,24 +108,30 @@ export class RpcNodeRankingService {
       count: null, cemented: null, rttMs: null, health: 'unavailable',
       powHealth: 'unverified', powRttMs: null
     };
+    // RPC metadata and PoW are independent capabilities. In particular, a
+    // gateway can refuse block_count yet still generate valid Nano work.
+    // Probe in parallel so an RPC timeout never suppresses the PoW result.
+    const powProbe = this.probePoW(server).catch(() =>
+      ({ health: 'unverified' as PoWHealth, rttMs: null }));
+    let rpc = unavailable;
     try {
       const endpoint = secureEndpoint(server.api!, 'rpc');
       const start = performance.now();
       const response = await firstValueFrom(this.transport.post(endpoint,
         { action: 'block_count', include_cemented: 'true' }, {}).pipe(timeout(5000)));
       const elapsed = performance.now() - start;
-      if (!response || response.error) return unavailable;
-      // Standard Nano RPC uses count/cemented. Some compatible gateways use
-      // block_count/cemented_count; never mix the two metrics in a comparison.
-      const count = this.parseCount(response.count ?? response.block_count);
-      const cemented = this.parseCount(response.cemented ?? response.cemented_count);
-      if (count === null || (cemented !== null && cemented > count)) return unavailable;
-      const pow = await this.probePoW(server);
-      return { ...unavailable, count, cemented, rttMs: elapsed,
-        health: 'unverified', powHealth: pow.health, powRttMs: pow.rttMs };
-    } catch (_) {
-      return unavailable;
-    }
+      if (response && !response.error) {
+        // Standard Nano RPC uses count/cemented. Some compatible gateways use
+        // block_count/cemented_count; never mix the two metrics in a comparison.
+        const count = this.parseCount(response.count ?? response.block_count);
+        const cemented = this.parseCount(response.cemented ?? response.cemented_count);
+        if (count !== null && (cemented === null || cemented <= count)) {
+          rpc = { ...unavailable, count, cemented, rttMs: elapsed, health: 'unverified' };
+        }
+      }
+    } catch (_) { /* RPC status does not decide PoW availability. */ }
+    const pow = await powProbe;
+    return { ...rpc, powHealth: pow.health, powRttMs: pow.rttMs };
   }
 
   private async scan(): Promise<void> {
@@ -192,6 +198,33 @@ export class RpcNodeRankingService {
     });
     this.settings.setRankedEndpoints(ranked.map(node => node.api));
     this.ready = true;
+  }
+
+  // Only public registry nodes qualify as Android PWA's automatically
+  // selected external work source. Never include locally saved/private RPCs.
+  // PoW may still work when the separate block_count endpoint is refused.
+  getExternalPoWTargets(): Array<{ api: string; workUrl: string }> {
+    const candidates = this.settings.serverOptions.filter(node =>
+      !node.isLocal && node.allowFailover && node.failoverTarget !== false &&
+      !!node.api && !!node.ws && !node.auth
+    ).map(node => ({ node, measurement: this.measurements.find(m => m.api === node.api) }))
+      .filter(entry => entry.measurement &&
+        entry.measurement.powHealth !== 'unavailable')
+      .sort((a, b) =>
+        (a.measurement!.powHealth === 'available' ? 0 : 1) -
+        (b.measurement!.powHealth === 'available' ? 0 : 1) ||
+        (a.measurement!.powRttMs ?? Infinity) - (b.measurement!.powRttMs ?? Infinity));
+    const seen = new Set<string>();
+    const ordered: Array<{ api: string; workUrl: string }> = [];
+    for (const { node } of candidates) {
+      try {
+        const workUrl = secureEndpoint(node.work || node.api!, 'rpc');
+        if (seen.has(workUrl)) continue;
+        seen.add(workUrl);
+        ordered.push({ api: node.api!, workUrl });
+      } catch (_) { /* Skip malformed or insecure work endpoints. */ }
+    }
+    return ordered;
   }
 
   get best(): RpcNodeMeasurement | null {

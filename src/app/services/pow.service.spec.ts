@@ -3,6 +3,7 @@ import { TestBed, inject } from '@angular/core/testing';
 
 import { PowService, workState } from './pow.service';
 import { AppSettingsService } from './app-settings.service';
+import { RpcNodeRankingService } from './rpc-node-ranking.service';
 
 describe('PowService', () => {
   beforeEach(() => {
@@ -106,6 +107,58 @@ describe('PowService', () => {
         jasmine.objectContaining({ state: workState.error }));
       expect(generate.calls.count()).toBe(1);
       expect(generate.calls.first().args[2]).toBe('https://private-work.example/pow');
+    }
+  ));
+
+  it('chooses a separate verified external PoW server on installed Android PWA and retries work independently', inject(
+    [PowService, AppSettingsService, RpcNodeRankingService],
+    async (service: PowService, app: AppSettingsService, ranking: RpcNodeRankingService) => {
+      spyOn<any>(service, 'isAndroidInstalledPwa').and.returnValue(true);
+      spyOn(ranking, 'refresh').and.returnValue(Promise.resolve());
+      spyOn(ranking, 'getExternalPoWTargets').and.returnValue([
+        { api: 'https://nanoslo.0x.no/proxy', workUrl: 'https://nanoslo.0x.no/proxy' },
+        { api: 'https://twister32.changeip.net/proxy', workUrl: 'https://twister32.changeip.net/pow' }
+      ]);
+      app.settings.powSource = 'server';
+      app.settings.serverName = 'random';
+      app.settings.serverAPI = 'https://rainstorm.city/api';
+      app.settings.serverAuth = null;
+      const generate = spyOn(service, 'getHashServer').and.callFake(async (_hash, _multiplier, workUrl) =>
+        workUrl === 'https://twister32.changeip.net/pow' ? '0123456789ABCDEF' : null);
+      const selectedBefore = { ...app.settings };
+      const result = await service.getPow('B'.repeat(64), 1);
+      expect(result.state).toBe(workState.success);
+      expect(generate.calls.allArgs().map(args => args[2])).toEqual([
+        'https://nanoslo.0x.no/proxy', 'https://twister32.changeip.net/pow'
+      ]);
+      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000, 20000]);
+      expect(app.settings.serverAPI).toBe(selectedBefore.serverAPI);
+      expect(app.settings.serverName).toBe(selectedBefore.serverName);
+    }
+  ));
+
+  it('does not preselect external PoW in non-Android or non-installed browsers', inject(
+    [PowService, RpcNodeRankingService],
+    async (service: PowService, ranking: RpcNodeRankingService) => {
+      spyOn<any>(service, 'isAndroidInstalledPwa').and.returnValue(false);
+      const refresh = spyOn(ranking, 'refresh').and.returnValue(Promise.resolve());
+      await service.initializeAndroidPwaExternalPoW();
+      expect(refresh).not.toHaveBeenCalled();
+    }
+  ));
+
+  it('preserves an explicit custom work server even on Android PWA', inject(
+    [PowService, AppSettingsService, RpcNodeRankingService],
+    async (service: PowService, app: AppSettingsService, ranking: RpcNodeRankingService) => {
+      spyOn<any>(service, 'isAndroidInstalledPwa').and.returnValue(true);
+      const refresh = spyOn(ranking, 'refresh').and.returnValue(Promise.resolve());
+      const generate = spyOn(service, 'getHashServer').and.returnValue(Promise.resolve('0123456789ABCDEF'));
+      app.settings.powSource = 'custom';
+      app.settings.customWorkServer = 'https://private-work.example/pow';
+      const work = await service.getPow('C'.repeat(64), 1);
+      expect(work.state).toBe(workState.success);
+      expect(generate.calls.mostRecent().args[2]).toBe('https://private-work.example/pow');
+      expect(refresh).not.toHaveBeenCalled();
     }
   ));
 

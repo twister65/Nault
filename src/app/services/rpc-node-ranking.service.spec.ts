@@ -173,6 +173,34 @@ describe('RpcNodeRankingService', () => {
     expect(ranking.measurements.some(node => node.value === 'rpc-only')).toBeFalse();
   });
 
+  it('tests external PoW even when the same node refuses block_count', async () => {
+    const { ranking, settings, transport } = setup({ nanoslo: null, rainstorm: '200' });
+    await ranking.refresh();
+    const nanoslo = ranking.measurements.find(node => node.value === 'nanoslo');
+    expect(nanoslo?.health).toBe('unavailable');
+    expect(nanoslo?.powHealth).toBe('available');
+    expect(transport.post.calls.allArgs().some(args => args[0] ===
+      'https://nanoslo.example/rpc' && args[1].action === 'work_generate')).toBeTrue();
+    expect(settings.setRankedEndpoints.calls.mostRecent().args[0]).not.toContain('https://nanoslo.example/rpc');
+    expect(ranking.getExternalPoWTargets().map(node => node.api)).toContain('https://nanoslo.example/rpc');
+  });
+
+  it('selects only public external PoW providers, never private or locally saved nodes', async () => {
+    const { ranking, settings } = setup({ rainstorm: '200', nanoslo: '200', rejected: '200' }, ['rejected']);
+    settings.serverOptions.push({
+      name: 'Local PoW', value: 'local-pow', api: 'https://local.example/rpc',
+      ws: 'wss://local.example/ws', auth: null, isLocal: true,
+      allowFailover: true, shouldRandom: false
+    });
+    await ranking.refresh();
+    const providers = ranking.getExternalPoWTargets().map(node => node.api);
+    expect(providers).toContain('https://rainstorm.example/rpc');
+    expect(providers).toContain('https://nanoslo.example/rpc');
+    expect(providers).not.toContain('https://rejected.example/rpc');
+    expect(providers).not.toContain('https://local.example/rpc');
+    expect(providers).not.toContain('https://private.example/rpc');
+  });
+
   it('returns no candidates when every public node is unreachable', async () => {
     const { ranking, settings } = setup({ alpha: null, beta: null });
     await ranking.refresh();
