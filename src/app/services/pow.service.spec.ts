@@ -110,6 +110,88 @@ describe('PowService', () => {
     }
   ));
 
+  it('fails over a public custom work endpoint to RsNano /pow without changing wallet RPC or saved PoW settings', inject(
+    [PowService, AppSettingsService, RpcNodeRankingService],
+    async (service: PowService, app: AppSettingsService, ranking: RpcNodeRankingService) => {
+      app.settings.serverName = 'rainstorm';
+      app.settings.serverAPI = 'https://rainstorm.city/api';
+      app.settings.serverAuth = null;
+      app.settings.powSource = 'custom';
+      app.settings.customWorkServer = 'https://proxy.nanos.cc/proxy';
+      ranking.ready = false;
+      const generate = spyOn(service, 'getHashServer').and.callFake(async (_hash, _multiplier, endpoint) =>
+        endpoint === 'https://twister32.changeip.net/pow' ? '0123456789ABCDEF' : null);
+      const activate = spyOn(app, 'activateFailover');
+      const result = await service.getPow('1'.repeat(64), 1);
+      expect(result.state).toBe(workState.success);
+      expect(generate.calls.allArgs().map(args => args[2])).toEqual([
+        'https://proxy.nanos.cc/proxy', 'https://twister32.changeip.net/pow'
+      ]);
+      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000, 20000]);
+      expect(service.activeProvider$.value.name).toBe('Twister32 RsNano');
+      expect(service.activeProvider$.value.status).toBe('available');
+      expect(app.settings.serverName).toBe('rainstorm');
+      expect(app.settings.serverAPI).toBe('https://rainstorm.city/api');
+      expect(app.settings.powSource).toBe('custom');
+      expect(app.settings.customWorkServer).toBe('https://proxy.nanos.cc/proxy');
+      expect(activate).not.toHaveBeenCalled();
+    }
+  ));
+
+  it('does not fail over a custom work URL when RPC credentials are configured', inject(
+    [PowService, AppSettingsService],
+    async (service: PowService, app: AppSettingsService) => {
+      app.settings.serverName = 'local-private';
+      app.settings.serverAPI = 'https://private.example/rpc';
+      app.settings.serverAuth = 'secret';
+      app.settings.powSource = 'custom';
+      app.settings.customWorkServer = 'https://proxy.nanos.cc/proxy';
+      const generate = spyOn(service, 'getHashServer').and.returnValue(Promise.resolve(null));
+      await expectAsync(service.getPow('2'.repeat(64), 1)).toBeRejectedWith(
+        jasmine.objectContaining({ state: workState.error }));
+      expect(generate).toHaveBeenCalledOnceWith('2'.repeat(64), 1, 'https://proxy.nanos.cc/proxy');
+    }
+  ));
+
+  it('does not continue public custom PoW retries after a settings change', inject(
+    [PowService, AppSettingsService, RpcNodeRankingService],
+    async (service: PowService, app: AppSettingsService, ranking: RpcNodeRankingService) => {
+      app.settings.serverName = 'rainstorm';
+      app.settings.serverAPI = 'https://rainstorm.city/api';
+      app.settings.serverAuth = null;
+      app.settings.powSource = 'custom';
+      app.settings.customWorkServer = 'https://proxy.nanos.cc/proxy';
+      ranking.ready = false;
+      const generate = spyOn(service, 'getHashServer').and.callFake(async () => {
+        app.settings.customWorkServer = 'https://changed.example/pow';
+        return null;
+      });
+      await expectAsync(service.getPow('3'.repeat(64), 1)).toBeRejectedWith(
+        jasmine.objectContaining({ state: workState.error }));
+      expect(generate.calls.count()).toBe(1);
+      expect(app.settings.serverAPI).toBe('https://rainstorm.city/api');
+    }
+  ));
+
+  it('bounds custom PoW retries to two public providers when all work servers fail', inject(
+    [PowService, AppSettingsService, RpcNodeRankingService],
+    async (service: PowService, app: AppSettingsService, ranking: RpcNodeRankingService) => {
+      app.settings.serverName = 'rainstorm';
+      app.settings.serverAPI = 'https://rainstorm.city/api';
+      app.settings.serverAuth = null;
+      app.settings.powSource = 'custom';
+      app.settings.customWorkServer = 'https://proxy.nanos.cc/proxy';
+      ranking.ready = false;
+      const generate = spyOn(service, 'getHashServer').and.returnValue(Promise.resolve(null));
+      await expectAsync(service.getPow('4'.repeat(64), 1)).toBeRejectedWith(
+        jasmine.objectContaining({ state: workState.error }));
+      expect(generate.calls.count()).toBe(3);
+      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000, 20000, 20000]);
+      expect(app.settings.serverName).toBe('rainstorm');
+      expect(app.settings.serverAPI).toBe('https://rainstorm.city/api');
+    }
+  ));
+
   it('chooses a separate verified external PoW server on installed Android PWA and retries work independently', inject(
     [PowService, AppSettingsService, RpcNodeRankingService],
     async (service: PowService, app: AppSettingsService, ranking: RpcNodeRankingService) => {

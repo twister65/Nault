@@ -383,5 +383,19 @@ describe('ConfigureAppComponent live PoW selection label', () => {
       .toBe('Meilleure option disponible (NanOslo — secours PoW)');
     expect(settings.serverName).toBe('rainstorm');
     expect(settings.serverAPI).toBe('https://rainstorm.city/api');
+
+    // The custom URL stays editable and persisted; only the visible source
+    // label reflects a successful public PoW fallback.
+    settings.powSource = 'custom';
+    (settings as any).customWorkServer = 'https://proxy.nanos.cc/proxy';
+    active.source = 'custom';
+    active.status = 'available';
+    active.name = 'Twister32 RsNano';
+    active.endpoint = 'https://twister32.changeip.net/pow';
+    component.selectedPoWOption = 'custom';
+    expect(component.getRemotePoWOptionName('custom'))
+      .toBe('configure-app.pow-options.external-custom-server (Twister32 RsNano — secours PoW)');
+    expect(settings.serverAPI).toBe('https://rainstorm.city/api');
+    expect((settings as any).customWorkServer).toBe('https://proxy.nanos.cc/proxy');
   });
 });

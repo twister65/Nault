@@ -753,10 +753,10 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     this.statsRefreshEnabled = newServer === 'random' ? false : true;
   }
 
-  getRemotePoWOptionName(mode: 'server' | 'best' = 'server'): string {
+  getRemotePoWOptionName(mode: 'server' | 'best' | 'custom' = 'server'): string {
     const label = this.translocoService.translate(
-      mode === 'best'
-        ? 'configure-app.pow-options.best-option-available'
+      mode === 'best' ? 'configure-app.pow-options.best-option-available'
+        : mode === 'custom' ? 'configure-app.pow-options.external-custom-server'
         : 'configure-app.pow-options.external-selected-server'
     );
     // A dropdown option changes its text, not its saved value. Do not turn
@@ -767,14 +767,16 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
     const primary = this.appSettings.serverOptions.find(node =>
       node.api && node.api === saved.serverAPI);
-    const primaryWorkUrl = this.appSettings.getSelectedServerWorkUrl() || saved.serverAPI;
+    const primaryWorkUrl = mode === 'custom'
+      ? saved.customWorkServer
+      : this.appSettings.getSelectedServerWorkUrl() || saved.serverAPI;
     const active = this.pow.activeProvider$.value;
     // The active request may be checking or already failed; only identify
     // another provider as the selected source after successfully generating work.
     const confirmed = active.source === mode && active.status === 'available' &&
       !!active.name && !!active.endpoint;
     const fallback = !!(confirmed && primaryWorkUrl && active.endpoint !== primaryWorkUrl);
-    const name = confirmed ? active.name : primary?.name;
+    const name = confirmed ? active.name : (mode === 'custom' ? '' : primary?.name);
     if (!name) return label;
 
     if (fallback) {

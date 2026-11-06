@@ -250,6 +250,87 @@ export class PowService {
     return null;
   }
 
+  // A custom public PoW endpoint is eligible for work-only fallback. Keep
+  // local, intranet and reserved hostnames pinned to their user-selected
+  // endpoint; the URL check is not a proof that public DNS cannot resolve to
+  // a private address, so credentials and private RPC selections remain pinned.
+  private isPublicCustomWorkUrl(workUrl: string): boolean {
+    try {
+      const endpoint = new URL(secureEndpoint(workUrl, 'rpc'));
+      const host = endpoint.hostname.toLowerCase();
+      if (endpoint.protocol !== 'https:' || !host.includes('.') ||
+          /^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host) || host.includes(':') ||
+          /(?:^|\\.)(?:localhost|local|lan|home|internal|intranet|corp|test|example|invalid|onion)$/.test(host)) {
+        return false;
+      }
+      return true;
+    } catch (_) { return false; }
+  }
+
+  private async getCustomPoWWithFallback(
+    hash: string, multiplier: number, workUrl: string
+  ): Promise<string | null> {
+    const saved = { ...this.appSettings.settings };
+    // This is never wallet/RPC failover: no account data, credentials or
+    // signed process requests are sent to the alternate PoW providers.
+    if (!this.isPublicCustomWorkUrl(workUrl) || saved.serverAuth ||
+        saved.serverName === 'custom' || saved.serverName === 'offline') {
+      return this.requestServerWork(hash, multiplier, workUrl);
+    }
+
+    // Prefer already-ranked healthy public providers, but do not block a
+    // receive on discovery. RsNano /pow is a deterministic safe default
+    // when no ranking exists (including an installed Android PWA).
+    const publicNodes = this.appSettings.serverOptions.filter(node =>
+      !node.isLocal && node.allowFailover && node.failoverTarget !== false &&
+      !!node.api && !!node.ws && !node.auth
+    ).sort((a, b) => (a.value === 'twister32-rsnano' ? -1 : 0) -
+                     (b.value === 'twister32-rsnano' ? -1 : 0));
+    const measured = this.ranking.ready ? this.ranking.getExternalPoWTargets() : [];
+    const available = measured.length
+      ? measured
+      : publicNodes.map(node => ({ api: node.api!, workUrl: node.work || node.api! }));
+    const candidates: Array<{ api: string; workUrl: string }> = [];
+    const seen = new Set<string>();
+    try { seen.add(secureEndpoint(workUrl, 'rpc')); }
+    catch (_) { return this.requestServerWork(hash, multiplier, workUrl); }
+    for (const node of available) {
+      try {
+        const url = secureEndpoint(node.workUrl, 'rpc');
+        if (seen.has(url)) continue;
+        seen.add(url);
+        candidates.push({ api: node.api, workUrl: url });
+      } catch (_) { /* Ignore unsafe work endpoints. */ }
+      if (candidates.length === 2) break;
+    }
+    // Do not shorten the deliberate custom-server timeout when no public
+    // fallback is actually eligible.
+    if (!candidates.length) return this.requestServerWork(hash, multiplier, workUrl);
+
+    const stillCurrent = () => this.shouldContinueQueue &&
+      (typeof navigator === 'undefined' || navigator.onLine !== false) &&
+      saved.powSource === this.appSettings.settings.powSource &&
+      saved.customWorkServer === this.appSettings.settings.customWorkServer &&
+      saved.serverAPI === this.appSettings.settings.serverAPI &&
+      saved.serverName === this.appSettings.settings.serverName &&
+      saved.serverAuth === this.appSettings.settings.serverAuth;
+
+    if (!stillCurrent()) return null;
+    const primaryWork = await this.requestServerWork(hash, multiplier, workUrl, 30000);
+    if (primaryWork || !stillCurrent()) return primaryWork;
+
+    for (const target of candidates) {
+      if (!stillCurrent()) return null;
+      const fallbackWork = await this.requestServerWork(hash, multiplier, target.workUrl, 20000);
+      this.ranking.recordPoWResult(target.api, !!fallbackWork);
+      if (fallbackWork) {
+        console.info('[Nano PoW] Custom public work server recovered via alternate provider.');
+        return fallbackWork;
+      }
+    }
+    return null;
+  }
+
   /**
    * Determine the best PoW Method available for this browser
    */
@@ -404,7 +485,8 @@ export class PowService {
         const allowLocalMulti = workServer !== '' &&
           this.appSettings.knownApiEndpoints.every(endpointUrl => !workServer.includes(endpointUrl));
 
-        const customWork = await this.requestServerWork(queueItem.hash, allowLocalMulti ? localMultiplier : queueItem.multiplier, workServer);
+        const customWork = await this.getCustomPoWWithFallback(
+          queueItem.hash, allowLocalMulti ? localMultiplier : queueItem.multiplier, workServer);
         if (customWork) {
           work.work = customWork;
           work.state = workState.success;

@@ -143,7 +143,7 @@
                     <select class="uk-select" [(ngModel)]="selectedPoWOption">
                       @for (pow of powOptions; track pow) {
                         <option [value]="pow.value">
-                          @if (pow.value === 'server' || pow.value === 'best') {
+                          @if (pow.value === 'server' || pow.value === 'best' || pow.value === 'custom') {
                             <ng-element>{{ getRemotePoWOptionName(pow.value) }}</ng-element>
                           } @else {
                             <ng-element>{{ t(pow.name) }}</ng-element>
