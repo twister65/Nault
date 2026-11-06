@@ -312,3 +312,76 @@ describe('ConfigureAppComponent local-node management with The best selected', (
     expect(wallet.reloadBalances).toHaveBeenCalledTimes(1);
   });
 });
+
+
+describe('ConfigureAppComponent live PoW selection label', () => {
+  it('shows the fallback provider in the selected dropdown without changing wallet RPC or PoW mode', () => {
+    const component = Object.create(ConfigureAppComponent.prototype) as ConfigureAppComponent;
+    const settings = {
+      powSource: 'server', serverName: 'rainstorm',
+      serverAPI: 'https://rainstorm.city/api'
+    };
+    const active = {
+      source: 'server', name: 'Rainstorm City',
+      endpoint: 'https://rainstorm.city/api', status: 'unverified'
+    };
+    const translations: Record<string, string> = {
+      'configure-app.pow-options.external-selected-server': 'Externe — serveur sélectionné',
+      'configure-app.pow-options.external-provider': 'Externe',
+      'configure-app.pow-options.best-option-available': 'Meilleure option disponible',
+      'configure-app.pow-provider-fallback': 'secours PoW'
+    };
+    Object.assign(component, {
+      selectedPoWOption: 'server',
+      selectedServer: 'rainstorm',
+      appSettings: {
+        settings,
+        serverOptions: [
+          { value: 'rainstorm', api: 'https://rainstorm.city/api', name: 'Rainstorm City' },
+          { value: 'twister32-rsnano', api: 'https://twister32.changeip.net/proxy',
+            work: 'https://twister32.changeip.net/pow', name: 'Twister32 RsNano' }
+        ],
+        getSelectedServerWorkUrl: () => ''
+      },
+      pow: { activeProvider$: { value: active } },
+      translocoService: {
+        translate: (key: string) => translations[key] || key
+      }
+    });
+    const label = () => component.getRemotePoWOptionName('server');
+    expect(label()).toBe('Externe — serveur sélectionné (Rainstorm City)');
+
+    active.name = 'Twister32 RsNano';
+    active.endpoint = 'https://twister32.changeip.net/pow';
+    active.status = 'available';
+    expect(label()).toBe('Externe (Twister32 RsNano — secours PoW)');
+
+    // A second external work provider becomes the active source dynamically.
+    active.name = 'NanOslo';
+    active.endpoint = 'https://nanoslo.0x.no/proxy';
+    expect(label()).toBe('Externe (NanOslo — secours PoW)');
+    expect(settings.serverName).toBe('rainstorm');
+    expect(settings.serverAPI).toBe('https://rainstorm.city/api');
+    expect(settings.powSource).toBe('server');
+    expect(component.selectedPoWOption).toBe('server');
+
+    // Do not display another attempted provider as selected before success.
+    active.status = 'checking';
+    expect(label()).toBe('Externe — serveur sélectionné (Rainstorm City)');
+
+    // A draft option change is not an applied provider change.
+    component.selectedPoWOption = 'best';
+    expect(label()).toBe('Externe — serveur sélectionné');
+    expect(component.getRemotePoWOptionName('best')).toBe('Meilleure option disponible');
+
+    component.selectedPoWOption = 'server';
+    settings.powSource = 'best';
+    active.source = 'best';
+    active.status = 'available';
+    component.selectedPoWOption = 'best';
+    expect(component.getRemotePoWOptionName('best'))
+      .toBe('Meilleure option disponible (NanOslo — secours PoW)');
+    expect(settings.serverName).toBe('rainstorm');
+    expect(settings.serverAPI).toBe('https://rainstorm.city/api');
+  });
+});

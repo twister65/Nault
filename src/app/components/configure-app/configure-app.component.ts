@@ -753,22 +753,38 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     this.statsRefreshEnabled = newServer === 'random' ? false : true;
   }
 
-  getRemotePoWOptionName() {
-    const optionName = 'External - Selected Server';
+  getRemotePoWOptionName(mode: 'server' | 'best' = 'server'): string {
+    const label = this.translocoService.translate(
+      mode === 'best'
+        ? 'configure-app.pow-options.best-option-available'
+        : 'configure-app.pow-options.external-selected-server'
+    );
+    // A dropdown option changes its text, not its saved value. Do not turn
+    // a temporary PoW fallback into a wallet RPC node or a custom PoW source.
+    // An option not currently selected must remain an ordinary mode choice.
+    const saved = this.appSettings.settings;
+    if (mode !== this.selectedPoWOption || saved.powSource !== mode) return label;
 
-    if ( (this.selectedServer === 'random') || (this.selectedServer === 'offline') ) {
-      return optionName;
+    const primary = this.appSettings.serverOptions.find(node =>
+      node.api && node.api === saved.serverAPI);
+    const primaryWorkUrl = this.appSettings.getSelectedServerWorkUrl() || saved.serverAPI;
+    const active = this.pow.activeProvider$.value;
+    // The active request may be checking or already failed; only identify
+    // another provider as the selected source after successfully generating work.
+    const confirmed = active.source === mode && active.status === 'available' &&
+      !!active.name && !!active.endpoint;
+    const fallback = !!(confirmed && primaryWorkUrl && active.endpoint !== primaryWorkUrl);
+    const name = confirmed ? active.name : primary?.name;
+    if (!name) return label;
+
+    if (fallback) {
+      const external = mode === 'server'
+        ? this.translocoService.translate('configure-app.pow-options.external-provider')
+        : label;
+      const suffix = this.translocoService.translate('configure-app.pow-provider-fallback');
+      return `${external} (${name} — ${suffix})`;
     }
-
-    const selectedServerOption = this.appSettings.serverOptions.find(d => d.value === this.selectedServer);
-
-    if (!selectedServerOption) {
-      return optionName;
-    }
-
-    // The dedicated work endpoint is presented under its actual provider name.
-    if (selectedServerOption.value === 'twister32-rsnano') return selectedServerOption.name;
-    return ( optionName + ' (' + selectedServerOption.name + ')' );
+    return `${label} (${name})`;
   }
 
   async clearWorkCache() {

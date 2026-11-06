@@ -240,10 +240,12 @@
       "client-side-cpu-slowest": "Local — CPU (más lento)",
       "client-side-gpu-webgl": "Local — GPU/WebGL",
       "external-custom-server": "Externo — servidor personalizado",
+      "external-provider": "Externo",
       "external-selected-server": "Externo — servidor seleccionado"
     },
     "pow-source": "Fuente de PoW",
     "pow-active-provider": "Proveedor PoW activo",
+    "pow-provider-fallback": "respaldo PoW",
     "pow-provider-status": {"checking":"Comprobando…","available":"Disponible","unavailable":"No disponible","unverified":"Aún no probado"},
     "random-server": "Servidor aleatorio",
     "receive-method": "Método de recepción",
