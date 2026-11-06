@@ -48,7 +48,8 @@ describe('PowService', () => {
       settings.settings.customWorkServer = 'https://twister32.changeip.net/pow';
       const hash = 'D'.repeat(64);
       await service.getPow(hash, 1);
-      expect(getHashServer).toHaveBeenCalledWith(hash, 1, 'https://twister32.changeip.net/pow');
+      // A public custom URL now has bounded independent PoW fallback.
+      expect(getHashServer).toHaveBeenCalledWith(hash, 1, 'https://twister32.changeip.net/pow', 30000);
     }
   ));
 
