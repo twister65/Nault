@@ -132,7 +132,7 @@ describe('PowService', () => {
         'https://nanoslo.0x.no/proxy', 'https://twister32.changeip.net/pow'
       ]);
       expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000, 20000]);
-      expect(app.settings.serverAPI).toBe(selectedBefore.serverAPI);
+      expect(app.settings.serverAPI).toBe('https://rainstorm.city/api');
       expect(app.settings.serverName).toBe(selectedBefore.serverName);
     }
   ));
