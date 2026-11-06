@@ -3,6 +3,8 @@ import {AppSettingsService} from './app-settings.service';
 import {ApiService} from './api.service';
 import {NotificationService} from './notification.service';
 import { PoWSource } from './app-settings.service';
+import { RpcNodeRankingService } from './rpc-node-ranking.service';
+import { secureEndpoint } from './endpoint-policy';
 // Native browser worker; esbuild bundles the worker from a stable module-relative URL.
 const createPowWorker = () => new Worker(new URL('../../assets/lib/cpupow.js', import.meta.url));
 import {UtilService} from './util.service';
@@ -57,8 +59,71 @@ export class PowService {
     private appSettings: AppSettingsService,
     private api: ApiService,
     private notifications: NotificationService,
-    private util: UtilService
+    private util: UtilService,
+    private ranking: RpcNodeRankingService
   ) { }
+
+  private async getServerPoWWithFallback(hash: string, multiplier: number, selectedWorkUrl: string): Promise<string | null> {
+    const saved = { ...this.appSettings.settings };
+    const primary = this.appSettings.serverOptions.find(node =>
+      node.api && node.api === saved.serverAPI &&
+      (saved.serverName === 'random' || node.value === saved.serverName));
+    // Never forward private RPC credentials, override a custom work source,
+    // or choose another wallet node because only PoW failed.
+    if (!primary || !primary.allowFailover || !primary.ws || primary.auth ||
+        saved.serverName === 'offline' || saved.serverName === 'custom') {
+      return this.getHashServer(hash, multiplier, selectedWorkUrl);
+    }
+
+    const possible = this.appSettings.serverOptions.filter(node =>
+      node.allowFailover && node.failoverTarget !== false &&
+      node.api && node.ws && !node.auth && node.api !== primary.api);
+    const ranked = this.appSettings.getRankedFallbackEndpoints(primary.api!);
+    const order = ranked === null ? possible.map(node => node.api!) : ranked;
+    const seen = new Set<string>([secureEndpoint(selectedWorkUrl || primary.api!, 'rpc')]);
+    const backups: Array<{ api: string; workUrl: string }> = [];
+    for (const api of order) {
+      const node = possible.find(candidate => candidate.api === api);
+      if (!node || this.ranking.measurements.some(result =>
+          result.api === node.api && result.powHealth === 'unavailable')) continue;
+      try {
+        const workUrl = secureEndpoint(node.work || node.api!, 'rpc');
+        if (!seen.has(workUrl)) {
+          seen.add(workUrl);
+          backups.push({ api: node.api!, workUrl });
+        }
+      } catch (_) { /* Invalid or insecure PoW endpoint: do not retry it. */ }
+      if (backups.length === 2) break;
+    }
+
+    // Preserve the established 2-minute attempt if no safe backup is known.
+    if (!backups.length) {
+      const result = await this.getHashServer(hash, multiplier, selectedWorkUrl);
+      this.ranking.recordPoWResult(primary.api!, !!result);
+      return result;
+    }
+
+    const primaryUrl = secureEndpoint(selectedWorkUrl || primary.api!, 'rpc');
+    const targets = [{ api: primary.api!, workUrl: primaryUrl }, ...backups];
+    for (let index = 0; index < targets.length; index++) {
+      if (!this.shouldContinueQueue || (index > 0 &&
+          (typeof navigator !== 'undefined' && navigator.onLine === false))) return null;
+      const target = targets[index];
+      // The first work server gets a reasonable computation window; two
+      // independent backups get smaller, bounded windows. Each request is
+      // abortable, and the signed 'process' RPC is NEVER replayed.
+      const work = await this.getHashServer(hash, multiplier, target.workUrl, index === 0 ? 30000 : 20000);
+      this.ranking.recordPoWResult(target.api, !!work);
+      if (work) {
+        if (index > 0) console.info('[Nano PoW] Recovered through alternate work server.');
+        return work;
+      }
+      // Do not continue retrying a PoW request after user switched servers.
+      if (saved.serverAPI !== this.appSettings.settings.serverAPI ||
+          saved.powSource !== this.appSettings.settings.powSource) break;
+    }
+    return null;
+  }
 
   /**
    * Determine the best PoW Method available for this browser
@@ -180,7 +245,7 @@ export class PowService {
         // A named RPC server may expose PoW at a different URL (e.g. /pow,
         // while account RPC uses /proxy). All other nodes keep the RPC default.
         const selectedWorkServer = this.appSettings.getSelectedServerWorkUrl();
-        const serverWork = await this.getHashServer(queueItem.hash, queueItem.multiplier, selectedWorkServer);
+        const serverWork = await this.getServerPoWWithFallback(queueItem.hash, queueItem.multiplier, selectedWorkServer);
         if (serverWork) {
           work.work = serverWork;
           work.state = workState.success;
@@ -242,13 +307,14 @@ export class PowService {
   /**
    * Actual PoW functions
    */
-  async getHashServer(hash: string, multiplier: number, workServer = ''): Promise<string | null> {
+  async getHashServer(hash: string, multiplier: number, workServer = '', timeoutMs = 120000): Promise<string | null> {
     const newThreshold = this.util.nano.difficultyFromMultiplier(multiplier, baseThreshold);
     const serverString = workServer === '' ? 'external' : 'custom';
     console.log('Generating work with multiplier ' + multiplier + ' at threshold ' +
       newThreshold + ' using ' + serverString + ' server for hash: ', hash);
-    return await this.api.workGenerate(hash, newThreshold, workServer)
-    .then(work => work.work)
+    return await this.api.workGenerate(hash, newThreshold, workServer, timeoutMs)
+    .then(result => result && typeof result.work === 'string' &&
+      this.util.nano.validateWork(hash, newThreshold, result.work) ? result.work : null)
     // Do not fallback to CPU pow. Let the user decide
     // .catch(async err => await this.getHashCPUWorker(hash, multiplier))
     .catch(err => null);

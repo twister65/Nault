@@ -109,6 +109,7 @@
     "choose-local-node": "Lokalen Knoten auswählen",
     "delete-local-node-confirm": "Ausgewählten lokalen Knoten löschen?",
     "node-health": {"synchronized":"Synchronisiert","lagging":"Nicht synchronisiert","unavailable":"Nicht verfügbar","unverified":"Synchronisierung nicht bestätigt"},
+    "pow-health": {"available":"Verfügbar","unavailable":"Nicht verfügbar","unverified":"Nicht geprüft"},
     "node-stats": "Knotenstatistik",
     "note-since-this-server-only-notifies-about-new-transactions": "Hinweis: Da dieser Server nur neue Transaktionen meldet, funktionieren die meisten Wallet-Funktionen auch ohne ihn.",
     "optional-increased-work-for-transaction-priority-during": "Optional höherer Arbeitsaufwand zur Priorisierung von Transaktionen bei Netzwerkauslastung. Überschreibt die Standard-Schwierigkeit von 1x beim Senden und 1/64x beim Empfangen.",

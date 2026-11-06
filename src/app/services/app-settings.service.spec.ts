@@ -129,6 +129,14 @@ describe('AppSettingsService', () => {
     expect(server.shouldRandom).toBe(false);
   }));
 
+  it('retains the dedicated /pow endpoint when The best selects RsNano by RPC URL', inject(
+    [AppSettingsService], (service: AppSettingsService) => {
+      service.settings.serverName = 'random';
+      service.settings.serverAPI = 'https://twister32.changeip.net/proxy';
+      expect(service.getSelectedServerWorkUrl()).toBe('https://twister32.changeip.net/pow');
+    }
+  ));
+
   it('uses the dedicated PoW URL only for the explicitly selected Twister32 server', inject([AppSettingsService], (service: AppSettingsService) => {
     service.settings.serverName = 'twister32-rsnano';
     expect(service.getSelectedServerWorkUrl()).toBe('https://twister32.changeip.net/pow');

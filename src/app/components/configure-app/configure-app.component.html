@@ -346,6 +346,10 @@
                               @if (measurement.rttMs !== null) {
                                 ({{ measurement.rttMs | number:'1.0-0' }} ms)
                               }
+                              — PoW : {{ ('configure-app.pow-health.' + measurement.powHealth) | transloco }}
+                              @if (measurement.powRttMs !== null) {
+                                ({{ measurement.powRttMs | number:'1.0-0' }} ms)
+                              }
                             </li>
                           }
                         </ul>

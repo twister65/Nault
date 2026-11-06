@@ -162,6 +162,9 @@ export class ApiService {
     const settings = { ...this.appSettings.settings };
     const expectedNetworkGeneration = this.node.internetInterruptionGeneration;
     const successVersionAtStart = this.successfulRpcResponses;
+    // work_generate has its own availability/fallback lifecycle. Its failures
+    // must never clear or set the wallet's Nano RPC/WebSocket status.
+    const isPoW = action === 'work_generate';
     const firstUrl = url || settings.serverAPI;
     // A request can finish after a local Internet interruption or after
     // another RPC request has switched the selected node. Its result must
@@ -175,12 +178,13 @@ export class ApiService {
         this.node.internetInterruptionGeneration !== expectedNetworkGeneration
       );
     if (!firstUrl) {
+      if (isPoW) throw new Error('No work server configured.');
       this.node.setOffline(null);
       return;
     }
     let apiUrl: string;
     try { apiUrl = secureEndpoint(firstUrl, 'rpc'); } catch (error) {
-      this.noteRpcFailure(firstUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : 'Unsafe server address: use HTTPS (HTTP is allowed only on loopback).');
+      if (!isPoW) this.noteRpcFailure(firstUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : 'Unsafe server address: use HTTPS (HTTP is allowed only on loopback).');
       if (skipError) return;
       throw error;
     }
@@ -220,12 +224,12 @@ export class ApiService {
         selected: settings.serverName, totalEndpoints: endpoints.length
       });
     }
-    if (this.node.node.status === false && !skipError) this.node.setLoading();
+    if (!isPoW && this.node.node.status === false && !skipError) this.node.setLoading();
     // Includes legacy compatibility calls; PoW gets one longer, cancellable attempt.
     // A 3-second probe of up to five servers has a strict 15-second ceiling.
     // Ordinary wallet RPC retains its original 45-second and 3-attempt limits.
     const maxAttempts = healthProbe ? this.maxHealthProbeEndpoints : 3;
-    const deadline = Date.now() + (healthProbe ? 15000 : action === 'work_generate' ? 120000 : 45000);
+    const deadline = Date.now() + (healthProbe ? 15000 : isPoW ? perAttemptTimeoutMs : 45000);
     let attempts = 0;
     let lastError: any;
     for (const endpoint of endpoints.slice(0, maxAttempts)) {
@@ -243,7 +247,7 @@ export class ApiService {
         try {
           const remaining = deadline - Date.now();
           const res = await this.http.post(endpoint, { ...data, action: requestAction }, options)
-            .pipe(timeout(Math.max(1, Math.min(action === 'work_generate' ? 120000 : perAttemptTimeoutMs, remaining)))).toPromise();
+            .pipe(timeout(Math.max(1, Math.min(perAttemptTimeoutMs, remaining)))).toPromise();
           if (obsoleteSelectedRequest()) {
             if (skipError) return;
             throw { isStaleFailover: true };
@@ -264,7 +268,7 @@ export class ApiService {
               throw { isRpcError: true, error: res.error };
             }
             // An optional statistics RPC is not proof wallet reads work.
-            if (!skipError) this.noteRpcSuccess(endpoint, expectedNetworkGeneration);
+            if (!skipError && !isPoW) this.noteRpcSuccess(endpoint, expectedNetworkGeneration);
             return res;
           }
           if (typeof validateResponse === 'function' && validateResponse(res).err != null) {
@@ -293,7 +297,7 @@ export class ApiService {
             });
           }
           // An optional statistics RPC is not proof wallet reads work.
-          if (!skipError) this.noteRpcSuccess(endpoint, expectedNetworkGeneration);
+          if (!skipError && !isPoW) this.noteRpcSuccess(endpoint, expectedNetworkGeneration);
           return res;
         } catch (error) {
           lastError = error;
@@ -348,7 +352,7 @@ export class ApiService {
               (typeof failure.status === 'number' &&
                 failure.status >= 400 && failure.status < 500);
             if (!remoteResponded && !failure.isStaleFailover) {
-              this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
+              if (!isPoW) this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
             }
             throw error;
           }
@@ -356,7 +360,7 @@ export class ApiService {
           // server throughout this offline/online transition.
           if (endpoint === apiUrl && await this.internetDisconnected()) {
             this.markInternetDisconnected();
-            this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
+            if (!isPoW) this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
             throw { status: 0, isInternetDisconnected: true };
           }
           if (endpoint === apiUrl && this.node.internetRecoveryPending) {
@@ -365,7 +369,7 @@ export class ApiService {
             // cable is still disconnected; recovery keeps the same endpoint.
             if (healthProbe) console.info(
               '[Nano RPC health] Selected RPC still unresponsive after link restoration:', endpoint);
-            this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
+            if (!isPoW) this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
             throw error;
           }
           if (healthProbe && endpoint === apiUrl && endpoints.length > 1 &&
@@ -386,7 +390,7 @@ export class ApiService {
               if (!obsoleteSelectedRequest() &&
                   !(fallbackError && typeof fallbackError === 'object' &&
                     'isStaleFailover' in fallbackError && fallbackError.isStaleFailover)) {
-                this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
+                if (!isPoW) this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
               }
               throw fallbackError;
             }
@@ -396,7 +400,7 @@ export class ApiService {
       }
     }
     if (obsoleteSelectedRequest()) throw { isStaleFailover: true };
-    this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : (lastError && lastError.status === 429
+    if (!isPoW) this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : (lastError && lastError.status === 429
       ? 'Too Many Requests to the node. Try again later or choose another node.'
       : 'RPC unavailable. Retry later or choose another node.'));
     throw lastError || new Error('RPC request deadline exceeded.');
@@ -501,7 +505,7 @@ export class ApiService {
     return result && !result.error && result.count != null && result.cemented != null
       ? result : null;
   }
-  async workGenerate(hash: string, difficulty: string, workServer = ''): Promise<{ work: string }> {
+  async workGenerate(hash: string, difficulty: string, workServer = '', timeoutMs = 120000): Promise<{ work: string }> {
     const validateResponse = (res: {work?: unknown} | null): {err: string | null} => {
       if(!res || res.work == null) {
         return {
@@ -532,7 +536,9 @@ export class ApiService {
       };
     };
 
-    return await this.request('work_generate', { hash, difficulty }, workServer !== '', workServer, validateResponse);
+    // Always propagate PoW failures to PowService; do not silently swallow
+    // explicit work-server errors or turn them into wallet RPC outages.
+    return await this.request('work_generate', { hash, difficulty }, false, workServer, validateResponse, timeoutMs);
   }
   async process(block: unknown, subtype: TxType): Promise<{ hash: string, error?: string }> {
     return await this.request('process', { json_block: 'true', block, subtype: TxType[subtype] }, false);

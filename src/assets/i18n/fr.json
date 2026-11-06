@@ -225,6 +225,7 @@
     "choose-local-node": "Choisir un nœud local",
     "delete-local-node-confirm": "Supprimer le nœud local sélectionné ?",
     "node-health": {"synchronized":"Synchronisé","lagging":"Non synchronisé","unavailable":"Indisponible","unverified":"Synchronisation non vérifiée"},
+    "pow-health": {"available":"Disponible","unavailable":"Indisponible","unverified":"Non vérifié"},
     "node-stats": "Statistiques du nœud",
     "note-since-this-server-only-notifies-about-new-transactions": "Remarque : ce serveur signale uniquement les nouvelles transactions ; la plupart des fonctions du portefeuille marchent sans lui.",
     "optional-increased-work-for-transaction-priority-during": "Augmente facultativement la difficulté PoW pour donner la priorité aux transactions lors d'une saturation du réseau. Remplace les difficultés par défaut des ENVOIS (1×) et des RÉCEPTIONS (1/64×).",

@@ -225,6 +225,7 @@
     "choose-local-node": "Choose a local node",
     "delete-local-node-confirm": "Delete the selected local node?",
     "node-health": {"synchronized":"Synchronized","lagging":"Out of sync","unavailable":"Unavailable","unverified":"Synchronization unverified"},
+    "pow-health": {"available":"Available","unavailable":"Unavailable","unverified":"Unverified"},
     "node-stats": "Node Stats",
     "note-since-this-server-only-notifies-about-new-transactions": "Note: Since this server only notifies about new transactions, most of the wallet functions fine without it.",
     "optional-increased-work-for-transaction-priority-during": "Optional increased work for transaction priority during network saturation. Overrides both default SEND 1x and RECEIVE 1/64x difficulties.",

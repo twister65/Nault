@@ -643,6 +643,39 @@ describe('ApiService bounded secure requests', () => {
     expect(http.post).toHaveBeenCalledTimes(3);
     expect(node.setOffline).toHaveBeenCalled();
   }));
+  it('keeps RPC node status unchanged when PoW fails on the current or an external work server', async () => {
+    const { api, http, node, settings } = setup();
+    http.post.and.returnValue(throwError({ status: 503, error: 'PoW gateway unavailable' }));
+    await expectAsync(api.workGenerate('A'.repeat(64), 'fffffff800000000')).toBeRejected();
+    await expectAsync(api.workGenerate('A'.repeat(64), 'fffffff800000000', 'https://work.invalid')).toBeRejected();
+    expect(node.setOffline).not.toHaveBeenCalled();
+    expect(node.setOnline).not.toHaveBeenCalled();
+    expect(settings.activateFailover).not.toHaveBeenCalled();
+    expect(http.post.calls.count()).toBe(2);
+  });
+
+  it('does not infer wallet RPC health from successful PoW', async () => {
+    const { api, http, node } = setup();
+    http.post.and.returnValue(of({ work: 'ABCDEF0123456789' }));
+    expect((await api.workGenerate('A'.repeat(64), 'fffffff800000000')).work)
+      .toBe('ABCDEF0123456789');
+    expect(node.setOnline).not.toHaveBeenCalled();
+    expect(node.setOffline).not.toHaveBeenCalled();
+  });
+
+  it('supports bounded PoW requests before considering another work server', fakeAsync(() => {
+    const { api, http } = setup();
+    http.post.and.returnValue(NEVER);
+    let failed = false;
+    api.workGenerate('A'.repeat(64), 'fffffff800000000', 'https://work.invalid', 20000)
+      .catch(() => { failed = true; });
+    tick(19999);
+    expect(failed).toBeFalse();
+    tick(1);
+    expect(failed).toBeTrue();
+    expect(http.post.calls.count()).toBe(1);
+  }));
+
   it('gives PoW one bounded two-minute attempt', fakeAsync(() => {
     const { api, http } = setup();
     http.post.and.returnValue(NEVER);

@@ -3,7 +3,8 @@ import { RpcNodeRankingService } from './rpc-node-ranking.service';
 import { RpcServerOption } from './app-settings.service';
 
 describe('RpcNodeRankingService', () => {
-  function setup(counts: Record<string, string | { count: string; cemented?: string } | null>) {
+  function setup(counts: Record<string, string | { count: string; cemented?: string } | null>,
+    noWork: string[] = []) {
     const servers: RpcServerOption[] = Object.keys(counts).map(value => ({
       name: value, value, api: 'https://' + value + '.example/rpc',
       ws: value === 'rpc-only' ? null : 'wss://' + value + '.example/ws',
@@ -17,8 +18,12 @@ describe('RpcNodeRankingService', () => {
       getRankedFallbackEndpoints: jasmine.createSpy('getRankedFallbackEndpoints')
     };
     const transport = {
-      post: jasmine.createSpy('post').and.callFake((endpoint: string) => {
+      post: jasmine.createSpy('post').and.callFake((endpoint: string, payload: any) => {
         const name = endpoint.match(/^https:\/\/([^.]*)/)?.[1];
+        if (payload.action === 'work_generate') {
+          return noWork.includes(name || '') ? throwError({ status: 403 })
+            : of({ work: '0000000000000000' });
+        }
         const count = name ? counts[name] : null;
         return count === null ? throwError({ status: 503 })
           : of(typeof count === 'string' ? { count } : count);
@@ -42,7 +47,11 @@ describe('RpcNodeRankingService', () => {
     expect(rank).not.toContain('https://stale.example/rpc');
     expect(rank).not.toContain('https://offline.example/rpc');
     expect(transport.post.calls.allArgs().some(args => args[0] === 'https://private.example/rpc')).toBeFalse();
-    expect(transport.post.calls.allArgs().every(args => args[1].action === 'block_count')).toBeTrue();
+    expect(transport.post.calls.allArgs().every(args =>
+      ['block_count', 'work_generate'].includes(args[1].action))).toBeTrue();
+    expect(transport.post.calls.allArgs().filter(args => args[1].action === 'work_generate')
+      .every(args => args[1].hash === 'A'.repeat(64) &&
+        args[1].difficulty === '0000000000000000' && !args[2]?.headers)).toBeTrue();
   });
 
   it('keeps SomeNano synchronized when its unconfirmed count differs but cemented matches peers', async () => {
@@ -98,7 +107,7 @@ describe('RpcNodeRankingService', () => {
       auth: null, allowFailover: true, shouldRandom: false
     });
     await ranking.refresh();
-    expect(transport.post.calls.count()).toBe(2);
+    expect(transport.post.calls.count()).toBe(4);
     expect(ranking.measurements.find(node => node.value === 'local-nano-to')).toEqual(jasmine.objectContaining({
       name: 'Nano.to (local)', isLocal: true, health: 'synchronized'
     }));
@@ -117,9 +126,41 @@ describe('RpcNodeRankingService', () => {
       auth: null, allowFailover: true, shouldRandom: false
     });
     await ranking.refresh();
-    expect(transport.post.calls.count()).toBe(3);
+    expect(transport.post.calls.count()).toBe(6);
     expect(ranking.measurements.find(node => node.value === 'localnode')?.health).toBe('synchronized');
     expect(settings.setRankedEndpoints.calls.mostRecent().args[0]).toContain('https://localnode.example/rpc');
+  });
+
+  it('ranks a working PoW endpoint before a faster RPC that refuses work_generate', async () => {
+    const { ranking, settings } = setup({
+      rainstorm: { count: '200000000', cemented: '200000000' },
+      nanoslo: { count: '200000000', cemented: '200000000' }
+    }, ['rainstorm']);
+    await ranking.refresh();
+    expect(ranking.measurements.find(node => node.value === 'rainstorm')?.health).toBe('synchronized');
+    expect(ranking.measurements.find(node => node.value === 'rainstorm')?.powHealth).toBe('unavailable');
+    expect(ranking.measurements.find(node => node.value === 'nanoslo')?.powHealth).toBe('available');
+    const ordered = settings.setRankedEndpoints.calls.mostRecent().args[0] as string[];
+    expect(ordered).toEqual(['https://nanoslo.example/rpc', 'https://rainstorm.example/rpc']);
+  });
+
+  it('caches tiny synthetic work_generate checks across successive network scans', async () => {
+    const { ranking, transport } = setup({ alpha: '200', beta: '201' });
+    await ranking.refresh();
+    await ranking.refresh();
+    expect(transport.post.calls.allArgs().filter(args =>
+      args[1].action === 'work_generate').length).toBe(2);
+    expect(transport.post.calls.allArgs().filter(args =>
+      args[1].action === 'block_count').length).toBe(4);
+  });
+
+  it('checks the dedicated /pow URL without sending wallet data or authorization', async () => {
+    const { ranking, settings, transport } = setup({ alpha: '200', beta: '200' });
+    settings.serverOptions[0].work = 'https://alpha.example/pow';
+    await ranking.refresh();
+    expect(transport.post.calls.allArgs().some(args =>
+      args[0] === 'https://alpha.example/pow' &&
+      args[1].action === 'work_generate' && args[2]?.headers === undefined)).toBeTrue();
   });
 
   it('never probes or ranks a public node that has no WebSocket', async () => {

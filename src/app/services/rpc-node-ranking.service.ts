@@ -6,6 +6,7 @@ import { RpcTransportService } from './rpc-transport.service';
 import { secureEndpoint } from './endpoint-policy';
 
 export type RpcNodeHealth = 'synchronized' | 'lagging' | 'unavailable' | 'unverified';
+export type PoWHealth = 'available' | 'unavailable' | 'unverified';
 
 export interface RpcNodeMeasurement {
   value: string;
@@ -15,16 +16,23 @@ export interface RpcNodeMeasurement {
   cemented: number | null; // Confirmed blocks: preferred synchronization comparison.
   rttMs: number | null;
   health: RpcNodeHealth;
+  powHealth: PoWHealth;
+  powRttMs: number | null;
   isLocal?: boolean;
 }
 
-// Observes public metadata only. No wallet addresses, secrets, authorization
-// headers, block publication or PoW requests are sent by the background scan.
+// Background RPC ranking also checks whether a server can generate a tiny
+// synthetic PoW nonce. No wallet roots, secrets, auth headers or signed blocks
+// are sent. Cache probes so network reconnects do not spam public PoW servers.
 @Injectable({ providedIn: 'root' })
 export class RpcNodeRankingService {
   measurements: RpcNodeMeasurement[] = [];
   ready = false;
   private pending: Promise<void> | null = null;
+  private readonly powCache = new Map<string, { health: PoWHealth; rttMs: number | null; time: number }>();
+  private readonly powProbeHash = 'A'.repeat(64);
+  private readonly powProbeDifficulty = '0000000000000000';
+  private readonly powCacheMs = 15 * 60 * 1000;
 
   constructor(private transport: RpcTransportService, private settings: AppSettingsService) {}
 
@@ -48,10 +56,57 @@ export class RpcNodeRankingService {
     return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
   }
 
+  private async probePoW(server: RpcServerOption): Promise<{ health: PoWHealth; rttMs: number | null }> {
+    // The explicit low difficulty keeps this optional capability check cheap.
+    // It proves that work_generate answers, not performance at send threshold.
+    const url = secureEndpoint(server.work || server.api!, 'rpc');
+    const cached = this.powCache.get(url);
+    if (cached && Date.now() - cached.time < (cached.health === 'available' ?
+        this.powCacheMs : 60 * 1000)) {
+      return { health: cached.health, rttMs: cached.rttMs };
+    }
+    const start = performance.now();
+    let health: PoWHealth = 'unverified';
+    let rttMs: number | null = null;
+    try {
+      const response = await firstValueFrom(this.transport.post(url, {
+        action: 'work_generate', hash: this.powProbeHash,
+        difficulty: this.powProbeDifficulty
+      }, {}).pipe(timeout(5000)));
+      if (response && typeof response.work === 'string' && /^[0-9a-f]{16}$/i.test(response.work)) {
+        health = 'available';
+        rttMs = performance.now() - start;
+      } else {
+        health = 'unavailable';
+      }
+    } catch (error) {
+      const status = (error && typeof error === 'object' && 'status' in error)
+        ? (error as { status?: number }).status : null;
+      // A network interruption or timeout is not proof of missing PoW support.
+      health = status && status >= 400 ? 'unavailable' : 'unverified';
+    }
+    this.powCache.set(url, { health, rttMs, time: Date.now() });
+    return { health, rttMs };
+  }
+
+  // Real work results are more significant than a synthetic capability probe.
+  // A PoW failure never changes Nano RPC status or the selected wallet node.
+  recordPoWResult(api: string, success: boolean): void {
+    const server = this.settings.serverOptions.find(node => node.api === api && !!node.ws && !node.auth);
+    if (!server) return;
+    const url = secureEndpoint(server.work || server.api!, 'rpc');
+    const health: PoWHealth = success ? 'available' : 'unavailable';
+    this.powCache.set(url, { health, rttMs: null, time: Date.now() });
+    this.measurements.forEach(node => {
+      if (node.api === api) node.powHealth = health;
+    });
+  }
+
   private async probe(server: RpcServerOption): Promise<RpcNodeMeasurement> {
     const unavailable: RpcNodeMeasurement = {
       value: server.value, name: server.name, api: server.api!,
-      count: null, cemented: null, rttMs: null, health: 'unavailable'
+      count: null, cemented: null, rttMs: null, health: 'unavailable',
+      powHealth: 'unverified', powRttMs: null
     };
     try {
       const endpoint = secureEndpoint(server.api!, 'rpc');
@@ -65,7 +120,9 @@ export class RpcNodeRankingService {
       const count = this.parseCount(response.count ?? response.block_count);
       const cemented = this.parseCount(response.cemented ?? response.cemented_count);
       if (count === null || (cemented !== null && cemented > count)) return unavailable;
-      return { ...unavailable, count, cemented, rttMs: elapsed, health: 'unverified' };
+      const pow = await this.probePoW(server);
+      return { ...unavailable, count, cemented, rttMs: elapsed,
+        health: 'unverified', powHealth: pow.health, powRttMs: pow.rttMs };
     } catch (_) {
       return unavailable;
     }
@@ -121,6 +178,10 @@ export class RpcNodeRankingService {
     const ranked = results.filter(node =>
       node.health === 'synchronized' || node.health === 'unverified')
       .sort((a, b) =>
+        // Prefer a synchronized RPC with proven PoW over a fast RPC whose
+        // work_generate was refused. Keep RPC-only nodes as a last resort.
+        (a.powHealth === 'available' ? 0 : a.powHealth === 'unverified' ? 1 : 2) -
+        (b.powHealth === 'available' ? 0 : b.powHealth === 'unverified' ? 1 : 2) ||
         (a.health === 'synchronized' ? 0 : 1) - (b.health === 'synchronized' ? 0 : 1) ||
         (a.rttMs ?? Infinity) - (b.rttMs ?? Infinity));
     // Show both official and local labels in the diagnostics, sharing the

@@ -225,6 +225,7 @@
     "choose-local-node": "Seleccionar un nodo local",
     "delete-local-node-confirm": "¿Eliminar el nodo local seleccionado?",
     "node-health": {"synchronized":"Sincronizado","lagging":"No sincronizado","unavailable":"No disponible","unverified":"Sin verificar sincronización"},
+    "pow-health": {"available":"Disponible","unavailable":"No disponible","unverified":"No verificado"},
     "node-stats": "Estadísticas del nodo",
     "note-since-this-server-only-notifies-about-new-transactions": "Nota: este servidor solo avisa de nuevas transacciones, por lo que la mayoría de las funciones de la cartera pueden usarse sin él.",
     "optional-increased-work-for-transaction-priority-during": "Aumenta opcionalmente la dificultad del PoW para dar prioridad a las transacciones cuando la red esté saturada. Sustituye las dificultades predeterminadas de ENVÍO (1×) y RECEPCIÓN (1/64×).",

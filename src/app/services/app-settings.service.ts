@@ -309,8 +309,15 @@ export class AppSettingsService {
   // advertises one. Preserve the existing RPC work_generate path for all
   // other servers and never use a previous custom PoW URL implicitly.
   getSelectedServerWorkUrl(): string {
-    const selected = this.serverOptions.find(server => server.value === this.settings.serverName);
-    return selected && selected.work ? selected.work : '';
+    // "The best" retains serverName === 'random', but its active RPC may
+    // have a separate work endpoint (e.g. RsNano /pow versus /proxy).
+    const selectedByName = this.serverOptions.find(server =>
+      server.api && server.value === this.settings.serverName &&
+      (!this.settings.serverAPI || server.api === this.settings.serverAPI));
+    const active = selectedByName || (this.settings.serverName === 'random'
+      ? this.serverOptions.find(server => server.api && server.api === this.settings.serverAPI)
+      : null);
+    return active?.work || '';
   }
 
   saveAppSettings() {
