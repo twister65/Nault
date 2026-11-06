@@ -88,9 +88,12 @@ export class PowService {
     const matching = this.appSettings.serverOptions.find(node => node.api &&
       (node.work === actualEndpoint || node.api === actualEndpoint));
     let name = matching?.name || 'External PoW';
+    const authenticated = PoWApiKeyVaultService.providerForUrl(actualEndpoint);
+    if (authenticated === 'nano-to') name = 'Nano.to';
+    else if (authenticated === 'nanswap') name = 'Nanswap';
     if (source === 'clientCPU') name = 'CPU';
     else if (source === 'clientWebGL') name = 'WebGL';
-    else if (actualEndpoint && !matching) {
+    else if (actualEndpoint && !matching && !authenticated) {
       try { name = new URL(actualEndpoint).hostname; } catch (_) { /* No URL in UI. */ }
     }
     this.activeProvider$.next({ source, name, endpoint: actualEndpoint, status });
@@ -209,9 +212,15 @@ export class PowService {
     // The unauthenticated probe may classify a paid API as unavailable.
     // Unlocked API-key providers are separate candidates, not RPC nodes.
     const ranked = this.ranking.getExternalPoWTargets();
-    const targets = [...ranked.filter(target =>
-      !this.getAuthenticatedWorkTargets().some(auth => auth.workUrl === target.workUrl)),
-      ...this.getAuthenticatedWorkTargets()].slice(0, 3);
+    const authenticated = this.getAuthenticatedWorkTargets();
+    // Keep the best measured provider first, but reserve fallback slots for
+    // the unlocked paid PoW endpoints even when their anonymous probe failed.
+    const targets = [
+      ...ranked.slice(0, 1),
+      ...authenticated,
+      ...ranked.slice(1)
+    ].filter((target, index, all) =>
+      all.findIndex(other => other.workUrl === target.workUrl) === index).slice(0, 3);
     if (!targets.length) return { handled: false, work: null };
 
     for (let i = 0; i < targets.length; i++) {
@@ -249,18 +258,25 @@ export class PowService {
       node.allowFailover && node.failoverTarget !== false &&
       node.api && node.ws && !node.auth && node.api !== primary.api);
     const ranked = this.appSettings.getRankedFallbackEndpoints(primary.api!);
-    const order = ranked === null ? possible.map(node => node.api!) : ranked;
+    const knownOrder = ranked === null ? possible.map(node => node.api!) : ranked;
+    const authenticated = this.getAuthenticatedWorkTargets();
+    const order = authenticated.length
+      ? [...knownOrder.filter(api => possible.some(node =>
+          node.api === api && node.value === 'twister32-rsnano')),
+        ...authenticated.map(node => node.api), ...knownOrder]
+      : knownOrder;
     const seen = new Set<string>([secureEndpoint(selectedWorkUrl || primary.api!, 'rpc')]);
     const backups: Array<{ api: string; workUrl: string }> = [];
     for (const api of order) {
       const node = possible.find(candidate => candidate.api === api);
-      if (!node || this.ranking.measurements.some(result =>
-          result.api === node.api && result.powHealth === 'unavailable')) continue;
+      const paid = authenticated.find(candidate => candidate.api === api);
+      if ((!node && !paid) || (!paid && this.ranking.measurements.some(result =>
+          result.api === node?.api && result.powHealth === 'unavailable'))) continue;
       try {
-        const workUrl = secureEndpoint(node.work || node.api!, 'rpc');
+        const workUrl = secureEndpoint(paid?.workUrl || node?.work || node?.api || '', 'rpc');
         if (!seen.has(workUrl)) {
           seen.add(workUrl);
-          backups.push({ api: node.api!, workUrl });
+          backups.push({ api, workUrl });
         }
       } catch (_) { /* Invalid or insecure PoW endpoint: do not retry it. */ }
       if (backups.length === 2) break;
@@ -576,9 +592,12 @@ export class PowService {
     const serverString = workServer === '' ? 'external' : 'custom';
     console.log('Generating work with multiplier ' + multiplier + ' at threshold ' +
       newThreshold + ' using ' + serverString + ' server for hash: ', hash);
-    const headers = this.powApiKeys.getAuthorizedHeaders(workServer);
+    // With a selected Nano.to RPC node the caller may use the implicit work
+    // URL. Resolve it only for PoW: ordinary RPC reads stay unauthenticated.
+    const authUrl = workServer || this.appSettings.settings.serverAPI || '';
+    const headers = this.powApiKeys.getAuthorizedHeaders(authUrl);
     if (headers) {
-      return this.generateAuthenticatedWork(workServer, hash, newThreshold, timeoutMs, headers);
+      return this.generateAuthenticatedWork(authUrl, hash, newThreshold, timeoutMs, headers);
     }
     return await this.api.workGenerate(hash, newThreshold, workServer, timeoutMs)
     .then(result => result && typeof result.work === 'string' &&
