@@ -163,3 +163,67 @@ describe('PowService', () => {
   ));
 
 });
+
+
+describe('PoW provider display and first-launch defaults', () => {
+  beforeEach(() => {
+    isolateConstructorIO();
+    TestBed.configureTestingModule({
+      imports: [ComponentTestModule],
+      providers: [PowService]
+    });
+  });
+
+  it('shows Twister32 RsNano /pow without starting an automatic scan', inject(
+    [PowService, AppSettingsService, RpcNodeRankingService],
+    (pow: PowService, app: AppSettingsService, ranking: RpcNodeRankingService) => {
+      app.settings.serverName = 'twister32-rsnano';
+      app.settings.serverAPI = 'https://twister32.changeip.net/proxy';
+      app.settings.powSource = 'server';
+      const scan = spyOn(ranking, 'refresh');
+      pow.syncProviderFromSettings(true);
+      expect(pow.activeProvider$.value).toEqual({
+        source: 'server', name: 'Twister32 RsNano',
+        endpoint: 'https://twister32.changeip.net/pow', status: 'unverified'
+      });
+      expect(scan).not.toHaveBeenCalled();
+    }
+  ));
+
+  it('updates the displayed source after work fallback without changing the wallet RPC', inject(
+    [PowService, AppSettingsService],
+    async (pow: PowService, app: AppSettingsService) => {
+      app.settings.powSource = 'best';
+      app.settings.serverName = 'random';
+      app.settings.serverAPI = 'https://rainstorm.city/api';
+      app.settings.serverAuth = null;
+      spyOn(app, 'getRankedFallbackEndpoints').and.returnValue(['https://twister32.changeip.net/proxy']);
+      spyOn(pow, 'getHashServer').and.callFake(async (_hash, _multiplier, url) =>
+        url === 'https://twister32.changeip.net/pow' ? '0123456789ABCDEF' : null);
+      const observed: string[] = [];
+      const sub = pow.activeProvider$.subscribe(provider =>
+        observed.push(provider.name + ':' + provider.status));
+      try {
+        expect((await pow.getPow('1'.repeat(64), 1)).state).toBe(workState.success);
+        expect(observed).toContain('Rainstorm City:unavailable');
+        expect(pow.activeProvider$.value.name).toBe('Twister32 RsNano');
+        expect(pow.activeProvider$.value.status).toBe('available');
+        expect(app.settings.serverName).toBe('random');
+        expect(app.settings.serverAPI).toBe('https://rainstorm.city/api');
+      } finally { sub.unsubscribe(); }
+    }
+  ));
+
+  it('retains successful PoW fallback status when reopening settings', inject(
+    [PowService, AppSettingsService],
+    (pow: PowService, app: AppSettingsService) => {
+      app.settings.powSource = 'best';
+      app.settings.serverAPI = 'https://rainstorm.city/api';
+      pow.syncProviderFromSettings(true);
+      const state = pow.activeProvider$.value;
+      expect(state.name).toBe('Rainstorm City');
+      pow.syncProviderFromSettings();
+      expect(pow.activeProvider$.value).toEqual(state);
+    }
+  ));
+});

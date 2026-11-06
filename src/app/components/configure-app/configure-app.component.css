@@ -89,3 +89,9 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* Live PoW diagnostics: long node names must stay within mobile layouts. */
+.pow-provider-status {
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+}

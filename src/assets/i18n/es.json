@@ -243,6 +243,8 @@
       "external-selected-server": "Externo — servidor seleccionado"
     },
     "pow-source": "Fuente de PoW",
+    "pow-active-provider": "Proveedor PoW activo",
+    "pow-provider-status": {"checking":"Comprobando…","available":"Disponible","unavailable":"No disponible","unverified":"Aún no probado"},
     "random-server": "Servidor aleatorio",
     "receive-method": "Método de recepción",
     "save-settings-to-update": "Guarda los ajustes para actualizar",

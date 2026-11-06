@@ -35,7 +35,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     private notifications: NotificationService,
     private appSettings: AppSettingsService,
     private addressBook: AddressBookService,
-    private pow: PowService,
+    public pow: PowService,
     private api: ApiService,
     public rpcRanking: RpcNodeRankingService,
     private websocket: WebsocketService,
@@ -338,6 +338,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
 
   loadFromSettings() {
+    this.pow.syncProviderFromSettings();
     const settings = this.appSettings.settings;
 
     const matchingLanguage = this.languages.find(language => language.id === settings.language);
@@ -539,6 +540,12 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     };
 
     this.appSettings.setAppSettings(newSettings);
+    this.pow.syncProviderFromSettings(true);
+    if (this.walletService.isConfigured() && (newPoW === 'server' || newPoW === 'best')) {
+      // A manually chosen automatic PoW mode may request discovery, without
+      // delaying the settings save or switching the wallet's RPC endpoint.
+      void this.pow.initializeAndroidPwaExternalPoW();
+    }
     this.notifications.sendSuccess(this.translocoService.translate('configure-app.app-wallet-settings-successfully-updated'));
 
     if (resaveWallet) {
@@ -580,6 +587,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
     this.appSettings.setAppSettings(newSettings);
     this.appSettings.loadAppSettings();
+    this.pow.syncProviderFromSettings(true);
     this.serverOptions = this.appSettings.serverOptions;
     this.resetNodeStats();
 

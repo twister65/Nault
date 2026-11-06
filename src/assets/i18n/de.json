@@ -127,6 +127,8 @@
       "external-selected-server": "Extern – ausgewählter Server"
     },
     "pow-source": "PoW-Quelle",
+    "pow-active-provider": "Aktiver PoW-Anbieter",
+    "pow-provider-status": {"checking":"Wird geprüft…","available":"Verfügbar","unavailable":"Nicht verfügbar","unverified":"Noch nicht getestet"},
     "random-server": "Zufälliger Server",
     "receive-method": "Empfangsmethode",
     "save-settings-to-update": "Einstellungen speichern, um Änderungen zu übernehmen.",

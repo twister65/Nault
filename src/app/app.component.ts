@@ -299,19 +299,15 @@ export class AppComponent implements OnInit, OnDestroy {
     // Completing a previously saved "The best" choice is not failover.
     // Reconnect only once when the first ranked result becomes available.
     this.settings.serverBestSelected$.subscribe(() => {
+      this.pow.syncProviderFromSettings(true);
       this.websocket.forceReconnect();
       if (this.walletService.isConfigured()) {
         void this.walletService.reloadBalances().catch(() => {});
       }
     });
-    // Never await this diagnostic on startup: first-run RsNano and the wallet
-    // UI must be usable immediately, even if every other public RPC is slow.
-    void this.rpcRanking.refresh().catch(() => {
-      console.info('[Nano RPC ranking] Background node scan unavailable.');
-    });
-    // Only installed Android PWAs preselect a proven external work server at
-    // startup. This is independent of the wallet RPC and never blocks the UI.
-    void this.pow.initializeAndroidPwaExternalPoW();
+    // First launch uses Twister32 RsNano /pow as configured. No ranking or
+    // synthetic work generation starts before the stored wallet is restored.
+    this.pow.syncProviderFromSettings();
     // The PWA uses browser online/offline events; only the Electron renderer
     // has an OS locale and the trusted native connectivity bridge.
     if (nativeLocale !== null) this.startNativeNetworkMonitor();
@@ -326,6 +322,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
     // Align WebSocket subscriptions and the visible notice after an RPC switch.
     this.settings.serverFailover$.subscribe(({ previousName, nextName }) => {
+      this.pow.syncProviderFromSettings(true);
       this.handleServerFailover(previousName, nextName);
     });
 
@@ -340,6 +337,17 @@ export class AppComponent implements OnInit, OnDestroy {
     } finally {
       // Release guarded routes only after the persisted wallet has been read.
       this.walletService.walletLoaded$.next(true);
+    }
+    // An empty first-run wallet requires no PoW discovery. For restored wallets,
+    // or an explicit saved "The best" RPC choice, scan asynchronously only
+    // after wallet restoration, never delaying the first paint or wallet load.
+    if (this.walletService.isConfigured() || this.settings.settings.serverName === 'random') {
+      void this.rpcRanking.refresh().catch(() => {
+        console.info('[Nano RPC ranking] Background node scan unavailable.');
+      });
+      if (this.walletService.isConfigured()) {
+        void this.pow.initializeAndroidPwaExternalPoW();
+      }
     }
     // Subscribe to any transaction tracking
     for (const entry of this.addressBook.addressBook) {

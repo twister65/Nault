@@ -25,6 +25,15 @@ export interface PowResult {
   work: string;
 }
 
+// Session-only diagnostics: never persist or use this state to change the wallet RPC.
+export type PoWProviderStatus = 'unverified' | 'checking' | 'available' | 'unavailable';
+export interface ActivePoWProvider {
+  source: PoWSource;
+  name: string;
+  endpoint: string;
+  status: PoWProviderStatus;
+}
+
 interface Deferred<T> {
   promise: Promise<T>;
   resolve(value: T): void;
@@ -55,6 +64,9 @@ export class PowService {
   cpuWorkerReject: ((reason?: unknown) => void) | null = null;
   shouldAbortGpuPow = false; // set to true to abort GPU pow
   private androidPowStartup: Promise<void> | null = null;
+  readonly activeProvider$ = new BehaviorSubject<ActivePoWProvider>({
+    source: 'server', name: '', endpoint: '', status: 'unverified'
+  });
 
   constructor(
     private appSettings: AppSettingsService,
@@ -63,6 +75,46 @@ export class PowService {
     private util: UtilService,
     private ranking: RpcNodeRankingService
   ) { }
+
+  // Keep the displayed provider independent from RPC failover and from saved
+  // settings. A successful PoW fallback only updates this observable.
+  private publishProvider(endpoint: string, status: PoWProviderStatus): void {
+    const source = this.appSettings.settings.powSource;
+    const actualEndpoint = endpoint || (source === 'custom'
+      ? this.appSettings.settings.customWorkServer
+      : this.appSettings.getSelectedServerWorkUrl() || this.appSettings.settings.serverAPI || '');
+    const matching = this.appSettings.serverOptions.find(node => node.api &&
+      (node.work === actualEndpoint || node.api === actualEndpoint));
+    let name = matching?.name || 'External PoW';
+    if (source === 'clientCPU') name = 'CPU';
+    else if (source === 'clientWebGL') name = 'WebGL';
+    else if (actualEndpoint && !matching) {
+      try { name = new URL(actualEndpoint).hostname; } catch (_) { /* No URL in UI. */ }
+    }
+    this.activeProvider$.next({ source, name, endpoint: actualEndpoint, status });
+  }
+
+  // Called after initial settings restoration and when the user explicitly
+  // changes a configuration. Do not erase a working fallback on page visits.
+  syncProviderFromSettings(force = false): void {
+    const previous = this.activeProvider$.value;
+    if (!force && previous.name && previous.source === this.appSettings.settings.powSource) return;
+    this.publishProvider('', 'unverified');
+  }
+
+  private async requestServerWork(hash: string, multiplier: number,
+      endpoint: string, timeoutMs = 120000): Promise<string | null> {
+    const source = this.appSettings.settings.powSource;
+    const rpc = this.appSettings.settings.serverAPI;
+    const custom = this.appSettings.settings.customWorkServer;
+    const stillCurrent = () => this.appSettings.settings.powSource === source &&
+      this.appSettings.settings.serverAPI === rpc &&
+      this.appSettings.settings.customWorkServer === custom;
+    if (stillCurrent()) this.publishProvider(endpoint, 'checking');
+    const work = await this.getHashServer(hash, multiplier, endpoint, timeoutMs);
+    if (stillCurrent()) this.publishProvider(endpoint, work ? 'available' : 'unavailable');
+    return work;
+  }
 
   private isAndroidInstalledPwa(): boolean {
     // Android Chrome tabs, Chromebook PWAs, iOS and Electron keep the
@@ -84,6 +136,10 @@ export class PowService {
       this.androidPowStartup = this.ranking.refresh()
         .then(() => {
           const selected = this.ranking.getExternalPoWTargets()[0];
+          if (selected && this.activeProvider$.value.status === 'unverified') {
+            const health = this.ranking.measurements.find(node => node.api === selected.api)?.powHealth;
+            this.publishProvider(selected.workUrl, health === 'available' ? 'available' : 'unverified');
+          }
           console.info('[Nano PoW] Android PWA external work:', selected ? 'ready' : 'no verified provider');
         })
         .catch(() => { console.info('[Nano PoW] External work scan unavailable.'); });
@@ -115,7 +171,7 @@ export class PowService {
       const { api, workUrl } = targets[i];
       // A proven provider gets first attempt; the remaining public providers
       // are fallbacks for the very same PoW root, never for signed process.
-      const work = await this.getHashServer(hash, multiplier, workUrl, i === 0 ? 30000 : 20000);
+      const work = await this.requestServerWork(hash, multiplier, workUrl, i === 0 ? 30000 : 20000);
       this.ranking.recordPoWResult(api, !!work);
       if (work) return { handled: true, work };
     }
@@ -133,7 +189,7 @@ export class PowService {
     // or choose another wallet node because only PoW failed.
     if (!primary || !primary.allowFailover || !primary.ws || primary.auth ||
         saved.serverName === 'offline' || saved.serverName === 'custom') {
-      return this.getHashServer(hash, multiplier, selectedWorkUrl);
+      return this.requestServerWork(hash, multiplier, selectedWorkUrl);
     }
 
     const possible = this.appSettings.serverOptions.filter(node =>
@@ -159,7 +215,7 @@ export class PowService {
 
     // Preserve the established 2-minute attempt if no safe backup is known.
     if (!backups.length) {
-      const result = await this.getHashServer(hash, multiplier, selectedWorkUrl);
+      const result = await this.requestServerWork(hash, multiplier, selectedWorkUrl);
       this.ranking.recordPoWResult(primary.api!, !!result);
       return result;
     }
@@ -173,7 +229,7 @@ export class PowService {
       // The first work server gets a reasonable computation window; two
       // independent backups get smaller, bounded windows. Each request is
       // abortable, and the signed 'process' RPC is NEVER replayed.
-      const work = await this.getHashServer(hash, multiplier, target.workUrl, index === 0 ? 30000 : 20000);
+      const work = await this.requestServerWork(hash, multiplier, target.workUrl, index === 0 ? 30000 : 20000);
       this.ranking.recordPoWResult(target.api, !!work);
       if (work) {
         if (index > 0) console.info('[Nano PoW] Recovered through alternate work server.');
@@ -315,20 +371,24 @@ export class PowService {
         }
         break;
       case 'clientCPU':
+        this.publishProvider('', 'checking');
         try {
           work.work = await this.getHashCPUWorker(queueItem.hash, localMultiplier);
           work.state = workState.success;
         } catch (state) {
           work.state = state === workState.cancelled ? workState.cancelled : workState.error;
         }
+        this.publishProvider('', work.state === workState.success ? 'available' : 'unavailable');
         break;
       case 'clientWebGL':
+        this.publishProvider('', 'checking');
         try {
           work.work = await this.getHashWebGL(queueItem.hash, localMultiplier);
           work.state = workState.success;
         } catch (state) {
           work.state = state === workState.cancelled ? workState.cancelled : workState.error;
         }
+        this.publishProvider('', work.state === workState.success ? 'available' : 'unavailable');
         break;
       case 'custom':
         const workServer = this.appSettings.settings.customWorkServer;
@@ -336,7 +396,7 @@ export class PowService {
         const allowLocalMulti = workServer !== '' &&
           this.appSettings.knownApiEndpoints.every(endpointUrl => !workServer.includes(endpointUrl));
 
-        const customWork = await this.getHashServer(queueItem.hash, allowLocalMulti ? localMultiplier : queueItem.multiplier, workServer);
+        const customWork = await this.requestServerWork(queueItem.hash, allowLocalMulti ? localMultiplier : queueItem.multiplier, workServer);
         if (customWork) {
           work.work = customWork;
           work.state = workState.success;

@@ -153,6 +153,13 @@
                       }
                     </select>
                   </div>
+                  @if (pow.activeProvider$ | async; as activeProvider) {
+                    <div class="pow-provider-status uk-text-meta uk-margin-small-top" aria-live="polite">
+                      <strong>{{ 'configure-app.pow-active-provider' | transloco }}:</strong>
+                      {{ activeProvider.name }}
+                      — {{ ('configure-app.pow-provider-status.' + activeProvider.status) | transloco }}
+                    </div>
+                  }
                 </div>
               </div>
               @if (selectedPoWOption === 'custom') {
