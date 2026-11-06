@@ -911,3 +911,57 @@ describe('ApiService bounded secure requests', () => {
     expect(http.post.calls.allArgs().map(args => args[1].action)).toEqual(['receivable', 'pending', 'receivable']);
   });
 });
+
+describe('ApiService Nano.to block_count aliases', () => {
+  it('accepts standard and Nano.to block_count responses for optional statistics', async () => {
+    const service = new ApiService(null as any, null as any, null as any);
+    const request = spyOn<any>(service, 'request');
+    request.and.returnValue(Promise.resolve({
+      count: '200', cemented: '197', unchecked: '3'
+    }));
+    expect(await service.optionalBlockCount()).toEqual({
+      count: 200, cemented: 197, unchecked: 3
+    });
+    request.and.returnValue(Promise.resolve({
+      block_count: '205', cemented_count: '202', unchecked_count: '3'
+    }));
+    expect(await service.optionalBlockCount()).toEqual({
+      count: 205, cemented: 202, unchecked: 3
+    });
+    expect(request).toHaveBeenCalledWith('block_count',
+      { include_cemented: 'true' }, true);
+  });
+
+  it('does not fabricate counters for invalid or partial gateway statistics', async () => {
+    const service = new ApiService(null as any, null as any, null as any);
+    const request = spyOn<any>(service, 'request');
+    for (const data of [
+      { error: 'block_count unavailable' },
+      { block_count: 'NaN', cemented_count: '30' },
+      { block_count: '9', cemented_count: '10' }
+    ]) {
+      request.and.returnValue(Promise.resolve(data));
+      expect(await service.optionalBlockCount()).toBeNull();
+    }
+    request.and.returnValue(Promise.resolve({
+      block_count: '1000', cemented_count: '995'
+    }));
+    expect(await service.optionalBlockCount()).toEqual({
+      count: 1000, cemented: 995, unchecked: null
+    });
+  });
+
+  it('checks availability using either canonical or Nano.to count fields', async () => {
+    const service = new ApiService(null as any, null as any, {
+      settings: { serverAPI: 'https://rpc.nano.to/' }
+    } as any);
+    const request = spyOn<any>(service, 'request').and.returnValue(Promise.resolve({ count: '1' }));
+    await service.checkNodeAvailability();
+    const validation = request.calls.mostRecent().args[4] as
+      (value: unknown) => { err: string | null };
+    expect(validation({ count: '1000' }).err).toBeNull();
+    expect(validation({ block_count: '1000' }).err).toBeNull();
+    expect(validation({ block_count: '-1' }).err).not.toBeNull();
+    expect(validation({ error: 'Not allowed', block_count: '1000' }).err).not.toBeNull();
+  });
+});

@@ -416,10 +416,11 @@ export class ApiService {
     // Never probe an artificial account here: some healthy proxies reject it
     // or take too long, producing a false offline warning 30–60s after start.
     // Real wallet reads still validate accounts_balances with real accounts.
-    const validateHealth = (res: any): { err: string | null } => ({
-      err: res && (typeof res.count === 'string' || typeof res.count === 'number') &&
-        /^[0-9]+$/.test(String(res.count)) ? null : 'Invalid block_count response'
-    });
+    const validateHealth = (res: any): { err: string | null } => {
+      const count = this.parseRpcBlockCount(res?.count ?? res?.block_count);
+      return { err: !res?.error && count !== null
+        ? null : 'Invalid block_count response' };
+    };
     const promise = this.request('block_count', { include_cemented: 'true' },
       false, '', validateHealth, 5000, silentOffline, true, allowFailover)
       .then(() => undefined);
@@ -492,18 +493,33 @@ export class ApiService {
     this.normalizeBlockContents(response);
     return response;
   }
+  // Nano.to's RPC gateway exposes block_count/cemented_count/unchecked_count,
+  // while standard Nano uses count/cemented/unchecked. Accept both variants
+  // without mixing metrics or treating malformed numeric data as zero.
+  private parseRpcBlockCount(value: unknown): number | null {
+    if ((typeof value !== 'string' && typeof value !== 'number') ||
+        !/^[0-9]+$/.test(String(value))) return null;
+    const count = Number(value);
+    return Number.isSafeInteger(count) && count >= 0 ? count : null;
+  }
+
   async blockCount(): Promise<{count: number, unchecked: number, cemented: number }> {
     return await this.request('block_count', { include_cemented: 'true'}, false);
   }
   // Statistics are optional: restricted public proxies may reject block_count
   // while their wallet RPC is fully usable. Do not rotate nodes, mark them
   // offline or display wallet errors for dashboard-only metadata.
-  async optionalBlockCount(): Promise<{count: number, unchecked: number, cemented: number } | null> {
+  async optionalBlockCount(): Promise<{count: number, unchecked: number | null, cemented: number } | null> {
     const result = await this.request('block_count', { include_cemented: 'true'}, true);
-    // Some public proxies return HTTP 200 with a JSON RPC action denial.
-    // Do not render "NaN" counters or claim statistics are available.
-    return result && !result.error && result.count != null && result.cemented != null
-      ? result : null;
+    // Optional stats must not trigger wallet RPC failover. Normalize the
+    // alternate Nano.to gateway response and reject malformed/unconfirmed
+    // counters instead of silently displaying zero or NaN.
+    if (!result || result.error) return null;
+    const count = this.parseRpcBlockCount(result.count ?? result.block_count);
+    const cemented = this.parseRpcBlockCount(result.cemented ?? result.cemented_count);
+    const unchecked = this.parseRpcBlockCount(result.unchecked ?? result.unchecked_count);
+    if (count === null || cemented === null || cemented > count) return null;
+    return { count, cemented, unchecked };
   }
   async workGenerate(hash: string, difficulty: string, workServer = '', timeoutMs = 120000): Promise<{ work: string }> {
     const validateResponse = (res: {work?: unknown} | null): {err: string | null} => {

@@ -361,7 +361,8 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
         this.nodeStatsServer = endpoint;
         if (blockCount) {
           this.nodeBlockCount = Number(blockCount.count).toLocaleString('en-US');
-          this.nodeUnchecked = Number(blockCount.unchecked).toLocaleString('en-US');
+          this.nodeUnchecked = blockCount.unchecked === null
+            ? null : blockCount.unchecked.toLocaleString('en-US');
           this.nodeCemented = Number(blockCount.cemented).toLocaleString('en-US');
           this.nodeUncemented = Number(blockCount.count - blockCount.cemented).toLocaleString('en-US');
         }
