@@ -105,6 +105,7 @@ async function main() {
       setAppSettings(values) { Object.assign(this.settings, values); },
       loadAppSettings() { this.settings.serverAPI = 'https://example.org'; }
     },
+    pow: { syncProviderFromSettings() {} },
     notifications: { sendSuccess() {}, sendWarning() { notices++; } },
     translocoService: { translate: x => x }, node: { node: {}, setLoading() {} },
     walletService: { wallet: { accounts: [{ id: 'nano_test' }] }, isConfigured: () => true, reloadBalances: async () => { throw new Error('offline'); } },
