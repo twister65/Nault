@@ -102,6 +102,10 @@ describe('ConfigureAppComponent server settings', () => {
       serverOptions: settings.serverOptions, serverNodeName: 'My node',
       showServerConfigs: () => true, selectedLocalNode: () => null,
       appSettings: settings, notifications, websocket, walletService: wallet,
+      pow: {
+        syncProviderFromSettings: jasmine.createSpy('syncProviderFromSettings'),
+        initializeAndroidPwaExternalPoW: jasmine.createSpy('initializeAndroidPwaExternalPoW').and.returnValue(Promise.resolve())
+      },
       api: { checkNodeAvailability: jasmine.createSpy().and.returnValue(Promise.resolve()) },
       translocoService: { translate: (key: string) => key },
       node: { setLoading: jasmine.createSpy(), node: {} }, statsRequest: 0
