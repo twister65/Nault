@@ -128,6 +128,17 @@ export class PowService {
 
   // Only explicit, unlocked credentials authorize these two exact HTTPS work
   // endpoints. No key is transmitted to ordinary RPC nodes or diagnostics.
+  private canGenerateWorkAt(url: string): boolean {
+    const provider = PoWApiKeyVaultService.providerForUrl(url);
+    return !provider || this.powApiKeys.hasKey(provider);
+  }
+
+  // A locked paid provider was never actually contacted. Do not mark it
+  // unavailable in the RPC/PoW health ranking based on a skipped request.
+  private recordActualWorkResult(api: string, url: string, success: boolean): void {
+    if (this.canGenerateWorkAt(url)) this.ranking.recordPoWResult(api, success);
+  }
+
   private getAuthenticatedWorkTargets(): Array<{ api: string; workUrl: string }> {
     return this.powApiKeys.unlockedProviders().map(provider => {
       const workUrl = provider === 'nano-to'
@@ -220,6 +231,7 @@ export class PowService {
       ...authenticated,
       ...ranked.slice(1)
     ].filter((target, index, all) =>
+      this.canGenerateWorkAt(target.workUrl) &&
       all.findIndex(other => other.workUrl === target.workUrl) === index).slice(0, 3);
     if (!targets.length) return { handled: false, work: null };
 
@@ -234,7 +246,7 @@ export class PowService {
       // A proven provider gets first attempt; the remaining public providers
       // are fallbacks for the very same PoW root, never for signed process.
       const work = await this.requestServerWork(hash, multiplier, workUrl, i === 0 ? 30000 : 20000);
-      this.ranking.recordPoWResult(api, !!work);
+      this.recordActualWorkResult(api, workUrl, !!work);
       if (work) return { handled: true, work };
     }
     return { handled: true, work: null };
@@ -256,7 +268,8 @@ export class PowService {
 
     const possible = this.appSettings.serverOptions.filter(node =>
       node.allowFailover && node.failoverTarget !== false &&
-      node.api && node.ws && !node.auth && node.api !== primary.api);
+      node.api && node.ws && !node.auth && node.api !== primary.api &&
+      this.canGenerateWorkAt(node.work || node.api));
     const ranked = this.appSettings.getRankedFallbackEndpoints(primary.api!);
     const knownOrder = ranked === null ? possible.map(node => node.api!) : ranked;
     const authenticated = this.getAuthenticatedWorkTargets();
@@ -285,7 +298,7 @@ export class PowService {
     // Preserve the established 2-minute attempt if no safe backup is known.
     if (!backups.length) {
       const result = await this.requestServerWork(hash, multiplier, selectedWorkUrl);
-      this.ranking.recordPoWResult(primary.api!, !!result);
+      this.recordActualWorkResult(primary.api!, selectedWorkUrl || primary.api!, !!result);
       return result;
     }
 
@@ -299,7 +312,7 @@ export class PowService {
       // independent backups get smaller, bounded windows. Each request is
       // abortable, and the signed 'process' RPC is NEVER replayed.
       const work = await this.requestServerWork(hash, multiplier, target.workUrl, index === 0 ? 30000 : 20000);
-      this.ranking.recordPoWResult(target.api, !!work);
+      this.recordActualWorkResult(target.api, target.workUrl, !!work);
       if (work) {
         if (index > 0) console.info('[Nano PoW] Recovered through alternate work server.');
         return work;
@@ -344,7 +357,8 @@ export class PowService {
     // when no ranking exists (including an installed Android PWA).
     const publicNodes = this.appSettings.serverOptions.filter(node =>
       !node.isLocal && node.allowFailover && node.failoverTarget !== false &&
-      !!node.api && !!node.ws && !node.auth
+      !!node.api && !!node.ws && !node.auth &&
+      this.canGenerateWorkAt(node.work || node.api)
     ).sort((a, b) => (a.value === 'twister32-rsnano' ? -1 : 0) -
                      (b.value === 'twister32-rsnano' ? -1 : 0));
     const measured = this.ranking.ready ? this.ranking.getExternalPoWTargets() : [];
@@ -391,7 +405,7 @@ export class PowService {
     for (const target of candidates) {
       if (!stillCurrent()) return null;
       const fallbackWork = await this.requestServerWork(hash, multiplier, target.workUrl, 20000);
-      this.ranking.recordPoWResult(target.api, !!fallbackWork);
+      this.recordActualWorkResult(target.api, target.workUrl, !!fallbackWork);
       if (fallbackWork) {
         console.info('[Nano PoW] Custom public work server recovered via alternate provider.');
         return fallbackWork;

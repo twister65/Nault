@@ -86,6 +86,13 @@ export class AppComponent implements OnInit, OnDestroy {
   powVaultUnlockBusy = false;
   powVaultUnlockError = false;
 
+  // Called only AFTER stored wallet restoration. Do not disturb a clean first
+  // launch without a wallet or block any RPC/PoW network request.
+  offerPowVaultUnlock(): void {
+    this.showPowVaultUnlock = this.walletService.isConfigured() &&
+      this.powApiKeyVault.hasVault && !this.powApiKeyVault.isUnlocked;
+  }
+
   // Never request keys over the network or hold up wallet startup. The
   // user may dismiss the optional prompt and rely on public PoW instead.
   async unlockPowVaultOnStartup(): Promise<void> {
@@ -370,8 +377,7 @@ export class AppComponent implements OnInit, OnDestroy {
     // A saved API-key vault is locked after each full restart by design.
     // Offer a dismissible unlock prompt AFTER wallet restoration, not during
     // first paint or first launch without a wallet; no password is persisted.
-    this.showPowVaultUnlock = this.walletService.isConfigured() &&
-      this.powApiKeyVault.hasVault && !this.powApiKeyVault.isUnlocked;
+    this.offerPowVaultUnlock();
     // An empty first-run wallet requires no PoW discovery. For restored wallets,
     // or an explicit saved "The best" RPC choice, scan asynchronously only
     // after wallet restoration, never delaying the first paint or wallet load.

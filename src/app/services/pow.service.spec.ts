@@ -248,6 +248,27 @@ describe('PowService', () => {
     }
   ));
 
+  it('never selects a locked paid provider for PoW fallback or marks it unavailable', inject(
+    [PowService, AppSettingsService, RpcNodeRankingService, PoWApiKeyVaultService],
+    async (pow: PowService, app: AppSettingsService, ranking: RpcNodeRankingService,
+      vault: PoWApiKeyVaultService) => {
+      vault.lock();
+      app.settings.powSource = 'server';
+      app.settings.serverName = 'nano-to';
+      app.settings.serverAPI = 'https://rpc.nano.to/';
+      app.settings.serverAuth = null;
+      const marked = spyOn(ranking, 'recordPoWResult');
+      const generate = spyOn(pow, 'getHashServer').and.returnValue(Promise.resolve(null));
+      await expectAsync(pow.getPow('F'.repeat(64), 1)).toBeRejectedWith(
+        jasmine.objectContaining({ state: workState.error }));
+      // If no anonymous PoW works, the disabled provider is not evidence of
+      // a failed Nano.to RPC endpoint. Other public PoW attempts may fail.
+      expect(marked.calls.allArgs().every(args => args[0] !== 'https://rpc.nano.to/')).toBeTrue();
+      expect(generate).toHaveBeenCalled();
+      expect(app.settings.serverAPI).toBe('https://rpc.nano.to/');
+    }
+  ));
+
   it('uses the Nanswap nodes-api-key header without URL query parameters', inject(
     [PowService, PoWApiKeyVaultService],
     async (pow: PowService, vault: PoWApiKeyVaultService) => {
