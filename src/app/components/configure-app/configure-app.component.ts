@@ -5,6 +5,7 @@ import {NotificationService} from '../../services/notification.service';
 import {AppSettingsService, AppSettings, PoWSource} from '../../services/app-settings.service';
 import {PriceService} from '../../services/price.service';
 import {PowService} from '../../services/pow.service';
+import {PoWApiKeyVaultService, PoWApiProvider} from '../../services/pow-api-key-vault.service';
 import {WorkPoolService} from '../../services/work-pool.service';
 import {AddressBookService} from '../../services/address-book.service';
 import type {QRType} from '../qr-modal/qr-modal.component';
@@ -36,6 +37,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     private appSettings: AppSettingsService,
     private addressBook: AddressBookService,
     public pow: PowService,
+    public powApiKeyVault: PoWApiKeyVaultService,
     private api: ApiService,
     public rpcRanking: RpcNodeRankingService,
     private websocket: WebsocketService,
@@ -138,6 +140,57 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     { name: 'configure-app.pow-options.external-custom-server', value: 'custom' },
   ];
   selectedPoWOption = this.powOptions[0].value;
+  powApiProvider: PoWApiProvider = 'nano-to';
+  powApiKeyInput = '';
+  powVaultPassphrase = '';
+  powVaultBusy = false;
+
+  async savePowApiKey(): Promise<void> {
+    if (this.powVaultBusy) return;
+    this.powVaultBusy = true;
+    try {
+      await this.powApiKeyVault.saveKey(this.powApiProvider, this.powApiKeyInput, this.powVaultPassphrase);
+      this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.saved'));
+    } catch (_) {
+      this.notifications.sendWarning(this.translocoService.translate('configure-app.pow-api-vault.failed'));
+    } finally {
+      this.powApiKeyInput = '';
+      this.powVaultPassphrase = '';
+      this.powVaultBusy = false;
+    }
+  }
+  async unlockPowApiKeys(): Promise<void> {
+    if (this.powVaultBusy) return;
+    this.powVaultBusy = true;
+    try {
+      await this.powApiKeyVault.unlock(this.powVaultPassphrase);
+      this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.unlocked'));
+    } catch (_) {
+      this.notifications.sendWarning(this.translocoService.translate('configure-app.pow-api-vault.failed'));
+    } finally {
+      this.powVaultPassphrase = '';
+      this.powVaultBusy = false;
+    }
+  }
+  async removePowApiKey(): Promise<void> {
+    if (this.powVaultBusy) return;
+    this.powVaultBusy = true;
+    try {
+      await this.powApiKeyVault.removeKey(this.powApiProvider, this.powVaultPassphrase);
+      this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.deleted'));
+    } catch (_) {
+      this.notifications.sendWarning(this.translocoService.translate('configure-app.pow-api-vault.failed'));
+    } finally {
+      this.powApiKeyInput = '';
+      this.powVaultPassphrase = '';
+      this.powVaultBusy = false;
+    }
+  }
+  lockPowApiKeys(): void {
+    this.powApiKeyVault.lock();
+    this.powApiKeyInput = '';
+    this.powVaultPassphrase = '';
+  }
 
   multiplierOptions = [
     { name: 'configure-app.multiplier-options.default-1x-or-1-64x', value: 1 },

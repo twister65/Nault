@@ -4,6 +4,7 @@ import {ApiService} from './api.service';
 import {NotificationService} from './notification.service';
 import { PoWSource } from './app-settings.service';
 import { RpcNodeRankingService } from './rpc-node-ranking.service';
+import { PoWApiKeyVaultService } from './pow-api-key-vault.service';
 import { secureEndpoint } from './endpoint-policy';
 // Native browser worker; esbuild bundles the worker from a stable module-relative URL.
 const createPowWorker = () => new Worker(new URL('../../assets/lib/cpupow.js', import.meta.url));
@@ -73,7 +74,8 @@ export class PowService {
     private api: ApiService,
     private notifications: NotificationService,
     private util: UtilService,
-    private ranking: RpcNodeRankingService
+    private ranking: RpcNodeRankingService,
+    private powApiKeys: PoWApiKeyVaultService
   ) { }
 
   // Keep the displayed provider independent from RPC failover and from saved
@@ -118,6 +120,44 @@ export class PowService {
       : await this.getHashServer(hash, multiplier, endpoint, timeoutMs);
     if (stillCurrent()) this.publishProvider(endpoint, work ? 'available' : 'unavailable');
     return work;
+  }
+
+
+  // Only explicit, unlocked credentials authorize these two exact HTTPS work
+  // endpoints. No key is transmitted to ordinary RPC nodes or diagnostics.
+  private getAuthenticatedWorkTargets(): Array<{ api: string; workUrl: string }> {
+    return this.powApiKeys.unlockedProviders().map(provider => {
+      const workUrl = provider === 'nano-to'
+        ? 'https://rpc.nano.to/' : 'https://nodes.nanswap.com/XNO';
+      return { api: workUrl, workUrl };
+    });
+  }
+
+  private async generateAuthenticatedWork(
+    workServer: string, hash: string, threshold: string, timeoutMs: number,
+    headers: Record<string, string>
+  ): Promise<string | null> {
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(workServer, {
+        method: 'POST', redirect: 'error', credentials: 'omit', cache: 'no-store',
+        referrerPolicy: 'no-referrer', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ action: 'work_generate', hash, difficulty: threshold })
+      });
+      if (!response.ok) return null;
+      const result: unknown = await response.json();
+      const work = result !== null && typeof result === 'object'
+        ? (result as { work?: unknown }).work : null;
+      return typeof work === 'string' && /^[0-9a-f]{16}$/i.test(work) &&
+        this.util.nano.validateWork(hash, threshold, work) ? work : null;
+    } catch (_) {
+      // Do not log fetch exceptions: they can include confidential headers.
+      return null;
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
   }
 
   private isAndroidInstalledPwa(): boolean {
@@ -166,7 +206,12 @@ export class PowService {
     // configured server (Twister32 /pow on first launch), without waiting.
     void this.initializeAndroidPwaExternalPoW();
     if (!this.ranking.ready) return { handled: false, work: null };
-    const targets = this.ranking.getExternalPoWTargets().slice(0, 3);
+    // The unauthenticated probe may classify a paid API as unavailable.
+    // Unlocked API-key providers are separate candidates, not RPC nodes.
+    const ranked = this.ranking.getExternalPoWTargets();
+    const targets = [...ranked.filter(target =>
+      !this.getAuthenticatedWorkTargets().some(auth => auth.workUrl === target.workUrl)),
+      ...this.getAuthenticatedWorkTargets()].slice(0, 3);
     if (!targets.length) return { handled: false, work: null };
 
     for (let i = 0; i < targets.length; i++) {
@@ -287,9 +332,17 @@ export class PowService {
     ).sort((a, b) => (a.value === 'twister32-rsnano' ? -1 : 0) -
                      (b.value === 'twister32-rsnano' ? -1 : 0));
     const measured = this.ranking.ready ? this.ranking.getExternalPoWTargets() : [];
-    const available = measured.length
-      ? measured
-      : publicNodes.map(node => ({ api: node.api!, workUrl: node.work || node.api! }));
+    // Prefer own verified work endpoint, then unlocked paid work providers.
+    // Other public nodes are last-resort fallbacks; absence of a credential
+    // never causes an API key to be sent in plaintext or in a URL.
+    const available = [
+      ...publicNodes.filter(node => node.value === 'twister32-rsnano')
+        .map(node => ({ api: node.api!, workUrl: node.work || node.api! })),
+      ...this.getAuthenticatedWorkTargets(),
+      ...measured,
+      ...publicNodes.filter(node => node.value !== 'twister32-rsnano')
+        .map(node => ({ api: node.api!, workUrl: node.work || node.api! }))
+    ];
     const candidates: Array<{ api: string; workUrl: string }> = [];
     const seen = new Set<string>();
     try { seen.add(secureEndpoint(workUrl, 'rpc')); }
@@ -523,6 +576,10 @@ export class PowService {
     const serverString = workServer === '' ? 'external' : 'custom';
     console.log('Generating work with multiplier ' + multiplier + ' at threshold ' +
       newThreshold + ' using ' + serverString + ' server for hash: ', hash);
+    const headers = this.powApiKeys.getAuthorizedHeaders(workServer);
+    if (headers) {
+      return this.generateAuthenticatedWork(workServer, hash, newThreshold, timeoutMs, headers);
+    }
     return await this.api.workGenerate(hash, newThreshold, workServer, timeoutMs)
     .then(result => result && typeof result.work === 'string' &&
       this.util.nano.validateWork(hash, newThreshold, result.work) ? result.work : null)

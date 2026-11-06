@@ -245,6 +245,7 @@
     },
     "pow-source": "Fuente de PoW",
     "pow-active-provider": "Proveedor PoW activo",
+    "pow-api-vault": {"title":"Claves API de proveedores PoW","help":"Opcional. Las claves se cifran localmente; solo work_generate utiliza credenciales desbloqueadas.","provider":"Proveedor","api-key":"Clave API","key-placeholder":"Pega aquí la clave (nunca en el chat)","passphrase":"Frase secreta del almacén","passphrase-placeholder":"Mínimo 12 caracteres","save":"Cifrar y guardar","unlock":"Desbloquear claves","lock":"Bloquear claves","delete":"Eliminar clave seleccionada","saved":"Clave API cifrada y guardada.","unlocked":"Claves PoW desbloqueadas para esta sesión.","deleted":"Clave PoW seleccionada eliminada.","failed":"No se pudieron gestionar las credenciales PoW. Comprueba la clave y la contraseña.","status-locked":"Claves cifradas guardadas; introduce la frase secreta para desbloquearlas.","status-unlocked":"Claves desbloqueadas para esta sesión.","status-empty":"No hay claves API guardadas.","key-ready":"Clave desbloqueada para este proveedor.","warning":"La frase secreta no se guarda. Desbloquea las claves después de reiniciar. El cifrado protege las claves almacenadas, no de scripts o extensiones maliciosas mientras estén desbloqueadas."},
     "pow-provider-fallback": "respaldo PoW",
     "pow-provider-status": {"checking":"Comprobando…","available":"Disponible","unavailable":"No disponible","unverified":"Aún no probado"},
     "random-server": "Servidor aleatorio",

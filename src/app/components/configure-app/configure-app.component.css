@@ -95,3 +95,7 @@
     overflow-wrap: anywhere;
     line-height: 1.5;
 }
+
+.pow-vault-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.pow-vault-actions .uk-button { flex: 1 1 115px; white-space: normal; }
+@media (max-width: 520px) { .pow-vault-actions .uk-button { flex-basis: 100%; } }

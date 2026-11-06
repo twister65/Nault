@@ -161,6 +161,58 @@
                   }
                 </div>
               </div>
+              <div class="uk-margin">
+                <label class="uk-form-label">{{ 'configure-app.pow-api-vault.title' | transloco }}</label>
+                <div class="uk-form-controls">
+                  <div class="uk-text-meta uk-margin-small-bottom">
+                    {{ 'configure-app.pow-api-vault.help' | transloco }}
+                  </div>
+                  <div class="uk-text-meta uk-margin-small-bottom">
+                    {{ (powApiKeyVault.isUnlocked
+                       ? 'configure-app.pow-api-vault.status-unlocked'
+                       : powApiKeyVault.hasVault
+                         ? 'configure-app.pow-api-vault.status-locked'
+                         : 'configure-app.pow-api-vault.status-empty') | transloco }}
+                  </div>
+                  <label class="uk-text-small" for="pow-api-provider">{{ 'configure-app.pow-api-vault.provider' | transloco }}</label>
+                  <select id="pow-api-provider" class="uk-select uk-margin-small-bottom" [(ngModel)]="powApiProvider">
+                    <option value="nano-to">Nano.to</option>
+                    <option value="nanswap">Nanswap</option>
+                  </select>
+                  @if (powApiKeyVault.hasKey(powApiProvider)) {
+                    <div class="uk-text-meta uk-margin-small-bottom">
+                      {{ 'configure-app.pow-api-vault.key-ready' | transloco }}
+                    </div>
+                  }
+                  <label class="uk-text-small" for="pow-api-key">{{ 'configure-app.pow-api-vault.api-key' | transloco }}</label>
+                  <input id="pow-api-key" class="uk-input uk-margin-small-bottom"
+                    type="password" autocomplete="off" spellcheck="false"
+                    [(ngModel)]="powApiKeyInput"
+                    [placeholder]="'configure-app.pow-api-vault.key-placeholder' | transloco">
+                  <label class="uk-text-small" for="pow-vault-passphrase">{{ 'configure-app.pow-api-vault.passphrase' | transloco }}</label>
+                  <input id="pow-vault-passphrase" class="uk-input uk-margin-small-bottom"
+                    type="password" autocomplete="off" spellcheck="false"
+                    [(ngModel)]="powVaultPassphrase"
+                    [placeholder]="'configure-app.pow-api-vault.passphrase-placeholder' | transloco">
+                  <div class="pow-vault-actions">
+                    <button class="uk-button uk-button-primary" type="button"
+                      [disabled]="powVaultBusy || !powApiKeyInput || !powVaultPassphrase"
+                      (click)="savePowApiKey()">{{ 'configure-app.pow-api-vault.save' | transloco }}</button>
+                    <button class="uk-button uk-button-default" type="button"
+                      [disabled]="powVaultBusy || !powApiKeyVault.hasVault || !powVaultPassphrase"
+                      (click)="unlockPowApiKeys()">{{ 'configure-app.pow-api-vault.unlock' | transloco }}</button>
+                    <button class="uk-button uk-button-default" type="button"
+                      [disabled]="powVaultBusy || !powApiKeyVault.isUnlocked"
+                      (click)="lockPowApiKeys()">{{ 'configure-app.pow-api-vault.lock' | transloco }}</button>
+                    <button class="uk-button uk-button-danger" type="button"
+                      [disabled]="powVaultBusy || !powApiKeyVault.hasVault || !powVaultPassphrase"
+                      (click)="removePowApiKey()">{{ 'configure-app.pow-api-vault.delete' | transloco }}</button>
+                  </div>
+                  <div class="uk-text-meta uk-margin-small-top">
+                    {{ 'configure-app.pow-api-vault.warning' | transloco }}
+                  </div>
+                </div>
+              </div>
               @if (selectedPoWOption === 'custom') {
                 <div class="uk-margin">
                   <label class="uk-form-label">{{ 'configure-app.work-server' | transloco }}</label>
