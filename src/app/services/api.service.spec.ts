@@ -297,8 +297,8 @@ describe('ApiService optional node statistics', () => {
     };
     const api = new ApiService(http as any, node as any, settings as any);
     expect(await api.optionalBlockCount()).toEqual({
-      count: '225972210', cemented: '225972210', unchecked: '0'
-    } as any);
+      count: 225972210, cemented: 225972210, unchecked: 0
+    });
     expect(node.setOnline).not.toHaveBeenCalled();
     expect(node.setOffline).not.toHaveBeenCalled();
     expect(node.node.status).toBeFalse();
