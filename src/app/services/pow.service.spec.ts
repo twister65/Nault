@@ -4,6 +4,7 @@ import { TestBed, inject } from '@angular/core/testing';
 import { PowService, workState } from './pow.service';
 import { AppSettingsService } from './app-settings.service';
 import { RpcNodeRankingService } from './rpc-node-ranking.service';
+import { PoWApiKeyVaultService } from './pow-api-key-vault.service';
 
 describe('PowService', () => {
   beforeEach(() => {
@@ -190,6 +191,48 @@ describe('PowService', () => {
       expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000, 20000, 20000]);
       expect(app.settings.serverName).toBe('rainstorm');
       expect(app.settings.serverAPI).toBe('https://rainstorm.city/api');
+    }
+  ));
+
+  it('uses bearer authentication exclusively on the Nano.to work endpoint', inject(
+    [PowService, AppSettingsService, PoWApiKeyVaultService],
+    async (pow: PowService, app: AppSettingsService, vault: PoWApiKeyVaultService) => {
+      app.settings.serverAPI = 'https://rainstorm.city/api';
+      const headersSpy = spyOn(vault, 'getAuthorizedHeaders').and.returnValue({
+        Authorization: 'Bearer TEST-KEY-ONLY'
+      });
+      const fetchSpy = spyOn(window, 'fetch').and.returnValue(Promise.resolve({
+        ok: true, json: async () => ({ work: '0123456789ABCDEF' })
+      } as Response));
+      spyOn<any>((pow as any).util.nano, 'validateWork').and.returnValue(true);
+      const result = await pow.getHashServer('A'.repeat(64), 1, 'https://rpc.nano.to/', 15000);
+      expect(result).toBe('0123456789ABCDEF');
+      expect(headersSpy).toHaveBeenCalledWith('https://rpc.nano.to/');
+      expect(fetchSpy.calls.count()).toBe(1);
+      const [url, options] = fetchSpy.calls.mostRecent().args;
+      expect(url).toBe('https://rpc.nano.to/');
+      const opts = options as RequestInit;
+      expect(opts.credentials).toBe('omit');
+      expect(opts.redirect).toBe('error');
+      expect((opts.headers as Record<string, string>).Authorization).toBe('Bearer TEST-KEY-ONLY');
+      expect(JSON.parse(opts.body as string).action).toBe('work_generate');
+      expect(app.settings.serverAPI).toBe('https://rainstorm.city/api');
+    }
+  ));
+
+  it('uses the Nanswap nodes-api-key header without URL query parameters', inject(
+    [PowService, PoWApiKeyVaultService],
+    async (pow: PowService, vault: PoWApiKeyVaultService) => {
+      spyOn(vault, 'getAuthorizedHeaders').and.returnValue({ 'nodes-api-key': 'NANSWAP-TEST-ONLY' });
+      const fetchSpy = spyOn(window, 'fetch').and.returnValue(Promise.resolve({
+        ok: true, json: async () => ({ work: '0123456789ABCDEF' })
+      } as Response));
+      spyOn<any>((pow as any).util.nano, 'validateWork').and.returnValue(true);
+      expect(await pow.getHashServer('B'.repeat(64), 1, 'https://nodes.nanswap.com/XNO', 15000))
+        .toBe('0123456789ABCDEF');
+      expect(fetchSpy.calls.mostRecent().args[0]).toBe('https://nodes.nanswap.com/XNO');
+      expect((fetchSpy.calls.mostRecent().args[1] as RequestInit).headers)
+        .toEqual({ 'Content-Type': 'application/json', 'nodes-api-key': 'NANSWAP-TEST-ONLY' });
     }
   ));
 
