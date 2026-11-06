@@ -950,12 +950,12 @@ export class WalletService {
     // A public gateway can answer HTTP 200 with { error: "..." }. Treat
     // invalid account snapshots as failed reads, never as zero-balance
     // wallets; retain the last known balance and pending state unchanged.
-    if (!accounts || accounts.error || !accounts.balances ||
+    if (!accounts || 'error' in accounts || !accounts.balances ||
         typeof accounts.balances !== 'object' || Array.isArray(accounts.balances)) {
       throw new Error('Invalid accounts_balances RPC response');
     }
     const frontiers = await this.api.accountsFrontiers(accountIDs);
-    if (!frontiers || frontiers.error || !frontiers.frontiers ||
+    if (!frontiers || 'error' in frontiers || !frontiers.frontiers ||
         typeof frontiers.frontiers !== 'object' || Array.isArray(frontiers.frontiers)) {
       throw new Error('Invalid accounts_frontiers RPC response');
     }
