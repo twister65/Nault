@@ -8,6 +8,7 @@ import {UtilService} from './services/util.service';
 import {NotificationService} from './services/notification.service';
 import {WorkPoolService} from './services/work-pool.service';
 import {PowService} from './services/pow.service';
+import {PoWApiKeyVaultService} from './services/pow-api-key-vault.service';
 import {Router} from '@angular/router';
 import {SwUpdate} from '@angular/service-worker';
 import {RepresentativeService} from './services/representative.service';
@@ -43,6 +44,7 @@ export class AppComponent implements OnInit, OnDestroy {
     public updates: SwUpdate,
     private workPool: WorkPoolService,
     private pow: PowService,
+    public powApiKeyVault: PoWApiKeyVaultService,
     public price: PriceService,
     private util: UtilService,
     private desktop: DesktopService,
@@ -79,6 +81,33 @@ export class AppComponent implements OnInit, OnDestroy {
   showAccountsDropdown = false;
   canToggleLightMode = true;
   searchData = '';
+  showPowVaultUnlock = false;
+  powVaultUnlockPassphrase = '';
+  powVaultUnlockBusy = false;
+  powVaultUnlockError = false;
+
+  // Never request keys over the network or hold up wallet startup. The
+  // user may dismiss the optional prompt and rely on public PoW instead.
+  async unlockPowVaultOnStartup(): Promise<void> {
+    if (this.powVaultUnlockBusy || !this.powVaultUnlockPassphrase) return;
+    this.powVaultUnlockBusy = true;
+    this.powVaultUnlockError = false;
+    try {
+      await this.powApiKeyVault.unlock(this.powVaultUnlockPassphrase);
+      this.showPowVaultUnlock = false;
+    } catch (_) {
+      this.powVaultUnlockError = true;
+    } finally {
+      this.powVaultUnlockPassphrase = '';
+      this.powVaultUnlockBusy = false;
+    }
+  }
+  dismissPowVaultPrompt(): void {
+    if (this.powVaultUnlockBusy) return;
+    this.showPowVaultUnlock = false;
+    this.powVaultUnlockError = false;
+    this.powVaultUnlockPassphrase = '';
+  }
   // Android PWAs can stay alive while airplane mode suspends RPC and WebSocket.
   private networkRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
   private networkRecoveryInProgress = false;
@@ -338,6 +367,11 @@ export class AppComponent implements OnInit, OnDestroy {
       // Release guarded routes only after the persisted wallet has been read.
       this.walletService.walletLoaded$.next(true);
     }
+    // A saved API-key vault is locked after each full restart by design.
+    // Offer a dismissible unlock prompt AFTER wallet restoration, not during
+    // first paint or first launch without a wallet; no password is persisted.
+    this.showPowVaultUnlock = this.walletService.isConfigured() &&
+      this.powApiKeyVault.hasVault && !this.powApiKeyVault.isUnlocked;
     // An empty first-run wallet requires no PoW discovery. For restored wallets,
     // or an explicit saved "The best" RPC choice, scan asynchronously only
     // after wallet restoration, never delaying the first paint or wallet load.

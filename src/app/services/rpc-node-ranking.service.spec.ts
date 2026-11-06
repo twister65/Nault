@@ -154,6 +154,20 @@ describe('RpcNodeRankingService', () => {
       args[1].action === 'block_count').length).toBe(4);
   });
 
+  it('never sends anonymous synthetic PoW probes to the paid Nano.to endpoint', async () => {
+    const { ranking, settings, transport } = setup({ alpha: '200', beta: '200' });
+    settings.serverOptions.push({
+      name: 'Nano.to', value: 'nano-to', api: 'https://rpc.nano.to/',
+      ws: 'wss://ws.nano.to/', auth: null, shouldRandom: false, allowFailover: true
+    });
+    await ranking.refresh();
+    const requests = transport.post.calls.allArgs();
+    expect(requests.some(args => args[0] === 'https://rpc.nano.to/' &&
+      args[1]?.action === 'work_generate')).toBeFalse();
+    expect(ranking.measurements.find(node => node.value === 'nano-to')?.powHealth)
+      .toBe('unverified');
+  });
+
   it('checks the dedicated /pow URL without sending wallet data or authorization', async () => {
     const { ranking, settings, transport } = setup({ alpha: '200', beta: '200' });
     settings.serverOptions[0].work = 'https://alpha.example/pow';

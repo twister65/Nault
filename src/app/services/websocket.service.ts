@@ -90,6 +90,10 @@ export class WebsocketService {
     }
     console.info('WebSocket connecting.');
     const ws = new WebSocket(wsUrl);
+    // Some compatible Nano gateways send JSON text in binary WS frames.
+    // Decode the frame instead of JSON.parsing "[object Blob]"; otherwise
+    // legitimate pong replies are lost and a healthy WS is disconnected.
+    ws.binaryType = 'arraybuffer';
     this.socket.ws = ws;
     // DNS/TLS/WebSocket errors can precede the ordinary RPC polling cycle.
     // One signal per socket keeps onerror + onclose from issuing duplicate
@@ -132,19 +136,27 @@ export class WebsocketService {
       reportFailure();
       this.disconnect(ws);
     };
-    ws.onmessage = event => {
+    const processMessage = (text: string): void => {
       if (this.socket.ws !== ws) return;
       try {
-        const newEvent: { ack?: string; topic?: string; message?: NanoConfirmation } = JSON.parse(event.data);
-        console.log('WS', newEvent);
-
-        if (newEvent.ack === 'pong') clearTimeout(this.pongTimer);
-
-        if (newEvent.topic === 'confirmation') {
-          this.newTransactions$.next(newEvent.message ?? null);
+        const incoming: { ack?: string; topic?: string; message?: NanoConfirmation } = JSON.parse(text);
+        if (incoming.ack === 'pong') clearTimeout(this.pongTimer);
+        if (incoming.topic === 'confirmation') {
+          this.newTransactions$.next(incoming.message ?? null);
         }
-      } catch (err) {
-        console.log(`Error parsing message`, err);
+      } catch (_) {
+        // Do not leak untrusted message contents or interrupt confirmations.
+        console.warn('WebSocket message rejected: invalid JSON.');
+      }
+    };
+    ws.onmessage = event => {
+      if (this.socket.ws !== ws) return;
+      if (typeof event.data === 'string') processMessage(event.data);
+      else if (event.data instanceof ArrayBuffer) {
+        processMessage(new TextDecoder().decode(event.data));
+      } else if (event.data instanceof Blob) {
+        void event.data.text().then(processMessage)
+          .catch(() => { console.warn('WebSocket binary message could not be decoded.'); });
       }
     };
   }

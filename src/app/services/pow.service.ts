@@ -608,6 +608,13 @@ export class PowService {
     if (headers) {
       return this.generateAuthenticatedWork(authUrl, hash, newThreshold, timeoutMs, headers);
     }
+    if (PoWApiKeyVaultService.providerForUrl(authUrl)) {
+      // An API-key work provider may permit anonymous wallet RPC reads but
+      // refuse anonymous work_generate with HTTP 402. Skip it silently and
+      // let the bounded PoW fallback try a public work provider instead.
+      // This never changes the wallet RPC or decrypts stored credentials.
+      return null;
+    }
     return await this.api.workGenerate(hash, newThreshold, workServer, timeoutMs)
     .then(result => result && typeof result.work === 'string' &&
       this.util.nano.validateWork(hash, newThreshold, result.work) ? result.work : null)

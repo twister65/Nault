@@ -233,6 +233,21 @@ describe('PowService', () => {
     }
   ));
 
+  it('never sends anonymous work_generate to a locked paid provider', inject(
+    [PowService, AppSettingsService, PoWApiKeyVaultService],
+    async (pow: PowService, app: AppSettingsService, vault: PoWApiKeyVaultService) => {
+      vault.lock();
+      app.settings.serverAPI = 'https://rpc.nano.to/';
+      const request = spyOn<any>((pow as any).api, 'workGenerate');
+      const fetchSpy = spyOn(window, 'fetch');
+      const result = await pow.getHashServer('E'.repeat(64), 1, 'https://rpc.nano.to/', 15000);
+      expect(result).toBeNull();
+      expect(request).not.toHaveBeenCalled();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(app.settings.serverAPI).toBe('https://rpc.nano.to/');
+    }
+  ));
+
   it('uses the Nanswap nodes-api-key header without URL query parameters', inject(
     [PowService, PoWApiKeyVaultService],
     async (pow: PowService, vault: PoWApiKeyVaultService) => {

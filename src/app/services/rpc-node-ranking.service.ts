@@ -60,6 +60,12 @@ export class RpcNodeRankingService {
     // The explicit low difficulty keeps this optional capability check cheap.
     // It proves that work_generate answers, not performance at send threshold.
     const url = secureEndpoint(server.work || server.api!, 'rpc');
+    // Nano.to requires a separately unlocked paid PoW credential. Never
+    // issue anonymous synthetic work_generate for its public RPC registry
+    // entry (and do not mark the usable wallet RPC as a failed PoW node).
+    if (new URL(url).hostname === 'rpc.nano.to') {
+      return { health: 'unverified', rttMs: null };
+    }
     const cached = this.powCache.get(url);
     if (cached && Date.now() - cached.time < (cached.health === 'available' ?
         this.powCacheMs : 60 * 1000)) {
