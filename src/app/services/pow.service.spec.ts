@@ -220,6 +220,19 @@ describe('PowService', () => {
     }
   ));
 
+  it('refuses credential-bearing provider URLs and never sends them to the network', inject(
+    [PowService],
+    async (pow: PowService) => {
+      const network = spyOn<any>((pow as any).api, 'workGenerate');
+      const fetchSpy = spyOn(window, 'fetch');
+      const work = await pow.getHashServer(
+        'C'.repeat(64), 1, 'https://nodes.nanswap.com/XNO?api_key=DO-NOT-LOG', 15000);
+      expect(work).toBeNull();
+      expect(network).not.toHaveBeenCalled();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    }
+  ));
+
   it('uses the Nanswap nodes-api-key header without URL query parameters', inject(
     [PowService, PoWApiKeyVaultService],
     async (pow: PowService, vault: PoWApiKeyVaultService) => {

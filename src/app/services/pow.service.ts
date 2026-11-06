@@ -588,6 +588,15 @@ export class PowService {
    * Actual PoW functions
    */
   async getHashServer(hash: string, multiplier: number, workServer = '', timeoutMs = 120000): Promise<string | null> {
+    // Never allow legacy query-string API keys to be transmitted to known
+    // credential providers. Users must use the encrypted vault instead.
+    try {
+      if (workServer) {
+        const parsed = new URL(workServer);
+        if ((parsed.hostname === 'rpc.nano.to' || parsed.hostname === 'nodes.nanswap.com') &&
+            (parsed.search || parsed.username || parsed.password)) return null;
+      }
+    } catch (_) { /* The established endpoint policy will reject invalid URLs. */ }
     const newThreshold = this.util.nano.difficultyFromMultiplier(multiplier, baseThreshold);
     const serverString = workServer === '' ? 'external' : 'custom';
     console.log('Generating work with multiplier ' + multiplier + ' at threshold ' +

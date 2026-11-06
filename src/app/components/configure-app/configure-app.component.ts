@@ -490,7 +490,14 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
   async updateWalletSettings() {
     if (this.customWorkServer && this.customWorkServer.trim()) {
-      try { this.customWorkServer = secureEndpoint(this.customWorkServer, 'rpc'); } catch (_) {
+      try {
+        this.customWorkServer = secureEndpoint(this.customWorkServer, 'rpc');
+        const parsed = new URL(this.customWorkServer);
+        if ((parsed.hostname === 'rpc.nano.to' || parsed.hostname === 'nodes.nanswap.com') &&
+            (parsed.search || parsed.username || parsed.password)) {
+          return this.notifications.sendWarning(this.translocoService.translate('configure-app.pow-api-vault.no-url-keys'));
+        }
+      } catch (_) {
         return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.endpoint-work-https'));
       }
     }
