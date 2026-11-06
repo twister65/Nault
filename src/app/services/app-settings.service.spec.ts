@@ -147,6 +147,17 @@ describe('AppSettingsService', () => {
     expect(service.serverOptions.some(server => server.value === 'twister32-rsnano')).toBe(true);
   }));
 
+  it('includes Nano.to from the official registry with its canonical WebSocket URL', inject([AppSettingsService], (service: AppSettingsService) => {
+    // A missing trailing slash used to fail the exact URL validation and
+    // silently omit this valid official node from the server dropdown.
+    const nanoTo = service.serverOptions.find(option => option.value === 'nano-to');
+    expect(nanoTo).toBeDefined();
+    expect(nanoTo?.name).toBe('Nano.to');
+    expect(nanoTo?.api).toBe('https://rpc.nano.to/');
+    expect(nanoTo?.ws).toBe('wss://ws.nano.to/');
+    expect(nanoTo?.allowFailover).toBeTrue();
+  }));
+
   it('retains SomeNano while removing the temporary SpyNano test server from production', inject([AppSettingsService], (service: AppSettingsService) => {
     const someNano = service.serverOptions.find(option => option.value === 'somenano');
     expect(someNano?.name).toBe('SomeNano');
