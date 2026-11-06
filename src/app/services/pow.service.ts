@@ -161,7 +161,11 @@ export class PowService {
         (saved.powSource !== 'server' && saved.powSource !== 'best')) {
       return { handled: false, work: null };
     }
-    await this.initializeAndroidPwaExternalPoW();
+    // Discovery is never on the critical path of a receive/send. When a
+    // wallet has just been imported and no scan is ready, immediately use the
+    // configured server (Twister32 /pow on first launch), without waiting.
+    void this.initializeAndroidPwaExternalPoW();
+    if (!this.ranking.ready) return { handled: false, work: null };
     const targets = this.ranking.getExternalPoWTargets().slice(0, 3);
     if (!targets.length) return { handled: false, work: null };
 

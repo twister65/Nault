@@ -137,6 +137,29 @@ describe('PowService', () => {
     }
   ));
 
+  it('uses the configured RsNano /pow immediately while Android provider discovery is pending', inject(
+    [PowService, AppSettingsService, RpcNodeRankingService],
+    async (service: PowService, app: AppSettingsService, ranking: RpcNodeRankingService) => {
+      spyOn<any>(service, 'isAndroidInstalledPwa').and.returnValue(true);
+      // Simulate the first work request after a wallet was imported into an
+      // otherwise empty PWA session: the ranking has not completed yet.
+      spyOn(ranking, 'refresh').and.returnValue(new Promise<void>(() => {}));
+      ranking.ready = false;
+      app.settings.powSource = 'server';
+      app.settings.serverName = 'twister32-rsnano';
+      app.settings.serverAPI = 'https://twister32.changeip.net/proxy';
+      app.settings.serverAuth = null;
+      const generate = spyOn(service, 'getHashServer')
+        .and.returnValue(Promise.resolve('0123456789ABCDEF'));
+      const work = await service.getPow('9'.repeat(64), 1);
+      expect(work.state).toBe(workState.success);
+      expect(generate).toHaveBeenCalledWith(
+        '9'.repeat(64), 1, 'https://twister32.changeip.net/pow', 30000
+      );
+      expect(app.settings.serverAPI).toBe('https://twister32.changeip.net/proxy');
+    }
+  ));
+
   it('does not preselect external PoW in non-Android or non-installed browsers', inject(
     [PowService, RpcNodeRankingService],
     async (service: PowService, ranking: RpcNodeRankingService) => {
