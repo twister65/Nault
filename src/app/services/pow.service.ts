@@ -111,7 +111,11 @@ export class PowService {
       this.appSettings.settings.serverAPI === rpc &&
       this.appSettings.settings.customWorkServer === custom;
     if (stillCurrent()) this.publishProvider(endpoint, 'checking');
-    const work = await this.getHashServer(hash, multiplier, endpoint, timeoutMs);
+    // Keep the historical three-argument call for the standard timeout;
+    // focused regression tests and custom-server routing rely on it.
+    const work = timeoutMs === 120000
+      ? await this.getHashServer(hash, multiplier, endpoint)
+      : await this.getHashServer(hash, multiplier, endpoint, timeoutMs);
     if (stillCurrent()) this.publishProvider(endpoint, work ? 'available' : 'unavailable');
     return work;
   }
