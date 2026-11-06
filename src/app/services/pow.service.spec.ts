@@ -115,6 +115,8 @@ describe('PowService', () => {
     async (service: PowService, app: AppSettingsService, ranking: RpcNodeRankingService) => {
       spyOn<any>(service, 'isAndroidInstalledPwa').and.returnValue(true);
       spyOn(ranking, 'refresh').and.returnValue(Promise.resolve());
+      // The asynchronous provider discovery has completed before this work.
+      ranking.ready = true;
       spyOn(ranking, 'getExternalPoWTargets').and.returnValue([
         { api: 'https://nanoslo.0x.no/proxy', workUrl: 'https://nanoslo.0x.no/proxy' },
         { api: 'https://twister32.changeip.net/proxy', workUrl: 'https://twister32.changeip.net/pow' }
