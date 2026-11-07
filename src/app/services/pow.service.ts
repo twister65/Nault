@@ -138,44 +138,68 @@ export class PowService {
     if (this.canGenerateWorkAt(url)) this.ranking.recordPoWResult(api, success);
   }
 
-  private getAuthenticatedWorkTargets(): Array<{ api: string; workUrl: string }> {
-    if (!this.powApiKeys.hasKey('nano-to')) return [];
-    return [{ api: 'https://rpc.nano.to/', workUrl: 'https://rpc.nano.to/' }];
+  // This is the only anonymous external PoW fallback. Other registry nodes
+  // are wallet RPC candidates, not proven work providers.
+  private getTwister32WorkTarget(): { api: string; workUrl: string } | null {
+    const node = this.appSettings.serverOptions.find(candidate =>
+      candidate.value === 'twister32-rsnano' && !candidate.isLocal &&
+      candidate.allowFailover && !!candidate.api && !!candidate.ws && !candidate.auth);
+    if (!node) return null;
+    try {
+      return { api: node.api!, workUrl: secureEndpoint(node.work || node.api!, 'rpc') };
+    } catch (_) { return null; }
   }
 
-  // Choose public work endpoints independently of the wallet RPC ranking.
-  // A node excluded from wallet sync ranking can still generate valid work.
-  // Keep proven PoW ahead of unverified servers and reserve RsNano /pow as a
-  // bounded fallback when no measured provider can be used.
-  private getPublicWorkTargets(): Array<{ api: string; workUrl: string }> {
-    const nodes = this.appSettings.serverOptions.filter(node =>
-      !node.isLocal && node.allowFailover && node.failoverTarget !== false &&
-      !!node.api && !!node.ws && !node.auth &&
-      (node.value !== 'nano-to' || this.powApiKeys.hasKey('nano-to')) &&
-      (!this.ranking.ready || !this.ranking.measurements.some(measured =>
-        measured.api === node.api && measured.powHealth === 'unavailable')));
-    const ranked = this.ranking.ready ? this.ranking.getExternalPoWTargets() : [];
-    const verified = ranked.filter(candidate => this.ranking.measurements.some(measured =>
-      measured.api === candidate.api && measured.powHealth === 'available'));
-    const ordered = [
-      ...verified,
-      ...ranked,
-      ...nodes.filter(node => node.value === 'twister32-rsnano')
-        .map(node => ({ api: node.api!, workUrl: node.work || node.api! })),
-      ...nodes.map(node => ({ api: node.api!, workUrl: node.work || node.api! }))
-    ];
-    const seen = new Set<string>();
-    const targets: Array<{ api: string; workUrl: string }> = [];
-    for (const candidate of ordered) {
-      if (!nodes.some(node => node.api === candidate.api)) continue;
-      try {
-        const workUrl = secureEndpoint(candidate.workUrl, 'rpc');
-        if (seen.has(workUrl) || !this.canGenerateWorkAt(workUrl)) continue;
-        seen.add(workUrl);
-        targets.push({ api: candidate.api, workUrl });
-      } catch (_) { /* Never use an invalid/insecure work URL. */ }
+  private canUseWebGLFallback(): boolean {
+    // Android PWA is server-only. Desktop Electron and Chromebook/PWA may
+    // compute locally if the sole public fallback is unavailable.
+    return !this.isAndroidInstalledPwa() &&
+      typeof navigator !== 'undefined' &&
+      !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) &&
+      this.hasWebGLSupport();
+  }
+
+  private async fallbackToTwisterOrWebGL(
+    hash: string, multiplier: number, saved: AppSettingsService['settings'],
+    attemptedWorkUrl: string
+  ): Promise<string | null> {
+    const stillCurrent = () => this.shouldContinueQueue &&
+      (typeof navigator === 'undefined' || navigator.onLine !== false) &&
+      saved.powSource === this.appSettings.settings.powSource &&
+      saved.serverName === this.appSettings.settings.serverName &&
+      saved.serverAPI === this.appSettings.settings.serverAPI &&
+      saved.serverAuth === this.appSettings.settings.serverAuth &&
+      saved.customWorkServer === this.appSettings.settings.customWorkServer;
+    if (!stillCurrent()) return null;
+
+    const twister = this.getTwister32WorkTarget();
+    if (twister && twister.workUrl !== attemptedWorkUrl) {
+      const work = await this.requestServerWork(hash, multiplier, twister.workUrl, 30000);
+      this.recordActualWorkResult(twister.api, twister.workUrl, !!work);
+      if (work || !stillCurrent()) return work;
     }
-    return targets;
+
+    if (!stillCurrent() || !this.canUseWebGLFallback()) return null;
+    this.activeProvider$.next({
+      source: saved.powSource, name: 'WebGL', endpoint: '', status: 'checking'
+    });
+    try {
+      const work = await this.getHashWebGL(hash, multiplier);
+      const threshold = this.util.nano.difficultyFromMultiplier(multiplier, baseThreshold);
+      const valid = /^[0-9a-f]{16}$/i.test(work) &&
+        this.util.nano.validateWork(hash, threshold, work);
+      if (!stillCurrent()) return null;
+      this.activeProvider$.next({
+        source: saved.powSource, name: 'WebGL', endpoint: '',
+        status: valid ? 'available' : 'unavailable'
+      });
+      return valid ? work : null;
+    } catch (_) {
+      if (stillCurrent()) this.activeProvider$.next({
+        source: saved.powSource, name: 'WebGL', endpoint: '', status: 'unavailable'
+      });
+      return null;
+    }
   }
 
   private async generateAuthenticatedWork(
@@ -221,17 +245,14 @@ export class PowService {
     if (!this.isAndroidInstalledPwa() ||
         (this.appSettings.settings.powSource !== 'server' &&
          this.appSettings.settings.powSource !== 'best')) return Promise.resolve();
+    // No discovery needed: Twister32 /pow is the sole public Android fallback.
+    // A preference is not evidence of successful work generation.
     if (!this.androidPowStartup) {
-      this.androidPowStartup = this.ranking.refresh()
-        .then(() => {
-          const selected = this.getPublicWorkTargets()[0];
-          if (selected && this.activeProvider$.value.status === 'unverified') {
-            const health = this.ranking.measurements.find(node => node.api === selected.api)?.powHealth;
-            this.publishProvider(selected.workUrl, health === 'available' ? 'available' : 'unverified');
-          }
-          console.info('[Nano PoW] Android PWA external work:', selected ? 'ready' : 'no verified provider');
-        })
-        .catch(() => { console.info('[Nano PoW] External work scan unavailable.'); });
+      const fallback = this.getTwister32WorkTarget();
+      if (fallback && this.activeProvider$.value.status === 'unverified') {
+        this.publishProvider(fallback.workUrl, 'unverified');
+      }
+      this.androidPowStartup = Promise.resolve();
     }
     return this.androidPowStartup;
   }
@@ -239,232 +260,104 @@ export class PowService {
   private async getAndroidPwaExternalPoW(
     hash: string, multiplier: number, saved: AppSettingsService['settings']
   ): Promise<{ handled: boolean; work: string | null }> {
-    // Respect explicitly configured private/authenticated or offline nodes
-    // and user-selected custom, CPU or WebGL PoW sources.
+    const configured = this.appSettings.serverOptions.find(node =>
+      node.value === saved.serverName);
+    // Never override private/local, authenticated, offline or explicit custom
+    // sources. Android's public automatic fallback is Twister32 /pow only.
     if (!this.isAndroidInstalledPwa() || saved.serverAuth ||
         saved.serverName === 'custom' || saved.serverName === 'offline' ||
+        configured?.isLocal || configured?.allowFailover === false ||
         (saved.powSource !== 'server' && saved.powSource !== 'best')) {
       return { handled: false, work: null };
     }
-    // Discovery is never on the critical path of a receive/send. When a
-    // wallet has just been imported and no scan is ready, immediately use the
-    // configured server (Twister32 /pow on first launch), without waiting.
-    void this.initializeAndroidPwaExternalPoW();
-    if (!this.ranking.ready) return { handled: false, work: null };
-    // The unauthenticated probe may classify a paid API as unavailable.
-    // Unlocked API-key providers are separate candidates, not RPC nodes.
-    const ranked = this.getPublicWorkTargets();
-    const authenticated = this.getAuthenticatedWorkTargets();
-    // Keep the best measured provider first, but reserve fallback slots for
-    // the unlocked paid PoW endpoints even when their anonymous probe failed.
-    const targets = [
-      ...ranked.slice(0, 1),
-      ...authenticated,
-      ...ranked.slice(1)
-    ].filter((target, index, all) =>
-      this.canGenerateWorkAt(target.workUrl) &&
-      all.findIndex(other => other.workUrl === target.workUrl) === index).slice(0, 3);
-    if (!targets.length) return { handled: false, work: null };
+    const stillCurrent = () => this.shouldContinueQueue &&
+      (typeof navigator === 'undefined' || navigator.onLine !== false) &&
+      saved.serverAPI === this.appSettings.settings.serverAPI &&
+      saved.serverName === this.appSettings.settings.serverName &&
+      saved.powSource === this.appSettings.settings.powSource;
 
-    for (let i = 0; i < targets.length; i++) {
-      if (!this.shouldContinueQueue ||
-          (typeof navigator !== 'undefined' && navigator.onLine === false) ||
-          saved.serverAPI !== this.appSettings.settings.serverAPI ||
-          saved.powSource !== this.appSettings.settings.powSource) {
-        return { handled: true, work: null };
-      }
-      const { api, workUrl } = targets[i];
-      // A proven provider gets first attempt; the remaining public providers
-      // are fallbacks for the very same PoW root, never for signed process.
-      const work = await this.requestServerWork(hash, multiplier, workUrl, i === 0 ? 30000 : 20000);
-      this.recordActualWorkResult(api, workUrl, !!work);
-      if (work) return { handled: true, work };
+    void this.initializeAndroidPwaExternalPoW();
+    const selected = this.appSettings.getSelectedServerWorkUrl() || saved.serverAPI || '';
+    // Explicitly selected Nano.to works when the user has unlocked its key.
+    // After "Later", it is skipped without any anonymous paid request.
+    if (saved.powSource === 'server' &&
+        PoWApiKeyVaultService.providerForUrl(selected) === 'nano-to' &&
+        this.canGenerateWorkAt(selected) && stillCurrent()) {
+      const work = await this.requestServerWork(hash, multiplier, selected, 30000);
+      this.recordActualWorkResult(selected, selected, !!work);
+      if (work || !stillCurrent()) return { handled: true, work };
     }
-    return { handled: true, work: null };
+    const twister = this.getTwister32WorkTarget();
+    if (!twister || !stillCurrent()) return { handled: true, work: null };
+    const work = await this.requestServerWork(hash, multiplier, twister.workUrl, 30000);
+    this.recordActualWorkResult(twister.api, twister.workUrl, !!work);
+    return { handled: true, work: stillCurrent() ? work : null };
   }
 
-  private async getServerPoWWithFallback(hash: string, multiplier: number, selectedWorkUrl: string): Promise<string | null> {
+  private async getServerPoWWithFallback(
+    hash: string, multiplier: number, selectedWorkUrl: string
+  ): Promise<string | null> {
     const saved = { ...this.appSettings.settings };
     const android = await this.getAndroidPwaExternalPoW(hash, multiplier, saved);
     if (android.handled) return android.work;
+
     const primary = this.appSettings.serverOptions.find(node =>
       node.api && node.api === saved.serverAPI &&
       (saved.serverName === 'random' || node.value === saved.serverName));
-    // Never forward private RPC credentials, override a custom work source,
-    // or choose another wallet node because only PoW failed.
+    // Respect a manually configured private/offline endpoint without rotation.
     if (!primary || !primary.allowFailover || !primary.ws || primary.auth ||
-        saved.serverName === 'offline' || saved.serverName === 'custom') {
+        primary.isLocal || saved.serverName === 'offline' ||
+        saved.serverName === 'custom') {
       return this.requestServerWork(hash, multiplier, selectedWorkUrl);
     }
 
-    const primaryWorkUrl = secureEndpoint(selectedWorkUrl || primary.api!, 'rpc');
-    // "Later" deliberately leaves Nano.to locked. Do not attempt an
-    // impossible anonymous work_generate there or exhaust the only fallback
-    // slot on the wrong list (RPC rank != PoW rank).
-    if (!this.canGenerateWorkAt(primaryWorkUrl)) {
-      const targets = this.getPublicWorkTargets()
-        .filter(target => target.workUrl !== primaryWorkUrl).slice(0, 3);
-      for (let index = 0; index < targets.length; index++) {
-        if (!this.shouldContinueQueue ||
-            (typeof navigator !== 'undefined' && navigator.onLine === false) ||
-            saved.serverName !== this.appSettings.settings.serverName ||
-            saved.serverAPI !== this.appSettings.settings.serverAPI ||
-            saved.powSource !== this.appSettings.settings.powSource) return null;
-        const target = targets[index];
-        const work = await this.requestServerWork(hash, multiplier, target.workUrl,
-          index === 0 ? 30000 : 20000);
-        this.recordActualWorkResult(target.api, target.workUrl, !!work);
-        if (work) return work;
-      }
-      return null;
-    }
-
-    const possible = this.appSettings.serverOptions.filter(node =>
-      node.allowFailover && node.failoverTarget !== false &&
-      node.api && node.ws && !node.auth && node.api !== primary.api &&
-      this.canGenerateWorkAt(node.work || node.api));
-    const ranked = this.appSettings.getRankedFallbackEndpoints(primary.api!);
-    const knownOrder = ranked === null ? possible.map(node => node.api!) : ranked;
-    const authenticated = this.getAuthenticatedWorkTargets();
-    const order = authenticated.length
-      ? [...knownOrder.filter(api => possible.some(node =>
-          node.api === api && node.value === 'twister32-rsnano')),
-        ...authenticated.map(node => node.api), ...knownOrder]
-      : knownOrder;
-    const seen = new Set<string>([secureEndpoint(selectedWorkUrl || primary.api!, 'rpc')]);
-    const backups: Array<{ api: string; workUrl: string }> = [];
-    for (const api of order) {
-      const node = possible.find(candidate => candidate.api === api);
-      const paid = authenticated.find(candidate => candidate.api === api);
-      if ((!node && !paid) || (!paid && this.ranking.measurements.some(result =>
-          result.api === node?.api && result.powHealth === 'unavailable'))) continue;
-      try {
-        const workUrl = secureEndpoint(paid?.workUrl || node?.work || node?.api || '', 'rpc');
-        if (!seen.has(workUrl)) {
-          seen.add(workUrl);
-          backups.push({ api, workUrl });
-        }
-      } catch (_) { /* Invalid or insecure PoW endpoint: do not retry it. */ }
-      if (backups.length === 2) break;
-    }
-
-    // Preserve the established 2-minute attempt if no safe backup is known.
-    if (!backups.length) {
-      const result = await this.requestServerWork(hash, multiplier, selectedWorkUrl);
-      this.recordActualWorkResult(primary.api!, selectedWorkUrl || primary.api!, !!result);
-      return result;
-    }
-
     const primaryUrl = secureEndpoint(selectedWorkUrl || primary.api!, 'rpc');
-    const targets = [{ api: primary.api!, workUrl: primaryUrl }, ...backups];
-    for (let index = 0; index < targets.length; index++) {
-      if (!this.shouldContinueQueue || (index > 0 &&
-          (typeof navigator !== 'undefined' && navigator.onLine === false))) return null;
-      const target = targets[index];
-      // The first work server gets a reasonable computation window; two
-      // independent backups get smaller, bounded windows. Each request is
-      // abortable, and the signed 'process' RPC is NEVER replayed.
-      const work = await this.requestServerWork(hash, multiplier, target.workUrl, index === 0 ? 30000 : 20000);
-      this.recordActualWorkResult(target.api, target.workUrl, !!work);
-      if (work) {
-        if (index > 0) console.info('[Nano PoW] Recovered through alternate work server.');
-        return work;
-      }
-      // Do not continue retrying a PoW request after user switched servers.
-      if (saved.serverAPI !== this.appSettings.settings.serverAPI ||
-          saved.powSource !== this.appSettings.settings.powSource) break;
-    }
-    return null;
-  }
+    const twister = this.getTwister32WorkTarget();
+    const isTwister = !!twister && primaryUrl === twister.workUrl;
+    const isUnlockedNano = PoWApiKeyVaultService.providerForUrl(primaryUrl) === 'nano-to' &&
+      this.canGenerateWorkAt(primaryUrl);
 
-  // A custom public PoW endpoint is eligible for work-only fallback. Keep
-  // local, intranet and reserved hostnames pinned to their user-selected
-  // endpoint; the URL check is not a proof that public DNS cannot resolve to
-  // a private address, so credentials and private RPC selections remain pinned.
-  private isPublicCustomWorkUrl(workUrl: string): boolean {
-    try {
-      const endpoint = new URL(secureEndpoint(workUrl, 'rpc'));
-      const host = endpoint.hostname.toLowerCase();
-      if (endpoint.protocol !== 'https:' || !host.includes('.') ||
-          /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) || host.includes(':') ||
-          /(?:^|\.)(?:localhost|local|lan|home|internal|intranet|corp|test|example|invalid|onion)$/.test(host)) {
-        return false;
-      }
-      return true;
-    } catch (_) { return false; }
+    // Other registry RPC nodes have no reliable work_generate. Start directly
+    // at Twister32, unless the selected provider is an unlocked Nano.to.
+    // Explicitly selected Twister32 is also attempted as the primary.
+    if (isTwister || isUnlockedNano) {
+      const work = await this.requestServerWork(hash, multiplier, primaryUrl, 30000);
+      this.recordActualWorkResult(primary.api!, primaryUrl, !!work);
+      if (work) return work;
+    }
+    return this.fallbackToTwisterOrWebGL(
+      hash, multiplier, saved, isTwister ? primaryUrl : '');
   }
 
   private async getCustomPoWWithFallback(
     hash: string, multiplier: number, workUrl: string
   ): Promise<string | null> {
     const saved = { ...this.appSettings.settings };
-    // This is never wallet/RPC failover: no account data, credentials or
-    // signed process requests are sent to the alternate PoW providers.
+    // Custom private/intranet and authenticated RPC selections stay pinned.
     if (!this.isPublicCustomWorkUrl(workUrl) || saved.serverAuth ||
         saved.serverName === 'custom' || saved.serverName === 'offline') {
       return this.requestServerWork(hash, multiplier, workUrl);
     }
-
-    // Prefer already-ranked healthy public providers, but do not block a
-    // receive on discovery. RsNano /pow is a deterministic safe default
-    // when no ranking exists (including an installed Android PWA).
-    const publicNodes = this.appSettings.serverOptions.filter(node =>
-      !node.isLocal && node.allowFailover && node.failoverTarget !== false &&
-      !!node.api && !!node.ws && !node.auth &&
-      this.canGenerateWorkAt(node.work || node.api)
-    ).sort((a, b) => (a.value === 'twister32-rsnano' ? -1 : 0) -
-                     (b.value === 'twister32-rsnano' ? -1 : 0));
-    const measured = this.ranking.ready ? this.ranking.getExternalPoWTargets() : [];
-    // Prefer own verified work endpoint, then unlocked paid work providers.
-    // Other public nodes are last-resort fallbacks; absence of a credential
-    // never causes an API key to be sent in plaintext or in a URL.
-    const available = [
-      ...publicNodes.filter(node => node.value === 'twister32-rsnano')
-        .map(node => ({ api: node.api!, workUrl: node.work || node.api! })),
-      ...this.getAuthenticatedWorkTargets(),
-      ...measured,
-      ...publicNodes.filter(node => node.value !== 'twister32-rsnano')
-        .map(node => ({ api: node.api!, workUrl: node.work || node.api! }))
-    ];
-    const candidates: Array<{ api: string; workUrl: string }> = [];
-    const seen = new Set<string>();
-    try { seen.add(secureEndpoint(workUrl, 'rpc')); }
-    catch (_) { return this.requestServerWork(hash, multiplier, workUrl); }
-    for (const node of available) {
-      try {
-        const url = secureEndpoint(node.workUrl, 'rpc');
-        if (seen.has(url)) continue;
-        seen.add(url);
-        candidates.push({ api: node.api, workUrl: url });
-      } catch (_) { /* Ignore unsafe work endpoints. */ }
-      if (candidates.length === 2) break;
+    const secureWorkUrl = secureEndpoint(workUrl, 'rpc');
+    if (this.canGenerateWorkAt(secureWorkUrl)) {
+      const result = await this.requestServerWork(hash, multiplier, secureWorkUrl, 30000);
+      if (result) return result;
     }
-    // Do not shorten the deliberate custom-server timeout when no public
-    // fallback is actually eligible.
-    if (!candidates.length) return this.requestServerWork(hash, multiplier, workUrl);
+    return this.fallbackToTwisterOrWebGL(hash, multiplier, saved, secureWorkUrl);
+  }
 
-    const stillCurrent = () => this.shouldContinueQueue &&
-      (typeof navigator === 'undefined' || navigator.onLine !== false) &&
-      saved.powSource === this.appSettings.settings.powSource &&
-      saved.customWorkServer === this.appSettings.settings.customWorkServer &&
-      saved.serverAPI === this.appSettings.settings.serverAPI &&
-      saved.serverName === this.appSettings.settings.serverName &&
-      saved.serverAuth === this.appSettings.settings.serverAuth;
-
-    if (!stillCurrent()) return null;
-    const primaryWork = await this.requestServerWork(hash, multiplier, workUrl, 30000);
-    if (primaryWork || !stillCurrent()) return primaryWork;
-
-    for (const target of candidates) {
-      if (!stillCurrent()) return null;
-      const fallbackWork = await this.requestServerWork(hash, multiplier, target.workUrl, 20000);
-      this.recordActualWorkResult(target.api, target.workUrl, !!fallbackWork);
-      if (fallbackWork) {
-        console.info('[Nano PoW] Custom public work server recovered via alternate provider.');
-        return fallbackWork;
+  // Keep public custom work sources separate from private or local endpoints.
+  private isPublicCustomWorkUrl(workUrl: string): boolean {
+    try {
+      const endpoint = new URL(secureEndpoint(workUrl, 'rpc'));
+      const host = endpoint.hostname.toLowerCase();
+      if (endpoint.protocol !== 'https:' || !host.includes('.') ||
+          /^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host) || host.includes(':') ||
+          /(?:^|\\.)(?:localhost|local|lan|home|internal|intranet|corp|test|example|invalid|onion)$/.test(host)) {
+        return false;
       }
-    }
-    return null;
+      return true;
+    } catch (_) { return false; }
   }
 
   /**
