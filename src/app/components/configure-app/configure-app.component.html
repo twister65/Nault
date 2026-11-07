@@ -247,6 +247,7 @@
                     <input id="pow-vault-passphrase" class="uk-input uk-margin-small-bottom"
                       type="password" autocomplete="off" spellcheck="false"
                       [(ngModel)]="powVaultPassphrase"
+                      [disabled]="powVaultBusy || powApiKeyVault.isUnlocked"
                       [placeholder]="'configure-app.pow-api-vault.passphrase-placeholder' | transloco">
                     <div class="pow-vault-actions">
                       <button class="uk-button uk-button-primary" type="button"
@@ -260,7 +261,7 @@
                         [disabled]="powVaultBusy || !powApiKeyVault.isUnlocked"
                         (click)="lockPowApiKeys()">{{ 'configure-app.pow-api-vault.lock' | transloco }}</button>
                       <button class="uk-button uk-button-default" type="button"
-                        [disabled]="powVaultBusy || !powApiKeyVault.isUnlocked || !selectedPowKeyId() || !powVaultPassphrase"
+                        [disabled]="powVaultBusy || !powApiKeyVault.isUnlocked || !selectedPowKeyId()"
                         (click)="activatePowApiKey()">{{ 'configure-app.pow-api-vault.activate' | transloco }}</button>
                       <button class="uk-button uk-button-danger" type="button"
                         [disabled]="powVaultBusy || !powApiKeyVault.isUnlocked || !selectedPowKeyId()"
