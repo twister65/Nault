@@ -357,16 +357,10 @@ export class PowService {
     if (!primary || !primary.allowFailover || !primary.ws || primary.auth ||
         primary.isLocal || saved.serverName === 'offline' ||
         saved.serverName === 'custom') {
-      return !primary && saved.powSource === 'best'
-        ? this.fallbackToTwisterOrWebGL(hash, multiplier, saved, '')
-        : this.requestServerWork(hash, multiplier, selectedWorkUrl);
+      return this.requestServerWork(hash, multiplier, selectedWorkUrl);
     }
 
-    const preferredBestNanoTo = saved.powSource === 'best' &&
-      this.powApiKeys.hasKey('nano-to');
-    const primaryUrl = preferredBestNanoTo
-      ? 'https://rpc.nano.to/'
-      : secureEndpoint(selectedWorkUrl || primary.api!, 'rpc');
+    const primaryUrl = secureEndpoint(selectedWorkUrl || primary.api!, 'rpc');
     const twister = this.getTwister32WorkTarget();
     const isTwister = !!twister && primaryUrl === twister.workUrl;
     const isUnlockedNano = PoWApiKeyVaultService.providerForUrl(primaryUrl) === 'nano-to' &&
@@ -377,8 +371,7 @@ export class PowService {
     // Explicitly selected Twister32 is also attempted as the primary.
     if (isTwister || isUnlockedNano) {
       const work = await this.requestServerWork(hash, multiplier, primaryUrl, 30000);
-      this.recordActualWorkResult(preferredBestNanoTo
-        ? 'https://rpc.nano.to/' : primary.api!, primaryUrl, !!work);
+      this.recordActualWorkResult(primary.api!, primaryUrl, !!work);
       if (work) return work;
     }
     return this.fallbackToTwisterOrWebGL(
