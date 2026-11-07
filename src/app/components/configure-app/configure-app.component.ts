@@ -5,10 +5,12 @@ import {NotificationService} from '../../services/notification.service';
 import {AppSettingsService, AppSettings, PoWSource} from '../../services/app-settings.service';
 import {PriceService} from '../../services/price.service';
 import {PowService} from '../../services/pow.service';
+import {PoWApiKeyVaultService} from '../../services/pow-api-key-vault.service';
 import {WorkPoolService} from '../../services/work-pool.service';
 import {AddressBookService} from '../../services/address-book.service';
 import type {QRType} from '../qr-modal/qr-modal.component';
 import {ApiService} from '../../services/api.service';
+import {RpcNodeRankingService} from '../../services/rpc-node-ranking.service';
 import {WebsocketService} from '../../services/websocket.service';
 import {NodeService} from '../../services/node.service';
 import {UtilService} from '../../services/util.service';
@@ -34,8 +36,10 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     private notifications: NotificationService,
     private appSettings: AppSettingsService,
     private addressBook: AddressBookService,
-    private pow: PowService,
+    public pow: PowService,
+    public powApiKeyVault: PoWApiKeyVaultService,
     private api: ApiService,
+    public rpcRanking: RpcNodeRankingService,
     private websocket: WebsocketService,
     private workPool: WorkPoolService,
     private repService: RepresentativeService,
@@ -130,12 +134,112 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
   powOptions: Array<{name: string; value: PoWSource}> = [
     { name: 'configure-app.pow-options.best-option-available', value: 'best' },
+    { name: 'configure-app.pow-options.external-nano-to', value: 'nanoTo' },
     { name: 'configure-app.pow-options.client-side-gpu-webgl', value: 'clientWebGL' },
     { name: 'configure-app.pow-options.client-side-cpu-slowest', value: 'clientCPU' },
     { name: 'configure-app.pow-options.external-selected-server', value: 'server' },
     { name: 'configure-app.pow-options.external-custom-server', value: 'custom' },
   ];
   selectedPoWOption = this.powOptions[0].value;
+  powApiKeyInput = '';
+  powApiKeyLabel = '';
+  powSelectedKeyId = '';
+  powVaultPassphrase = '';
+  powVaultBusy = false;
+
+  selectedPowKeyId(): string {
+    const options = this.powApiKeyVault.getKeySummaries('nano-to');
+    const chosen = options.find(entry => entry.id === this.powSelectedKeyId) ||
+      options.find(entry => entry.active) || options[0];
+    return chosen?.id || '';
+  }
+
+  async savePowApiKey(): Promise<void> {
+    if (this.powVaultBusy) return;
+    this.powVaultBusy = true;
+    try {
+      this.powSelectedKeyId = await this.powApiKeyVault.saveKey(
+        'nano-to', this.powApiKeyInput, this.powVaultPassphrase, this.powApiKeyLabel);
+      this.pow.syncProviderFromSettings(true);
+      this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.saved'));
+    } catch (_) {
+      this.notifications.sendError(this.translocoService.translate('configure-app.pow-api-vault.failed'));
+    } finally {
+      this.powApiKeyInput = '';
+      this.powApiKeyLabel = '';
+      this.powVaultPassphrase = '';
+      this.powVaultBusy = false;
+    }
+  }
+  async unlockPowApiKeys(): Promise<void> {
+    if (this.powVaultBusy || !this.powApiKeyVault.hasVault || this.powApiKeyVault.isUnlocked) return;
+    // Keep the action available for a locked vault. An empty passphrase should
+    // guide the user to the existing input, not attempt an invalid unlock.
+    if (!this.powVaultPassphrase.trim()) {
+      document.getElementById('pow-vault-passphrase')?.focus();
+      return;
+    }
+    this.powVaultBusy = true;
+    try {
+      await this.powApiKeyVault.unlock(this.powVaultPassphrase);
+      this.pow.syncProviderFromSettings(true);
+      this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.unlocked'));
+    } catch (_) {
+      this.notifications.sendError(this.translocoService.translate('configure-app.pow-api-vault.failed'));
+    } finally {
+      this.powVaultPassphrase = '';
+      this.powVaultBusy = false;
+    }
+  }
+  async activatePowApiKey(): Promise<void> {
+    if (this.powVaultBusy) return;
+    const id = this.selectedPowKeyId();
+    if (!id || !this.powApiKeyVault.isUnlocked) return;
+    this.powVaultBusy = true;
+    try {
+      await this.powApiKeyVault.activateKey('nano-to', id);
+      this.pow.syncProviderFromSettings(true);
+      this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.activated'));
+    } catch (_) {
+      this.notifications.sendError(this.translocoService.translate('configure-app.pow-api-vault.failed'));
+    } finally {
+      this.powVaultPassphrase = '';
+      this.powVaultBusy = false;
+    }
+  }
+  async removePowApiKey(): Promise<void> {
+    if (this.powVaultBusy || !this.powApiKeyVault.isUnlocked) return;
+    const id = this.selectedPowKeyId();
+    if (!id) return;
+    const UIkit = (window as unknown as {UIkit: {modal: {confirm(message: string): Promise<void>}}}).UIkit;
+    try {
+      await UIkit.modal.confirm(this.translocoService.translate('configure-app.pow-api-vault.delete-confirm'));
+    } catch (_) {
+      // Cancel must leave the selected key and all other vault entries intact.
+      return;
+    }
+    this.powVaultBusy = true;
+    try {
+      // A non-extractable AES key is held only while the vault is unlocked.
+      // Deleting one entry does not require an unrelated "new API key" input
+      // or re-entering the vault phrase; the remaining secrets stay encrypted.
+      await this.powApiKeyVault.removeKey('nano-to', null, id);
+      this.powSelectedKeyId = '';
+      this.pow.syncProviderFromSettings(true);
+      this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.deleted'));
+    } catch (_) {
+      this.notifications.sendError(this.translocoService.translate('configure-app.pow-api-vault.failed'));
+    } finally {
+      this.powVaultBusy = false;
+    }
+  }
+  lockPowApiKeys(): void {
+    this.powApiKeyVault.lock();
+    this.pow.syncProviderFromSettings(true);
+    this.powApiKeyInput = '';
+    this.powApiKeyLabel = '';
+    this.powVaultPassphrase = '';
+  }
 
   multiplierOptions = [
     { name: 'configure-app.multiplier-options.default-1x-or-1-64x', value: 1 },
@@ -169,6 +273,12 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
   serverOptions: AppSettingsService['serverOptions'] = [];
   selectedServer: string | null = null;
+  serverNodeName = '';
+  // Local-node management is independent of the active RPC selection.
+  localNodeToDeleteId = '';
+  localNodes = () => this.serverOptions.filter(server => server.isLocal);
+  localNodeToDelete = () => this.localNodes().find(server =>
+    server.value === this.localNodeToDeleteId);
 
   defaultRepresentative: string | null = null;
   representativeResults$ = new BehaviorSubject<StoredRepresentative[]>([]);
@@ -200,7 +310,28 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
   showServerValues = () => this.selectedServer && this.selectedServer !== 'random' && this.selectedServer !== 'offline';
   showStatValues = () => this.selectedServer && this.selectedServer !== 'offline';
-  showServerConfigs = () => this.selectedServer && this.selectedServer === 'custom';
+  showServerConfigs = () => !!this.selectedServer && (this.selectedServer === 'custom' ||
+    !!this.serverOptions.find(server => server.value === this.selectedServer && server.isLocal));
+  selectedLocalNode = () => this.serverOptions.find(server =>
+    server.value === this.selectedServer && server.isLocal);
+  // The node dropdown only lists RPC nodes; these are independent actions.
+  availableServerNodes = () => this.serverOptions.filter(server => !!server.api && server.value !== 'custom');
+  selectedServerIsNode = () => this.availableServerNodes().some(server =>
+    server.value === this.selectedServer);
+  selectServerMode(mode: 'random' | 'custom' | 'offline') {
+    this.selectedServer = mode;
+    this.serverConfigChange(mode);
+    if (mode === 'random') {
+      // The user can inspect fresh results before applying the choice.
+      // The scan is independent of wallet state and never blocks the UI.
+      void this.rpcRanking.refresh().catch(() => {});
+    }
+  }
+  selectServerNode(value: string) {
+    if (!value || !this.availableServerNodes().some(server => server.value === value)) return;
+    this.selectedServer = value;
+    this.serverConfigChange(value);
+  }
 
   async ngOnInit() {
     this.loadFromSettings();
@@ -279,7 +410,8 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
         this.nodeStatsServer = endpoint;
         if (blockCount) {
           this.nodeBlockCount = Number(blockCount.count).toLocaleString('en-US');
-          this.nodeUnchecked = Number(blockCount.unchecked).toLocaleString('en-US');
+          this.nodeUnchecked = blockCount.unchecked === null
+            ? null : blockCount.unchecked.toLocaleString('en-US');
           this.nodeCemented = Number(blockCount.cemented).toLocaleString('en-US');
           this.nodeUncemented = Number(blockCount.count - blockCount.cemented).toLocaleString('en-US');
         }
@@ -309,6 +441,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
 
   loadFromSettings() {
+    this.pow.syncProviderFromSettings();
     const settings = this.appSettings.settings;
 
     const matchingLanguage = this.languages.find(language => language.id === settings.language);
@@ -346,6 +479,9 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
     this.serverOptions = this.appSettings.serverOptions;
     this.selectedServer = settings.serverName;
+    this.localNodeToDeleteId = this.serverOptions.find(server =>
+      server.value === settings.serverName && server.isLocal)?.value || '';
+    this.serverNodeName = this.serverOptions.find(server => server.value === settings.serverName && server.isLocal)?.name || '';
     this.serverAPI = settings.serverAPI;
     this.serverAPIUpdated = this.serverAPI;
     this.serverWS = settings.serverWS;
@@ -404,7 +540,14 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
   async updateWalletSettings() {
     if (this.customWorkServer && this.customWorkServer.trim()) {
-      try { this.customWorkServer = secureEndpoint(this.customWorkServer, 'rpc'); } catch (_) {
+      try {
+        this.customWorkServer = secureEndpoint(this.customWorkServer, 'rpc');
+        const parsed = new URL(this.customWorkServer);
+        if (parsed.hostname === 'rpc.nano.to' &&
+            (parsed.search || parsed.username || parsed.password)) {
+          return this.notifications.sendWarning(this.translocoService.translate('configure-app.pow-api-vault.no-url-keys'));
+        }
+      } catch (_) {
         return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.endpoint-work-https'));
       }
     }
@@ -507,6 +650,12 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     };
 
     this.appSettings.setAppSettings(newSettings);
+    this.pow.syncProviderFromSettings(true);
+    if (this.walletService.isConfigured() && (newPoW === 'server' || newPoW === 'best')) {
+      // A manually chosen automatic PoW mode may request discovery, without
+      // delaying the settings save or switching the wallet's RPC endpoint.
+      void this.pow.initializeAndroidPwaExternalPoW();
+    }
     this.notifications.sendSuccess(this.translocoService.translate('configure-app.app-wallet-settings-successfully-updated'));
 
     if (resaveWallet) {
@@ -519,27 +668,37 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
   async updateServerSettings() {
     const newSettings: Partial<AppSettings> = {
-      serverName: this.selectedServer ?? 'random',
-      serverAPI: null,
-      serverWS: null,
-      serverAuth: null,
+      serverName: this.selectedServer ?? 'twister32-rsnano',
+      serverAPI: null, serverWS: null, serverAuth: null
     };
-
-    if (this.selectedServer === 'custom') {
+    if (this.selectedServer === 'random') {
+      // Only an explicit user selection waits for the background results.
+      // The regular first launch NEVER waits for a ranking.
+      await this.rpcRanking.refresh();
+    }
+    if (this.showServerConfigs()) {
+      if (!this.serverAPI?.trim()) {
+        return this.notifications.sendWarning(this.translocoService.translate('configure-app.custom-api-server-has-an-invalid-address'));
+      }
       try {
-        if (this.serverAPI && this.serverAPI.trim()) newSettings.serverAPI = secureEndpoint(this.serverAPI, 'rpc');
-        if (this.serverWS && this.serverWS.trim()) newSettings.serverWS = secureEndpoint(this.serverWS, 'ws');
+        // Validate before writing local storage or updating the live connection.
+        // The Settings service validates as a second boundary as well.
+        const rpc = secureEndpoint(this.serverAPI, 'rpc');
+        const ws = this.serverWS?.trim() ? secureEndpoint(this.serverWS, 'ws') : null;
+        newSettings.serverName = this.appSettings.saveLocalNode(
+          this.serverNodeName, rpc, ws,
+          this.serverAuth && this.serverAuth.trim().length > 1 ? this.serverAuth : null,
+          this.selectedLocalNode()?.value
+        );
       } catch (_) {
         return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.endpoint-server-secure'));
       }
     }
 
-    if (this.selectedServer === 'custom' && this.serverAuth != null && this.serverAuth.trim().length > 1) {
-      newSettings.serverAuth = this.serverAuth;
-    }
-
     this.appSettings.setAppSettings(newSettings);
     this.appSettings.loadAppSettings();
+    this.pow.syncProviderFromSettings(true);
+    this.serverOptions = this.appSettings.serverOptions;
     this.resetNodeStats();
 
     this.notifications.sendSuccess(this.translocoService.translate('configure-app.server-settings-successfully-updated'));
@@ -579,6 +738,60 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     this.serverAPI = this.serverAPIUpdated;
     this.serverWS = this.appSettings.settings.serverWS;
     this.serverAuth = this.appSettings.settings.serverAuth;
+    this.serverNodeName = this.selectedLocalNode()?.name || '';
+    if (this.selectedLocalNode()) this.localNodeToDeleteId = this.selectedLocalNode()!.value;
+  }
+
+  async deleteLocalNode() {
+    // The server dropdown may be set to The best, Offline or another node:
+    // deletion always targets the explicit local-node management selection.
+    const selected = this.localNodeToDelete();
+    if (!selected) return;
+    const UIkit = (window as unknown as {UIkit: {modal: {confirm(message: string): Promise<void>}}}).UIkit;
+    try {
+      await UIkit.modal.confirm(this.translocoService.translate('configure-app.delete-local-node-confirm'));
+    } catch (_) { return; }
+
+    const activeBefore = this.appSettings.settings.serverAPI;
+    const wsBefore = this.appSettings.settings.serverWS;
+    const savedMode = this.appSettings.settings.serverName;
+    const selectedWasDeleted = this.selectedServer === selected.value;
+    this.appSettings.removeLocalNode(selected.value);
+    this.serverOptions = this.appSettings.serverOptions;
+    this.localNodeToDeleteId = '';
+
+    if (savedMode === selected.value) {
+      // Removing the actual configured endpoint requires a safe fallback.
+      this.appSettings.setAppSettings({ serverName: 'twister32-rsnano' });
+      this.appSettings.loadServerSettings();
+      this.appSettings.saveAppSettings();
+    } else if (savedMode === 'random' && activeBefore === selected.api) {
+      // Re-evaluate The best only if the deleted local node is actually
+      // active. Removing an unrelated entry must not switch the RPC server.
+      this.appSettings.loadServerSettings();
+      if (activeBefore !== this.appSettings.settings.serverAPI ||
+          wsBefore !== this.appSettings.settings.serverWS) {
+        this.appSettings.saveAppSettings();
+      }
+    }
+
+    if (selectedWasDeleted || savedMode === selected.value) {
+      this.selectedServer = this.appSettings.settings.serverName;
+      this.serverConfigChange(this.selectedServer);
+    }
+
+    if (activeBefore !== this.appSettings.settings.serverAPI ||
+        wsBefore !== this.appSettings.settings.serverWS) {
+      this.websocket.forceReconnect();
+      this.resetNodeStats();
+      void this.updateNodeStats();
+      if (this.walletService.wallet?.accounts?.length) {
+        void this.walletService.reloadBalances().catch(() =>
+          this.notifications.sendWarning(this.translocoService.translate('ui-notifications.refresh-balance-failed')));
+      }
+    }
+    // Refresh the visible audit so deleted local nodes no longer appear.
+    void this.rpcRanking.refresh();
   }
 
   searchRepresentatives() {
@@ -629,7 +842,9 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   serverConfigChange(newServer: string) {
     const custom = this.serverOptions.find(c => c.value === newServer);
     if (custom) {
+      if (custom.isLocal) this.localNodeToDeleteId = custom.value;
       this.serverAPI = custom.api;
+      this.serverNodeName = custom.isLocal ? custom.name : '';
       this.serverAPIUpdated = null;
       this.serverWS = custom.ws;
       this.serverAuth = custom.auth;
@@ -648,22 +863,56 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     this.statsRefreshEnabled = newServer === 'random' ? false : true;
   }
 
-  getRemotePoWOptionName() {
-    const optionName = 'External - Selected Server';
 
-    if ( (this.selectedServer === 'random') || (this.selectedServer === 'offline') ) {
-      return optionName;
+  // The locally encrypted Nano.to vault is independent of the RPC and PoW
+  // source selection, and must stay accessible even before a key is unlocked.
+  showNanoToPowApiKeys(): boolean {
+    return true;
+  }
+
+  getRemotePoWOptionName(mode: 'server' | 'best' | 'custom' = 'server'): string {
+    const label = this.translocoService.translate(
+      mode === 'best' ? 'configure-app.pow-options.best-option-available'
+        : mode === 'custom' ? 'configure-app.pow-options.external-custom-server'
+        : 'configure-app.pow-options.external-selected-server'
+    );
+    // A dropdown option changes its text, not its saved value. Do not turn
+    // a temporary PoW fallback into a wallet RPC node or a custom PoW source.
+    // An option not currently selected must remain an ordinary mode choice.
+    const saved = this.appSettings.settings;
+    if (mode !== this.selectedPoWOption || saved.powSource !== mode) return label;
+
+    const primary = this.appSettings.serverOptions.find(node =>
+      node.api && node.api === saved.serverAPI);
+    const preferred = mode === 'best' ? this.pow.getPreferredBestPoWProvider() : null;
+    const primaryWorkUrl = mode === 'best' ? preferred?.endpoint || ''
+      : mode === 'custom' ? saved.customWorkServer
+      : this.appSettings.getSelectedServerWorkUrl() || saved.serverAPI;
+    const active = this.pow.activeProvider$.value;
+    // A successful previous paid work request must not remain the "best"
+    // after its session key was locked or removed. Never infer PoW from RPC.
+    const activeEligible = mode !== 'best' || active.name !== 'Nano.to' ||
+      this.powApiKeyVault.hasKey('nano-to');
+    const confirmed = activeEligible && active.source === mode &&
+      active.status === 'available' && !!active.name &&
+      (!!active.endpoint || active.name === 'WebGL');
+    const fallback = !!(confirmed &&
+      (mode === 'best' ? !!preferred &&
+        (active.name !== preferred.name || active.endpoint !== preferred.endpoint)
+        : !!primaryWorkUrl &&
+          (active.name === 'WebGL' || active.endpoint !== primaryWorkUrl)));
+    const name = confirmed ? active.name
+      : mode === 'best' ? preferred?.name : mode === 'custom' ? '' : primary?.name;
+    if (!name) return label;
+
+    if (fallback) {
+      const external = mode === 'server'
+        ? this.translocoService.translate('configure-app.pow-options.external-provider')
+        : label;
+      const suffix = this.translocoService.translate('configure-app.pow-provider-fallback');
+      return `${external} (${name} — ${suffix})`;
     }
-
-    const selectedServerOption = this.appSettings.serverOptions.find(d => d.value === this.selectedServer);
-
-    if (!selectedServerOption) {
-      return optionName;
-    }
-
-    // The dedicated work endpoint is presented under its actual provider name.
-    if (selectedServerOption.value === 'twister32-rsnano') return selectedServerOption.name;
-    return ( optionName + ' (' + selectedServerOption.name + ')' );
+    return `${label} (${name})`;
   }
 
   async clearWorkCache() {
@@ -676,10 +925,21 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     } catch (err) { return false; }
   }
 
+  // Wallet-data deletion and full-data deletion both remove optional PoW
+  // credentials. Clear in-memory secrets and form inputs as well as storage.
+  private clearWalletAssociatedPoWCredentials(): void {
+    this.powApiKeyVault.clearVault();
+    this.powSelectedKeyId = '';
+    this.powApiKeyInput = '';
+    this.powApiKeyLabel = '';
+    this.powVaultPassphrase = '';
+  }
+
   async clearWalletData() {
     const UIkit = (window as unknown as {UIkit: {modal: {confirm(message: string): Promise<void>}}}).UIkit;
     try {
-      await UIkit.modal.confirm('<p class="uk-alert uk-alert-danger"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">' + this.translocoService.translate('configure-app.you-are-about-to-delete-all-locally-stored-data-about-your') + '</span><br><br><b style="font-size: 18px;">' + this.translocoService.translate('reset-wallet.before-continuing-make-sure-you-have-saved-the-nano-seed') + '</b><br><br><span style="font-size: 18px;"><b>' + this.translocoService.translate('reset-wallet.you-will-not-be-able-to-recover-the-funds-without-a-backup') + '</b></span></p><br>');
+      await UIkit.modal.confirm('<p class="uk-alert uk-alert-danger"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">' + this.translocoService.translate('configure-app.you-are-about-to-delete-all-locally-stored-data-about-your') + '</span><br><br><b style="font-size: 18px;">' + this.translocoService.translate('reset-wallet.before-continuing-make-sure-you-have-saved-the-nano-seed') + '</b><br><br><span style="font-size: 18px;"><b>' + this.translocoService.translate('reset-wallet.you-will-not-be-able-to-recover-the-funds-without-a-backup') + '</b></span><br><br><span style="font-size: 16px;">' + this.translocoService.translate('configure-app.pow-api-vault.delete-with-wallet') + '</span></p><br>');
+      this.clearWalletAssociatedPoWCredentials();
       this.walletService.resetWallet();
       this.walletService.removeWalletData();
 
@@ -690,7 +950,8 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   async clearAllData() {
     const UIkit = (window as unknown as {UIkit: {modal: {confirm(message: string): Promise<void>}}}).UIkit;
     try {
-      await UIkit.modal.confirm('<p class="uk-alert uk-alert-danger"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">' + this.translocoService.translate('configure-app.clear-all-data.1') + '</span><br><br><b style="font-size: 18px;">' + this.translocoService.translate('reset-wallet.before-continuing-make-sure-you-have-saved-the-nano-seed') + '</b><br><br><span style="font-size: 18px;"><b>' + this.translocoService.translate('reset-wallet.you-will-not-be-able-to-recover-the-funds-without-a-backup') + '</b></span></p><br>');
+      await UIkit.modal.confirm('<p class="uk-alert uk-alert-danger"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">' + this.translocoService.translate('configure-app.clear-all-data.1') + '</span><br><br><b style="font-size: 18px;">' + this.translocoService.translate('reset-wallet.before-continuing-make-sure-you-have-saved-the-nano-seed') + '</b><br><br><span style="font-size: 18px;"><b>' + this.translocoService.translate('reset-wallet.you-will-not-be-able-to-recover-the-funds-without-a-backup') + '</b></span><br><br><span style="font-size: 16px;">' + this.translocoService.translate('configure-app.pow-api-vault.delete-with-wallet') + '</span></p><br>');
+      this.clearWalletAssociatedPoWCredentials();
       this.walletService.resetWallet();
       this.walletService.removeWalletData();
 

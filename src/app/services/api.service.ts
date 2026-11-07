@@ -1,8 +1,8 @@
 import { Injectable, Optional } from '@angular/core';
 import { RpcTransportService } from './rpc-transport.service';
 import { secureEndpoint } from './endpoint-policy';
-import { catchError, map, timeout } from 'rxjs/operators';
-import { EMPTY, firstValueFrom, merge } from 'rxjs';
+import { catchError, map, takeUntil, timeout } from 'rxjs/operators';
+import { EMPTY, concat, firstValueFrom, timer } from 'rxjs';
 import { HttpHeaders } from '@angular/common/http';
 import {NodeService} from './node.service';
 import {AppSettingsService} from './app-settings.service';
@@ -19,6 +19,9 @@ export class ApiService {
   // background health probe may check every eligible built-in fallback so
   // random choice does not omit the only working node.
   private readonly maxHealthProbeEndpoints = 5;
+  // Parallel wallet reads, WS-triggered probes and optional node statistics may
+  // settle out of order. A late failure must not undo a newer successful RPC.
+  private successfulRpcResponses = 0;
   constructor(private http: RpcTransportService, private node: NodeService,
     private appSettings: AppSettingsService, @Optional() private desktop?: DesktopService) { }
 
@@ -36,16 +39,29 @@ export class ApiService {
     console.info('[Nano RPC health] Internet disconnected; preserving selected server.');
   }
 
-  // Kept separate to test selection deterministically without mocking
-  // Math.random globally (which can disrupt Jasmine and Zone.js internals).
-  private randomFallbackIndex(lastIndex: number): number {
-    return Math.floor(Math.random() * (lastIndex + 1));
+  private noteRpcSuccess(endpoint: string, generation: number): void {
+    if (this.appSettings.settings.serverAPI !== endpoint ||
+        this.node.internetInterruptionGeneration !== generation) return;
+    this.successfulRpcResponses++;
+    this.node.setOnline();
   }
 
-  // Only anonymous, synthetic availability checks may run concurrently.
-  // Aborts pending backup requests as soon as the first valid response wins.
-  // Normal wallet RPC (including signed process and PoW) remains sequential
-  // with its established attempt budget and cannot enter this method.
+  private noteRpcFailure(
+    endpoint: string, generation: number, successVersionAtStart: number,
+    message?: string | null
+  ): void {
+    if (this.appSettings.settings.serverAPI !== endpoint ||
+        this.node.internetInterruptionGeneration !== generation ||
+        this.successfulRpcResponses !== successVersionAtStart) {
+      console.info('[Nano RPC health] Ignoring stale failure after RPC success, network or server change.');
+      return;
+    }
+    this.node.setOffline(message);
+  }
+
+  // Try scored nodes in rank order. If the best RPC rejects this wallet
+  // action, try the next; never select the fastest response of an unranked
+  // race. Normal wallet RPC, signed process and PoW retain their safeguards.
   private async probeHealthyBackup(
     candidates: string[],
     requestAction: string,
@@ -58,7 +74,7 @@ export class ApiService {
     let lastFailure: any = new Error('No responsive Nano RPC fallback');
     const sources = candidates.map(endpoint => this.http.post(endpoint,
       { ...requestData, action: requestAction }, { responseType: 'json' } as any).pipe(
-      timeout(10000),
+      timeout(3000),
       map(res => {
         if (res && typeof res.error === 'string') {
           throw { isRpcError: true, error: res.error };
@@ -85,11 +101,10 @@ export class ApiService {
     for (const endpoint of candidates) {
       console.info('[Nano RPC health] Trying fallback:', endpoint);
     }
-    // firstValueFrom unsubscribes the other requests on the first valid
-    // response. A single 10-second budget covers every public fallback.
+    // A single 10-second budget bounds all ranked fallback attempts.
     let selected: { endpoint: string; response: any };
     try {
-      selected = await firstValueFrom(merge(...sources));
+      selected = await firstValueFrom(concat(...sources).pipe(takeUntil(timer(10000))));
     } catch (_) {
       throw lastFailure;
     }
@@ -113,7 +128,7 @@ export class ApiService {
       throw { isStaleFailover: true };
     }
     console.info('[Nano RPC health] Failover activated:', selected.endpoint);
-    this.node.setOnline();
+    this.noteRpcSuccess(selected.endpoint, expectedNetworkGeneration);
     return selected.response;
   }
 
@@ -146,6 +161,10 @@ export class ApiService {
     // Snapshot settings: a pending request must not acquire another server's credentials.
     const settings = { ...this.appSettings.settings };
     const expectedNetworkGeneration = this.node.internetInterruptionGeneration;
+    const successVersionAtStart = this.successfulRpcResponses;
+    // work_generate has its own availability/fallback lifecycle. Its failures
+    // must never clear or set the wallet's Nano RPC/WebSocket status.
+    const isPoW = action === 'work_generate';
     const firstUrl = url || settings.serverAPI;
     // A request can finish after a local Internet interruption or after
     // another RPC request has switched the selected node. Its result must
@@ -159,43 +178,43 @@ export class ApiService {
         this.node.internetInterruptionGeneration !== expectedNetworkGeneration
       );
     if (!firstUrl) {
+      if (isPoW) throw new Error('No work server configured.');
       this.node.setOffline(null);
       return;
     }
     let apiUrl: string;
     try { apiUrl = secureEndpoint(firstUrl, 'rpc'); } catch (error) {
-      this.node.setOffline(silentOffline ? null : 'Unsafe server address: use HTTPS (HTTP is allowed only on loopback).');
+      if (!isPoW) this.noteRpcFailure(firstUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : 'Unsafe server address: use HTTPS (HTTP is allowed only on loopback).');
       if (skipError) return;
       throw error;
     }
     const endpoints = [apiUrl];
-    // Rotate only trusted built-in RPC nodes on retryable network failures.
-    // Never replay signed blocks, work generation, optional calls or custom RPC.
+    // Rotate known built-in or locally saved WSS-capable unauthenticated
+    // endpoints. Never replay signed blocks, work generation or optional calls;
+    // authenticated local RPCs must remain pinned to their selected endpoint.
     const knownSource = this.appSettings.serverOptions?.find(server =>
-      server.allowFailover && server.api === firstUrl);
+      server.allowFailover && !!server.ws && !server.auth &&
+      server.api === firstUrl &&
+      (settings.serverName === 'random' || server.value === settings.serverName));
     if (!url && !skipError && allowFailover && !this.node.internetRecoveryPending &&
         action !== 'process' && action !== 'work_generate' &&
         knownSource && (settings.serverName === 'random' || settings.serverName === knownSource.value)) {
-      // Do not give the first entry in serverOptions an artificial priority.
-      // Pick a randomized order without replacement for this failover cycle.
-      // Keep the current server first, and exclude it and disabled/unsafe
-      // candidates from the shuffled public pool.
       const candidates: string[] = [];
       for (const server of this.appSettings.serverOptions || []) {
-        // Test-disabled and other ineligible nodes cannot be fallback targets.
-        if (!server.allowFailover || server.failoverTarget === false || !server.api) continue;
+        if (!server.allowFailover || server.failoverTarget === false ||
+            !server.api || !server.ws || server.auth) continue;
         try {
           const candidate = secureEndpoint(server.api, 'rpc');
           if (candidate !== apiUrl && !candidates.includes(candidate)) candidates.push(candidate);
-        } catch (_) { /* Ignore insecure built-in candidates. */ }
+        } catch (_) { /* Ignore insecure or invalid candidates. */ }
       }
-      // Fisher-Yates shuffle: each distinct eligible fallback can be tried
-      // first, regardless of its order in serverOptions.
-      for (let i = candidates.length - 1; i > 0; i--) {
-        const j = this.randomFallbackIndex(i);
-        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
-      }
-      endpoints.push(...candidates);
+      // The scan runs in the background and does not hold up first launch.
+      // Until it completes, retain deterministic candidate order. Afterward,
+      // only proven or explicitly unverified (insufficient peers) candidates
+      // may be selected; never fall back randomly to a known lagging node.
+      const ranked = this.appSettings.getRankedFallbackEndpoints?.(apiUrl);
+      endpoints.push(...(ranked === null || ranked === undefined
+        ? candidates : ranked.filter(endpoint => candidates.includes(endpoint))));
     }
     if (healthProbe) {
       // Public endpoint counts only, not wallet data or RPC authentication.
@@ -205,12 +224,12 @@ export class ApiService {
         selected: settings.serverName, totalEndpoints: endpoints.length
       });
     }
-    if (this.node.node.status === false && !skipError) this.node.setLoading();
+    if (!isPoW && this.node.node.status === false && !skipError) this.node.setLoading();
     // Includes legacy compatibility calls; PoW gets one longer, cancellable attempt.
     // A 3-second probe of up to five servers has a strict 15-second ceiling.
     // Ordinary wallet RPC retains its original 45-second and 3-attempt limits.
     const maxAttempts = healthProbe ? this.maxHealthProbeEndpoints : 3;
-    const deadline = Date.now() + (healthProbe ? 15000 : action === 'work_generate' ? 120000 : 45000);
+    const deadline = Date.now() + (healthProbe ? 15000 : isPoW ? perAttemptTimeoutMs : 45000);
     let attempts = 0;
     let lastError: any;
     for (const endpoint of endpoints.slice(0, maxAttempts)) {
@@ -219,13 +238,16 @@ export class ApiService {
         attempts++;
         const options: any = { responseType: 'json' };
         // Explicit work servers never inherit RPC credentials, even at the same origin.
-        if (!url && settings.serverName === 'custom' && endpoint === apiUrl && settings.serverAuth) {
+        const localSelection = this.appSettings.serverOptions?.some(server =>
+          server.value === settings.serverName && server.isLocal);
+        if (!url && (settings.serverName === 'custom' || localSelection) &&
+            endpoint === apiUrl && settings.serverAuth) {
           options.headers = new HttpHeaders().set('Authorization', settings.serverAuth);
         }
         try {
           const remaining = deadline - Date.now();
           const res = await this.http.post(endpoint, { ...data, action: requestAction }, options)
-            .pipe(timeout(Math.max(1, Math.min(action === 'work_generate' ? 120000 : perAttemptTimeoutMs, remaining)))).toPromise();
+            .pipe(timeout(Math.max(1, Math.min(perAttemptTimeoutMs, remaining)))).toPromise();
           if (obsoleteSelectedRequest()) {
             if (skipError) return;
             throw { isStaleFailover: true };
@@ -245,9 +267,8 @@ export class ApiService {
             if (typeof validateResponse === 'function') {
               throw { isRpcError: true, error: res.error };
             }
-            // Optional metadata/statistics can succeed even while wallet RPC
-            // calls fail. Never use them as proof that balances are reachable.
-            if (!skipError) this.node.setOnline();
+            // An optional statistics RPC is not proof wallet reads work.
+            if (!skipError && !isPoW) this.noteRpcSuccess(endpoint, expectedNetworkGeneration);
             return res;
           }
           if (typeof validateResponse === 'function' && validateResponse(res).err != null) {
@@ -275,9 +296,8 @@ export class ApiService {
               from: settings.serverName, to: endpoint, action,
             });
           }
-          // A successful optional statistics call must not override the
-          // wallet's node-offline status or clear its persistent warning.
-          if (!skipError) this.node.setOnline();
+          // An optional statistics RPC is not proof wallet reads work.
+          if (!skipError && !isPoW) this.noteRpcSuccess(endpoint, expectedNetworkGeneration);
           return res;
         } catch (error) {
           lastError = error;
@@ -324,8 +344,15 @@ export class ApiService {
              (typeof failure.status === 'number' && failure.status >= 500) ||
              failure.name === 'TimeoutError' || error instanceof TypeError);
           if (!retryable) {
-            if (!failure.isRpcError && !failure.isStaleFailover) {
-              this.node.setOffline(silentOffline ? null : undefined);
+            // A valid HTTP error response (authorization, unsupported action,
+            // malformed RPC payload) is not proof that the node is offline.
+            // The caller still receives the failure and can warn that wallet
+            // balances need refreshing, but we do not show a false DNS alert.
+            const remoteResponded = failure.isRpcError || failure.isValidationFailure ||
+              (typeof failure.status === 'number' &&
+                failure.status >= 400 && failure.status < 500);
+            if (!remoteResponded && !failure.isStaleFailover) {
+              if (!isPoW) this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
             }
             throw error;
           }
@@ -333,7 +360,7 @@ export class ApiService {
           // server throughout this offline/online transition.
           if (endpoint === apiUrl && await this.internetDisconnected()) {
             this.markInternetDisconnected();
-            this.node.setOffline(silentOffline ? null : undefined);
+            if (!isPoW) this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
             throw { status: 0, isInternetDisconnected: true };
           }
           if (endpoint === apiUrl && this.node.internetRecoveryPending) {
@@ -342,7 +369,7 @@ export class ApiService {
             // cable is still disconnected; recovery keeps the same endpoint.
             if (healthProbe) console.info(
               '[Nano RPC health] Selected RPC still unresponsive after link restoration:', endpoint);
-            this.node.setOffline(silentOffline ? null : undefined);
+            if (!isPoW) this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
             throw error;
           }
           if (healthProbe && endpoint === apiUrl && endpoints.length > 1 &&
@@ -363,7 +390,7 @@ export class ApiService {
               if (!obsoleteSelectedRequest() &&
                   !(fallbackError && typeof fallbackError === 'object' &&
                     'isStaleFailover' in fallbackError && fallbackError.isStaleFailover)) {
-                this.node.setOffline(silentOffline ? null : undefined);
+                if (!isPoW) this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : undefined);
               }
               throw fallbackError;
             }
@@ -373,34 +400,30 @@ export class ApiService {
       }
     }
     if (obsoleteSelectedRequest()) throw { isStaleFailover: true };
-    this.node.setOffline(silentOffline ? null : (lastError && lastError.status === 429
-      ? 'Too Many Requests to the node. Try again later or choose a different node.'
+    if (!isPoW) this.noteRpcFailure(apiUrl, expectedNetworkGeneration, successVersionAtStart, silentOffline ? null : (lastError && lastError.status === 429
+      ? 'Too Many Requests to the node. Try again later or choose another node.'
       : 'RPC unavailable. Retry later or choose another node.'));
     throw lastError || new Error('RPC request deadline exceeded.');
   }
 
-  // A first-run wallet has no actual accounts to read. Its synthetic burn
-  // address accounts_balances checks consistently timed out on *all* public
-  // backups in the Windows HAR despite healthy block_count/version replies.
-  // For silent (unconfigured-wallet) checks, test light RPC availability with
-  // block_count instead. This checks endpoint liveness, NOT wallet capabilities:
-  // real configured-wallet reads still require validated accounts_balances.
-  // Neither check sends wallet data, credentials or signed transactions.
+  // Bounded transport/availability check on the selected RPC, independent
+  // of the wallet. Never send an artificial account or wallet data to peers.
+  // Real account RPCs are validated separately by the wallet service.
   checkNodeAvailability(silentOffline = false, allowFailover = true): Promise<void> {
     const endpoint = this.appSettings.settings.serverAPI;
     if (allowFailover && this.pendingHealthCheck?.endpoint === endpoint) return this.pendingHealthCheck.promise;
-    const burnAccount = 'nano_1111111111111111111111111111111111111111111111111111hifc8npp';
-    const healthAction = silentOffline ? 'block_count' : 'accounts_balances';
-    const healthArgs = silentOffline ? { include_cemented: 'true' } : { accounts: [burnAccount] };
-    const validateHealth = (res: any): { err: string | null } => ({
-      err: silentOffline
-        ? (res && (typeof res.count === 'string' || typeof res.count === 'number') &&
-            /^[0-9]+$/.test(String(res.count)) ? null : 'Invalid block_count response')
-        : (res && res.balances && typeof res.balances === 'object' && !Array.isArray(res.balances)
-            ? null : 'Invalid accounts_balances response'),
-    });
-    const promise = this.request(healthAction, healthArgs, false, '', validateHealth,
-      3000, silentOffline, true, allowFailover).then(() => undefined);
+    // A WebSocket outage does not imply the wallet RPC is unavailable.
+    // Never probe an artificial account here: some healthy proxies reject it
+    // or take too long, producing a false offline warning 30–60s after start.
+    // Real wallet reads still validate accounts_balances with real accounts.
+    const validateHealth = (res: any): { err: string | null } => {
+      const count = this.parseRpcBlockCount(res?.count ?? res?.block_count);
+      return { err: !res?.error && count !== null
+        ? null : 'Invalid block_count response' };
+    };
+    const promise = this.request('block_count', { include_cemented: 'true' },
+      false, '', validateHealth, 5000, silentOffline, true, allowFailover)
+      .then(() => undefined);
     const pending = { endpoint, promise };
     if (allowFailover) this.pendingHealthCheck = pending;
     // Never create an unhandled rejection from a .finally() cleanup.
@@ -470,20 +493,35 @@ export class ApiService {
     this.normalizeBlockContents(response);
     return response;
   }
+  // Nano.to's RPC gateway exposes block_count/cemented_count/unchecked_count,
+  // while standard Nano uses count/cemented/unchecked. Accept both variants
+  // without mixing metrics or treating malformed numeric data as zero.
+  private parseRpcBlockCount(value: unknown): number | null {
+    if ((typeof value !== 'string' && typeof value !== 'number') ||
+        !/^[0-9]+$/.test(String(value))) return null;
+    const count = Number(value);
+    return Number.isSafeInteger(count) && count >= 0 ? count : null;
+  }
+
   async blockCount(): Promise<{count: number, unchecked: number, cemented: number }> {
     return await this.request('block_count', { include_cemented: 'true'}, false);
   }
   // Statistics are optional: restricted public proxies may reject block_count
   // while their wallet RPC is fully usable. Do not rotate nodes, mark them
   // offline or display wallet errors for dashboard-only metadata.
-  async optionalBlockCount(): Promise<{count: number, unchecked: number, cemented: number } | null> {
+  async optionalBlockCount(): Promise<{count: number, unchecked: number | null, cemented: number } | null> {
     const result = await this.request('block_count', { include_cemented: 'true'}, true);
-    // Some public proxies return HTTP 200 with a JSON RPC action denial.
-    // Do not render "NaN" counters or claim statistics are available.
-    return result && !result.error && result.count != null && result.cemented != null
-      ? result : null;
+    // Optional stats must not trigger wallet RPC failover. Normalize the
+    // alternate Nano.to gateway response and reject malformed/unconfirmed
+    // counters instead of silently displaying zero or NaN.
+    if (!result || result.error) return null;
+    const count = this.parseRpcBlockCount(result.count ?? result.block_count);
+    const cemented = this.parseRpcBlockCount(result.cemented ?? result.cemented_count);
+    const unchecked = this.parseRpcBlockCount(result.unchecked ?? result.unchecked_count);
+    if (count === null || cemented === null || cemented > count) return null;
+    return { count, cemented, unchecked };
   }
-  async workGenerate(hash: string, difficulty: string, workServer = ''): Promise<{ work: string }> {
+  async workGenerate(hash: string, difficulty: string, workServer = '', timeoutMs = 120000): Promise<{ work: string }> {
     const validateResponse = (res: {work?: unknown} | null): {err: string | null} => {
       if(!res || res.work == null) {
         return {
@@ -514,7 +552,9 @@ export class ApiService {
       };
     };
 
-    return await this.request('work_generate', { hash, difficulty }, workServer !== '', workServer, validateResponse);
+    // Always propagate PoW failures to PowService; do not silently swallow
+    // explicit work-server errors or turn them into wallet RPC outages.
+    return await this.request('work_generate', { hash, difficulty }, false, workServer, validateResponse, timeoutMs);
   }
   async process(block: unknown, subtype: TxType): Promise<{ hash: string, error?: string }> {
     return await this.request('process', { json_block: 'true', block, subtype: TxType[subtype] }, false);

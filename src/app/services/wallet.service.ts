@@ -947,7 +947,18 @@ export class WalletService {
 
     const fiatPrice = this.price.price.lastPrice;
     const accounts = await this.api.accountsBalances(accountIDs);
+    // A public gateway can answer HTTP 200 with { error: "..." }. Treat
+    // invalid account snapshots as failed reads, never as zero-balance
+    // wallets; retain the last known balance and pending state unchanged.
+    if (!accounts || 'error' in accounts || !accounts.balances ||
+        typeof accounts.balances !== 'object' || Array.isArray(accounts.balances)) {
+      throw new Error('Invalid accounts_balances RPC response');
+    }
     const frontiers = await this.api.accountsFrontiers(accountIDs);
+    if (!frontiers || 'error' in frontiers || !frontiers.frontiers ||
+        typeof frontiers.frontiers !== 'object' || Array.isArray(frontiers.frontiers)) {
+      throw new Error('Invalid accounts_frontiers RPC response');
+    }
     // const allFrontiers = [];
     // for (const account in frontiers.frontiers) {
     //   allFrontiers.push({ account, frontier: frontiers.frontiers[account] });
@@ -957,12 +968,6 @@ export class WalletService {
     let walletBalance = new BigNumber(0);
     let walletPendingInclUnconfirmed = new BigNumber(0);
     let walletPendingAboveThresholdConfirmed = new BigNumber(0);
-
-    if (!accounts) {
-      this.resetBalances();
-      this.wallet.balanceInitialized = true;
-      return;
-    }
 
     this.clearPendingBlocks();
 
