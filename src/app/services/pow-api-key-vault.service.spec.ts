@@ -227,13 +227,60 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
     expect(localStorage.getItem(keyName)).toBeNull();
     expect(vault.getKeySummaries()).toEqual([]);
   });
-  it('refuses weak passphrases and never replaces encrypted keys on wrong unlock', async () => {
-    await expectAsync(vault.saveKey('nano-to', 'valid-TEST-KEY', 'short'))
+  it('adds a key to an unlocked vault without re-entering or changing its passphrase', async () => {
+    const first = 'NANO-FIRST-SECRET-KEY-123';
+    const second = 'NANO-SECOND-SECRET-KEY-456';
+    const firstId = await vault.saveKey('nano-to', first, pass, 'Primary');
+    const original = JSON.parse(localStorage.getItem(keyName)!);
+    const secondId = await vault.saveKey('nano-to', second, '', 'Secondary');
+    const updated = JSON.parse(localStorage.getItem(keyName)!);
+
+    expect(vault.isUnlocked).toBeTrue();
+    expect(updated.salt).toBe(original.salt); // No silent passphrase change.
+    expect(updated.iv).not.toBe(original.iv); // Unique AES-GCM IV on re-seal.
+    expect(JSON.stringify(updated)).not.toContain(first);
+    expect(JSON.stringify(updated)).not.toContain(second);
+    expect(vault.getKeySummaries('nano-to').map(entry => entry.id)).toEqual([firstId, secondId]);
+    expect(vault.getKeySummaries('nano-to').find(entry => entry.active)?.id).toBe(secondId);
+    expect(vault.getAuthorizedHeaders('https://rpc.nano.to/'))
+      .toEqual({ Authorization: 'Bearer ' + second });
+
+    vault.lock();
+    await vault.unlock(pass);
+    expect(vault.getKeySummaries('nano-to').map(entry => entry.label))
+      .toEqual(['Primary', 'Secondary']);
+    expect(vault.getAuthorizedHeaders('https://rpc.nano.to/'))
+      .toEqual({ Authorization: 'Bearer ' + second });
+  });
+
+  it('keeps a decrypted vault open after invalid key entries or duplicate labels', async () => {
+    await vault.saveKey('nano-to', 'NANO-EXISTING-KEY-123456', pass, 'Primary');
+    const before = localStorage.getItem(keyName);
+
+    await expectAsync(vault.saveKey('nano-to', 'too-short', '', 'Primary'))
+      .toBeRejected(); // Duplicate label, not a password prompt.
+    expect(vault.isUnlocked).toBeTrue();
+    expect(localStorage.getItem(keyName)).toBe(before);
+    expect(vault.getAuthorizedHeaders('https://rpc.nano.to/'))
+      .toEqual({ Authorization: 'Bearer NANO-EXISTING-KEY-123456' });
+  });
+
+  it('requires unlocking an existing vault before adding another key', async () => {
+    await expectAsync(vault.saveKey('nano-to', 'NANO-NEW-KEY-12345678', 'short'))
       .toBeRejected();
-    await vault.saveKey('nano-to', 'valid-TEST-KEY', pass);
-    const previous = localStorage.getItem(keyName);
-    await expectAsync(vault.saveKey('nano-to', 'second-TEST-KEY', 'wrong passphrase', 'Another'))
-      .toBeRejected();
-    expect(localStorage.getItem(keyName)).toBe(previous);
+    await vault.saveKey('nano-to', 'NANO-EXISTING-KEY-123456', pass, 'Primary');
+    const before = localStorage.getItem(keyName);
+    vault.lock();
+
+    await expectAsync(vault.saveKey('nano-to', 'NANO-SECOND-KEY-123456', pass, 'Secondary'))
+      .toBeRejected(); // The add-key action never attempts an implicit unlock.
+    expect(vault.isUnlocked).toBeFalse();
+    expect(localStorage.getItem(keyName)).toBe(before);
+
+    await vault.unlock(pass);
+    await vault.saveKey('nano-to', 'NANO-SECOND-KEY-123456', '', 'Secondary');
+    expect(vault.isUnlocked).toBeTrue();
+    expect(vault.getKeySummaries('nano-to').map(entry => entry.label))
+      .toEqual(['Primary', 'Secondary']);
   });
 });
