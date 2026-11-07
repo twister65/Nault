@@ -250,8 +250,8 @@
                       <button class="uk-button uk-button-primary" type="button"
                         [disabled]="powVaultBusy || !powApiKeyInput || !powVaultPassphrase"
                         (click)="savePowApiKey()">{{ 'configure-app.pow-api-vault.save' | transloco }}</button>
-                      <button class="uk-button uk-button-default" type="button"
-                        [disabled]="powVaultBusy || !powApiKeyVault.hasVault || !powVaultPassphrase"
+                      <button id="pow-api-key-unlock" class="uk-button uk-button-default" type="button"
+                        [disabled]="powVaultBusy || !powApiKeyVault.hasVault || powApiKeyVault.isUnlocked"
                         (click)="unlockPowApiKeys()">{{ 'configure-app.pow-api-vault.unlock' | transloco }}</button>
                       <button class="uk-button uk-button-default" type="button"
                         [disabled]="powVaultBusy || !powApiKeyVault.isUnlocked"
