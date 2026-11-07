@@ -322,8 +322,12 @@ export class PoWApiKeyVaultService {
   async saveKey(provider: PoWApiProvider, rawKey: string, passphrase: string, label = ''): Promise<string> {
     if (provider !== 'nano-to') throw new Error('Unknown PoW API provider');
     const secret = checkSecret(rawKey?.trim());
-    checkPassphrase(passphrase);
-    if (this.hasVault) await this.unlock(passphrase);
+    // An unlocked vault already has an authenticated, session-only encryption
+    // key. Re-unlocking it could destroy the session on a mismatched phrase.
+    const existingVault = this.hasVault;
+    if (existingVault && !this.unlocked) throw new Error('Unlock the vault before adding a key');
+    if (!existingVault && this.unlocked) throw new Error('Vault changed in another session');
+    if (!existingVault) checkPassphrase(passphrase);
     if (this.data.entries.length >= MAX_KEYS) throw new Error('PoW key vault is full');
     const count = this.data.entries.filter(entry => entry.provider === provider).length;
     const proposed = label.trim() || 'Nano.to ' + (count + 1);
@@ -332,7 +336,9 @@ export class PoWApiKeyVaultService {
         entry.label.toLowerCase() === name.toLowerCase())) throw new Error('Duplicate key label');
     const id = newId();
     const entries = [...this.data.entries, { id, provider, label: name, secret }];
-    await this.seal({ entries, active: { ...this.data.active, [provider]: id } }, passphrase);
+    const updated = { entries, active: { ...this.data.active, [provider]: id } };
+    if (existingVault) await this.sealUnlocked(updated);
+    else await this.seal(updated, passphrase);
     return id;
   }
   async activateKey(provider: PoWApiProvider, id: string, passphrase: string): Promise<void> {
