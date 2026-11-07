@@ -621,6 +621,65 @@ describe('PoW provider display and first-launch defaults', () => {
     }
   ));
 
+  it('best mode rejects Nano.to without an unlocked active key even when wallet RPC is Nano.to', inject(
+    [PowService, AppSettingsService, PoWApiKeyVaultService],
+    async (pow: PowService, app: AppSettingsService, vault: PoWApiKeyVaultService) => {
+      vault.clearVault();
+      app.settings.powSource = 'best';
+      app.settings.serverName = 'nano-to';
+      app.settings.serverAPI = 'https://rpc.nano.to/';
+      app.settings.serverAuth = null;
+      pow.syncProviderFromSettings(true);
+      expect(pow.activeProvider$.value).toEqual({
+        source: 'best', name: 'Twister32 RsNano',
+        endpoint: 'https://twister32.changeip.net/pow', status: 'unverified'
+      });
+      const generate = spyOn(pow, 'getHashServer').and.resolveTo('0123456789ABCDEF');
+      const result = await pow.getPow('2'.repeat(64), 1);
+      expect(result.state).toBe(workState.success);
+      expect(generate.calls.allArgs().map(args => args[2]))
+        .toEqual(['https://twister32.changeip.net/pow']);
+      expect(pow.activeProvider$.value.name).toBe('Twister32 RsNano');
+      expect(pow.activeProvider$.value.status).toBe('available');
+      expect(app.settings.serverName).toBe('nano-to');
+      expect(app.settings.serverAPI).toBe('https://rpc.nano.to/');
+    }
+  ));
+
+  it('best mode uses Nano.to only while its active key is unlocked, then reverts to Twister32', inject(
+    [PowService, AppSettingsService, PoWApiKeyVaultService],
+    async (pow: PowService, app: AppSettingsService, vault: PoWApiKeyVaultService) => {
+      vault.clearVault();
+      try {
+        await vault.saveKey('nano-to', 'NANO-BEST-API-KEY-123456789', 'strong vault passphrase');
+        app.settings.powSource = 'best';
+        app.settings.serverName = 'rainstorm';
+        app.settings.serverAPI = 'https://rainstorm.city/api';
+        app.settings.serverAuth = null;
+        pow.syncProviderFromSettings(true);
+        expect(pow.activeProvider$.value.name).toBe('Nano.to');
+        expect(pow.activeProvider$.value.status).toBe('unverified');
+
+        const generate = spyOn(pow, 'getHashServer').and.resolveTo('0123456789ABCDEF');
+        expect((await pow.getPow('3'.repeat(64), 1)).state).toBe(workState.success);
+        expect(generate.calls.allArgs().map(args => args[2]))
+          .toEqual(['https://rpc.nano.to/']);
+
+        vault.lock();
+        pow.syncProviderFromSettings(true);
+        expect(pow.activeProvider$.value.name).toBe('Twister32 RsNano');
+        expect(pow.activeProvider$.value.status).toBe('unverified');
+
+        expect((await pow.getPow('4'.repeat(64), 1)).state).toBe(workState.success);
+        expect(generate.calls.allArgs().map(args => args[2]))
+          .toEqual(['https://rpc.nano.to/', 'https://twister32.changeip.net/pow']);
+        expect(app.settings.serverAPI).toBe('https://rainstorm.city/api');
+      } finally {
+        vault.clearVault();
+      }
+    }
+  ));
+
   it('retains successful PoW fallback status when reopening settings', inject(
     [PowService, AppSettingsService],
     (pow: PowService, app: AppSettingsService) => {
@@ -628,7 +687,9 @@ describe('PoW provider display and first-launch defaults', () => {
       app.settings.serverAPI = 'https://rainstorm.city/api';
       pow.syncProviderFromSettings(true);
       const state = pow.activeProvider$.value;
-      expect(state.name).toBe('Rainstorm City');
+      expect(state.name).toBe('Twister32 RsNano');
+      expect(state.endpoint).toBe('https://twister32.changeip.net/pow');
+      expect(state.status).toBe('unverified');
       pow.syncProviderFromSettings();
       expect(pow.activeProvider$.value).toEqual(state);
     }
