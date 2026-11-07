@@ -28,7 +28,7 @@ describe('PowService', () => {
 
       const result = await service.getPow(hash, 1);
       expect(result.state).toBe(workState.success);
-      expect(getHashServer).toHaveBeenCalledWith(hash, 1, 'https://twister32.changeip.net/pow');
+      expect(getHashServer).toHaveBeenCalledWith(hash, 1, 'https://twister32.changeip.net/pow', 30000);
     }
   ));
 
@@ -54,7 +54,7 @@ describe('PowService', () => {
     }
   ));
 
-  it('falls back from a healthy-RPC, unavailable-PoW server to ranked RsNano /pow without switching wallet RPC', inject(
+  it('uses Twister32 rather than unreliable wallet RPC nodes for PoW', inject(
     [PowService, AppSettingsService],
     async (service: PowService, app: AppSettingsService) => {
       app.settings.powSource = 'server';
@@ -68,10 +68,9 @@ describe('PowService', () => {
 
       const result = await service.getPow('F'.repeat(64), 1);
       expect(result.state).toBe(workState.success);
-      expect(generate.calls.allArgs().map(args => args[2])).toEqual([
-        'https://rainstorm.city/api', 'https://twister32.changeip.net/pow'
-      ]);
-      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000, 20000]);
+      expect(generate.calls.allArgs().map(args => args[2]))
+        .toEqual(['https://twister32.changeip.net/pow']);
+      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000]);
       expect(app.settings.serverAPI).toBe('https://rainstorm.city/api');
       expect(app.settings.serverName).toBe('random');
       expect(activate).not.toHaveBeenCalled();
@@ -129,7 +128,7 @@ describe('PowService', () => {
       expect(generate.calls.allArgs().map(args => args[2])).toEqual([
         'https://proxy.nanos.cc/proxy', 'https://twister32.changeip.net/pow'
       ]);
-      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000, 20000]);
+      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000, 30000]);
       expect(service.activeProvider$.value.name).toBe('Twister32 RsNano');
       expect(service.activeProvider$.value.status).toBe('available');
       expect(app.settings.serverName).toBe('rainstorm');
@@ -175,7 +174,7 @@ describe('PowService', () => {
     }
   ));
 
-  it('bounds custom PoW retries to two public providers when all work servers fail', inject(
+  it('bounds custom PoW retries to Twister32 when both servers fail', inject(
     [PowService, AppSettingsService, RpcNodeRankingService],
     async (service: PowService, app: AppSettingsService, ranking: RpcNodeRankingService) => {
       app.settings.serverName = 'rainstorm';
@@ -187,8 +186,11 @@ describe('PowService', () => {
       const generate = spyOn(service, 'getHashServer').and.returnValue(Promise.resolve(null));
       await expectAsync(service.getPow('4'.repeat(64), 1)).toBeRejectedWith(
         jasmine.objectContaining({ state: workState.error }));
-      expect(generate.calls.count()).toBe(3);
-      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000, 20000, 20000]);
+      expect(generate.calls.allArgs().map(args => args[2])).toEqual([
+        'https://proxy.nanos.cc/proxy', 'https://twister32.changeip.net/pow'
+      ]);
+      expect(generate.calls.count()).toBe(2);
+      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000, 30000]);
       expect(app.settings.serverName).toBe('rainstorm');
       expect(app.settings.serverAPI).toBe('https://rainstorm.city/api');
     }
@@ -319,7 +321,7 @@ describe('PowService', () => {
     }
   ));
 
-  it('tries a second independent free PoW candidate if NanoOslo fails after Later', inject(
+  it('ignores the ranked NanoOslo RPC and only uses Twister32 after Later', inject(
     [PowService, AppSettingsService, RpcNodeRankingService, PoWApiKeyVaultService],
     async (pow: PowService, app: AppSettingsService, ranking: RpcNodeRankingService,
       vault: PoWApiKeyVaultService) => {
@@ -339,18 +341,16 @@ describe('PowService', () => {
 
       const result = await pow.getPow('9'.repeat(64), 1);
       expect(result.state).toBe(workState.success);
-      expect(generate.calls.allArgs().map(args => args[2])).toEqual([
-        'https://nanoslo.0x.no/proxy',
-        'https://twister32.changeip.net/pow'
-      ]);
-      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000, 20000]);
+      expect(generate.calls.allArgs().map(args => args[2]))
+        .toEqual(['https://twister32.changeip.net/pow']);
+      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000]);
       expect(pow.activeProvider$.value.name).toBe('Twister32 RsNano');
       expect(pow.activeProvider$.value.status).toBe('available');
       expect(app.settings.serverAPI).toBe('https://rpc.nano.to/');
     }
   ));
 
-  it('bounds free-only PoW retries when Nano.to remains locked and all alternatives fail', inject(
+  it('never tries unproven RPC nodes when Nano.to is locked and Twister32 fails', inject(
     [PowService, AppSettingsService, RpcNodeRankingService, PoWApiKeyVaultService],
     async (pow: PowService, app: AppSettingsService, ranking: RpcNodeRankingService,
       vault: PoWApiKeyVaultService) => {
@@ -366,13 +366,9 @@ describe('PowService', () => {
       await expectAsync(pow.getPow('A'.repeat(64), 1)).toBeRejectedWith(
         jasmine.objectContaining({ state: workState.error }));
       const endpoints = generate.calls.allArgs().map(args => args[2]);
-      expect(endpoints).toEqual([
-        'https://twister32.changeip.net/pow',
-        'https://rainstorm.city/api',
-        'https://nanoslo.0x.no/proxy'
-      ]);
+      expect(endpoints).toEqual(['https://twister32.changeip.net/pow']);
       expect(endpoints).not.toContain('https://rpc.nano.to/');
-      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000, 20000, 20000]);
+      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000]);
       expect(app.settings.serverName).toBe('nano-to');
       expect(app.settings.serverAPI).toBe('https://rpc.nano.to/');
       expect(switchRpc).not.toHaveBeenCalled();
@@ -416,7 +412,7 @@ describe('PowService', () => {
       expect(ordinary).toHaveBeenCalled();
     }
   ));
-  it('chooses a separate verified external PoW server on installed Android PWA and retries work independently', inject(
+  it('uses only Twister32 for automatic external PoW on installed Android PWA', inject(
     [PowService, AppSettingsService, RpcNodeRankingService],
     async (service: PowService, app: AppSettingsService, ranking: RpcNodeRankingService) => {
       spyOn<any>(service, 'isAndroidInstalledPwa').and.returnValue(true);
@@ -436,10 +432,9 @@ describe('PowService', () => {
       const selectedBefore = { ...app.settings };
       const result = await service.getPow('B'.repeat(64), 1);
       expect(result.state).toBe(workState.success);
-      expect(generate.calls.allArgs().map(args => args[2])).toEqual([
-        'https://nanoslo.0x.no/proxy', 'https://twister32.changeip.net/pow'
-      ]);
-      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000, 20000]);
+      expect(generate.calls.allArgs().map(args => args[2]))
+        .toEqual(['https://twister32.changeip.net/pow']);
+      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000]);
       expect(app.settings.serverAPI).toBe('https://rainstorm.city/api');
       expect(app.settings.serverName).toBe(selectedBefore.serverName);
     }
@@ -536,7 +531,8 @@ describe('PoW provider display and first-launch defaults', () => {
         observed.push(provider.name + ':' + provider.status));
       try {
         expect((await pow.getPow('1'.repeat(64), 1)).state).toBe(workState.success);
-        expect(observed).toContain('Rainstorm City:unavailable');
+        expect(observed).not.toContain('Rainstorm City:unavailable');
+        expect(observed).toContain('Twister32 RsNano:available');
         expect(pow.activeProvider$.value.name).toBe('Twister32 RsNano');
         expect(pow.activeProvider$.value.status).toBe('available');
         expect(app.settings.serverName).toBe('random');
