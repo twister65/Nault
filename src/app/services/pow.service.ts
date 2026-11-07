@@ -159,9 +159,9 @@ export class PowService {
       measured.api === candidate.api && measured.powHealth === 'available'));
     const ordered = [
       ...verified,
+      ...ranked,
       ...nodes.filter(node => node.value === 'twister32-rsnano')
         .map(node => ({ api: node.api!, workUrl: node.work || node.api! })),
-      ...ranked,
       ...nodes.map(node => ({ api: node.api!, workUrl: node.work || node.api! }))
     ];
     const seen = new Set<string>();
