@@ -157,7 +157,12 @@ describe('ConfigureAppComponent', () => {
   it('enables Unlock keys for a locked Nano.to vault even with an empty passphrase', async () => {
     // These tests change component state directly, outside an Angular DOM event.
     // Mark the Eager/OnPush view dirty before checking its template bindings.
-    const render = () => {
+    const render = async () => {
+      fixture.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+      // NgModel synchronizes [disabled] via a microtask; wait for the
+      // ControlValueAccessor before checking the actual input element.
+      await fixture.whenStable();
       fixture.changeDetectorRef.markForCheck();
       fixture.detectChanges();
     };
@@ -173,9 +178,9 @@ describe('ConfigureAppComponent', () => {
     const unlock = spyOn(vault, 'unlock').and.returnValue(Promise.resolve());
     const transloco = TestBed.inject(TranslocoService);
     await firstValueFrom(transloco.load(transloco.getActiveLang()));
-    render();
+    await render();
     await fixture.whenStable();
-    render();
+    await render();
 
     const button = fixture.nativeElement.querySelector('#pow-api-key-unlock') as HTMLButtonElement;
     const passphrase = fixture.nativeElement.querySelector('#pow-vault-passphrase') as HTMLInputElement;
@@ -190,20 +195,20 @@ describe('ConfigureAppComponent', () => {
     expect(unlock).not.toHaveBeenCalled();
 
     component.powVaultPassphrase = 'the saved vault passphrase';
-    render();
+    await render();
     button.click();
     await fixture.whenStable();
     expect(unlock).toHaveBeenCalledOnceWith('the saved vault passphrase');
     expect(component.powVaultPassphrase).toBe('');
 
     isUnlocked.and.returnValue(true);
-    render();
+    await render();
     expect(button.disabled).toBeTrue();
     expect(passphrase.disabled).toBeTrue(); // No re-entry after explicit unlock.
 
     isUnlocked.and.returnValue(false);
     hasVault.and.returnValue(false);
-    render();
+    await render();
     expect(button.disabled).toBeTrue();
     expect(passphrase.disabled).toBeFalse(); // First vault creation is allowed.
   });
@@ -211,7 +216,12 @@ describe('ConfigureAppComponent', () => {
   it('enables key creation only for a new vault or an already unlocked vault', async () => {
     // These tests change component state directly, outside an Angular DOM event.
     // Mark the Eager/OnPush view dirty before checking its template bindings.
-    const render = () => {
+    const render = async () => {
+      fixture.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+      // NgModel synchronizes [disabled] via a microtask; wait for the
+      // ControlValueAccessor before checking the actual input element.
+      await fixture.whenStable();
       fixture.changeDetectorRef.markForCheck();
       fixture.detectChanges();
     };
@@ -228,9 +238,9 @@ describe('ConfigureAppComponent', () => {
     const isUnlocked = spyOnProperty(vault, 'isUnlocked', 'get').and.returnValue(false);
     const transloco = TestBed.inject(TranslocoService);
     await firstValueFrom(transloco.load(transloco.getActiveLang()));
-    render();
+    await render();
     await fixture.whenStable();
-    render();
+    await render();
     const buttons = fixture.nativeElement.querySelectorAll('.pow-vault-actions button') as NodeListOf<HTMLButtonElement>;
     const save = Array.from(buttons).find(button => button.classList.contains('uk-button-primary'))!;
     const labelInput = fixture.nativeElement.querySelector('#pow-api-key-label') as HTMLInputElement;
@@ -246,12 +256,12 @@ describe('ConfigureAppComponent', () => {
     expect(save.disabled).toBeTrue(); // New vault requires an initial passphrase.
 
     component.powVaultPassphrase = 'initial vault passphrase';
-    render();
+    await render();
     expect(save.disabled).toBeFalse();
 
     hasVault.and.returnValue(true);
     isUnlocked.and.returnValue(false);
-    render();
+    await render();
     expect(save.disabled).toBeTrue(); // Stored vault must be explicitly unlocked first.
     expect(labelInput.disabled).toBeTrue();
     expect(keyInput.disabled).toBeTrue();
@@ -259,7 +269,7 @@ describe('ConfigureAppComponent', () => {
 
     isUnlocked.and.returnValue(true);
     component.powVaultPassphrase = '';
-    render();
+    await render();
     expect(labelInput.disabled).toBeFalse();
     expect(keyInput.disabled).toBeFalse();
     expect(passphraseInput.disabled).toBeTrue(); // Session already unlocked.
@@ -267,7 +277,7 @@ describe('ConfigureAppComponent', () => {
 
     // Locking again must immediately disable both sensitive editing fields.
     isUnlocked.and.returnValue(false);
-    render();
+    await render();
     expect(labelInput.disabled).toBeTrue();
     expect(keyInput.disabled).toBeTrue();
     expect(passphraseInput.disabled).toBeFalse();
