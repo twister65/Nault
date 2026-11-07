@@ -134,6 +134,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
   powOptions: Array<{name: string; value: PoWSource}> = [
     { name: 'configure-app.pow-options.best-option-available', value: 'best' },
+    { name: 'configure-app.pow-options.external-nano-to', value: 'nanoTo' },
     { name: 'configure-app.pow-options.client-side-gpu-webgl', value: 'clientWebGL' },
     { name: 'configure-app.pow-options.client-side-cpu-slowest', value: 'clientCPU' },
     { name: 'configure-app.pow-options.external-selected-server', value: 'server' },
@@ -863,35 +864,10 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
 
 
-  // Match the currently selected PoW route, never an unrelated wallet RPC
-  // node or an unconfirmed fallback. The source selector may have unsaved edits.
+  // The locally encrypted Nano.to vault is independent of the RPC and PoW
+  // source selection, and must stay accessible even before a key is unlocked.
   showNanoToPowApiKeys(): boolean {
-    const source = this.selectedPoWOption;
-    if (source === 'clientCPU' || source === 'clientWebGL') return false;
-
-    const saved = this.appSettings.settings;
-    const active = this.pow.activeProvider$.value;
-    if (source === 'best') {
-      // "Best" is not the saved wallet RPC. The paid provider is eligible
-      // only with an active key unlocked for this session.
-      if (!this.powApiKeyVault.hasKey('nano-to')) return false;
-      if (active.source === source && active.status === 'available') {
-        return PoWApiKeyVaultService.providerForUrl(active.endpoint) === 'nano-to';
-      }
-      return PoWApiKeyVaultService.providerForUrl(
-        this.pow.getPreferredBestPoWProvider()?.endpoint || '') === 'nano-to';
-    }
-    // WebGL is a session-only fallback with no network endpoint; it must not
-    // reveal Nano.to controls merely because Nano.to remains the saved route.
-    if (saved.powSource === source && active.source === source &&
-        active.status === 'available' && active.name === 'WebGL') return false;
-    const confirmedActive = saved.powSource === source && active.source === source &&
-      active.status === 'available' && !!active.endpoint;
-    const primaryEndpoint = source === 'custom'
-      ? this.customWorkServer
-      : this.appSettings.getSelectedServerWorkUrl() || saved.serverAPI || '';
-    const endpoint = confirmedActive ? active.endpoint : primaryEndpoint;
-    return PoWApiKeyVaultService.providerForUrl(endpoint) === 'nano-to';
+    return true;
   }
 
   getRemotePoWOptionName(mode: 'server' | 'best' | 'custom' = 'server'): string {

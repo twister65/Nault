@@ -86,26 +86,10 @@ export class AppComponent implements OnInit, OnDestroy {
   powVaultUnlockBusy = false;
   powVaultUnlockError = false;
 
-  // Called after restoring the wallet and the persisted PoW source. A saved
-  // Nano.to vault alone is not a reason to interrupt users of another source.
-  // Prefer a confirmed current PoW provider over the configured primary URL;
-  // do not mistake an unconfirmed PoW fallback for a selected provider.
+  // Prompt to unlock any saved API vault after startup, independently of
+  // the selected wallet RPC, PoW mode or configured wallet.
   offerPowVaultUnlock(): void {
-    const selected = this.settings.settings;
-    let nanoToSource = false;
-    if (selected.powSource === 'server' || selected.powSource === 'best' ||
-        selected.powSource === 'custom') {
-      const active = this.pow.activeProvider$.value;
-      const confirmedActive = active.source === selected.powSource &&
-        active.status === 'available' && !!active.endpoint;
-      const primaryEndpoint = selected.powSource === 'custom'
-        ? selected.customWorkServer
-        : this.settings.getSelectedServerWorkUrl() || selected.serverAPI || '';
-      const endpoint = confirmedActive ? active.endpoint : primaryEndpoint;
-      nanoToSource = PoWApiKeyVaultService.providerForUrl(endpoint) === 'nano-to';
-    }
-    this.showPowVaultUnlock = nanoToSource && this.walletService.isConfigured() &&
-      this.powApiKeyVault.hasVault && !this.powApiKeyVault.isUnlocked;
+    this.showPowVaultUnlock = this.powApiKeyVault.hasVault && !this.powApiKeyVault.isUnlocked;
   }
 
   // Never request keys over the network or hold up wallet startup. The
@@ -398,8 +382,8 @@ export class AppComponent implements OnInit, OnDestroy {
       this.walletService.walletLoaded$.next(true);
     }
     // A saved API-key vault is locked after each full restart by design.
-    // Offer a dismissible unlock prompt AFTER wallet restoration, not during
-    // first paint or first launch without a wallet; no password is persisted.
+    // Offer a dismissible unlock prompt AFTER wallet restoration, including
+    // an empty wallet when a saved vault exists; the phrase is never persisted.
     this.offerPowVaultUnlock();
     if (!this.showPowVaultUnlock) {
       this.powApiKeyVault.resolveStartupUnlockDecision();

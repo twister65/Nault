@@ -104,6 +104,10 @@ export class PowService {
     const source = this.appSettings.settings.powSource;
     const previous = this.activeProvider$.value;
     if (!force && previous.name && previous.source === source) return;
+    if (source === 'nanoTo') {
+      this.publishProvider('https://rpc.nano.to/', 'unverified');
+      return;
+    }
     if (source === 'best') {
       // A wallet RPC selection is not automatically an eligible PoW provider.
       // Nano.to must have an active, unlocked API key before it can be chosen.
@@ -323,10 +327,26 @@ export class PowService {
     return { handled: true, work: stillCurrent() ? work : null };
   }
 
+  // Authenticated PoW is never coupled to the wallet's selected RPC node.
+  // Without an unlocked API key, fall back without contacting paid Nano.to.
+  private async getNanoToPoWWithFallback(hash: string, multiplier: number): Promise<string | null> {
+    const saved = { ...this.appSettings.settings };
+    const endpoint = 'https://rpc.nano.to/';
+    if (this.powApiKeys.hasKey('nano-to')) {
+      const work = await this.requestServerWork(hash, multiplier, endpoint, 30000);
+      this.recordActualWorkResult(endpoint, endpoint, !!work);
+      if (work) return work;
+    }
+    return this.fallbackToTwisterOrWebGL(hash, multiplier, saved, '');
+  }
+
   private async getServerPoWWithFallback(
     hash: string, multiplier: number, selectedWorkUrl: string
   ): Promise<string | null> {
     const saved = { ...this.appSettings.settings };
+    if (saved.powSource === 'best') {
+      return this.getNanoToPoWWithFallback(hash, multiplier);
+    }
     const android = await this.getAndroidPwaExternalPoW(hash, multiplier, saved);
     if (android.handled) return android.work;
 
@@ -498,11 +518,13 @@ export class PowService {
     // when the selected PoW endpoint needs a paid credential. Do not interpret
     // the locked vault as a failed PoW node or change the selected provider.
     const selectedSource = this.appSettings.settings.powSource;
-    const selectedPaidUrl = selectedSource === 'custom'
-      ? this.appSettings.settings.customWorkServer
-      : selectedSource === 'server'
-        ? this.appSettings.getSelectedServerWorkUrl() || this.appSettings.settings.serverAPI
-        : '';
+    const selectedPaidUrl = selectedSource === 'best' || selectedSource === 'nanoTo'
+      ? 'https://rpc.nano.to/'
+      : selectedSource === 'custom'
+        ? this.appSettings.settings.customWorkServer
+        : selectedSource === 'server'
+          ? this.appSettings.getSelectedServerWorkUrl() || this.appSettings.settings.serverAPI
+          : '';
     if (selectedPaidUrl) {
       await this.powApiKeys.waitForStartupUnlockDecision(selectedPaidUrl);
     }
@@ -532,6 +554,15 @@ export class PowService {
 
     const work: PowResult = {state: null, work: ''};
     switch (powSource) {
+      case 'nanoTo':
+        const nanoToWork = await this.getNanoToPoWWithFallback(queueItem.hash, queueItem.multiplier);
+        if (nanoToWork) {
+          work.work = nanoToWork;
+          work.state = workState.success;
+        } else {
+          work.state = workState.error;
+        }
+        break;
       default:
       case 'server':
         // A named RPC server may expose PoW at a different URL (e.g. /pow,

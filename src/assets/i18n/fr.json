@@ -241,7 +241,8 @@
       "client-side-gpu-webgl": "Local — GPU/WebGL",
       "external-custom-server": "Externe — serveur personnalisé",
       "external-provider": "Externe",
-      "external-selected-server": "Externe — serveur sélectionné"
+      "external-selected-server": "Externe — serveur sélectionné",
+      "external-nano-to": "Externe — Nano.to (clé API)"
     },
     "pow-source": "Source PoW",
     "pow-active-provider": "Fournisseur PoW actif",
