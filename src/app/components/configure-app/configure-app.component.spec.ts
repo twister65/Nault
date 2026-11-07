@@ -144,6 +144,18 @@ describe('ConfigureAppComponent', () => {
     render();
     expect(nanoToControls()).toBeNull();
 
+    // WebGL is a local, successful fallback with no endpoint URL. Do not
+    // mistake the persisted Nano.to primary for the provider currently used.
+    settings.powSource = 'server';
+    settings.serverName = 'nano-to';
+    settings.serverAPI = 'https://rpc.nano.to/';
+    component.selectedPoWOption = 'server';
+    component.pow.activeProvider$.next({
+      source: 'server', name: 'WebGL', endpoint: '', status: 'available'
+    });
+    render();
+    expect(nanoToControls()).toBeNull();
+
     component.selectedPoWOption = 'custom';
     component.customWorkServer = 'https://example.com/pow';
     render();
