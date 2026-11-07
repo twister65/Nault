@@ -95,6 +95,7 @@ describe('AppComponent', () => {
     const app = TestBed.inject(AppComponent);
     const vault = TestBed.inject(PoWApiKeyVaultService);
     const unlock = spyOn(vault, 'unlock').and.returnValue(Promise.resolve());
+    const refresh = spyOn(TestBed.inject(PowService), 'syncProviderFromSettings');
     const resolveDecision = spyOn(vault, 'resolveStartupUnlockDecision');
     app.showPowVaultUnlock = true;
     app.powVaultUnlockPassphrase = 'a secret phrase for work';
@@ -103,6 +104,7 @@ describe('AppComponent', () => {
     expect(app.showPowVaultUnlock).toBeFalse();
     expect(app.powVaultUnlockPassphrase).toBe('');
     expect(resolveDecision).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveBeenCalledOnceWith(true);
     app.showPowVaultUnlock = true;
     app.powVaultUnlockPassphrase = 'wrong';
     unlock.and.returnValue(Promise.reject(new Error('failed')));
