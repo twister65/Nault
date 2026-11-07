@@ -86,10 +86,25 @@ export class AppComponent implements OnInit, OnDestroy {
   powVaultUnlockBusy = false;
   powVaultUnlockError = false;
 
-  // Called only AFTER stored wallet restoration. Do not disturb a clean first
-  // launch without a wallet or block any RPC/PoW network request.
+  // Called after restoring the wallet and the persisted PoW source. A saved
+  // Nano.to vault alone is not a reason to interrupt users of another source.
+  // Prefer a confirmed current PoW provider over the configured primary URL;
+  // do not mistake an unconfirmed PoW fallback for a selected provider.
   offerPowVaultUnlock(): void {
-    this.showPowVaultUnlock = this.walletService.isConfigured() &&
+    const selected = this.settings.settings;
+    let nanoToSource = false;
+    if (selected.powSource === 'server' || selected.powSource === 'best' ||
+        selected.powSource === 'custom') {
+      const active = this.pow.activeProvider$.value;
+      const confirmedActive = active.source === selected.powSource &&
+        active.status === 'available' && !!active.endpoint;
+      const primaryEndpoint = selected.powSource === 'custom'
+        ? selected.customWorkServer
+        : this.settings.getSelectedServerWorkUrl() || selected.serverAPI || '';
+      const endpoint = confirmedActive ? active.endpoint : primaryEndpoint;
+      nanoToSource = PoWApiKeyVaultService.providerForUrl(endpoint) === 'nano-to';
+    }
+    this.showPowVaultUnlock = nanoToSource && this.walletService.isConfigured() &&
       this.powApiKeyVault.hasVault && !this.powApiKeyVault.isUnlocked;
   }
 
