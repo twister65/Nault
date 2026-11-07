@@ -352,8 +352,8 @@ export class PowService {
       const endpoint = new URL(secureEndpoint(workUrl, 'rpc'));
       const host = endpoint.hostname.toLowerCase();
       if (endpoint.protocol !== 'https:' || !host.includes('.') ||
-          /^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host) || host.includes(':') ||
-          /(?:^|\\.)(?:localhost|local|lan|home|internal|intranet|corp|test|example|invalid|onion)$/.test(host)) {
+          /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) || host.includes(':') ||
+          /(?:^|\.)(?:localhost|local|lan|home|internal|intranet|corp|test|example|invalid|onion)$/.test(host)) {
         return false;
       }
       return true;
