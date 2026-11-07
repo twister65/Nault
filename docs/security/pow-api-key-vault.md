@@ -31,19 +31,21 @@ browser console, screenshot or exported Nault configuration.
   **does not auto-unlock**; unauthenticated/default PoW remains available.
 - Each provider may have multiple encrypted named API keys with a single **active**
   key used for `work_generate`. Creating a new key adds it (and makes it
-  active) rather than overwriting other keys. Switching the active key and
-  deleting a particular key require the vault passphrase. If the active key
-  is deleted, another saved key for that provider becomes active.
-- Vault version 1 (one key per provider) is migrated upon the first successful
-  unlock to version 2 without changing the localStorage key name or discarding
-  the existing secret. A key overwritten by version 1 before migration cannot
-  be reconstructed.
+  active) rather than overwriting other keys. Switching the active key
+  currently requires the vault passphrase. Deleting a particular selected key
+  is possible after unlocking and explicit confirmation, without entering a
+  new API key or re-entering the passphrase.
+- Only the version 2 vault format is supported. Legacy v1 auto-migration was
+  removed after successful migration testing. The original localStorage key
+  name remains unchanged to preserve already-migrated encrypted v2 vaults.
+  Deleting an active key selects another saved key from the same provider
+  when available.
 - Key labels, provider names and the active flag are **public non-secret metadata**
   visible while the vault is locked, and authenticated on unlock through AES-GCM
   associated data; API-key values stay encrypted.
 - Removing the last saved key deletes the ciphertext entirely.
 - After confirmation, both **Advanced options → Delete wallet data** and
-  **Delete all data** erase the PoW API-key vault (legacy v1 and v2), labels
+  **Delete all data** erase the PoW API-key vault (v2), labels
   and active-key metadata from localStorage and clear decrypted keys from
   memory. These operations do not require the passphrase to destroy the
   local ciphertext; the confirmation dialog warns that saved API keys are

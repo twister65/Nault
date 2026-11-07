@@ -191,10 +191,6 @@
                         }
                       </ul>
                     </div>
-                  } @else if (powApiKeyVault.needsLegacyUnlock) {
-                    <div class="uk-text-meta uk-margin-small-bottom">
-                      {{ 'configure-app.pow-api-vault.legacy-locked' | transloco }}
-                    </div>
                   }
                   <label class="uk-text-small" for="pow-api-provider">{{ 'configure-app.pow-api-vault.provider' | transloco }}</label>
                   <select id="pow-api-provider" class="uk-select uk-margin-small-bottom"
@@ -255,7 +251,7 @@
                       [disabled]="powVaultBusy || !powApiKeyVault.isUnlocked || !selectedPowKeyId() || !powVaultPassphrase"
                       (click)="activatePowApiKey()">{{ 'configure-app.pow-api-vault.activate' | transloco }}</button>
                     <button class="uk-button uk-button-danger" type="button"
-                      [disabled]="powVaultBusy || !powApiKeyVault.hasVault || !selectedPowKeyId() || !powVaultPassphrase"
+                      [disabled]="powVaultBusy || !powApiKeyVault.isUnlocked || !selectedPowKeyId()"
                       (click)="removePowApiKey()">{{ 'configure-app.pow-api-vault.delete' | transloco }}</button>
                   </div>
                   <div class="uk-text-meta uk-margin-small-top">

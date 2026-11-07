@@ -500,3 +500,75 @@ describe('ConfigureAppComponent advanced-data deletion removes the PoW vault', (
     expect(vault.clearVault).not.toHaveBeenCalled();
   });
 });
+
+
+describe('ConfigureAppComponent selected PoW key deletion', () => {
+  const windowWithUIkit = window as unknown as { UIkit?: { modal: { confirm: jasmine.Spy } } };
+  let previousUIkit: typeof windowWithUIkit.UIkit;
+  let component: ConfigureAppComponent;
+  let confirm: jasmine.Spy;
+  let vault: any;
+  let notify: any;
+  let pow: any;
+
+  beforeEach(() => {
+    previousUIkit = windowWithUIkit.UIkit;
+    confirm = jasmine.createSpy('confirm').and.resolveTo();
+    windowWithUIkit.UIkit = { modal: { confirm } };
+    component = Object.create(ConfigureAppComponent.prototype) as ConfigureAppComponent;
+    vault = {
+      isUnlocked: true,
+      getKeySummaries: jasmine.createSpy('getKeySummaries').and.returnValue([
+        { id: 'active-key-id', label: 'Nano.to active', provider: 'nano-to', active: true }
+      ]),
+      removeKey: jasmine.createSpy('removeKey').and.resolveTo()
+    };
+    notify = { sendSuccess: jasmine.createSpy('sendSuccess'), sendWarning: jasmine.createSpy('sendWarning') };
+    pow = { syncProviderFromSettings: jasmine.createSpy('syncProviderFromSettings') };
+    Object.assign(component, {
+      powApiKeyVault: vault,
+      notifications: notify,
+      pow,
+      translocoService: { translate: (key: string) => key },
+      powApiProvider: 'nano-to',
+      powSelectedKeyId: '',
+      powApiKeyInput: '',
+      powVaultPassphrase: '',
+      powVaultBusy: false
+    });
+  });
+  afterEach(() => {
+    if (previousUIkit === undefined) delete windowWithUIkit.UIkit;
+    else windowWithUIkit.UIkit = previousUIkit;
+  });
+
+  it('deletes an active stored key with empty new-key and phrase inputs after confirmation', async () => {
+    expect(component.selectedPowKeyId()).toBe('active-key-id');
+    await component.removePowApiKey();
+    expect(confirm).toHaveBeenCalledOnceWith('configure-app.pow-api-vault.delete-confirm');
+    expect(vault.removeKey).toHaveBeenCalledOnceWith('nano-to', null, 'active-key-id');
+    expect(component.powSelectedKeyId).toBe('');
+    expect(pow.syncProviderFromSettings).toHaveBeenCalledOnceWith(true);
+    expect(notify.sendSuccess).toHaveBeenCalled();
+  });
+
+  it('does not delete the key when confirmation is cancelled', async () => {
+    confirm.and.rejectWith(new Error('cancel'));
+    component.powSelectedKeyId = 'active-key-id';
+    await component.removePowApiKey();
+    expect(vault.removeKey).not.toHaveBeenCalled();
+    expect(component.powSelectedKeyId).toBe('active-key-id');
+    expect(notify.sendWarning).not.toHaveBeenCalled();
+  });
+
+  it('does not delete while vault is locked or without a selected key', async () => {
+    vault.isUnlocked = false;
+    await component.removePowApiKey();
+    expect(confirm).not.toHaveBeenCalled();
+    vault.isUnlocked = true;
+    vault.getKeySummaries.and.returnValue([]);
+    await component.removePowApiKey();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(vault.removeKey).not.toHaveBeenCalled();
+  });
+});

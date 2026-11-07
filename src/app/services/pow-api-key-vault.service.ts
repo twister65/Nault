@@ -26,16 +26,15 @@ interface VaultData {
   active: Partial<Record<PoWApiProvider, string>>;
 }
 interface VaultEnvelope {
-  v: 1 | 2;
+  v: 2;
   salt: string;
   iv: string;
   data: string;
-  metadata?: PoWApiKeySummary[];
+  metadata: PoWApiKeySummary[];
 }
 
-const VAULT_KEY = 'nault-pow-provider-keys-v1'; // retain existing encrypted vaults
+const VAULT_KEY = 'nault-pow-provider-keys-v1'; // Preserve the storage key of already-migrated v2 vaults.
 const ITERATIONS = 600_000;
-const LEGACY_AAD = new TextEncoder().encode('nault:pow-api-keys:v1');
 const SUPPORTED: PoWApiProvider[] = ['nano-to', 'nanswap'];
 const MAX_KEYS = 16;
 const MAX_LABEL = 64;
@@ -119,25 +118,6 @@ function checkMetadata(value: unknown): PoWApiKeySummary[] {
   }
   return entries;
 }
-function checkLegacy(value: unknown): VaultData {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('Invalid encrypted credentials');
-  }
-  const parsed = value as Record<string, unknown>;
-  if (Object.keys(parsed).some(key => !SUPPORTED.includes(key as PoWApiProvider))) {
-    throw new Error('Invalid encrypted credentials');
-  }
-  const entries: StoredKey[] = [];
-  const active: VaultData['active'] = {};
-  for (const provider of SUPPORTED) {
-    if (parsed[provider] === undefined) continue;
-    const id = newId();
-    entries.push({ id, provider, label: (provider === 'nano-to' ? 'Nano.to' : 'Nanswap') + ' 1',
-      secret: checkSecret(parsed[provider]) });
-    active[provider] = id;
-  }
-  return { entries, active };
-}
 function summaries(data: VaultData): PoWApiKeySummary[] {
   return data.entries.map(({ id, provider, label }) => ({
     id, provider, label, active: data.active[provider] === id
@@ -174,14 +154,12 @@ function readEnvelope(): VaultEnvelope | null {
   if (stored.length > 44000) throw new Error('Invalid encrypted credentials');
   try {
     const envelope = JSON.parse(stored) as VaultEnvelope;
-    if (!envelope || (envelope.v !== 1 && envelope.v !== 2) ||
+    if (!envelope || envelope.v !== 2 ||
         decodeBase64(envelope.salt).length !== 16 ||
         decodeBase64(envelope.iv).length !== 12 ||
         decodeBase64(envelope.data).length < 17 ||
         decodeBase64(envelope.data).length > 32000) throw new Error();
-    if (envelope.v === 2) {
-      envelope.metadata = checkMetadata(envelope.metadata);
-    }
+    envelope.metadata = checkMetadata(envelope.metadata);
     return envelope;
   } catch (_) { throw new Error('Invalid encrypted credentials'); }
 }
@@ -190,6 +168,10 @@ function readEnvelope(): VaultEnvelope | null {
 export class PoWApiKeyVaultService {
   private data: VaultData = { entries: [], active: {} };
   private unlocked = false;
+  // Non-extractable AES key retained only during the unlocked session so an
+  // individual saved API key can be deleted without re-entering the phrase.
+  private sessionKey: CryptoKey | null = null;
+  private sessionEnvelope: string | null = null;
   private startupDecision: Promise<void> | null = null;
   private finishStartupDecision: (() => void) | null = null;
 
@@ -213,9 +195,6 @@ export class PoWApiKeyVaultService {
 
   get hasVault(): boolean { return localStorage.getItem(VAULT_KEY) !== null; }
   get isUnlocked(): boolean { return this.unlocked; }
-  get needsLegacyUnlock(): boolean {
-    return this.hasVault && !this.unlocked && readEnvelope()?.v === 1;
-  }
   getKeySummaries(provider?: PoWApiProvider): PoWApiKeySummary[] {
     const all = this.unlocked ? summaries(this.data) : (readEnvelope()?.metadata || []);
     return provider ? all.filter(entry => entry.provider === provider) : all;
@@ -250,10 +229,12 @@ export class PoWApiKeyVaultService {
   lock(): void {
     this.data = { entries: [], active: {} };
     this.unlocked = false;
+    this.sessionKey = null;
+    this.sessionEnvelope = null;
   }
   // Deliberately destructive: only call after the user confirms an advanced
   // wallet-data/full-data reset. No passphrase is needed to erase ciphertext.
-  // Remove both legacy v1 and current v2 via their shared storage key.
+  // The v2 envelope still uses the original localStorage key name.
   clearVault(): void {
     try {
       localStorage.removeItem(VAULT_KEY);
@@ -265,28 +246,26 @@ export class PoWApiKeyVaultService {
   }
   async unlock(passphrase: string): Promise<void> {
     this.lock();
+    const serialized = localStorage.getItem(VAULT_KEY);
     const envelope = readEnvelope();
-    if (!envelope) throw new Error('No API keys have been saved');
+    if (!envelope || !serialized) throw new Error('No API keys have been saved');
     try {
       const key = await keyFromPassphrase(passphrase, decodeBase64(envelope.salt));
       const plaintext = await getCrypto().subtle.decrypt(
         { name: 'AES-GCM', iv: decodeBase64(envelope.iv),
-          additionalData: envelope.v === 1 ? LEGACY_AAD : authenticatedMetadata(envelope.metadata!) },
+          additionalData: authenticatedMetadata(envelope.metadata) },
         key, decodeBase64(envelope.data)
       );
       const parsed: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(plaintext));
-      const data = envelope.v === 1 ? checkLegacy(parsed) : checkData(parsed);
-      if (envelope.v === 2 &&
-          JSON.stringify(summaries(data)) !== JSON.stringify(envelope.metadata)) {
-        throw new Error('Authenticated key labels do not match');
+      const data = checkData(parsed);
+      if (JSON.stringify(summaries(data)) !== JSON.stringify(envelope.metadata) ||
+          localStorage.getItem(VAULT_KEY) !== serialized) {
+        throw new Error('Authenticated key labels or vault changed');
       }
-      if (envelope.v === 1) {
-        // Upgrade only after a successful legacy decrypt, keeping old keys.
-        await this.seal(data, passphrase);
-      } else {
-        this.data = data;
-        this.unlocked = true;
-      }
+      this.data = data;
+      this.unlocked = true;
+      this.sessionKey = key;
+      this.sessionEnvelope = serialized;
     } catch (_) {
       this.lock();
       throw new Error('Incorrect passphrase or corrupted credential vault');
@@ -308,10 +287,44 @@ export class PoWApiKeyVaultService {
       v: 2, salt: encodeBase64(salt), iv: encodeBase64(iv),
       data: encodeBase64(new Uint8Array(ciphertext)), metadata
     };
-    localStorage.setItem(VAULT_KEY, JSON.stringify(envelope));
+    const serialized = JSON.stringify(envelope);
+    localStorage.setItem(VAULT_KEY, serialized);
     this.data = checked;
     this.unlocked = true;
+    this.sessionKey = key;
+    this.sessionEnvelope = serialized;
   }
+
+  private async sealUnlocked(data: VaultData): Promise<void> {
+    if (!this.unlocked || !this.sessionKey || !this.sessionEnvelope) {
+      throw new Error('Unlock the vault first');
+    }
+    if (localStorage.getItem(VAULT_KEY) !== this.sessionEnvelope) {
+      throw new Error('Vault modified in another session; unlock it again');
+    }
+    const checked = checkData(data);
+    const metadata = summaries(checked);
+    const previous = readEnvelope();
+    if (!previous) throw new Error('No API keys have been saved');
+    const iv = getCrypto().getRandomValues(new Uint8Array(12));
+    const ciphertext = await getCrypto().subtle.encrypt(
+      { name: 'AES-GCM', iv, additionalData: authenticatedMetadata(metadata), tagLength: 128 },
+      this.sessionKey, new TextEncoder().encode(JSON.stringify(checked))
+    );
+    // Reuse the existing PBKDF2 salt and session-only CryptoKey, but always
+    // generate a fresh AES-GCM IV when the encrypted entries change.
+    const serialized = JSON.stringify({
+      v: 2, salt: previous.salt, iv: encodeBase64(iv),
+      data: encodeBase64(new Uint8Array(ciphertext)), metadata
+    } satisfies VaultEnvelope);
+    if (localStorage.getItem(VAULT_KEY) !== this.sessionEnvelope) {
+      throw new Error('Vault modified in another session; unlock it again');
+    }
+    localStorage.setItem(VAULT_KEY, serialized);
+    this.data = checked;
+    this.sessionEnvelope = serialized;
+  }
+
   async saveKey(provider: PoWApiProvider, rawKey: string, passphrase: string, label = ''): Promise<string> {
     if (!SUPPORTED.includes(provider)) throw new Error('Unknown PoW API provider');
     const secret = checkSecret(rawKey?.trim());
@@ -340,14 +353,21 @@ export class PoWApiKeyVaultService {
       entries: this.data.entries, active: { ...this.data.active, [provider]: id }
     }, passphrase);
   }
-  async removeKey(provider: PoWApiProvider, passphrase: string, id?: string): Promise<void> {
+  async removeKey(provider: PoWApiProvider, passphrase: string | null, id?: string): Promise<void> {
     if (!SUPPORTED.includes(provider)) throw new Error('Unknown PoW API provider');
-    checkPassphrase(passphrase);
     if (!this.hasVault) throw new Error('No API keys have been saved');
-    await this.unlock(passphrase);
+    if (passphrase !== null) {
+      checkPassphrase(passphrase);
+      await this.unlock(passphrase);
+    } else if (!this.unlocked || !this.sessionKey || !this.sessionEnvelope) {
+      throw new Error('Unlock the vault first');
+    }
     const matches = this.data.entries.filter(entry => entry.provider === provider);
     const chosen = id || (matches.length === 1 ? matches[0].id : null);
     if (!chosen || !matches.some(entry => entry.id === chosen)) throw new Error('Select a key to delete');
+    if (localStorage.getItem(VAULT_KEY) !== this.sessionEnvelope) {
+      throw new Error('Vault modified in another session; unlock it again');
+    }
     const entries = this.data.entries.filter(entry => entry.id !== chosen);
     if (!entries.length) {
       localStorage.removeItem(VAULT_KEY);
@@ -360,6 +380,6 @@ export class PoWApiKeyVaultService {
       if (next) active[provider] = next.id;
       else delete active[provider];
     }
-    await this.seal({ entries, active }, passphrase);
+    await this.sealUnlocked({ entries, active });
   }
 }

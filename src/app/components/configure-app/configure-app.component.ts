@@ -204,19 +204,28 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     }
   }
   async removePowApiKey(): Promise<void> {
-    if (this.powVaultBusy) return;
+    if (this.powVaultBusy || !this.powApiKeyVault.isUnlocked) return;
+    const id = this.selectedPowKeyId();
+    if (!id) return;
+    const UIkit = (window as unknown as {UIkit: {modal: {confirm(message: string): Promise<void>}}}).UIkit;
+    try {
+      await UIkit.modal.confirm(this.translocoService.translate('configure-app.pow-api-vault.delete-confirm'));
+    } catch (_) {
+      // Cancel must leave the selected key and all other vault entries intact.
+      return;
+    }
     this.powVaultBusy = true;
     try {
-      const id = this.selectedPowKeyId();
-      if (!id) return;
-      await this.powApiKeyVault.removeKey(this.powApiProvider, this.powVaultPassphrase, id);
+      // A non-extractable AES key is held only while the vault is unlocked.
+      // Deleting one entry does not require an unrelated "new API key" input
+      // or re-entering the vault phrase; the remaining secrets stay encrypted.
+      await this.powApiKeyVault.removeKey(this.powApiProvider, null, id);
       this.powSelectedKeyId = '';
+      this.pow.syncProviderFromSettings(true);
       this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.deleted'));
     } catch (_) {
       this.notifications.sendWarning(this.translocoService.translate('configure-app.pow-api-vault.failed'));
     } finally {
-      this.powApiKeyInput = '';
-      this.powVaultPassphrase = '';
       this.powVaultBusy = false;
     }
   }
