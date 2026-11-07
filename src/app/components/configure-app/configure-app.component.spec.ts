@@ -78,97 +78,25 @@ describe('ConfigureAppComponent', () => {
     expect(details.open).toBeFalse();
   });
 
-  it('shows Nano.to PoW API controls only while Nano.to is the selected PoW provider', async () => {
-    // These tests change component state directly, outside an Angular DOM event.
-    // Mark the Eager/OnPush view dirty before checking its template bindings.
-    const render = () => {
-      fixture.changeDetectorRef.markForCheck();
-      fixture.detectChanges();
-    };
+  it('keeps the Nano.to vault accessible with any wallet RPC and PoW source', async () => {
     spyOn(component, 'ngOnInit').and.stub();
     const settings = (component as any).appSettings.settings;
-    settings.powSource = 'server';
-    settings.serverName = 'nano-to';
-    settings.serverAPI = 'https://rpc.nano.to/';
-    component.selectedPoWOption = 'server';
     const transloco = TestBed.inject(TranslocoService);
     await firstValueFrom(transloco.load(transloco.getActiveLang()));
-    render();
-    await fixture.whenStable();
-    render();
-
-    const nanoToControls = () => fixture.nativeElement.querySelector('#pow-vault-help');
-    expect(nanoToControls()).toBeTruthy();
-
-    component.selectedPoWOption = 'clientWebGL';
-    render();
-    expect(nanoToControls()).toBeNull();
-
-    component.selectedPoWOption = 'server';
-    render();
-    expect(nanoToControls()).toBeTruthy();
-
-    // A successful alternate provider hides the Nano.to credentials section.
-    component.pow.activeProvider$.next({
-      source: 'server', name: 'Rainstorm City', endpoint: 'https://rainstorm.city/api',
-      status: 'available'
-    });
-    render();
-    expect(nanoToControls()).toBeNull();
-
-    // An actual Nano.to work provider restores it.
-    component.pow.activeProvider$.next({
-      source: 'server', name: 'Nano.to', endpoint: 'https://rpc.nano.to/',
-      status: 'available'
-    });
-    render();
-    expect(nanoToControls()).toBeTruthy();
-
-    // Best must not expose Nano.to credentials or report it as available
-    // before a usable Nano.to API key is unlocked.
-    const keyAvailable = spyOn(component.powApiKeyVault, 'hasKey').and.returnValue(false);
-    settings.powSource = 'best';
-    settings.serverName = 'rainstorm';
-    settings.serverAPI = 'https://rainstorm.city/api';
-    component.selectedPoWOption = 'best';
-    component.pow.activeProvider$.next({
-      source: 'best', name: 'Nano.to', endpoint: 'https://rpc.nano.to/',
-      status: 'available'
-    });
-    render();
-    expect(nanoToControls()).toBeNull();
-    keyAvailable.and.returnValue(true);
-    render();
-    expect(nanoToControls()).toBeTruthy();
-
-    component.pow.activeProvider$.next({
-      source: 'best', name: 'Rainstorm City', endpoint: 'https://rainstorm.city/api',
-      status: 'available'
-    });
-    render();
-    expect(nanoToControls()).toBeNull();
-
-    // WebGL is a local, successful fallback with no endpoint URL. Do not
-    // mistake the persisted Nano.to primary for the provider currently used.
-    settings.powSource = 'server';
-    settings.serverName = 'nano-to';
-    settings.serverAPI = 'https://rpc.nano.to/';
-    component.selectedPoWOption = 'server';
-    component.pow.activeProvider$.next({
-      source: 'server', name: 'WebGL', endpoint: '', status: 'available'
-    });
-    render();
-    expect(nanoToControls()).toBeNull();
-
-    component.selectedPoWOption = 'custom';
-    component.customWorkServer = 'https://example.com/pow';
-    render();
-    expect(nanoToControls()).toBeNull();
-    component.customWorkServer = 'https://rpc.nano.to/';
-    render();
-    expect(nanoToControls()).toBeTruthy();
+    for (const source of ['best', 'nanoTo', 'server', 'custom', 'clientWebGL', 'clientCPU'] as const) {
+      component.selectedPoWOption = source;
+      settings.powSource = source;
+      for (const rpc of ['https://rainstorm.city/api', 'https://rpc.nano.to/']) {
+        settings.serverAPI = rpc;
+        fixture.changeDetectorRef.markForCheck();
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('#pow-vault-help')).toBeTruthy();
+      }
+    }
+    expect(component.powOptions.some(option => option.value === 'nanoTo')).toBeTrue();
   });
-
 
   it('shows an eligible provider in best mode, never a saved Nano.to RPC without a key', () => {
     const settings = (component as any).appSettings.settings;
@@ -185,7 +113,7 @@ describe('ConfigureAppComponent', () => {
     });
     expect(component.getRemotePoWOptionName('best')).toContain('Twister32 RsNano');
     expect(component.getRemotePoWOptionName('best')).not.toContain('Nano.to');
-    expect(component.showNanoToPowApiKeys()).toBeFalse();
+    expect(component.showNanoToPowApiKeys()).toBeTrue();
 
     hasKey.and.returnValue(true);
     component.pow.syncProviderFromSettings(true);
@@ -199,7 +127,7 @@ describe('ConfigureAppComponent', () => {
     hasKey.and.returnValue(false);
     component.pow.syncProviderFromSettings(true);
     expect(component.getRemotePoWOptionName('best')).toContain('Twister32 RsNano');
-    expect(component.showNanoToPowApiKeys()).toBeFalse();
+    expect(component.showNanoToPowApiKeys()).toBeTrue();
     expect(settings.serverName).toBe('nano-to');
     expect(settings.serverAPI).toBe('https://rpc.nano.to/');
   });

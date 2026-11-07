@@ -646,6 +646,68 @@ describe('PoW provider display and first-launch defaults', () => {
     }
   ));
 
+  it('routes explicitly selected Nano.to PoW independently of public or private wallet RPC', inject(
+    [PowService, AppSettingsService, PoWApiKeyVaultService],
+    async (pow: PowService, app: AppSettingsService, vault: PoWApiKeyVaultService) => {
+      vault.clearVault();
+      try {
+        await vault.saveKey('nano-to', 'NANO-INDEPENDENT-KEY-12345', 'strong vault passphrase');
+        app.settings.powSource = 'nanoTo';
+        const generate = spyOn(pow, 'getHashServer').and.resolveTo('0123456789ABCDEF');
+        for (const [serverName, serverAPI, serverAuth] of [
+          ['rainstorm', 'https://rainstorm.city/api', null],
+          ['local-private', 'https://private.example/rpc', 'private-auth']
+        ] as const) {
+          app.settings.serverName = serverName;
+          app.settings.serverAPI = serverAPI;
+          app.settings.serverAuth = serverAuth;
+          expect((await pow.getPow('A'.repeat(64), 1)).state).toBe(workState.success);
+          expect(app.settings.serverAPI).toBe(serverAPI);
+        }
+        expect(generate.calls.allArgs().map(args => args[2]))
+          .toEqual(['https://rpc.nano.to/', 'https://rpc.nano.to/']);
+      } finally { vault.clearVault(); }
+    }
+  ));
+
+  it('uses independent free best PoW even when the selected RPC is private', inject(
+    [PowService, AppSettingsService, PoWApiKeyVaultService],
+    async (pow: PowService, app: AppSettingsService, vault: PoWApiKeyVaultService) => {
+      vault.clearVault();
+      app.settings.powSource = 'best';
+      app.settings.serverName = 'local-private';
+      app.settings.serverAPI = 'https://private.example/rpc';
+      app.settings.serverAuth = 'private-auth';
+      const generate = spyOn(pow, 'getHashServer').and.resolveTo('0123456789ABCDEF');
+      expect((await pow.getPow('B'.repeat(64), 1)).state).toBe(workState.success);
+      expect(generate.calls.allArgs().map(args => args[2]))
+        .toEqual(['https://twister32.changeip.net/pow']);
+      expect(app.settings.serverAPI).toBe('https://private.example/rpc');
+    }
+  ));
+
+  it('best PoW waits for the startup unlock decision without anonymous paid requests', inject(
+    [PowService, AppSettingsService, PoWApiKeyVaultService],
+    async (pow: PowService, app: AppSettingsService, vault: PoWApiKeyVaultService) => {
+      vault.clearVault();
+      try {
+        await vault.saveKey('nano-to', 'NANO-STARTUP-KEY-12345', 'strong vault passphrase');
+        vault.lock();
+        vault.beginStartupUnlockDecision();
+        app.settings.powSource = 'best';
+        app.settings.serverAPI = 'https://rainstorm.city/api';
+        const generate = spyOn(pow, 'getHashServer').and.resolveTo('0123456789ABCDEF');
+        const request = pow.getPow('C'.repeat(64), 1);
+        await Promise.resolve();
+        expect(generate).not.toHaveBeenCalled();
+        vault.resolveStartupUnlockDecision();
+        expect((await request).state).toBe(workState.success);
+        expect(generate.calls.allArgs().map(args => args[2]))
+          .toEqual(['https://twister32.changeip.net/pow']);
+      } finally { vault.clearVault(); }
+    }
+  ));
+
   it('best mode uses Nano.to only while its active key is unlocked, then reverts to Twister32', inject(
     [PowService, AppSettingsService, PoWApiKeyVaultService],
     async (pow: PowService, app: AppSettingsService, vault: PoWApiKeyVaultService) => {

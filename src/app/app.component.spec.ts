@@ -23,71 +23,25 @@ describe('AppComponent', () => {
       ]
     }).compileComponents();
   }));
-  it('offers PoW vault unlock only when Nano.to is the configured PoW source', () => {
+  it('offers saved PoW vault unlock independently of wallet RPC and PoW choice', () => {
     const app = TestBed.inject(AppComponent);
-    const wallet = TestBed.inject(WalletService);
     const vault = TestBed.inject(PoWApiKeyVaultService);
-    const pow = TestBed.inject(PowService);
-    const configured = spyOn(wallet, 'isConfigured').and.returnValue(false);
     const hasVault = spyOnProperty(vault, 'hasVault', 'get').and.returnValue(true);
     const unlocked = spyOnProperty(vault, 'isUnlocked', 'get').and.returnValue(false);
     const saved = app.settings.settings;
-    saved.powSource = 'server';
-    saved.serverName = 'nano-to';
-    saved.serverAPI = 'https://rpc.nano.to/';
-
-    app.offerPowVaultUnlock();
-    expect(app.showPowVaultUnlock).toBeFalse(); // No configured wallet.
-
-    configured.and.returnValue(true);
+    for (const source of ['best', 'nanoTo', 'server', 'custom', 'clientCPU', 'clientWebGL'] as const) {
+      saved.powSource = source;
+      for (const rpc of ['https://rainstorm.city/api', 'https://rpc.nano.to/']) {
+        saved.serverAPI = rpc;
+        app.offerPowVaultUnlock();
+        expect(app.showPowVaultUnlock).toBeTrue();
+      }
+    }
     hasVault.and.returnValue(false);
     app.offerPowVaultUnlock();
-    expect(app.showPowVaultUnlock).toBeFalse(); // No saved keys.
-
+    expect(app.showPowVaultUnlock).toBeFalse();
     hasVault.and.returnValue(true);
     unlocked.and.returnValue(true);
-    app.offerPowVaultUnlock();
-    expect(app.showPowVaultUnlock).toBeFalse(); // Already unlocked.
-
-    unlocked.and.returnValue(false);
-    app.offerPowVaultUnlock();
-    expect(app.showPowVaultUnlock).toBeTrue(); // Nano.to, keys saved and locked.
-
-    saved.serverName = 'rainstorm';
-    saved.serverAPI = 'https://rainstorm.city/api';
-    app.offerPowVaultUnlock();
-    expect(app.showPowVaultUnlock).toBeFalse(); // Other PoW source.
-
-    for (const source of ['clientCPU', 'clientWebGL'] as const) {
-      saved.powSource = source;
-      saved.serverName = 'nano-to';
-      saved.serverAPI = 'https://rpc.nano.to/';
-      app.offerPowVaultUnlock();
-      expect(app.showPowVaultUnlock).toBeFalse(); // Local PoW wins over RPC node.
-    }
-
-    saved.powSource = 'custom';
-    saved.customWorkServer = 'https://example.org/pow';
-    app.offerPowVaultUnlock();
-    expect(app.showPowVaultUnlock).toBeFalse();
-    saved.customWorkServer = 'https://rpc.nano.to/';
-    app.offerPowVaultUnlock();
-    expect(app.showPowVaultUnlock).toBeTrue();
-
-    saved.powSource = 'best';
-    saved.serverName = 'rainstorm';
-    saved.serverAPI = 'https://rainstorm.city/api';
-    pow.activeProvider$.next({
-      source: 'best', name: 'Nano.to', endpoint: 'https://rpc.nano.to/',
-      status: 'available'
-    });
-    app.offerPowVaultUnlock();
-    expect(app.showPowVaultUnlock).toBeTrue(); // Confirmed best-mode Nano.to.
-
-    pow.activeProvider$.next({
-      source: 'best', name: 'Rainstorm City', endpoint: 'https://rainstorm.city/api',
-      status: 'available'
-    });
     app.offerPowVaultUnlock();
     expect(app.showPowVaultUnlock).toBeFalse();
   });

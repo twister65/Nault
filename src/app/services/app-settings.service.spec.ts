@@ -16,6 +16,29 @@ describe('AppSettingsService', () => {
     expect(service).toBeTruthy();
   }));
 
+  it('defaults to best PoW on a fresh launch and after reset without changing saved choices', inject(
+    [AppSettingsService], (service: AppSettingsService) => {
+      const previous = localStorage.getItem(service.storeKey);
+      const localNodes = localStorage.getItem('nanovault-rpc-local-nodes');
+      try {
+        service.clearAppSettings();
+        expect(service.settings.powSource).toBe('best');
+        service.loadAppSettings('fr-FR');
+        expect(service.settings.powSource).toBe('best');
+        service.setAppSettings({ powSource: 'server' });
+        service.loadAppSettings('fr-FR');
+        expect(service.settings.powSource).toBe('server');
+        service.clearAppSettings();
+        expect(service.settings.powSource).toBe('best');
+      } finally {
+        if (previous === null) localStorage.removeItem(service.storeKey);
+        else localStorage.setItem(service.storeKey, previous);
+        if (localNodes === null) localStorage.removeItem('nanovault-rpc-local-nodes');
+        else localStorage.setItem('nanovault-rpc-local-nodes', localNodes);
+      }
+    }
+  ));
+
   it('defaults to the OS French language only when there is no saved choice', inject([AppSettingsService], (service: AppSettingsService) => {
     const saved = localStorage.getItem(service.storeKey);
     try {
