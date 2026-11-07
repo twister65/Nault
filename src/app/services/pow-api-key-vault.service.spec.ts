@@ -233,6 +233,10 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
     const firstId = await vault.saveKey('nano-to', first, pass, 'Primary');
     const original = JSON.parse(localStorage.getItem(keyName)!);
     const secondId = await vault.saveKey('nano-to', second, '', 'Secondary');
+    // A stray value in the passphrase field must not rekey or lock an
+    // authenticated session while another API key is being added.
+    const third = 'NANO-THIRD-SECRET-KEY-789';
+    const thirdId = await vault.saveKey('nano-to', third, 'a different unused passphrase', 'Third');
     const updated = JSON.parse(localStorage.getItem(keyName)!);
 
     expect(vault.isUnlocked).toBeTrue();
@@ -240,17 +244,19 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
     expect(updated.iv).not.toBe(original.iv); // Unique AES-GCM IV on re-seal.
     expect(JSON.stringify(updated)).not.toContain(first);
     expect(JSON.stringify(updated)).not.toContain(second);
-    expect(vault.getKeySummaries('nano-to').map(entry => entry.id)).toEqual([firstId, secondId]);
-    expect(vault.getKeySummaries('nano-to').find(entry => entry.active)?.id).toBe(secondId);
+    expect(JSON.stringify(updated)).not.toContain(third);
+    expect(vault.getKeySummaries('nano-to').map(entry => entry.id))
+      .toEqual([firstId, secondId, thirdId]);
+    expect(vault.getKeySummaries('nano-to').find(entry => entry.active)?.id).toBe(thirdId);
     expect(vault.getAuthorizedHeaders('https://rpc.nano.to/'))
-      .toEqual({ Authorization: 'Bearer ' + second });
+      .toEqual({ Authorization: 'Bearer ' + third });
 
     vault.lock();
     await vault.unlock(pass);
     expect(vault.getKeySummaries('nano-to').map(entry => entry.label))
-      .toEqual(['Primary', 'Secondary']);
+      .toEqual(['Primary', 'Secondary', 'Third']);
     expect(vault.getAuthorizedHeaders('https://rpc.nano.to/'))
-      .toEqual({ Authorization: 'Bearer ' + second });
+      .toEqual({ Authorization: 'Bearer ' + third });
   });
 
   it('keeps a decrypted vault open after invalid key entries or duplicate labels', async () => {
@@ -259,6 +265,8 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
 
     await expectAsync(vault.saveKey('nano-to', 'too-short', '', 'Primary'))
       .toBeRejected(); // Duplicate label, not a password prompt.
+    await expectAsync(vault.saveKey('nano-to', 'bad', '', 'Invalid'))
+      .toBeRejected(); // Invalid API key must not lock the session.
     expect(vault.isUnlocked).toBeTrue();
     expect(localStorage.getItem(keyName)).toBe(before);
     expect(vault.getAuthorizedHeaders('https://rpc.nano.to/'))
