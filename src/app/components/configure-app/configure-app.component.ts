@@ -901,8 +901,9 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     // The active request may be checking or already failed; only identify
     // another provider as the selected source after successfully generating work.
     const confirmed = active.source === mode && active.status === 'available' &&
-      !!active.name && !!active.endpoint;
-    const fallback = !!(confirmed && primaryWorkUrl && active.endpoint !== primaryWorkUrl);
+      !!active.name && (!!active.endpoint || active.name === 'WebGL');
+    const fallback = !!(confirmed && primaryWorkUrl &&
+      (active.name === 'WebGL' || active.endpoint !== primaryWorkUrl));
     const name = confirmed ? active.name : (mode === 'custom' ? '' : primary?.name);
     if (!name) return label;
 
