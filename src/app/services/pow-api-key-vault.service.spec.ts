@@ -112,7 +112,7 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
     await vault.unlock(pass);
     expect(vault.getAuthorizedHeaders('https://rpc.nano.to/'))
       .toEqual({ Authorization: 'Bearer ' + second });
-    await vault.activateKey('nano-to', firstId, pass);
+    await vault.activateKey('nano-to', firstId);
     expect(vault.getAuthorizedHeaders('https://rpc.nano.to/'))
       .toEqual({ Authorization: 'Bearer ' + first });
     vault.lock();
@@ -126,6 +126,51 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
     await vault.removeKey('nano-to', pass, firstId);
     expect(vault.hasVault).toBeFalse();
     expect(vault.isUnlocked).toBeFalse();
+  });
+
+  it('activates an existing Nano.to key without a new passphrase while unlocked', async () => {
+    const first = 'NANO-ACTIVATION-KEY-11111111';
+    const second = 'NANO-ACTIVATION-KEY-22222222';
+    const firstId = await vault.saveKey('nano-to', first, pass, 'Primary');
+    const secondId = await vault.saveKey('nano-to', second, '', 'Secondary');
+    const previous = JSON.parse(localStorage.getItem(keyName)!);
+
+    await vault.activateKey('nano-to', firstId);
+    const updated = JSON.parse(localStorage.getItem(keyName)!);
+    expect(vault.isUnlocked).toBeTrue();
+    expect(updated.salt).toBe(previous.salt);
+    expect(updated.iv).not.toBe(previous.iv);
+    expect(updated.data).not.toContain(first);
+    expect(updated.data).not.toContain(second);
+    expect(vault.getKeySummaries('nano-to').find(entry => entry.active)?.id).toBe(firstId);
+    expect(vault.getAuthorizedHeaders('https://rpc.nano.to/'))
+      .toEqual({ Authorization: 'Bearer ' + first });
+
+    vault.lock();
+    await expectAsync(vault.activateKey('nano-to', secondId)).toBeRejected();
+    expect(vault.isUnlocked).toBeFalse();
+    await vault.unlock(pass);
+    expect(vault.getKeySummaries('nano-to').find(entry => entry.active)?.id).toBe(firstId);
+    await vault.activateKey('nano-to', secondId);
+    expect(vault.getAuthorizedHeaders('https://rpc.nano.to/'))
+      .toEqual({ Authorization: 'Bearer ' + second });
+  });
+
+  it('preserves unlocked vault and encrypted keys if activation fails', async () => {
+    const first = 'NANO-ACTIVATION-KEY-33333333';
+    const id = await vault.saveKey('nano-to', first, pass, 'Primary');
+    const before = localStorage.getItem(keyName);
+    await expectAsync(vault.activateKey('nano-to', 'unknown-id')).toBeRejected();
+    expect(vault.isUnlocked).toBeTrue();
+    expect(localStorage.getItem(keyName)).toBe(before);
+    expect(vault.getKeySummaries('nano-to').find(entry => entry.active)?.id).toBe(id);
+
+    const modified = JSON.parse(before!);
+    modified.metadata[0].label = 'Unexpected other-session update';
+    localStorage.setItem(keyName, JSON.stringify(modified));
+    await expectAsync(vault.activateKey('nano-to', id)).toBeRejected();
+    expect(vault.isUnlocked).toBeTrue(); // No implicit re-unlock or session loss.
+    expect(localStorage.getItem(keyName)).toBe(JSON.stringify(modified));
   });
 
   it('deleting an active Nano.to key promotes a saved key of the same provider', async () => {
