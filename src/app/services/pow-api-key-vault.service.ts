@@ -251,6 +251,18 @@ export class PoWApiKeyVaultService {
     this.data = { entries: [], active: {} };
     this.unlocked = false;
   }
+  // Deliberately destructive: only call after the user confirms an advanced
+  // wallet-data/full-data reset. No passphrase is needed to erase ciphertext.
+  // Remove both legacy v1 and current v2 via their shared storage key.
+  clearVault(): void {
+    try {
+      localStorage.removeItem(VAULT_KEY);
+    } finally {
+      this.lock();
+      // Do not leave a queued paid PoW request waiting on a now-deleted vault.
+      this.resolveStartupUnlockDecision();
+    }
+  }
   async unlock(passphrase: string): Promise<void> {
     this.lock();
     const envelope = readEnvelope();

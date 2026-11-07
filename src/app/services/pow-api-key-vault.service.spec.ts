@@ -192,6 +192,40 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
     expect(vault.hasVault).toBeTrue();
   });
 
+
+  it('clears encrypted v2 keys, labels and in-memory credentials without the passphrase', async () => {
+    const first = await vault.saveKey('nano-to', 'TEST-KEY-ONE-12345678', pass, 'Testing');
+    await vault.saveKey('nanswap', 'TEST-NANSWAP-KEY-123456', pass, 'Nanswap key');
+    expect(vault.hasVault).toBeTrue();
+    expect(vault.isUnlocked).toBeTrue();
+    expect(vault.getKeySummaries().length).toBe(2);
+    expect(first).toBeTruthy();
+
+    vault.clearVault();
+    expect(localStorage.getItem(keyName)).toBeNull();
+    expect(vault.hasVault).toBeFalse();
+    expect(vault.isUnlocked).toBeFalse();
+    expect(vault.getKeySummaries()).toEqual([]);
+    expect(vault.getAuthorizedHeaders('https://rpc.nano.to/')).toBeNull();
+    expect(vault.getAuthorizedHeaders('https://nodes.nanswap.com/XNO')).toBeNull();
+    await expectAsync(vault.unlock(pass)).toBeRejected();
+  });
+
+  it('deletes a locked vault and releases the pending paid-PoW startup decision', async () => {
+    await vault.saveKey('nano-to', 'TEST-KEY-ONE-12345678', pass, 'Testing');
+    vault.lock();
+    vault.beginStartupUnlockDecision();
+    let released = false;
+    const waiting = vault.waitForStartupUnlockDecision('https://rpc.nano.to/')
+      .then(() => { released = true; });
+    await Promise.resolve();
+    expect(released).toBeFalse();
+    vault.clearVault();
+    await waiting;
+    expect(released).toBeTrue();
+    expect(localStorage.getItem(keyName)).toBeNull();
+    expect(vault.getKeySummaries()).toEqual([]);
+  });
   it('refuses weak passphrases and never replaces encrypted keys on wrong unlock', async () => {
     await expectAsync(vault.saveKey('nano-to', 'valid-TEST-KEY', 'short'))
       .toBeRejected();

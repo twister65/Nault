@@ -399,3 +399,104 @@ describe('ConfigureAppComponent live PoW selection label', () => {
     expect((settings as any).customWorkServer).toBe('https://proxy.nanos.cc/proxy');
   });
 });
+
+
+describe('ConfigureAppComponent advanced-data deletion removes the PoW vault', () => {
+  const testWindow = window as unknown as { UIkit?: { modal: { confirm: jasmine.Spy } } };
+  let previousUIkit: typeof testWindow.UIkit;
+  let component: ConfigureAppComponent;
+  let confirm: jasmine.Spy;
+  let vault: { clearVault: jasmine.Spy };
+  let wallet: { resetWallet: jasmine.Spy; removeWalletData: jasmine.Spy };
+  let workPool: { clearCache: jasmine.Spy; deleteCache: jasmine.Spy };
+  let settings: { clearAppSettings: jasmine.Spy };
+  let notifications: { sendSuccess: jasmine.Spy };
+
+  beforeEach(() => {
+    previousUIkit = testWindow.UIkit;
+    confirm = jasmine.createSpy('confirm').and.resolveTo();
+    testWindow.UIkit = { modal: { confirm } };
+    component = Object.create(ConfigureAppComponent.prototype) as ConfigureAppComponent;
+    vault = { clearVault: jasmine.createSpy('clearVault') };
+    wallet = {
+      resetWallet: jasmine.createSpy('resetWallet'),
+      removeWalletData: jasmine.createSpy('removeWalletData')
+    };
+    workPool = {
+      clearCache: jasmine.createSpy('clearCache'),
+      deleteCache: jasmine.createSpy('deleteCache')
+    };
+    settings = { clearAppSettings: jasmine.createSpy('clearAppSettings') };
+    notifications = { sendSuccess: jasmine.createSpy('sendSuccess') };
+    Object.assign(component, {
+      powApiKeyVault: vault,
+      walletService: wallet,
+      workPool,
+      notifications,
+      appSettings: settings,
+      addressBook: { clearAddressBook: jasmine.createSpy('clearAddressBook') },
+      repService: { resetRepresentativeList: jasmine.createSpy('resetRepresentativeList') },
+      api: { deleteCache: jasmine.createSpy('deleteCache') },
+      translocoService: { translate: (key: string) => key },
+      powSelectedKeyId: 'key-id',
+      powApiKeyInput: 'raw-secret-not-persisted',
+      powApiKeyLabel: 'My key',
+      powVaultPassphrase: 'a strong passphrase',
+      loadFromSettings: jasmine.createSpy('loadFromSettings'),
+      updateServerSettings: jasmine.createSpy('updateServerSettings').and.resolveTo()
+    });
+  });
+  afterEach(() => {
+    if (previousUIkit === undefined) delete testWindow.UIkit;
+    else testWindow.UIkit = previousUIkit;
+  });
+
+  it('deletes the PoW vault after confirming Delete wallet data', async () => {
+    await component.clearWalletData();
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm.calls.mostRecent().args[0]).toContain(
+      'configure-app.pow-api-vault.delete-with-wallet');
+    expect(vault.clearVault).toHaveBeenCalledTimes(1);
+    expect(wallet.resetWallet).toHaveBeenCalledTimes(1);
+    expect(wallet.removeWalletData).toHaveBeenCalledTimes(1);
+    expect(workPool.deleteCache).not.toHaveBeenCalled();
+    expect(settings.clearAppSettings).not.toHaveBeenCalled();
+    expect(component.powApiKeyInput).toBe('');
+    expect(component.powVaultPassphrase).toBe('');
+    expect(component.powApiKeyLabel).toBe('');
+    expect(component.powSelectedKeyId).toBe('');
+  });
+
+  it('deletes the PoW vault after confirming Delete all data', async () => {
+    await component.clearAllData();
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm.calls.mostRecent().args[0]).toContain(
+      'configure-app.pow-api-vault.delete-with-wallet');
+    expect(vault.clearVault).toHaveBeenCalledTimes(1);
+    expect(wallet.resetWallet).toHaveBeenCalledTimes(1);
+    expect(wallet.removeWalletData).toHaveBeenCalledTimes(1);
+    expect(workPool.deleteCache).toHaveBeenCalledTimes(1);
+    expect(settings.clearAppSettings).toHaveBeenCalledTimes(1);
+    expect(component.powApiKeyInput).toBe('');
+    expect(component.powSelectedKeyId).toBe('');
+  });
+
+  it('cancelling either destructive action leaves the wallet and PoW vault intact', async () => {
+    confirm.and.rejectWith(new Error('Cancelled'));
+    await component.clearWalletData();
+    await component.clearAllData();
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(vault.clearVault).not.toHaveBeenCalled();
+    expect(wallet.resetWallet).not.toHaveBeenCalled();
+    expect(wallet.removeWalletData).not.toHaveBeenCalled();
+    expect(workPool.deleteCache).not.toHaveBeenCalled();
+    expect(settings.clearAppSettings).not.toHaveBeenCalled();
+    expect(component.powApiKeyInput).toBe('raw-secret-not-persisted');
+  });
+
+  it('clearing only the PoW work cache keeps encrypted API keys intact', async () => {
+    await component.clearWorkCache();
+    expect(workPool.clearCache).toHaveBeenCalledTimes(1);
+    expect(vault.clearVault).not.toHaveBeenCalled();
+  });
+});

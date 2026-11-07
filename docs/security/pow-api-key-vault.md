@@ -42,6 +42,13 @@ browser console, screenshot or exported Nault configuration.
   visible while the vault is locked, and authenticated on unlock through AES-GCM
   associated data; API-key values stay encrypted.
 - Removing the last saved key deletes the ciphertext entirely.
+- After confirmation, both **Advanced options → Delete wallet data** and
+  **Delete all data** erase the PoW API-key vault (legacy v1 and v2), labels
+  and active-key metadata from localStorage and clear decrypted keys from
+  memory. These operations do not require the passphrase to destroy the
+  local ciphertext; the confirmation dialog warns that saved API keys are
+  deleted as well. Cancel preserves the vault. **Clear PoW work cache**
+  intentionally does not delete the credential vault.
 
 ## Network and trust boundaries
 
