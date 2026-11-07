@@ -25,7 +25,7 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
     expect(encrypted).not.toContain(secret);
     expect(encrypted).not.toContain(pass);
     const parsed = JSON.parse(encrypted);
-    expect(parsed.v).toBe(1);
+    expect(parsed.v).toBe(2);
     expect(parsed.salt).toBeTruthy();
     expect(parsed.iv).toBeTruthy();
     expect(vault.getAuthorizedHeaders('https://rpc.nano.to/'))
