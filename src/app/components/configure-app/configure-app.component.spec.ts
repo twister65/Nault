@@ -147,6 +147,52 @@ describe('ConfigureAppComponent', () => {
     expect(nanoToControls()).toBeTruthy();
   });
 
+
+  it('enables Unlock keys for a locked Nano.to vault even with an empty passphrase', async () => {
+    spyOn(component, 'ngOnInit').and.stub();
+    const settings = (component as any).appSettings.settings;
+    settings.powSource = 'server';
+    settings.serverName = 'nano-to';
+    settings.serverAPI = 'https://rpc.nano.to/';
+    component.selectedPoWOption = 'server';
+    const vault = component.powApiKeyVault;
+    const hasVault = spyOnProperty(vault, 'hasVault', 'get').and.returnValue(true);
+    const isUnlocked = spyOnProperty(vault, 'isUnlocked', 'get').and.returnValue(false);
+    const unlock = spyOn(vault, 'unlock').and.returnValue(Promise.resolve());
+    const transloco = TestBed.inject(TranslocoService);
+    await firstValueFrom(transloco.load(transloco.getActiveLang()));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const button = fixture.nativeElement.querySelector('#pow-api-key-unlock') as HTMLButtonElement;
+    const passphrase = fixture.nativeElement.querySelector('#pow-vault-passphrase') as HTMLInputElement;
+    expect(button).toBeTruthy();
+    expect(passphrase).toBeTruthy();
+    expect(button.disabled).toBeFalse();
+
+    const focus = spyOn(passphrase, 'focus').and.callThrough();
+    button.click();
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(unlock).not.toHaveBeenCalled();
+
+    component.powVaultPassphrase = 'the saved vault passphrase';
+    fixture.detectChanges();
+    button.click();
+    await fixture.whenStable();
+    expect(unlock).toHaveBeenCalledOnceWith('the saved vault passphrase');
+    expect(component.powVaultPassphrase).toBe('');
+
+    isUnlocked.and.returnValue(true);
+    fixture.detectChanges();
+    expect(button.disabled).toBeTrue();
+
+    isUnlocked.and.returnValue(false);
+    hasVault.and.returnValue(false);
+    fixture.detectChanges();
+    expect(button.disabled).toBeTrue();
+  });
+
   it('keeps selector labels as translation keys until Transloco has loaded', () => {
     // Do not eagerly call translate() in the component constructor: the
     // asynchronous dictionary may not be ready, leaving raw keys visible.
