@@ -867,6 +867,10 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
     const saved = this.appSettings.settings;
     const active = this.pow.activeProvider$.value;
+    // WebGL is a session-only fallback with no network endpoint; it must not
+    // reveal Nano.to controls merely because Nano.to remains the saved route.
+    if (saved.powSource === source && active.source === source &&
+        active.status === 'available' && active.name === 'WebGL') return false;
     const confirmedActive = saved.powSource === source && active.source === source &&
       active.status === 'available' && !!active.endpoint;
     const primaryEndpoint = source === 'custom'
