@@ -53,6 +53,28 @@ describe('WebSocket bounded connections', () => {
     tick(250);
   }));
 
+  it('decodes binary Nano.to pong and confirmation frames without losing WS keepalive', fakeAsync(() => {
+    service.connect();
+    const socket = sockets[0];
+    expect(socket.binaryType).toBe('arraybuffer');
+    socket.onopen({});
+    const pong = new TextEncoder().encode(JSON.stringify({ ack: 'pong' }));
+    socket.onmessage({ data: pong.buffer });
+    const confirmation = {
+      account: 'nano_test', amount: '1', hash: 'test-hash',
+      block: { type: 'state', subtype: 'receive', account: 'nano_test',
+        link_as_account: 'nano_source', representative: 'nano_rep' }
+    };
+    const bytes = new TextEncoder().encode(JSON.stringify({ topic: 'confirmation', message: confirmation }));
+    socket.onmessage({ data: bytes.buffer });
+    expect(service.newTransactions$.value).toEqual(confirmation);
+    tick(15000);
+    expect(service.socket.connected).toBe(true);
+    settings.settings.serverWS = null;
+    service.forceReconnect();
+    tick(250);
+  }));
+
   it('blocks insecure saved endpoints', () => {
     settings.settings.serverWS = 'ws://192.0.2.10:7078';
     service.connect();

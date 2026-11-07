@@ -6,6 +6,7 @@ import { DesktopService } from './services/desktop.service';
 import { AppComponent } from './app.component';
 import { WalletService } from './services/wallet.service';
 import { NotificationService } from './services/notification.service';
+import { PoWApiKeyVaultService } from './services/pow-api-key-vault.service';
 import { ComponentTestModule, isolateConstructorIO } from '../testing/component-test.module';
 
 describe('AppComponent', () => {
@@ -21,6 +22,43 @@ describe('AppComponent', () => {
       ]
     }).compileComponents();
   }));
+  it('offers PoW vault unlock only for a stored and configured wallet', () => {
+    const app = TestBed.inject(AppComponent);
+    const wallet = TestBed.inject(WalletService);
+    const vault = TestBed.inject(PoWApiKeyVaultService);
+    const configured = spyOn(wallet, 'isConfigured').and.returnValue(false);
+    spyOnProperty(vault, 'hasVault', 'get').and.returnValue(true);
+    app.offerPowVaultUnlock();
+    expect(app.showPowVaultUnlock).toBeFalse();
+    configured.and.returnValue(true);
+    app.offerPowVaultUnlock();
+    expect(app.showPowVaultUnlock).toBeTrue();
+  });
+  it('requires explicit passphrase unlock after restart without retaining it', async () => {
+    const app = TestBed.inject(AppComponent);
+    const vault = TestBed.inject(PoWApiKeyVaultService);
+    const unlock = spyOn(vault, 'unlock').and.returnValue(Promise.resolve());
+    const resolveDecision = spyOn(vault, 'resolveStartupUnlockDecision');
+    app.showPowVaultUnlock = true;
+    app.powVaultUnlockPassphrase = 'a secret phrase for work';
+    await app.unlockPowVaultOnStartup();
+    expect(unlock).toHaveBeenCalledOnceWith('a secret phrase for work');
+    expect(app.showPowVaultUnlock).toBeFalse();
+    expect(app.powVaultUnlockPassphrase).toBe('');
+    expect(resolveDecision).toHaveBeenCalledTimes(1);
+    app.showPowVaultUnlock = true;
+    app.powVaultUnlockPassphrase = 'wrong';
+    unlock.and.returnValue(Promise.reject(new Error('failed')));
+    await app.unlockPowVaultOnStartup();
+    expect(app.showPowVaultUnlock).toBeTrue();
+    expect(app.powVaultUnlockError).toBeTrue();
+    expect(app.powVaultUnlockPassphrase).toBe('');
+    expect(resolveDecision).toHaveBeenCalledTimes(1);
+    app.dismissPowVaultPrompt();
+    expect(app.showPowVaultUnlock).toBeFalse();
+    expect(resolveDecision).toHaveBeenCalledTimes(2);
+  });
+
   it('constructs the application with its real dependency graph', () => {
     expect(TestBed.createComponent(AppComponent).componentInstance).toBeTruthy();
   });

@@ -6,6 +6,129 @@
 .node-stats-disabled {
     color: #bbb;
 }
+#node-stats-table {
+    max-width: 100%;
+    table-layout: auto;
+}
+
 #node-stats-table td {
-    padding-right: 20px;
+    padding-right: 12px;
+}
+
+#node-stats-table td:first-child {
+    white-space: nowrap;
+}
+
+#node-stats-table td:last-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* Separate the destructive local-node action from the save action on touch devices. */
+.server-action-buttons,
+.local-node-delete-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+}
+
+.local-node-delete-controls {
+    min-width: 0;
+    gap: 12px;
+}
+
+.local-node-delete-controls .uk-form-label {
+    text-align: left;
+}
+
+@media (min-width: 960px) {
+    .server-action-buttons {
+        flex-direction: row;
+        align-items: flex-end;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+    }
+
+    .local-node-delete-controls {
+        display: grid;
+        grid-template-columns: minmax(180px, 260px) auto;
+        column-gap: 16px;
+        align-items: end;
+    }
+
+    .local-node-delete-controls .uk-form-label {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 959px) {
+    .server-action-buttons > .uk-button,
+    .local-node-delete-controls > .uk-button {
+        width: 100%;
+    }
+}
+
+/* Server modes are actions, not entries in the RPC-node list. */
+.server-selection-modes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.server-selection-modes .uk-button {
+    min-width: 0;
+    line-height: 1.35;
+    white-space: normal;
+    padding: 11px 8px;
+}
+
+@media (max-width: 520px) {
+    .server-selection-modes {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Live PoW diagnostics: long node names must stay within mobile layouts. */
+.pow-provider-status {
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+}
+
+.pow-vault-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.pow-vault-actions .uk-button { flex: 1 1 115px; white-space: normal; }
+@media (max-width: 520px) { .pow-vault-actions .uk-button { flex-basis: 100%; } }
+
+/* Non-secret PoW API-key labels remain visible with the vault locked. */
+.pow-vault-key-list { list-style: none; margin: 6px 0 12px; padding: 0; }
+.pow-vault-key-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; overflow-wrap: anywhere; padding: 5px 0; }
+.pow-vault-key-list .uk-label { font-size: 10px; }
+
+/* Use a native disclosure for the vault info, not hover-only UIKit tooltip.
+   The whole row (including the i icon) is a touch/keyboard target. */
+.pow-vault-help > summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    max-width: 100%;
+    width: fit-content;
+    cursor: pointer;
+    list-style: none;
+}
+.pow-vault-help > summary::-webkit-details-marker { display: none; }
+.pow-vault-help > summary::marker { content: ''; }
+.pow-vault-help > summary [uk-icon] { flex-shrink: 0; }
+.pow-vault-help > summary:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+.pow-vault-help-content {
+    margin: 4px 0 12px;
+    padding: 10px 12px;
+    border-radius: 5px;
+    background: rgba(127, 127, 127, 0.12);
+    overflow-wrap: anywhere;
 }

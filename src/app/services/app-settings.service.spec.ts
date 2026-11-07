@@ -119,7 +119,7 @@ describe('AppSettingsService', () => {
     }
   }));
 
-  it('lists Twister32 RsNano but never selects it at random', inject([AppSettingsService], (service: AppSettingsService) => {
+  it('lists Twister32 RsNano as the first-launch default', inject([AppSettingsService], (service: AppSettingsService) => {
     const server = service.serverOptions.find(option => option.value === 'twister32-rsnano');
     expect(server).toBeTruthy();
     if (!server) throw new Error('Twister32 RsNano must be listed in serverOptions');
@@ -128,6 +128,14 @@ describe('AppSettingsService', () => {
     expect(server.work).toBe('https://twister32.changeip.net/pow');
     expect(server.shouldRandom).toBe(false);
   }));
+
+  it('retains the dedicated /pow endpoint when The best selects RsNano by RPC URL', inject(
+    [AppSettingsService], (service: AppSettingsService) => {
+      service.settings.serverName = 'random';
+      service.settings.serverAPI = 'https://twister32.changeip.net/proxy';
+      expect(service.getSelectedServerWorkUrl()).toBe('https://twister32.changeip.net/pow');
+    }
+  ));
 
   it('uses the dedicated PoW URL only for the explicitly selected Twister32 server', inject([AppSettingsService], (service: AppSettingsService) => {
     service.settings.serverName = 'twister32-rsnano';
@@ -139,12 +147,23 @@ describe('AppSettingsService', () => {
     });
   }));
 
-  it('only rotates among tested public nodes', inject([AppSettingsService], (service: AppSettingsService) => {
+  it('keeps the former random flags without using random selection', inject([AppSettingsService], (service: AppSettingsService) => {
     const active = service.serverOptions.filter(server => server.shouldRandom).map(server => server.value);
     expect(active).toEqual(['rainstorm', 'nanoslo']);
     expect(service.serverOptions.some(server => server.value === 'berrypay')).toBe(false);
     expect(active).not.toContain('twister32-rsnano');
     expect(service.serverOptions.some(server => server.value === 'twister32-rsnano')).toBe(true);
+  }));
+
+  it('includes Nano.to from the official registry with its canonical WebSocket URL', inject([AppSettingsService], (service: AppSettingsService) => {
+    // A missing trailing slash used to fail the exact URL validation and
+    // silently omit this valid official node from the server dropdown.
+    const nanoTo = service.serverOptions.find(option => option.value === 'nano-to');
+    expect(nanoTo).toBeDefined();
+    expect(nanoTo?.name).toBe('Nano.to');
+    expect(nanoTo?.api).toBe('https://rpc.nano.to/');
+    expect(nanoTo?.ws).toBe('wss://ws.nano.to/');
+    expect(nanoTo?.allowFailover).toBeTrue();
   }));
 
   it('retains SomeNano while removing the temporary SpyNano test server from production', inject([AppSettingsService], (service: AppSettingsService) => {
@@ -185,22 +204,102 @@ describe('AppSettingsService', () => {
   }));
 
   it('removes Berry Pay and falls back safely for previously saved selections', inject([AppSettingsService], (service: AppSettingsService) => {
-    const retainedPublicServers = ['rainstorm', 'nanoslo'];
-    const retainedEndpoints = service.serverOptions
-      .filter(server => retainedPublicServers.includes(server.value))
-      .map(server => server.api);
-
     for (const removedServer of ['berrypay']) {
       expect(service.serverOptions.some(server => server.value === removedServer)).toBe(false);
 
       service.settings.serverName = removedServer;
       service.loadServerSettings();
 
-      expect(service.settings.serverName).toBe('random');
-      expect(retainedEndpoints).toContain(service.settings.serverAPI);
+      expect(service.settings.serverName).toBe('twister32-rsnano');
+      expect(service.settings.serverAPI).toBe('https://twister32.changeip.net/proxy');
     }
 
     expect(service.knownApiEndpoints).toContain('node.somenano.com/proxy');
     expect(service.knownApiEndpoints).not.toContain('xno-rpc.berrypay.org/proxy');
+  }));
+  it('never waits for ranking or changes RsNano on a fresh first start', inject([AppSettingsService], (service: AppSettingsService) => {
+    const previous = localStorage.getItem(service.storeKey);
+    try {
+      localStorage.removeItem(service.storeKey);
+      service.loadAppSettings('en');
+      expect(service.settings.serverName).toBe('twister32-rsnano');
+      expect(service.settings.serverAPI).toBe('https://twister32.changeip.net/proxy');
+    } finally {
+      if (previous === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, previous);
+    }
+  }));
+
+  it('uses the fastest validated candidate only when The best is selected', inject([AppSettingsService], (service: AppSettingsService) => {
+    service.setRankedEndpoints(['https://nanoslo.0x.no/proxy', 'https://rainstorm.city/api']);
+    service.settings.serverName = 'random'; // persisted legacy identifier
+    service.loadServerSettings();
+    expect(service.settings.serverAPI).toBe('https://nanoslo.0x.no/proxy');
+    expect(service.getRankedFallbackEndpoints('https://nanoslo.0x.no/proxy'))
+      .toEqual(['https://rainstorm.city/api']);
+  }));
+
+  it('keeps an explicitly saved The best RPC selection even with Best PoW', inject([AppSettingsService], (service: AppSettingsService) => {
+    const previous = localStorage.getItem(service.storeKey);
+    try {
+      service.setAppSettings({ serverName: 'random', powSource: 'best' });
+      service.loadAppSettings('en');
+      expect(service.settings.serverName).toBe('random');
+      expect(service.settings.powSource).toBe('best');
+    } finally {
+      if (previous === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, previous);
+    }
+  }));
+
+  it('applies a saved best-mode choice once when background checks complete', inject([AppSettingsService], (service: AppSettingsService) => {
+    service.settings.serverName = 'random';
+    service.loadServerSettings(); // ranking still pending: temporary RsNano
+    expect(service.settings.serverAPI).toBe('https://twister32.changeip.net/proxy');
+    const selection = jasmine.createSpy('bestSelected');
+    service.serverBestSelected$.subscribe(selection);
+    service.setRankedEndpoints(['https://nanoslo.0x.no/proxy', 'https://rainstorm.city/api']);
+    expect(service.settings.serverName).toBe('random');
+    expect(service.settings.serverAPI).toBe('https://nanoslo.0x.no/proxy');
+    expect(selection).toHaveBeenCalledTimes(1);
+    service.setRankedEndpoints(['https://rainstorm.city/api']);
+    expect(service.settings.serverAPI).toBe('https://nanoslo.0x.no/proxy');
+    expect(selection).toHaveBeenCalledTimes(1);
+  }));
+
+  it('persists a public-compatible local WSS node and allows ranking and failover', inject([AppSettingsService], (service: AppSettingsService) => {
+    const id = service.saveLocalNode('My node', 'https://mine.example/rpc', 'wss://mine.example/ws', null);
+    try {
+      service.setAppSettings({ serverName: id });
+      service.loadAppSettings();
+      expect(service.settings.serverName).toBe(id);
+      expect(service.settings.serverAPI).toBe('https://mine.example/rpc');
+      expect(service.serverOptions.find(node => node.value === id)?.isLocal).toBeTrue();
+      expect(service.serverOptions.find(node => node.value === id)?.allowFailover).toBeTrue();
+      service.setRankedEndpoints(['https://mine.example/rpc', 'https://rainstorm.city/api']);
+      expect(service.getRankedFallbackEndpoints('https://twister32.changeip.net/proxy'))
+        .toContain('https://mine.example/rpc');
+      service.removeLocalNode(id);
+      expect(service.serverOptions.some(node => node.value === id)).toBeFalse();
+      expect(service.getRankedFallbackEndpoints('https://twister32.changeip.net/proxy'))
+        .not.toContain('https://mine.example/rpc');
+    } finally {
+      service.removeLocalNode(id);
+    }
+  }));
+
+  it('keeps private or RPC-only local nodes out of automatic ranking', inject([AppSettingsService], (service: AppSettingsService) => {
+    const privateId = service.saveLocalNode('Authenticated', 'https://private.example/rpc', 'wss://private.example/ws', 'Bearer private');
+    const rpcOnlyId = service.saveLocalNode('RPC only', 'https://rpc-only.example/rpc', null, null);
+    try {
+      service.loadAppSettings();
+      expect(service.serverOptions.find(node => node.value === privateId)?.allowFailover).toBeFalse();
+      expect(service.serverOptions.find(node => node.value === rpcOnlyId)?.allowFailover).toBeFalse();
+      service.setRankedEndpoints(['https://private.example/rpc', 'https://rpc-only.example/rpc']);
+      expect(service.getRankedFallbackEndpoints('')).toEqual([]);
+    } finally {
+      service.removeLocalNode(privateId);
+      service.removeLocalNode(rpcOnlyId);
+    }
   }));
 });

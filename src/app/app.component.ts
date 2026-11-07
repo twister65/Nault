@@ -7,11 +7,14 @@ import {PriceService} from './services/price.service';
 import {UtilService} from './services/util.service';
 import {NotificationService} from './services/notification.service';
 import {WorkPoolService} from './services/work-pool.service';
+import {PowService} from './services/pow.service';
+import {PoWApiKeyVaultService} from './services/pow-api-key-vault.service';
 import {Router} from '@angular/router';
 import {SwUpdate} from '@angular/service-worker';
 import {RepresentativeService} from './services/representative.service';
 import {NodeService} from './services/node.service';
 import {ApiService} from './services/api.service';
+import {RpcNodeRankingService} from './services/rpc-node-ranking.service';
 import { DesktopService, LedgerService } from './services';
 import { environment } from 'environments/environment';
 import { DeeplinkService } from './services/deeplink.service';
@@ -33,12 +36,15 @@ export class AppComponent implements OnInit, OnDestroy {
     public settings: AppSettingsService,
     private websocket: WebsocketService,
     private api: ApiService,
+    private rpcRanking: RpcNodeRankingService,
     private notifications: NotificationService,
     public nodeService: NodeService,
     private representative: RepresentativeService,
     private router: Router,
     public updates: SwUpdate,
     private workPool: WorkPoolService,
+    private pow: PowService,
+    public powApiKeyVault: PoWApiKeyVaultService,
     public price: PriceService,
     private util: UtilService,
     private desktop: DesktopService,
@@ -75,6 +81,42 @@ export class AppComponent implements OnInit, OnDestroy {
   showAccountsDropdown = false;
   canToggleLightMode = true;
   searchData = '';
+  showPowVaultUnlock = false;
+  powVaultUnlockPassphrase = '';
+  powVaultUnlockBusy = false;
+  powVaultUnlockError = false;
+
+  // Called only AFTER stored wallet restoration. Do not disturb a clean first
+  // launch without a wallet or block any RPC/PoW network request.
+  offerPowVaultUnlock(): void {
+    this.showPowVaultUnlock = this.walletService.isConfigured() &&
+      this.powApiKeyVault.hasVault && !this.powApiKeyVault.isUnlocked;
+  }
+
+  // Never request keys over the network or hold up wallet startup. The
+  // user may dismiss the optional prompt and rely on public PoW instead.
+  async unlockPowVaultOnStartup(): Promise<void> {
+    if (this.powVaultUnlockBusy || !this.powVaultUnlockPassphrase) return;
+    this.powVaultUnlockBusy = true;
+    this.powVaultUnlockError = false;
+    try {
+      await this.powApiKeyVault.unlock(this.powVaultUnlockPassphrase);
+      this.showPowVaultUnlock = false;
+      this.powApiKeyVault.resolveStartupUnlockDecision();
+    } catch (_) {
+      this.powVaultUnlockError = true;
+    } finally {
+      this.powVaultUnlockPassphrase = '';
+      this.powVaultUnlockBusy = false;
+    }
+  }
+  dismissPowVaultPrompt(): void {
+    if (this.powVaultUnlockBusy) return;
+    this.showPowVaultUnlock = false;
+    this.powVaultUnlockError = false;
+    this.powVaultUnlockPassphrase = '';
+    this.powApiKeyVault.resolveStartupUnlockDecision();
+  }
   // Android PWAs can stay alive while airplane mode suspends RPC and WebSocket.
   private networkRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
   private networkRecoveryInProgress = false;
@@ -246,6 +288,10 @@ export class AppComponent implements OnInit, OnDestroy {
     // Browser and Electron may both announce the same transition. Do not
     // queue duplicate recovery attempts or misleading transition messages.
     if (this.networkRecoveryInProgress || this.networkRecoveryTimer !== null) return;
+    // A scan performed while the device was offline has no viable backups.
+    // Refresh the public-node ranking in the background on connectivity return,
+    // without switching away from the user's previously selected RPC.
+    void this.rpcRanking.refresh().catch(() => {});
     if (this.nodeService.internetRecoveryPending) {
       // socket.connected may still describe an old TCP connection from
       // before the cable was unplugged. Only connected$ after a fresh
@@ -288,6 +334,21 @@ export class AppComponent implements OnInit, OnDestroy {
     // language. Browsers fall back to their navigator culture as before.
     const nativeLocale = await this.desktop.getSystemLocale();
     this.settings.loadAppSettings(nativeLocale);
+    // Start the one-shot decision gate before WebSocket account restoration
+    // can queue automatic PoW. Ordinary public PoW and wallet RPC continue.
+    this.powApiKeyVault.beginStartupUnlockDecision();
+    // Completing a previously saved "The best" choice is not failover.
+    // Reconnect only once when the first ranked result becomes available.
+    this.settings.serverBestSelected$.subscribe(() => {
+      this.pow.syncProviderFromSettings(true);
+      this.websocket.forceReconnect();
+      if (this.walletService.isConfigured()) {
+        void this.walletService.reloadBalances().catch(() => {});
+      }
+    });
+    // First launch uses Twister32 RsNano /pow as configured. No ranking or
+    // synthetic work generation starts before the stored wallet is restored.
+    this.pow.syncProviderFromSettings();
     // The PWA uses browser online/offline events; only the Electron renderer
     // has an OS locale and the trusted native connectivity bridge.
     if (nativeLocale !== null) this.startNativeNetworkMonitor();
@@ -302,6 +363,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
     // Align WebSocket subscriptions and the visible notice after an RPC switch.
     this.settings.serverFailover$.subscribe(({ previousName, nextName }) => {
+      this.pow.syncProviderFromSettings(true);
       this.handleServerFailover(previousName, nextName);
     });
 
@@ -316,6 +378,24 @@ export class AppComponent implements OnInit, OnDestroy {
     } finally {
       // Release guarded routes only after the persisted wallet has been read.
       this.walletService.walletLoaded$.next(true);
+    }
+    // A saved API-key vault is locked after each full restart by design.
+    // Offer a dismissible unlock prompt AFTER wallet restoration, not during
+    // first paint or first launch without a wallet; no password is persisted.
+    this.offerPowVaultUnlock();
+    if (!this.showPowVaultUnlock) {
+      this.powApiKeyVault.resolveStartupUnlockDecision();
+    }
+    // An empty first-run wallet requires no PoW discovery. For restored wallets,
+    // or an explicit saved "The best" RPC choice, scan asynchronously only
+    // after wallet restoration, never delaying the first paint or wallet load.
+    if (this.walletService.isConfigured() || this.settings.settings.serverName === 'random') {
+      void this.rpcRanking.refresh().catch(() => {
+        console.info('[Nano RPC ranking] Background node scan unavailable.');
+      });
+      if (this.walletService.isConfigured()) {
+        void this.pow.initializeAndroidPwaExternalPoW();
+      }
     }
     // Subscribe to any transaction tracking
     for (const entry of this.addressBook.addressBook) {
