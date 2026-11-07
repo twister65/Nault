@@ -38,12 +38,14 @@ describe('AppComponent', () => {
     const app = TestBed.inject(AppComponent);
     const vault = TestBed.inject(PoWApiKeyVaultService);
     const unlock = spyOn(vault, 'unlock').and.returnValue(Promise.resolve());
+    const resolveDecision = spyOn(vault, 'resolveStartupUnlockDecision');
     app.showPowVaultUnlock = true;
     app.powVaultUnlockPassphrase = 'a secret phrase for work';
     await app.unlockPowVaultOnStartup();
     expect(unlock).toHaveBeenCalledOnceWith('a secret phrase for work');
     expect(app.showPowVaultUnlock).toBeFalse();
     expect(app.powVaultUnlockPassphrase).toBe('');
+    expect(resolveDecision).toHaveBeenCalledTimes(1);
     app.showPowVaultUnlock = true;
     app.powVaultUnlockPassphrase = 'wrong';
     unlock.and.returnValue(Promise.reject(new Error('failed')));
@@ -51,8 +53,10 @@ describe('AppComponent', () => {
     expect(app.showPowVaultUnlock).toBeTrue();
     expect(app.powVaultUnlockError).toBeTrue();
     expect(app.powVaultUnlockPassphrase).toBe('');
+    expect(resolveDecision).toHaveBeenCalledTimes(1);
     app.dismissPowVaultPrompt();
     expect(app.showPowVaultUnlock).toBeFalse();
+    expect(resolveDecision).toHaveBeenCalledTimes(2);
   });
 
   it('constructs the application with its real dependency graph', () => {

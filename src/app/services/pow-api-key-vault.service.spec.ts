@@ -55,6 +55,39 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
     expect(vault.isUnlocked).toBeFalse();
   });
 
+
+  it('holds paid PoW until unlock/skip, without blocking public sources', async () => {
+    await vault.saveKey('nano-to', 'nano-TEST-KEY-1234567', pass);
+    vault.lock();
+    vault.beginStartupUnlockDecision();
+    let settled = false;
+    const waiting = vault.waitForStartupUnlockDecision('https://rpc.nano.to/')
+      .then(() => { settled = true; });
+    await vault.waitForStartupUnlockDecision('https://twister32.changeip.net/pow');
+    await Promise.resolve();
+    expect(settled).toBeFalse();
+    await vault.unlock(pass);
+    // Explicit resolution after successful unlock by the startup dialog.
+    vault.resolveStartupUnlockDecision();
+    await waiting;
+    expect(settled).toBeTrue();
+    expect(vault.hasKey('nano-to')).toBeTrue();
+  });
+
+  it('releases the paid PoW gate on Later and never stores a passphrase', async () => {
+    await vault.saveKey('nano-to', 'nano-TEST-KEY-1234567', pass);
+    vault.lock();
+    vault.beginStartupUnlockDecision();
+    let settled = false;
+    const waiting = vault.waitForStartupUnlockDecision('https://rpc.nano.to/')
+      .then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBeFalse();
+    vault.resolveStartupUnlockDecision();
+    await waiting;
+    expect(settled).toBeTrue();
+    expect(vault.isUnlocked).toBeFalse();
+  });
   it('refuses weak passphrases and never replaces encrypted keys on wrong unlock', async () => {
     await expectAsync(vault.saveKey('nano-to', 'valid-TEST-KEY', 'short'))
       .toBeRejected();

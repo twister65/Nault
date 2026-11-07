@@ -102,6 +102,7 @@ export class AppComponent implements OnInit, OnDestroy {
     try {
       await this.powApiKeyVault.unlock(this.powVaultUnlockPassphrase);
       this.showPowVaultUnlock = false;
+      this.powApiKeyVault.resolveStartupUnlockDecision();
     } catch (_) {
       this.powVaultUnlockError = true;
     } finally {
@@ -114,6 +115,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.showPowVaultUnlock = false;
     this.powVaultUnlockError = false;
     this.powVaultUnlockPassphrase = '';
+    this.powApiKeyVault.resolveStartupUnlockDecision();
   }
   // Android PWAs can stay alive while airplane mode suspends RPC and WebSocket.
   private networkRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -332,6 +334,9 @@ export class AppComponent implements OnInit, OnDestroy {
     // language. Browsers fall back to their navigator culture as before.
     const nativeLocale = await this.desktop.getSystemLocale();
     this.settings.loadAppSettings(nativeLocale);
+    // Start the one-shot decision gate before WebSocket account restoration
+    // can queue automatic PoW. Ordinary public PoW and wallet RPC continue.
+    this.powApiKeyVault.beginStartupUnlockDecision();
     // Completing a previously saved "The best" choice is not failover.
     // Reconnect only once when the first ranked result becomes available.
     this.settings.serverBestSelected$.subscribe(() => {
@@ -378,6 +383,9 @@ export class AppComponent implements OnInit, OnDestroy {
     // Offer a dismissible unlock prompt AFTER wallet restoration, not during
     // first paint or first launch without a wallet; no password is persisted.
     this.offerPowVaultUnlock();
+    if (!this.showPowVaultUnlock) {
+      this.powApiKeyVault.resolveStartupUnlockDecision();
+    }
     // An empty first-run wallet requires no PoW discovery. For restored wallets,
     // or an explicit saved "The best" RPC choice, scan asynchronously only
     // after wallet restoration, never delaying the first paint or wallet load.

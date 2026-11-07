@@ -233,6 +233,43 @@ describe('PowService', () => {
     }
   ));
 
+
+  it('waits for the paid startup decision before selecting PoW fallback', inject(
+    [PowService, AppSettingsService, PoWApiKeyVaultService],
+    async (pow: PowService, app: AppSettingsService, vault: PoWApiKeyVaultService) => {
+      app.settings.powSource = 'server';
+      app.settings.serverName = 'nano-to';
+      app.settings.serverAPI = 'https://rpc.nano.to/';
+      app.settings.serverAuth = null;
+      spyOnProperty(vault, 'hasVault', 'get').and.returnValue(true);
+      vault.beginStartupUnlockDecision();
+      const generate = spyOn(pow, 'getHashServer').and.resolveTo('0000000000000001');
+      const request = pow.getPow('D'.repeat(64), 1);
+      await Promise.resolve();
+      expect(generate).not.toHaveBeenCalled();
+      expect(app.settings.powSource).toBe('server');
+      expect(app.settings.serverAPI).toBe('https://rpc.nano.to/');
+      vault.resolveStartupUnlockDecision();
+      expect((await request).state).toBe(workState.success);
+      expect(generate).toHaveBeenCalled();
+      expect(app.settings.serverAPI).toBe('https://rpc.nano.to/');
+    }
+  ));
+
+  it('does not block free Twister32 PoW while vault unlock is pending', inject(
+    [PowService, AppSettingsService, PoWApiKeyVaultService],
+    async (pow: PowService, app: AppSettingsService, vault: PoWApiKeyVaultService) => {
+      app.settings.powSource = 'server';
+      app.settings.serverName = 'twister32-rsnano';
+      app.settings.serverAPI = 'https://twister32.changeip.net/proxy';
+      spyOnProperty(vault, 'hasVault', 'get').and.returnValue(true);
+      vault.beginStartupUnlockDecision();
+      const generate = spyOn(pow, 'getHashServer').and.resolveTo('0000000000000001');
+      expect((await pow.getPow('E'.repeat(64), 1)).state).toBe(workState.success);
+      expect(generate).toHaveBeenCalled();
+      vault.resolveStartupUnlockDecision();
+    }
+  ));
   it('never sends anonymous work_generate to a locked paid provider', inject(
     [PowService, AppSettingsService, PoWApiKeyVaultService],
     async (pow: PowService, app: AppSettingsService, vault: PoWApiKeyVaultService) => {

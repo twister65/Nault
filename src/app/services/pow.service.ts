@@ -509,7 +509,28 @@ export class PowService {
     if (!this.PoWPool.length) return; // Nothing in the queue?
     this.processingQueueItem = true;
     const queueItem = this.PoWPool[0];
-    this.powAlert$.next(false); // extra safety to ensure the alert is always reset
+    this.powAlert$.next(false);
+
+    // Restored wallets may precompute work before the optional API-key dialog
+    // can be answered. Wait only for the user's one-time unlock/skip decision
+    // when the selected PoW endpoint needs a paid credential. Do not interpret
+    // the locked vault as a failed PoW node or change the selected provider.
+    const selectedSource = this.appSettings.settings.powSource;
+    const selectedPaidUrl = selectedSource === 'custom'
+      ? this.appSettings.settings.customWorkServer
+      : selectedSource === 'server'
+        ? this.appSettings.getSelectedServerWorkUrl() || this.appSettings.settings.serverAPI
+        : '';
+    if (selectedPaidUrl) {
+      await this.powApiKeys.waitForStartupUnlockDecision(selectedPaidUrl);
+    }
+    if (!this.shouldContinueQueue || this.PoWPool[0] !== queueItem) {
+      this.PoWPool.shift();
+      this.processingQueueItem = false;
+      queueItem.promise.reject({ state: workState.cancelled, work: '' });
+      if (this.shouldContinueQueue) this.processQueue();
+      return queueItem;
+    } // extra safety to ensure the alert is always reset
 
     let powSource = this.appSettings.settings.powSource;
     const multiplierSource: number = this.appSettings.settings.multiplierSource;

@@ -94,6 +94,29 @@ function checkPassphrase(passphrase: string): void {
 export class PoWApiKeyVaultService {
   private keys: CredentialMap = {};
   private unlocked = false;
+  // A one-shot boot gate prevents restored-wallet work precomputation from
+  // declaring an encrypted paid PoW source unavailable before the user has
+  // answered the optional vault prompt. No passphrase is held in the gate.
+  private startupDecision: Promise<void> | null = null;
+  private finishStartupDecision: (() => void) | null = null;
+
+  beginStartupUnlockDecision(): void {
+    if (!this.hasVault || this.unlocked || this.startupDecision) return;
+    this.startupDecision = new Promise<void>(resolve => {
+      this.finishStartupDecision = resolve;
+    });
+  }
+  resolveStartupUnlockDecision(): void {
+    const finish = this.finishStartupDecision;
+    this.finishStartupDecision = null;
+    this.startupDecision = null;
+    finish?.();
+  }
+  async waitForStartupUnlockDecision(url: string): Promise<void> {
+    if (PoWApiKeyVaultService.providerForUrl(url) && this.startupDecision) {
+      await this.startupDecision;
+    }
+  }
 
   get hasVault(): boolean { return localStorage.getItem(VAULT_KEY) !== null; }
   get isUnlocked(): boolean { return this.unlocked; }
