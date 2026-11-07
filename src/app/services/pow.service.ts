@@ -143,6 +143,41 @@ export class PowService {
     return [{ api: 'https://rpc.nano.to/', workUrl: 'https://rpc.nano.to/' }];
   }
 
+  // Choose public work endpoints independently of the wallet RPC ranking.
+  // A node excluded from wallet sync ranking can still generate valid work.
+  // Keep proven PoW ahead of unverified servers and reserve RsNano /pow as a
+  // bounded fallback when no measured provider can be used.
+  private getPublicWorkTargets(): Array<{ api: string; workUrl: string }> {
+    const nodes = this.appSettings.serverOptions.filter(node =>
+      !node.isLocal && node.allowFailover && node.failoverTarget !== false &&
+      !!node.api && !!node.ws && !node.auth &&
+      (node.value !== 'nano-to' || this.powApiKeys.hasKey('nano-to')) &&
+      (!this.ranking.ready || !this.ranking.measurements.some(measured =>
+        measured.api === node.api && measured.powHealth === 'unavailable')));
+    const ranked = this.ranking.ready ? this.ranking.getExternalPoWTargets() : [];
+    const verified = ranked.filter(candidate => this.ranking.measurements.some(measured =>
+      measured.api === candidate.api && measured.powHealth === 'available'));
+    const ordered = [
+      ...verified,
+      ...nodes.filter(node => node.value === 'twister32-rsnano')
+        .map(node => ({ api: node.api!, workUrl: node.work || node.api! })),
+      ...ranked,
+      ...nodes.map(node => ({ api: node.api!, workUrl: node.work || node.api! }))
+    ];
+    const seen = new Set<string>();
+    const targets: Array<{ api: string; workUrl: string }> = [];
+    for (const candidate of ordered) {
+      if (!nodes.some(node => node.api === candidate.api)) continue;
+      try {
+        const workUrl = secureEndpoint(candidate.workUrl, 'rpc');
+        if (seen.has(workUrl) || !this.canGenerateWorkAt(workUrl)) continue;
+        seen.add(workUrl);
+        targets.push({ api: candidate.api, workUrl });
+      } catch (_) { /* Never use an invalid/insecure work URL. */ }
+    }
+    return targets;
+  }
+
   private async generateAuthenticatedWork(
     workServer: string, hash: string, threshold: string, timeoutMs: number,
     headers: Record<string, string>
@@ -189,7 +224,7 @@ export class PowService {
     if (!this.androidPowStartup) {
       this.androidPowStartup = this.ranking.refresh()
         .then(() => {
-          const selected = this.ranking.getExternalPoWTargets()[0];
+          const selected = this.getPublicWorkTargets()[0];
           if (selected && this.activeProvider$.value.status === 'unverified') {
             const health = this.ranking.measurements.find(node => node.api === selected.api)?.powHealth;
             this.publishProvider(selected.workUrl, health === 'available' ? 'available' : 'unverified');
@@ -218,7 +253,7 @@ export class PowService {
     if (!this.ranking.ready) return { handled: false, work: null };
     // The unauthenticated probe may classify a paid API as unavailable.
     // Unlocked API-key providers are separate candidates, not RPC nodes.
-    const ranked = this.ranking.getExternalPoWTargets();
+    const ranked = this.getPublicWorkTargets();
     const authenticated = this.getAuthenticatedWorkTargets();
     // Keep the best measured provider first, but reserve fallback slots for
     // the unlocked paid PoW endpoints even when their anonymous probe failed.
@@ -260,6 +295,28 @@ export class PowService {
     if (!primary || !primary.allowFailover || !primary.ws || primary.auth ||
         saved.serverName === 'offline' || saved.serverName === 'custom') {
       return this.requestServerWork(hash, multiplier, selectedWorkUrl);
+    }
+
+    const primaryWorkUrl = secureEndpoint(selectedWorkUrl || primary.api!, 'rpc');
+    // "Later" deliberately leaves Nano.to locked. Do not attempt an
+    // impossible anonymous work_generate there or exhaust the only fallback
+    // slot on the wrong list (RPC rank != PoW rank).
+    if (!this.canGenerateWorkAt(primaryWorkUrl)) {
+      const targets = this.getPublicWorkTargets()
+        .filter(target => target.workUrl !== primaryWorkUrl).slice(0, 3);
+      for (let index = 0; index < targets.length; index++) {
+        if (!this.shouldContinueQueue ||
+            (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+            saved.serverName !== this.appSettings.settings.serverName ||
+            saved.serverAPI !== this.appSettings.settings.serverAPI ||
+            saved.powSource !== this.appSettings.settings.powSource) return null;
+        const target = targets[index];
+        const work = await this.requestServerWork(hash, multiplier, target.workUrl,
+          index === 0 ? 30000 : 20000);
+        this.recordActualWorkResult(target.api, target.workUrl, !!work);
+        if (work) return work;
+      }
+      return null;
     }
 
     const possible = this.appSettings.serverOptions.filter(node =>
