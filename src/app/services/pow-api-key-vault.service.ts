@@ -341,16 +341,17 @@ export class PoWApiKeyVaultService {
     else await this.seal(updated, passphrase);
     return id;
   }
-  async activateKey(provider: PoWApiProvider, id: string, passphrase: string): Promise<void> {
+  async activateKey(provider: PoWApiProvider, id: string): Promise<void> {
     if (provider !== 'nano-to') throw new Error('Unknown PoW API provider');
-    checkPassphrase(passphrase);
-    await this.unlock(passphrase);
+    // Once explicitly unlocked, changing the active key reuses the
+    // non-extractable session AES key rather than prompting for a passphrase.
+    if (!this.unlocked) throw new Error('Unlock the vault first');
     if (!this.data.entries.some(entry => entry.provider === provider && entry.id === id)) {
       throw new Error('Selected key not found');
     }
-    await this.seal({
+    await this.sealUnlocked({
       entries: this.data.entries, active: { ...this.data.active, [provider]: id }
-    }, passphrase);
+    });
   }
   async removeKey(provider: PoWApiProvider, passphrase: string | null, id?: string): Promise<void> {
     if (provider !== 'nano-to') throw new Error('Unknown PoW API provider');
