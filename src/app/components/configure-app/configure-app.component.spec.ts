@@ -110,13 +110,33 @@ describe('ConfigureAppComponent', () => {
     fixture.detectChanges();
     expect(nanoToControls()).toBeNull();
 
-    // An actual Nano.to work provider restores it, including on fallback.
+    // An actual Nano.to work provider restores it.
     component.pow.activeProvider$.next({
       source: 'server', name: 'Nano.to', endpoint: 'https://rpc.nano.to/',
       status: 'available'
     });
     fixture.detectChanges();
     expect(nanoToControls()).toBeTruthy();
+
+    // "Best" can select Nano.to as a live fallback even when the saved
+    // wallet RPC endpoint is Rainstorm City.
+    settings.powSource = 'best';
+    settings.serverName = 'rainstorm';
+    settings.serverAPI = 'https://rainstorm.city/api';
+    component.selectedPoWOption = 'best';
+    component.pow.activeProvider$.next({
+      source: 'best', name: 'Nano.to', endpoint: 'https://rpc.nano.to/',
+      status: 'available'
+    });
+    fixture.detectChanges();
+    expect(nanoToControls()).toBeTruthy();
+
+    component.pow.activeProvider$.next({
+      source: 'best', name: 'Rainstorm City', endpoint: 'https://rainstorm.city/api',
+      status: 'available'
+    });
+    fixture.detectChanges();
+    expect(nanoToControls()).toBeNull();
 
     component.selectedPoWOption = 'custom';
     component.customWorkServer = 'https://example.com/pow';
