@@ -182,6 +182,7 @@ describe('ConfigureAppComponent', () => {
     expect(button).toBeTruthy();
     expect(passphrase).toBeTruthy();
     expect(button.disabled).toBeFalse();
+    expect(passphrase.disabled).toBeFalse();
 
     const focus = spyOn(passphrase, 'focus').and.callThrough();
     button.click();
@@ -198,11 +199,13 @@ describe('ConfigureAppComponent', () => {
     isUnlocked.and.returnValue(true);
     render();
     expect(button.disabled).toBeTrue();
+    expect(passphrase.disabled).toBeTrue(); // No re-entry after explicit unlock.
 
     isUnlocked.and.returnValue(false);
     hasVault.and.returnValue(false);
     render();
     expect(button.disabled).toBeTrue();
+    expect(passphrase.disabled).toBeFalse(); // First vault creation is allowed.
   });
 
   it('enables key creation only for a new vault or an already unlocked vault', async () => {
@@ -232,12 +235,14 @@ describe('ConfigureAppComponent', () => {
     const save = Array.from(buttons).find(button => button.classList.contains('uk-button-primary'))!;
     const labelInput = fixture.nativeElement.querySelector('#pow-api-key-label') as HTMLInputElement;
     const keyInput = fixture.nativeElement.querySelector('#pow-api-key') as HTMLInputElement;
+    const passphraseInput = fixture.nativeElement.querySelector('#pow-vault-passphrase') as HTMLInputElement;
 
     expect(save).toBeTruthy();
     expect(labelInput).toBeTruthy();
     expect(keyInput).toBeTruthy();
     expect(labelInput.disabled).toBeFalse();
     expect(keyInput.disabled).toBeFalse();
+    expect(passphraseInput.disabled).toBeFalse();
     expect(save.disabled).toBeTrue(); // New vault requires an initial passphrase.
 
     component.powVaultPassphrase = 'initial vault passphrase';
@@ -250,12 +255,14 @@ describe('ConfigureAppComponent', () => {
     expect(save.disabled).toBeTrue(); // Stored vault must be explicitly unlocked first.
     expect(labelInput.disabled).toBeTrue();
     expect(keyInput.disabled).toBeTrue();
+    expect(passphraseInput.disabled).toBeFalse(); // Required to unlock.
 
     isUnlocked.and.returnValue(true);
     component.powVaultPassphrase = '';
     render();
     expect(labelInput.disabled).toBeFalse();
     expect(keyInput.disabled).toBeFalse();
+    expect(passphraseInput.disabled).toBeTrue(); // Session already unlocked.
     expect(save.disabled).toBeFalse(); // No need to re-enter passphrase for a new key.
 
     // Locking again must immediately disable both sensitive editing fields.
@@ -263,6 +270,7 @@ describe('ConfigureAppComponent', () => {
     render();
     expect(labelInput.disabled).toBeTrue();
     expect(keyInput.disabled).toBeTrue();
+    expect(passphraseInput.disabled).toBeFalse();
     expect(save.disabled).toBeTrue();
   });
 
@@ -720,6 +728,52 @@ describe('ConfigureAppComponent advanced-data deletion removes the PoW vault', (
   });
 });
 
+
+describe('ConfigureAppComponent PoW API-key activation', () => {
+  it('activates a selected key without entering a passphrase while unlocked', async () => {
+    const component = Object.create(ConfigureAppComponent.prototype) as ConfigureAppComponent;
+    const activateKey = jasmine.createSpy('activateKey').and.resolveTo();
+    const notifications = {
+      sendSuccess: jasmine.createSpy('sendSuccess'),
+      sendError: jasmine.createSpy('sendError')
+    };
+    Object.assign(component, {
+      powApiKeyVault: {
+        isUnlocked: true,
+        getKeySummaries: () => [{ id: 'stored-key', provider: 'nano-to', label: 'Saved', active: false }],
+        activateKey
+      },
+      notifications,
+      translocoService: { translate: (key: string) => key },
+      powVaultPassphrase: '',
+      powSelectedKeyId: 'stored-key',
+      powVaultBusy: false
+    });
+
+    await component.activatePowApiKey();
+    expect(activateKey).toHaveBeenCalledOnceWith('nano-to', 'stored-key');
+    expect(notifications.sendSuccess).toHaveBeenCalledOnceWith('configure-app.pow-api-vault.activated');
+    expect(notifications.sendError).not.toHaveBeenCalled();
+    expect(component.powVaultPassphrase).toBe('');
+    expect(component.powVaultBusy).toBeFalse();
+  });
+
+  it('does not activate a selected key while the vault is locked', async () => {
+    const component = Object.create(ConfigureAppComponent.prototype) as ConfigureAppComponent;
+    const activateKey = jasmine.createSpy('activateKey').and.resolveTo();
+    Object.assign(component, {
+      powApiKeyVault: {
+        isUnlocked: false,
+        getKeySummaries: () => [{ id: 'stored-key', provider: 'nano-to', label: 'Saved', active: false }],
+        activateKey
+      },
+      powSelectedKeyId: 'stored-key',
+      powVaultBusy: false
+    });
+    await component.activatePowApiKey();
+    expect(activateKey).not.toHaveBeenCalled();
+  });
+});
 
 describe('ConfigureAppComponent PoW API-key save errors', () => {
   it('reports an encryption failure as a red error notification without claiming success', async () => {
