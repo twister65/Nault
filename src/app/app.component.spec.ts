@@ -7,6 +7,7 @@ import { AppComponent } from './app.component';
 import { WalletService } from './services/wallet.service';
 import { NotificationService } from './services/notification.service';
 import { PoWApiKeyVaultService } from './services/pow-api-key-vault.service';
+import { PowService } from './services/pow.service';
 import { ComponentTestModule, isolateConstructorIO } from '../testing/component-test.module';
 
 describe('AppComponent', () => {
@@ -26,6 +27,7 @@ describe('AppComponent', () => {
     const app = TestBed.inject(AppComponent);
     const wallet = TestBed.inject(WalletService);
     const vault = TestBed.inject(PoWApiKeyVaultService);
+    const pow = TestBed.inject(PowService);
     const configured = spyOn(wallet, 'isConfigured').and.returnValue(false);
     const hasVault = spyOnProperty(vault, 'hasVault', 'get').and.returnValue(true);
     const unlocked = spyOnProperty(vault, 'isUnlocked', 'get').and.returnValue(false);
@@ -75,14 +77,14 @@ describe('AppComponent', () => {
     saved.powSource = 'best';
     saved.serverName = 'rainstorm';
     saved.serverAPI = 'https://rainstorm.city/api';
-    app.pow.activeProvider$.next({
+    pow.activeProvider$.next({
       source: 'best', name: 'Nano.to', endpoint: 'https://rpc.nano.to/',
       status: 'available'
     });
     app.offerPowVaultUnlock();
     expect(app.showPowVaultUnlock).toBeTrue(); // Confirmed best-mode Nano.to.
 
-    app.pow.activeProvider$.next({
+    pow.activeProvider$.next({
       source: 'best', name: 'Rainstorm City', endpoint: 'https://rainstorm.city/api',
       status: 'available'
     });
