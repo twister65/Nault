@@ -161,7 +161,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
         'nano-to', this.powApiKeyInput, this.powVaultPassphrase, this.powApiKeyLabel);
       this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.saved'));
     } catch (_) {
-      this.notifications.sendWarning(this.translocoService.translate('configure-app.pow-api-vault.failed'));
+      this.notifications.sendError(this.translocoService.translate('configure-app.pow-api-vault.failed'));
     } finally {
       this.powApiKeyInput = '';
       this.powApiKeyLabel = '';
@@ -182,7 +182,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
       await this.powApiKeyVault.unlock(this.powVaultPassphrase);
       this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.unlocked'));
     } catch (_) {
-      this.notifications.sendWarning(this.translocoService.translate('configure-app.pow-api-vault.failed'));
+      this.notifications.sendError(this.translocoService.translate('configure-app.pow-api-vault.failed'));
     } finally {
       this.powVaultPassphrase = '';
       this.powVaultBusy = false;
@@ -197,7 +197,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
       await this.powApiKeyVault.activateKey('nano-to', id, this.powVaultPassphrase);
       this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.activated'));
     } catch (_) {
-      this.notifications.sendWarning(this.translocoService.translate('configure-app.pow-api-vault.failed'));
+      this.notifications.sendError(this.translocoService.translate('configure-app.pow-api-vault.failed'));
     } finally {
       this.powVaultPassphrase = '';
       this.powVaultBusy = false;
@@ -224,7 +224,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
       this.pow.syncProviderFromSettings(true);
       this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.deleted'));
     } catch (_) {
-      this.notifications.sendWarning(this.translocoService.translate('configure-app.pow-api-vault.failed'));
+      this.notifications.sendError(this.translocoService.translate('configure-app.pow-api-vault.failed'));
     } finally {
       this.powVaultBusy = false;
     }
