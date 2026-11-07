@@ -852,6 +852,24 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     this.statsRefreshEnabled = newServer === 'random' ? false : true;
   }
 
+
+  // Match the currently selected PoW route, never an unrelated wallet RPC
+  // node or an unconfirmed fallback. The source selector may have unsaved edits.
+  showNanoToPowApiKeys(): boolean {
+    const source = this.selectedPoWOption;
+    if (source === 'clientCPU' || source === 'clientWebGL') return false;
+
+    const saved = this.appSettings.settings;
+    const active = this.pow.activeProvider$.value;
+    const confirmedActive = saved.powSource === source && active.source === source &&
+      active.status === 'available' && !!active.endpoint;
+    const primaryEndpoint = source === 'custom'
+      ? this.customWorkServer
+      : this.appSettings.getSelectedServerWorkUrl() || saved.serverAPI || '';
+    const endpoint = confirmedActive ? active.endpoint : primaryEndpoint;
+    return PoWApiKeyVaultService.providerForUrl(endpoint) === 'nano-to';
+  }
+
   getRemotePoWOptionName(mode: 'server' | 'best' | 'custom' = 'server'): string {
     const label = this.translocoService.translate(
       mode === 'best' ? 'configure-app.pow-options.best-option-available'
