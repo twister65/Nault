@@ -170,7 +170,13 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     }
   }
   async unlockPowApiKeys(): Promise<void> {
-    if (this.powVaultBusy) return;
+    if (this.powVaultBusy || !this.powApiKeyVault.hasVault || this.powApiKeyVault.isUnlocked) return;
+    // Keep the action available for a locked vault. An empty passphrase should
+    // guide the user to the existing input, not attempt an invalid unlock.
+    if (!this.powVaultPassphrase.trim()) {
+      document.getElementById('pow-vault-passphrase')?.focus();
+      return;
+    }
     this.powVaultBusy = true;
     try {
       await this.powApiKeyVault.unlock(this.powVaultPassphrase);
