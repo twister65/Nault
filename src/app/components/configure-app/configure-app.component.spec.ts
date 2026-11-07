@@ -210,8 +210,8 @@ describe('ConfigureAppComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
-    const save = Array.from(fixture.nativeElement.querySelectorAll('.pow-vault-actions button'))
-      .find((button: HTMLButtonElement) => button.classList.contains('uk-button-primary')) as HTMLButtonElement;
+    const buttons = fixture.nativeElement.querySelectorAll('.pow-vault-actions button') as NodeListOf<HTMLButtonElement>;
+    const save = Array.from(buttons).find(button => button.classList.contains('uk-button-primary'))!;
 
     expect(save).toBeTruthy();
     expect(save.disabled).toBeTrue(); // New vault requires an initial passphrase.
