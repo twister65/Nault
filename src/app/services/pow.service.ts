@@ -101,8 +101,19 @@ export class PowService {
   // Called after initial settings restoration and when the user explicitly
   // changes a configuration. Do not erase a working fallback on page visits.
   syncProviderFromSettings(force = false): void {
+    const source = this.appSettings.settings.powSource;
     const previous = this.activeProvider$.value;
-    if (!force && previous.name && previous.source === this.appSettings.settings.powSource) return;
+    if (!force && previous.name && previous.source === source) return;
+    if (source === 'best') {
+      // A wallet RPC selection is not automatically an eligible PoW provider.
+      // Nano.to must have an active, unlocked API key before it can be chosen.
+      const preferred = this.getPreferredBestPoWProvider();
+      this.activeProvider$.next({
+        source, name: preferred?.name || '', endpoint: preferred?.endpoint || '',
+        status: 'unverified'
+      });
+      return;
+    }
     this.publishProvider('', 'unverified');
   }
 
@@ -148,6 +159,19 @@ export class PowService {
     try {
       return { api: node.api!, workUrl: secureEndpoint(node.work || node.api!, 'rpc') };
     } catch (_) { return null; }
+  }
+
+  getPreferredBestPoWProvider(): { name: string; endpoint: string } | null {
+    if (this.powApiKeys.hasKey('nano-to')) {
+      return { name: 'Nano.to', endpoint: 'https://rpc.nano.to/' };
+    }
+    const twister = this.getTwister32WorkTarget();
+    if (twister) {
+      const matching = this.appSettings.serverOptions.find(node =>
+        node.api === twister.api && node.value === 'twister32-rsnano');
+      return { name: matching?.name || 'Twister32 RsNano', endpoint: twister.workUrl };
+    }
+    return this.canUseWebGLFallback() ? { name: 'WebGL', endpoint: '' } : null;
   }
 
   private canUseWebGLFallback(): boolean {
@@ -249,7 +273,9 @@ export class PowService {
     // A preference is not evidence of successful work generation.
     if (!this.androidPowStartup) {
       const fallback = this.getTwister32WorkTarget();
-      if (fallback && this.activeProvider$.value.status === 'unverified') {
+      if (fallback && this.activeProvider$.value.status === 'unverified' &&
+          !(this.appSettings.settings.powSource === 'best' &&
+            this.powApiKeys.hasKey('nano-to'))) {
         this.publishProvider(fallback.workUrl, 'unverified');
       }
       this.androidPowStartup = Promise.resolve();
@@ -280,11 +306,14 @@ export class PowService {
     const selected = this.appSettings.getSelectedServerWorkUrl() || saved.serverAPI || '';
     // Explicitly selected Nano.to works when the user has unlocked its key.
     // After "Later", it is skipped without any anonymous paid request.
-    if (saved.powSource === 'server' &&
+    const authenticatedNanoTo = saved.powSource === 'best' &&
+      this.powApiKeys.hasKey('nano-to');
+    const paidEndpoint = authenticatedNanoTo ? 'https://rpc.nano.to/' : selected;
+    if ((authenticatedNanoTo || (saved.powSource === 'server' &&
         PoWApiKeyVaultService.providerForUrl(selected) === 'nano-to' &&
-        this.canGenerateWorkAt(selected) && stillCurrent()) {
-      const work = await this.requestServerWork(hash, multiplier, selected, 30000);
-      this.recordActualWorkResult(selected, selected, !!work);
+        this.canGenerateWorkAt(selected))) && stillCurrent()) {
+      const work = await this.requestServerWork(hash, multiplier, paidEndpoint, 30000);
+      this.recordActualWorkResult(paidEndpoint, paidEndpoint, !!work);
       if (work || !stillCurrent()) return { handled: true, work };
     }
     const twister = this.getTwister32WorkTarget();
@@ -308,10 +337,16 @@ export class PowService {
     if (!primary || !primary.allowFailover || !primary.ws || primary.auth ||
         primary.isLocal || saved.serverName === 'offline' ||
         saved.serverName === 'custom') {
-      return this.requestServerWork(hash, multiplier, selectedWorkUrl);
+      return !primary && saved.powSource === 'best'
+        ? this.fallbackToTwisterOrWebGL(hash, multiplier, saved, '')
+        : this.requestServerWork(hash, multiplier, selectedWorkUrl);
     }
 
-    const primaryUrl = secureEndpoint(selectedWorkUrl || primary.api!, 'rpc');
+    const preferredBestNanoTo = saved.powSource === 'best' &&
+      this.powApiKeys.hasKey('nano-to');
+    const primaryUrl = preferredBestNanoTo
+      ? 'https://rpc.nano.to/'
+      : secureEndpoint(selectedWorkUrl || primary.api!, 'rpc');
     const twister = this.getTwister32WorkTarget();
     const isTwister = !!twister && primaryUrl === twister.workUrl;
     const isUnlockedNano = PoWApiKeyVaultService.providerForUrl(primaryUrl) === 'nano-to' &&
@@ -322,7 +357,8 @@ export class PowService {
     // Explicitly selected Twister32 is also attempted as the primary.
     if (isTwister || isUnlockedNano) {
       const work = await this.requestServerWork(hash, multiplier, primaryUrl, 30000);
-      this.recordActualWorkResult(primary.api!, primaryUrl, !!work);
+      this.recordActualWorkResult(preferredBestNanoTo
+        ? 'https://rpc.nano.to/' : primary.api!, primaryUrl, !!work);
       if (work) return work;
     }
     return this.fallbackToTwisterOrWebGL(
