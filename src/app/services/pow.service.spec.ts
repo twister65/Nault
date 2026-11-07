@@ -433,6 +433,7 @@ describe('PowService', () => {
   it('prefers explicitly unlocked Nano.to over Twister32 on Android PWA', inject(
     [PowService, AppSettingsService, PoWApiKeyVaultService],
     async (pow: PowService, app: AppSettingsService, vault: PoWApiKeyVaultService) => {
+      vault.clearVault(); // A previous Karma spec must not leave a locked test vault.
       await vault.saveKey('nano-to', 'NANO-TEST-PAID-KEY-123456', 'valid session phrase');
       app.settings.powSource = 'server';
       app.settings.serverName = 'nano-to';
@@ -447,7 +448,7 @@ describe('PowService', () => {
         .toEqual(['https://rpc.nano.to/']);
       expect(pow.activeProvider$.value.name).toBe('Nano.to');
       expect(app.settings.serverAPI).toBe('https://rpc.nano.to/');
-      vault.lock();
+      vault.clearVault();
     }
   ));
 
@@ -476,6 +477,7 @@ describe('PowService', () => {
   it('does not attach Nano.to API keys to an unrelated external PoW endpoint', inject(
     [PowService, PoWApiKeyVaultService],
     async (pow: PowService, vault: PoWApiKeyVaultService) => {
+      vault.clearVault();
       await vault.saveKey('nano-to', 'NANO-ONLY-TEST-KEY-123456', 'valid vault phrase');
       expect(vault.getAuthorizedHeaders('https://rainstorm.city/api')).toBeNull();
       const fetchSpy = spyOn(window, 'fetch');
@@ -487,6 +489,7 @@ describe('PowService', () => {
       expect(result).toBe('0123456789ABCDEF');
       expect(fetchSpy).not.toHaveBeenCalled();
       expect(ordinary).toHaveBeenCalled();
+      vault.clearVault();
     }
   ));
   it('uses only Twister32 for automatic external PoW on installed Android PWA', inject(
