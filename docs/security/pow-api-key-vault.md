@@ -9,6 +9,8 @@ Nault supports two opt-in **work_generate-only** credential providers:
 | Nano.to | `https://rpc.nano.to/` | `Authorization: Bearer <key>` |
 | Nanswap | `https://nodes.nanswap.com/XNO` | `nodes-api-key: <key>` |
 
+Generate a dedicated Nano.to RPC/PoW API key from the official [Nano.to key management page](https://rpc.nano.to/account/api-keys). The link is displayed under **PoW provider API keys** only when Nano.to is selected. API credentials are entered only in Nault's encrypted key vault, never in a URL.
+
 Only the **PoW service** may read decrypted credentials, and only after the user
 unlocks the local vault. No wallet RPC reads, signed `process` request, WebSocket,
 node-probe, backup QR code or saved AppSettings receive a credential.

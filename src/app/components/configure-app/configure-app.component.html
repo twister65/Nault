@@ -179,6 +179,13 @@
                     <option value="nano-to">Nano.to</option>
                     <option value="nanswap">Nanswap</option>
                   </select>
+                  @if (powApiProvider === 'nano-to') {
+                    <div class="uk-text-small uk-margin-small-bottom">
+                      <a href="https://rpc.nano.to/account/api-keys" target="_blank" rel="noopener noreferrer">
+                        {{ 'configure-app.pow-api-vault.nano-to-create-key' | transloco }}
+                      </a>
+                    </div>
+                  }
                   @if (powApiKeyVault.hasKey(powApiProvider)) {
                     <div class="uk-text-meta uk-margin-small-bottom">
                       {{ 'configure-app.pow-api-vault.key-ready' | transloco }}
