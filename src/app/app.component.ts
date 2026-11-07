@@ -116,6 +116,9 @@ export class AppComponent implements OnInit, OnDestroy {
     this.powVaultUnlockError = false;
     try {
       await this.powApiKeyVault.unlock(this.powVaultUnlockPassphrase);
+      // The best provider is now eligible for Nano.to; refresh its session-
+      // only display before releasing deferred PoW requests.
+      this.pow.syncProviderFromSettings(true);
       this.showPowVaultUnlock = false;
       this.powApiKeyVault.resolveStartupUnlockDecision();
     } catch (_) {
