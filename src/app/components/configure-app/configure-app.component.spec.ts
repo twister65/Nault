@@ -230,8 +230,14 @@ describe('ConfigureAppComponent', () => {
     render();
     const buttons = fixture.nativeElement.querySelectorAll('.pow-vault-actions button') as NodeListOf<HTMLButtonElement>;
     const save = Array.from(buttons).find(button => button.classList.contains('uk-button-primary'))!;
+    const labelInput = fixture.nativeElement.querySelector('#pow-api-key-label') as HTMLInputElement;
+    const keyInput = fixture.nativeElement.querySelector('#pow-api-key') as HTMLInputElement;
 
     expect(save).toBeTruthy();
+    expect(labelInput).toBeTruthy();
+    expect(keyInput).toBeTruthy();
+    expect(labelInput.disabled).toBeFalse();
+    expect(keyInput.disabled).toBeFalse();
     expect(save.disabled).toBeTrue(); // New vault requires an initial passphrase.
 
     component.powVaultPassphrase = 'initial vault passphrase';
@@ -242,11 +248,22 @@ describe('ConfigureAppComponent', () => {
     isUnlocked.and.returnValue(false);
     render();
     expect(save.disabled).toBeTrue(); // Stored vault must be explicitly unlocked first.
+    expect(labelInput.disabled).toBeTrue();
+    expect(keyInput.disabled).toBeTrue();
 
     isUnlocked.and.returnValue(true);
     component.powVaultPassphrase = '';
     render();
+    expect(labelInput.disabled).toBeFalse();
+    expect(keyInput.disabled).toBeFalse();
     expect(save.disabled).toBeFalse(); // No need to re-enter passphrase for a new key.
+
+    // Locking again must immediately disable both sensitive editing fields.
+    isUnlocked.and.returnValue(false);
+    render();
+    expect(labelInput.disabled).toBeTrue();
+    expect(keyInput.disabled).toBeTrue();
+    expect(save.disabled).toBeTrue();
   });
 
   it('keeps selector labels as translation keys until Transloco has loaded', () => {
