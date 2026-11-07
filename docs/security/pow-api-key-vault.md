@@ -77,11 +77,17 @@ browser console, screenshot or exported Nault configuration.
   requested PoW root and difficulty before use.
 - After **Later**, the Nano.to vault remains locked: do not attempt an
   anonymous Nano.to `work_generate` or report it as a failed RPC/PoW provider.
+- In **Best available** mode, Nano.to is eligible only when its encrypted
+  vault has a currently unlocked, active API key. A saved Nano.to wallet RPC
+  address alone is never evidence that Nano.to PoW can be used. The displayed
+  provider is a candidate until real work has succeeded; a fallback does not
+  overwrite the wallet RPC or saved PoW preference.
 - Automatic work-only fallback uses **Twister32 RsNano `/pow`** on installed
   Android PWA. On Desktop Electron and ChromeOS PWA it tries Twister32 first,
   then local WebGL only if supported and Twister32 fails. Other public wallet
   RPC entries (including NanoOslo and Rainstorm City) are not automatic PoW
-  fallbacks. An explicitly selected unlocked Nano.to key remains usable.
+  fallbacks. Authenticated Nano.to is tried first in Best mode only while its
+  active key is unlocked, and remains usable when explicitly selected.
 - Fallback work is bounded and validated locally. The **wallet's RPC server,
   saved PoW selection and any signed block submission remain unchanged**.
 - Authenticated/local RPC settings and private network endpoints stay pinned.
