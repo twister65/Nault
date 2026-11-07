@@ -290,6 +290,8 @@ describe('PowService', () => {
     async (pow: PowService, app: AppSettingsService, ranking: RpcNodeRankingService,
       vault: PoWApiKeyVaultService) => {
       vault.lock();
+      // Simulate a previously encrypted vault, not an empty first launch.
+      spyOnProperty(vault, 'hasVault', 'get').and.returnValue(true);
       vault.beginStartupUnlockDecision();
       app.settings.powSource = 'server';
       app.settings.serverName = 'nano-to';
