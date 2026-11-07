@@ -26,7 +26,7 @@ Only the **PoW service** may read decrypted credentials, and only after explicit
 unlock. The chosen key is sent exclusively in an HTTPS `Authorization: Bearer`
 header to `https://rpc.nano.to/` when generating `work_generate`; no wallet RPC
 reads, signed `process` request, WebSocket, node-probe, backup QR code,
-Nanswap endpoint or saved AppSettings receive any credential.
+other provider endpoint or saved AppSettings receive any credential.
 
 Never put an API key in a URL, custom server string, source control, issue, log,
 browser console, screenshot or exported Nault configuration.
@@ -34,7 +34,7 @@ browser console, screenshot or exported Nault configuration.
 ## Persistence and unlock
 
 - Each origin/profile has its own encrypted localStorage envelope under
-  `nault-pow-provider-keys-v1`. No plaintext or password is stored there.
+  `nault-pow-provider-keys-v2`. No plaintext or password is stored there.
 - WebCrypto AES-256-GCM with 96-bit random IV, 128-bit authentication tag and
   authenticated context binds the ciphertext to the PoW key vault.
 - PBKDF2-HMAC-SHA256 with 600,000 iterations and 128-bit random salt derives
@@ -47,13 +47,8 @@ browser console, screenshot or exported Nault configuration.
   Switching the active key requires the vault passphrase. Deleting a selected
   key requires an unlocked vault and explicit confirmation, but not a new API
   key or re-entry of the passphrase.
-- Only the version 2 vault format is supported. Legacy v1 auto-migration was
-  removed after successful migration testing. The original localStorage key
-  name remains unchanged to preserve already-migrated encrypted v2 vaults.
-  Deleting an active key selects another saved Nano.to key when available.
-  Former Nanswap credentials in already encrypted v2 vaults are discarded on
-  the next successful unlock while preserving all Nano.to credentials.
-  No Nanswap credential is transmitted or accepted for new storage.
+- The version 2 vault stores Nano.to credentials only. Removing an active
+  key selects another saved Nano.to key when available.
 - Key labels, provider names and the active flag are **public non-secret metadata**
   visible while the vault is locked, and authenticated on unlock through AES-GCM
   associated data; API-key values stay encrypted.

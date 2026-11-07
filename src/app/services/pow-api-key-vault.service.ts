@@ -9,24 +9,21 @@ import { Injectable } from '@angular/core';
  * They are authenticated together with the ciphertext when unlocking.
  */
 export type PoWApiProvider = 'nano-to';
-// Read-only compatibility for old v2 vaults: obsolete credentials are erased
-// after successful unlock without sacrificing existing Nano.to entries.
-type StoredPoWApiProvider = PoWApiProvider | 'nanswap';
 export interface PoWApiKeySummary {
   id: string;
-  provider: StoredPoWApiProvider;
+  provider: PoWApiProvider;
   label: string;
   active: boolean;
 }
 interface StoredKey {
   id: string;
-  provider: StoredPoWApiProvider;
+  provider: PoWApiProvider;
   label: string;
   secret: string;
 }
 interface VaultData {
   entries: StoredKey[];
-  active: Partial<Record<StoredPoWApiProvider, string>>;
+  active: Partial<Record<PoWApiProvider, string>>;
 }
 interface VaultEnvelope {
   v: 2;
@@ -36,9 +33,9 @@ interface VaultEnvelope {
   metadata: PoWApiKeySummary[];
 }
 
-const VAULT_KEY = 'nault-pow-provider-keys-v1'; // Preserve the storage key of already-migrated v2 vaults.
+const VAULT_KEY = 'nault-pow-provider-keys-v2';
 const ITERATIONS = 600_000;
-const STORED_PROVIDERS: StoredPoWApiProvider[] = ['nano-to', 'nanswap'];
+const SUPPORTED: PoWApiProvider[] = ['nano-to'];
 const MAX_KEYS = 16;
 const MAX_LABEL = 64;
 
@@ -103,7 +100,7 @@ function checkMetadata(value: unknown): PoWApiKeySummary[] {
   for (const element of value) {
     if (!element || typeof element !== 'object' ||
         !/^[0-9a-f]{32}$/.test(element.id) ||
-        !STORED_PROVIDERS.includes(element.provider) || typeof element.active !== 'boolean') {
+        !SUPPORTED.includes(element.provider) || typeof element.active !== 'boolean') {
       throw new Error('Invalid encrypted credentials');
     }
     const label = checkLabel(element.label);
@@ -133,7 +130,7 @@ function checkData(value: unknown): VaultData {
   const obj = value as Record<string, unknown>;
   if (!Array.isArray(obj.entries) || !obj.active || typeof obj.active !== 'object' ||
       Array.isArray(obj.active) || Object.keys(obj.active).some(key =>
-        !STORED_PROVIDERS.includes(key as StoredPoWApiProvider))) throw new Error('Invalid encrypted credentials');
+        !SUPPORTED.includes(key as PoWApiProvider))) throw new Error('Invalid encrypted credentials');
   const entries: StoredKey[] = obj.entries.map((entry: StoredKey) => ({
     id: entry?.id, provider: entry?.provider, label: checkLabel(entry?.label),
     secret: checkSecret(entry?.secret)
@@ -142,7 +139,7 @@ function checkData(value: unknown): VaultData {
   const verified = checkMetadata(entries.map(entry => ({
     id: entry.id, provider: entry.provider, label: entry.label, active: active[entry.provider] === entry.id
   })));
-  if (verified.length !== entries.length || STORED_PROVIDERS.some(provider =>
+  if (verified.length !== entries.length || SUPPORTED.some(provider =>
       !!active[provider] !== entries.some(entry => entry.provider === provider))) {
     throw new Error('Invalid encrypted credentials');
   }
@@ -200,8 +197,7 @@ export class PoWApiKeyVaultService {
   get isUnlocked(): boolean { return this.unlocked; }
   getKeySummaries(provider?: PoWApiProvider): PoWApiKeySummary[] {
     const all = this.unlocked ? summaries(this.data) : (readEnvelope()?.metadata || []);
-    // Never surface obsolete provider keys as available for API use.
-    return all.filter(entry => entry.provider === 'nano-to' && (!provider || entry.provider === provider));
+    return provider ? all.filter(entry => entry.provider === provider) : all;
   }
   hasKey(provider: PoWApiProvider): boolean {
     return this.unlocked && this.data.entries.some(entry =>
@@ -232,7 +228,7 @@ export class PoWApiKeyVaultService {
   }
   // Deliberately destructive: only call after the user confirms an advanced
   // wallet-data/full-data reset. No passphrase is needed to erase ciphertext.
-  // The v2 envelope still uses the original localStorage key name.
+  // This removes the encrypted Nano.to vault for the current origin.
   clearVault(): void {
     try {
       localStorage.removeItem(VAULT_KEY);
@@ -264,13 +260,6 @@ export class PoWApiKeyVaultService {
       this.unlocked = true;
       this.sessionKey = key;
       this.sessionEnvelope = serialized;
-      // Clean up old Nanswap credentials that may coexist with Nano.to in a
-      // previously created v2 vault. Keep Nano.to keys, labels and active ID.
-      if (data.entries.some(entry => entry.provider === 'nanswap')) {
-        const entries = data.entries.filter(entry => entry.provider === 'nano-to');
-        if (!entries.length) this.clearVault();
-        else await this.sealUnlocked({ entries, active: { 'nano-to': data.active['nano-to'] } });
-      }
     } catch (_) {
       this.lock();
       throw new Error('Incorrect passphrase or corrupted credential vault');

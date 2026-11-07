@@ -532,7 +532,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
       try {
         this.customWorkServer = secureEndpoint(this.customWorkServer, 'rpc');
         const parsed = new URL(this.customWorkServer);
-        if ((parsed.hostname === 'rpc.nano.to' || parsed.hostname === 'nodes.nanswap.com') &&
+        if (parsed.hostname === 'rpc.nano.to' &&
             (parsed.search || parsed.username || parsed.password)) {
           return this.notifications.sendWarning(this.translocoService.translate('configure-app.pow-api-vault.no-url-keys'));
         }

@@ -619,12 +619,12 @@ export class PowService {
    * Actual PoW functions
    */
   async getHashServer(hash: string, multiplier: number, workServer = '', timeoutMs = 120000): Promise<string | null> {
-    // Never allow legacy query-string API keys to be transmitted to known
-    // credential providers. Users must use the encrypted vault instead.
+    // Never allow credential-bearing URLs for the Nano.to work provider.
+    // Keys are entered only in the encrypted local vault.
     try {
       if (workServer) {
         const parsed = new URL(workServer);
-        if ((parsed.hostname === 'rpc.nano.to' || parsed.hostname === 'nodes.nanswap.com') &&
+        if (parsed.hostname === 'rpc.nano.to' &&
             (parsed.search || parsed.username || parsed.password)) return null;
       }
     } catch (_) { /* The established endpoint policy will reject invalid URLs. */ }

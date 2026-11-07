@@ -226,7 +226,7 @@ describe('PowService', () => {
       const network = spyOn<any>((pow as any).api, 'workGenerate');
       const fetchSpy = spyOn(window, 'fetch');
       const work = await pow.getHashServer(
-        'C'.repeat(64), 1, 'https://nodes.nanswap.com/XNO?api_key=DO-NOT-LOG', 15000);
+        'C'.repeat(64), 1, 'https://rpc.nano.to/?api_key=DO-NOT-LOG', 15000);
       expect(work).toBeNull();
       expect(network).not.toHaveBeenCalled();
       expect(fetchSpy).not.toHaveBeenCalled();
@@ -310,13 +310,13 @@ describe('PowService', () => {
     [PowService, PoWApiKeyVaultService],
     async (pow: PowService, vault: PoWApiKeyVaultService) => {
       await vault.saveKey('nano-to', 'NANO-ONLY-TEST-KEY-123456', 'valid vault phrase');
-      expect(vault.getAuthorizedHeaders('https://nodes.nanswap.com/XNO')).toBeNull();
+      expect(vault.getAuthorizedHeaders('https://rainstorm.city/api')).toBeNull();
       const fetchSpy = spyOn(window, 'fetch');
       const ordinary = spyOn<any>((pow as any).api, 'workGenerate')
         .and.returnValue(Promise.resolve({ work: '0123456789ABCDEF' }));
       spyOn<any>((pow as any).util.nano, 'validateWork').and.returnValue(true);
       const result = await pow.getHashServer(
-        'B'.repeat(64), 1, 'https://nodes.nanswap.com/XNO', 15000);
+        'B'.repeat(64), 1, 'https://rainstorm.city/api', 15000);
       expect(result).toBe('0123456789ABCDEF');
       expect(fetchSpy).not.toHaveBeenCalled();
       expect(ordinary).toHaveBeenCalled();
