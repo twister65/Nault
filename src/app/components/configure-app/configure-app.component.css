@@ -104,3 +104,31 @@
 .pow-vault-key-list { list-style: none; margin: 6px 0 12px; padding: 0; }
 .pow-vault-key-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; overflow-wrap: anywhere; padding: 5px 0; }
 .pow-vault-key-list .uk-label { font-size: 10px; }
+
+/* Use a native disclosure for the vault info, not hover-only UIKit tooltip.
+   The whole row (including the i icon) is a touch/keyboard target. */
+.pow-vault-help > summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    max-width: 100%;
+    width: fit-content;
+    cursor: pointer;
+    list-style: none;
+}
+.pow-vault-help > summary::-webkit-details-marker { display: none; }
+.pow-vault-help > summary::marker { content: ''; }
+.pow-vault-help > summary [uk-icon] { flex-shrink: 0; }
+.pow-vault-help > summary:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+.pow-vault-help-content {
+    margin: 4px 0 12px;
+    padding: 10px 12px;
+    border-radius: 5px;
+    background: rgba(127, 127, 127, 0.12);
+    overflow-wrap: anywhere;
+}

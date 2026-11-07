@@ -162,13 +162,17 @@
                 </div>
               </div>
               <div class="uk-margin">
-                <label class="uk-form-label">
-                  {{ 'configure-app.pow-api-vault.title' | transloco }}
-                  <span uk-icon="icon: info;" uk-tooltip
-                    [title]="'configure-app.pow-api-vault.help' | transloco"
-                    [attr.aria-label]="'configure-app.pow-api-vault.help' | transloco"
-                    tabindex="0" role="img"></span>
-                </label>
+                <!-- Native disclosure works with touch, mouse, keyboard and
+                     screen readers: UIKit hover tooltips do not open reliably on Android. -->
+                <details class="pow-vault-help" id="pow-vault-help">
+                  <summary class="uk-form-label">
+                    {{ 'configure-app.pow-api-vault.title' | transloco }}
+                    <span uk-icon="icon: info;" aria-hidden="true"></span>
+                  </summary>
+                  <div class="pow-vault-help-content uk-text-small">
+                    {{ 'configure-app.pow-api-vault.help' | transloco }}
+                  </div>
+                </details>
                 <div class="uk-form-controls">
                   <div class="uk-text-meta uk-margin-small-bottom">
                     {{ (powApiKeyVault.isUnlocked

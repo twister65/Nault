@@ -47,6 +47,25 @@ describe('ConfigureAppComponent', () => {
     tick(500);
   }));
 
+
+  it('opens and closes the PoW API-key explanation on tap without a hover tooltip', () => {
+    // Keep the smoke test isolated from network/ledger work while rendering
+    // the actual Angular template and letting the browser handle <details>.
+    spyOn(component, 'ngOnInit').and.stub();
+    fixture.detectChanges();
+    const details = fixture.nativeElement.querySelector('#pow-vault-help') as HTMLDetailsElement;
+    expect(details).toBeTruthy();
+    const summary = details.querySelector('summary') as HTMLElement;
+    const content = details.querySelector('.pow-vault-help-content') as HTMLElement;
+    expect(summary).toBeTruthy();
+    expect(summary.hasAttribute('uk-tooltip')).toBeFalse();
+    expect(details.open).toBeFalse();
+    summary.click();
+    expect(details.open).toBeTrue();
+    expect(content.textContent?.trim()).toBeTruthy();
+    summary.click();
+    expect(details.open).toBeFalse();
+  });
   it('keeps selector labels as translation keys until Transloco has loaded', () => {
     // Do not eagerly call translate() in the component constructor: the
     // asynchronous dictionary may not be ready, leaving raw keys visible.
