@@ -124,8 +124,9 @@ describe('ConfigureAppComponent', () => {
     render();
     expect(nanoToControls()).toBeTruthy();
 
-    // "Best" can select Nano.to as a live fallback even when the saved
-    // wallet RPC endpoint is Rainstorm City.
+    // Best must not expose Nano.to credentials or report it as available
+    // before a usable Nano.to API key is unlocked.
+    const keyAvailable = spyOn(component.powApiKeyVault, 'hasKey').and.returnValue(false);
     settings.powSource = 'best';
     settings.serverName = 'rainstorm';
     settings.serverAPI = 'https://rainstorm.city/api';
@@ -134,6 +135,9 @@ describe('ConfigureAppComponent', () => {
       source: 'best', name: 'Nano.to', endpoint: 'https://rpc.nano.to/',
       status: 'available'
     });
+    render();
+    expect(nanoToControls()).toBeNull();
+    keyAvailable.and.returnValue(true);
     render();
     expect(nanoToControls()).toBeTruthy();
 
@@ -165,6 +169,40 @@ describe('ConfigureAppComponent', () => {
     expect(nanoToControls()).toBeTruthy();
   });
 
+
+  it('shows an eligible provider in best mode, never a saved Nano.to RPC without a key', () => {
+    const settings = (component as any).appSettings.settings;
+    const hasKey = spyOn(component.powApiKeyVault, 'hasKey').and.returnValue(false);
+    settings.powSource = 'best';
+    settings.serverName = 'nano-to';
+    settings.serverAPI = 'https://rpc.nano.to/';
+    component.selectedPoWOption = 'best';
+
+    component.pow.syncProviderFromSettings(true);
+    expect(component.pow.activeProvider$.value).toEqual({
+      source: 'best', name: 'Twister32 RsNano',
+      endpoint: 'https://twister32.changeip.net/pow', status: 'unverified'
+    });
+    expect(component.getRemotePoWOptionName('best')).toContain('Twister32 RsNano');
+    expect(component.getRemotePoWOptionName('best')).not.toContain('Nano.to');
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
+
+    hasKey.and.returnValue(true);
+    component.pow.syncProviderFromSettings(true);
+    expect(component.pow.activeProvider$.value).toEqual({
+      source: 'best', name: 'Nano.to',
+      endpoint: 'https://rpc.nano.to/', status: 'unverified'
+    });
+    expect(component.getRemotePoWOptionName('best')).toContain('Nano.to');
+    expect(component.showNanoToPowApiKeys()).toBeTrue();
+
+    hasKey.and.returnValue(false);
+    component.pow.syncProviderFromSettings(true);
+    expect(component.getRemotePoWOptionName('best')).toContain('Twister32 RsNano');
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
+    expect(settings.serverName).toBe('nano-to');
+    expect(settings.serverAPI).toBe('https://rpc.nano.to/');
+  });
 
   it('enables Unlock keys for a locked Nano.to vault even with an empty passphrase', async () => {
     // These tests change component state directly, outside an Angular DOM event.
@@ -592,7 +630,13 @@ describe('ConfigureAppComponent live PoW selection label', () => {
         ],
         getSelectedServerWorkUrl: () => ''
       },
-      pow: { activeProvider$: { value: active } },
+      pow: {
+        activeProvider$: { value: active },
+        getPreferredBestPoWProvider: () => ({
+          name: 'Twister32 RsNano', endpoint: 'https://twister32.changeip.net/pow'
+        })
+      },
+      powApiKeyVault: { hasKey: () => false },
       translocoService: {
         translate: (key: string) => translations[key] || key
       }
@@ -626,10 +670,16 @@ describe('ConfigureAppComponent live PoW selection label', () => {
     component.selectedPoWOption = 'server';
     settings.powSource = 'best';
     active.source = 'best';
-    active.status = 'available';
+    active.status = 'unverified';
     component.selectedPoWOption = 'best';
     expect(component.getRemotePoWOptionName('best'))
-      .toBe('Meilleure option disponible (NanOslo — secours PoW)');
+      .toBe('Meilleure option disponible (Twister32 RsNano)');
+    // The saved RPC's name is not a fallback PoW selection.
+    active.name = 'Twister32 RsNano';
+    active.endpoint = 'https://twister32.changeip.net/pow';
+    active.status = 'available';
+    expect(component.getRemotePoWOptionName('best'))
+      .toBe('Meilleure option disponible (Twister32 RsNano)');
     expect(settings.serverName).toBe('rainstorm');
     expect(settings.serverAPI).toBe('https://rainstorm.city/api');
 
@@ -765,6 +815,7 @@ describe('ConfigureAppComponent PoW API-key activation', () => {
         getKeySummaries: () => [{ id: 'stored-key', provider: 'nano-to', label: 'Saved', active: false }],
         activateKey
       },
+      pow: { syncProviderFromSettings: jasmine.createSpy('syncProviderFromSettings') },
       notifications,
       translocoService: { translate: (key: string) => key },
       powVaultPassphrase: '',
