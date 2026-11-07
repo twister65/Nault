@@ -159,6 +159,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     try {
       this.powSelectedKeyId = await this.powApiKeyVault.saveKey(
         'nano-to', this.powApiKeyInput, this.powVaultPassphrase, this.powApiKeyLabel);
+      this.pow.syncProviderFromSettings(true);
       this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.saved'));
     } catch (_) {
       this.notifications.sendError(this.translocoService.translate('configure-app.pow-api-vault.failed'));
@@ -180,6 +181,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     this.powVaultBusy = true;
     try {
       await this.powApiKeyVault.unlock(this.powVaultPassphrase);
+      this.pow.syncProviderFromSettings(true);
       this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.unlocked'));
     } catch (_) {
       this.notifications.sendError(this.translocoService.translate('configure-app.pow-api-vault.failed'));
@@ -195,6 +197,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     this.powVaultBusy = true;
     try {
       await this.powApiKeyVault.activateKey('nano-to', id);
+      this.pow.syncProviderFromSettings(true);
       this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.activated'));
     } catch (_) {
       this.notifications.sendError(this.translocoService.translate('configure-app.pow-api-vault.failed'));
@@ -231,6 +234,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
   lockPowApiKeys(): void {
     this.powApiKeyVault.lock();
+    this.pow.syncProviderFromSettings(true);
     this.powApiKeyInput = '';
     this.powApiKeyLabel = '';
     this.powVaultPassphrase = '';
@@ -867,6 +871,16 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
     const saved = this.appSettings.settings;
     const active = this.pow.activeProvider$.value;
+    if (source === 'best') {
+      // "Best" is not the saved wallet RPC. The paid provider is eligible
+      // only with an active key unlocked for this session.
+      if (!this.powApiKeyVault.hasKey('nano-to')) return false;
+      if (active.source === source && active.status === 'available') {
+        return PoWApiKeyVaultService.providerForUrl(active.endpoint) === 'nano-to';
+      }
+      return PoWApiKeyVaultService.providerForUrl(
+        this.pow.getPreferredBestPoWProvider()?.endpoint || '') === 'nano-to';
+    }
     // WebGL is a session-only fallback with no network endpoint; it must not
     // reveal Nano.to controls merely because Nano.to remains the saved route.
     if (saved.powSource === source && active.source === source &&
@@ -894,17 +908,25 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
     const primary = this.appSettings.serverOptions.find(node =>
       node.api && node.api === saved.serverAPI);
-    const primaryWorkUrl = mode === 'custom'
-      ? saved.customWorkServer
+    const preferred = mode === 'best' ? this.pow.getPreferredBestPoWProvider() : null;
+    const primaryWorkUrl = mode === 'best' ? preferred?.endpoint || ''
+      : mode === 'custom' ? saved.customWorkServer
       : this.appSettings.getSelectedServerWorkUrl() || saved.serverAPI;
     const active = this.pow.activeProvider$.value;
-    // The active request may be checking or already failed; only identify
-    // another provider as the selected source after successfully generating work.
-    const confirmed = active.source === mode && active.status === 'available' &&
-      !!active.name && (!!active.endpoint || active.name === 'WebGL');
-    const fallback = !!(confirmed && primaryWorkUrl &&
-      (active.name === 'WebGL' || active.endpoint !== primaryWorkUrl));
-    const name = confirmed ? active.name : (mode === 'custom' ? '' : primary?.name);
+    // A successful previous paid work request must not remain the "best"
+    // after its session key was locked or removed. Never infer PoW from RPC.
+    const activeEligible = mode !== 'best' || active.name !== 'Nano.to' ||
+      this.powApiKeyVault.hasKey('nano-to');
+    const confirmed = activeEligible && active.source === mode &&
+      active.status === 'available' && !!active.name &&
+      (!!active.endpoint || active.name === 'WebGL');
+    const fallback = !!(confirmed &&
+      (mode === 'best' ? !!preferred &&
+        (active.name !== preferred.name || active.endpoint !== preferred.endpoint)
+        : !!primaryWorkUrl &&
+          (active.name === 'WebGL' || active.endpoint !== primaryWorkUrl)));
+    const name = confirmed ? active.name
+      : mode === 'best' ? preferred?.name : mode === 'custom' ? '' : primary?.name;
     if (!name) return label;
 
     if (fallback) {
