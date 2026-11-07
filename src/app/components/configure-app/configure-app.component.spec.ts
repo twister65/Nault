@@ -79,6 +79,12 @@ describe('ConfigureAppComponent', () => {
   });
 
   it('shows Nano.to PoW API controls only while Nano.to is the selected PoW provider', async () => {
+    // These tests change component state directly, outside an Angular DOM event.
+    // Mark the Eager/OnPush view dirty before checking its template bindings.
+    const render = () => {
+      fixture.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+    };
     spyOn(component, 'ngOnInit').and.stub();
     const settings = (component as any).appSettings.settings;
     settings.powSource = 'server';
@@ -87,19 +93,19 @@ describe('ConfigureAppComponent', () => {
     component.selectedPoWOption = 'server';
     const transloco = TestBed.inject(TranslocoService);
     await firstValueFrom(transloco.load(transloco.getActiveLang()));
-    fixture.detectChanges();
+    render();
     await fixture.whenStable();
-    fixture.detectChanges();
+    render();
 
     const nanoToControls = () => fixture.nativeElement.querySelector('#pow-vault-help');
     expect(nanoToControls()).toBeTruthy();
 
     component.selectedPoWOption = 'clientWebGL';
-    fixture.detectChanges();
+    render();
     expect(nanoToControls()).toBeNull();
 
     component.selectedPoWOption = 'server';
-    fixture.detectChanges();
+    render();
     expect(nanoToControls()).toBeTruthy();
 
     // A successful alternate provider hides the Nano.to credentials section.
@@ -107,7 +113,7 @@ describe('ConfigureAppComponent', () => {
       source: 'server', name: 'Rainstorm City', endpoint: 'https://rainstorm.city/api',
       status: 'available'
     });
-    fixture.detectChanges();
+    render();
     expect(nanoToControls()).toBeNull();
 
     // An actual Nano.to work provider restores it.
@@ -115,7 +121,7 @@ describe('ConfigureAppComponent', () => {
       source: 'server', name: 'Nano.to', endpoint: 'https://rpc.nano.to/',
       status: 'available'
     });
-    fixture.detectChanges();
+    render();
     expect(nanoToControls()).toBeTruthy();
 
     // "Best" can select Nano.to as a live fallback even when the saved
@@ -128,27 +134,33 @@ describe('ConfigureAppComponent', () => {
       source: 'best', name: 'Nano.to', endpoint: 'https://rpc.nano.to/',
       status: 'available'
     });
-    fixture.detectChanges();
+    render();
     expect(nanoToControls()).toBeTruthy();
 
     component.pow.activeProvider$.next({
       source: 'best', name: 'Rainstorm City', endpoint: 'https://rainstorm.city/api',
       status: 'available'
     });
-    fixture.detectChanges();
+    render();
     expect(nanoToControls()).toBeNull();
 
     component.selectedPoWOption = 'custom';
     component.customWorkServer = 'https://example.com/pow';
-    fixture.detectChanges();
+    render();
     expect(nanoToControls()).toBeNull();
     component.customWorkServer = 'https://rpc.nano.to/';
-    fixture.detectChanges();
+    render();
     expect(nanoToControls()).toBeTruthy();
   });
 
 
   it('enables Unlock keys for a locked Nano.to vault even with an empty passphrase', async () => {
+    // These tests change component state directly, outside an Angular DOM event.
+    // Mark the Eager/OnPush view dirty before checking its template bindings.
+    const render = () => {
+      fixture.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+    };
     spyOn(component, 'ngOnInit').and.stub();
     const settings = (component as any).appSettings.settings;
     settings.powSource = 'server';
@@ -161,9 +173,9 @@ describe('ConfigureAppComponent', () => {
     const unlock = spyOn(vault, 'unlock').and.returnValue(Promise.resolve());
     const transloco = TestBed.inject(TranslocoService);
     await firstValueFrom(transloco.load(transloco.getActiveLang()));
-    fixture.detectChanges();
+    render();
     await fixture.whenStable();
-    fixture.detectChanges();
+    render();
 
     const button = fixture.nativeElement.querySelector('#pow-api-key-unlock') as HTMLButtonElement;
     const passphrase = fixture.nativeElement.querySelector('#pow-vault-passphrase') as HTMLInputElement;
@@ -177,23 +189,29 @@ describe('ConfigureAppComponent', () => {
     expect(unlock).not.toHaveBeenCalled();
 
     component.powVaultPassphrase = 'the saved vault passphrase';
-    fixture.detectChanges();
+    render();
     button.click();
     await fixture.whenStable();
     expect(unlock).toHaveBeenCalledOnceWith('the saved vault passphrase');
     expect(component.powVaultPassphrase).toBe('');
 
     isUnlocked.and.returnValue(true);
-    fixture.detectChanges();
+    render();
     expect(button.disabled).toBeTrue();
 
     isUnlocked.and.returnValue(false);
     hasVault.and.returnValue(false);
-    fixture.detectChanges();
+    render();
     expect(button.disabled).toBeTrue();
   });
 
   it('enables key creation only for a new vault or an already unlocked vault', async () => {
+    // These tests change component state directly, outside an Angular DOM event.
+    // Mark the Eager/OnPush view dirty before checking its template bindings.
+    const render = () => {
+      fixture.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+    };
     spyOn(component, 'ngOnInit').and.stub();
     const settings = (component as any).appSettings.settings;
     settings.powSource = 'server';
@@ -207,9 +225,9 @@ describe('ConfigureAppComponent', () => {
     const isUnlocked = spyOnProperty(vault, 'isUnlocked', 'get').and.returnValue(false);
     const transloco = TestBed.inject(TranslocoService);
     await firstValueFrom(transloco.load(transloco.getActiveLang()));
-    fixture.detectChanges();
+    render();
     await fixture.whenStable();
-    fixture.detectChanges();
+    render();
     const buttons = fixture.nativeElement.querySelectorAll('.pow-vault-actions button') as NodeListOf<HTMLButtonElement>;
     const save = Array.from(buttons).find(button => button.classList.contains('uk-button-primary'))!;
 
@@ -217,17 +235,17 @@ describe('ConfigureAppComponent', () => {
     expect(save.disabled).toBeTrue(); // New vault requires an initial passphrase.
 
     component.powVaultPassphrase = 'initial vault passphrase';
-    fixture.detectChanges();
+    render();
     expect(save.disabled).toBeFalse();
 
     hasVault.and.returnValue(true);
     isUnlocked.and.returnValue(false);
-    fixture.detectChanges();
+    render();
     expect(save.disabled).toBeTrue(); // Stored vault must be explicitly unlocked first.
 
     isUnlocked.and.returnValue(true);
     component.powVaultPassphrase = '';
-    fixture.detectChanges();
+    render();
     expect(save.disabled).toBeFalse(); // No need to re-enter passphrase for a new key.
   });
 
