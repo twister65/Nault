@@ -191,10 +191,10 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   async activatePowApiKey(): Promise<void> {
     if (this.powVaultBusy) return;
     const id = this.selectedPowKeyId();
-    if (!id || !this.powApiKeyVault.isUnlocked || !this.powVaultPassphrase) return;
+    if (!id || !this.powApiKeyVault.isUnlocked) return;
     this.powVaultBusy = true;
     try {
-      await this.powApiKeyVault.activateKey('nano-to', id, this.powVaultPassphrase);
+      await this.powApiKeyVault.activateKey('nano-to', id);
       this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.activated'));
     } catch (_) {
       this.notifications.sendError(this.translocoService.translate('configure-app.pow-api-vault.failed'));
