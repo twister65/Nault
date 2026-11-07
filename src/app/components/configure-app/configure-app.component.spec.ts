@@ -193,6 +193,44 @@ describe('ConfigureAppComponent', () => {
     expect(button.disabled).toBeTrue();
   });
 
+  it('enables key creation only for a new vault or an already unlocked vault', async () => {
+    spyOn(component, 'ngOnInit').and.stub();
+    const settings = (component as any).appSettings.settings;
+    settings.powSource = 'server';
+    settings.serverName = 'nano-to';
+    settings.serverAPI = 'https://rpc.nano.to/';
+    component.selectedPoWOption = 'server';
+    component.powApiKeyInput = 'NANO-NEW-API-KEY-123456';
+    component.powVaultPassphrase = '';
+    const vault = component.powApiKeyVault;
+    const hasVault = spyOnProperty(vault, 'hasVault', 'get').and.returnValue(false);
+    const isUnlocked = spyOnProperty(vault, 'isUnlocked', 'get').and.returnValue(false);
+    const transloco = TestBed.inject(TranslocoService);
+    await firstValueFrom(transloco.load(transloco.getActiveLang()));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const save = Array.from(fixture.nativeElement.querySelectorAll('.pow-vault-actions button'))
+      .find((button: HTMLButtonElement) => button.classList.contains('uk-button-primary')) as HTMLButtonElement;
+
+    expect(save).toBeTruthy();
+    expect(save.disabled).toBeTrue(); // New vault requires an initial passphrase.
+
+    component.powVaultPassphrase = 'initial vault passphrase';
+    fixture.detectChanges();
+    expect(save.disabled).toBeFalse();
+
+    hasVault.and.returnValue(true);
+    isUnlocked.and.returnValue(false);
+    fixture.detectChanges();
+    expect(save.disabled).toBeTrue(); // Stored vault must be explicitly unlocked first.
+
+    isUnlocked.and.returnValue(true);
+    component.powVaultPassphrase = '';
+    fixture.detectChanges();
+    expect(save.disabled).toBeFalse(); // No need to re-enter passphrase for a new key.
+  });
+
   it('keeps selector labels as translation keys until Transloco has loaded', () => {
     // Do not eagerly call translate() in the component constructor: the
     // asynchronous dictionary may not be ready, leaving raw keys visible.
@@ -647,6 +685,37 @@ describe('ConfigureAppComponent advanced-data deletion removes the PoW vault', (
   });
 });
 
+
+describe('ConfigureAppComponent PoW API-key save errors', () => {
+  it('reports an encryption failure as a red error notification without claiming success', async () => {
+    const component = Object.create(ConfigureAppComponent.prototype) as ConfigureAppComponent;
+    const notifications = {
+      sendSuccess: jasmine.createSpy('sendSuccess'),
+      sendError: jasmine.createSpy('sendError'),
+      sendWarning: jasmine.createSpy('sendWarning')
+    };
+    const saveKey = jasmine.createSpy('saveKey').and.rejectWith(new Error('Failed to seal vault'));
+    Object.assign(component, {
+      powApiKeyVault: { saveKey },
+      notifications,
+      translocoService: { translate: (key: string) => key },
+      powApiKeyInput: 'NANO-NEW-KEY-123456',
+      powVaultPassphrase: 'existing vault phrase',
+      powApiKeyLabel: 'Second key',
+      powSelectedKeyId: 'original-id',
+      powVaultBusy: false
+    });
+
+    await component.savePowApiKey();
+    expect(saveKey).toHaveBeenCalledOnceWith('nano-to', 'NANO-NEW-KEY-123456',
+      'existing vault phrase', 'Second key');
+    expect(notifications.sendError).toHaveBeenCalledOnceWith('configure-app.pow-api-vault.failed');
+    expect(notifications.sendWarning).not.toHaveBeenCalled();
+    expect(notifications.sendSuccess).not.toHaveBeenCalled();
+    expect(component.powSelectedKeyId).toBe('original-id');
+    expect(component.powVaultBusy).toBeFalse();
+  });
+});
 
 describe('ConfigureAppComponent selected PoW key deletion', () => {
   const windowWithUIkit = window as unknown as { UIkit?: { modal: { confirm: jasmine.Spy } } };
