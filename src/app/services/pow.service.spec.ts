@@ -285,6 +285,98 @@ describe('PowService', () => {
     }
   ));
 
+  it('after Later uses free RsNano work without contacting locked Nano.to or changing wallet RPC', inject(
+    [PowService, AppSettingsService, RpcNodeRankingService, PoWApiKeyVaultService],
+    async (pow: PowService, app: AppSettingsService, ranking: RpcNodeRankingService,
+      vault: PoWApiKeyVaultService) => {
+      vault.lock();
+      vault.beginStartupUnlockDecision();
+      app.settings.powSource = 'server';
+      app.settings.serverName = 'nano-to';
+      app.settings.serverAPI = 'https://rpc.nano.to/';
+      app.settings.serverAuth = null;
+      ranking.ready = false;
+      spyOn(app, 'getRankedFallbackEndpoints').and.returnValue([]);
+      const switchRpc = spyOn(app, 'activateFailover');
+      const generate = spyOn(pow, 'getHashServer').and.callFake(async (_hash, _multiplier, endpoint) =>
+        endpoint === 'https://twister32.changeip.net/pow' ? '0123456789ABCDEF' : null);
+
+      const request = pow.getPow('8'.repeat(64), 1);
+      await Promise.resolve();
+      expect(generate).not.toHaveBeenCalled(); // Startup unlock decision pending.
+      vault.resolveStartupUnlockDecision(); // User selects "Later".
+      const result = await request;
+      expect(result.state).toBe(workState.success);
+      expect(generate).toHaveBeenCalledOnceWith(
+        '8'.repeat(64), 1, 'https://twister32.changeip.net/pow', 30000);
+      expect(pow.activeProvider$.value.name).toBe('Twister32 RsNano');
+      expect(pow.activeProvider$.value.status).toBe('available');
+      expect(app.settings.serverName).toBe('nano-to');
+      expect(app.settings.serverAPI).toBe('https://rpc.nano.to/');
+      expect(switchRpc).not.toHaveBeenCalled();
+    }
+  ));
+
+  it('tries a second independent free PoW candidate if NanoOslo fails after Later', inject(
+    [PowService, AppSettingsService, RpcNodeRankingService, PoWApiKeyVaultService],
+    async (pow: PowService, app: AppSettingsService, ranking: RpcNodeRankingService,
+      vault: PoWApiKeyVaultService) => {
+      vault.lock();
+      app.settings.powSource = 'server';
+      app.settings.serverName = 'nano-to';
+      app.settings.serverAPI = 'https://rpc.nano.to/';
+      app.settings.serverAuth = null;
+      ranking.ready = true;
+      spyOn(ranking, 'getExternalPoWTargets').and.returnValue([
+        { api: 'https://nanoslo.0x.no/proxy', workUrl: 'https://nanoslo.0x.no/proxy' }
+      ]);
+      // A node excluded from RPC sync ranking must still be eligible for work.
+      spyOn(app, 'getRankedFallbackEndpoints').and.returnValue([]);
+      const generate = spyOn(pow, 'getHashServer').and.callFake(async (_hash, _multiplier, endpoint) =>
+        endpoint === 'https://twister32.changeip.net/pow' ? '0123456789ABCDEF' : null);
+
+      const result = await pow.getPow('9'.repeat(64), 1);
+      expect(result.state).toBe(workState.success);
+      expect(generate.calls.allArgs().map(args => args[2])).toEqual([
+        'https://nanoslo.0x.no/proxy',
+        'https://twister32.changeip.net/pow'
+      ]);
+      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000, 20000]);
+      expect(pow.activeProvider$.value.name).toBe('Twister32 RsNano');
+      expect(pow.activeProvider$.value.status).toBe('available');
+      expect(app.settings.serverAPI).toBe('https://rpc.nano.to/');
+    }
+  ));
+
+  it('bounds free-only PoW retries when Nano.to remains locked and all alternatives fail', inject(
+    [PowService, AppSettingsService, RpcNodeRankingService, PoWApiKeyVaultService],
+    async (pow: PowService, app: AppSettingsService, ranking: RpcNodeRankingService,
+      vault: PoWApiKeyVaultService) => {
+      vault.lock();
+      app.settings.powSource = 'server';
+      app.settings.serverName = 'nano-to';
+      app.settings.serverAPI = 'https://rpc.nano.to/';
+      app.settings.serverAuth = null;
+      ranking.ready = false;
+      const switchRpc = spyOn(app, 'activateFailover');
+      const generate = spyOn(pow, 'getHashServer').and.resolveTo(null);
+
+      await expectAsync(pow.getPow('A'.repeat(64), 1)).toBeRejectedWith(
+        jasmine.objectContaining({ state: workState.error }));
+      const endpoints = generate.calls.allArgs().map(args => args[2]);
+      expect(endpoints).toEqual([
+        'https://twister32.changeip.net/pow',
+        'https://rainstorm.city/api',
+        'https://nanoslo.0x.no/proxy'
+      ]);
+      expect(endpoints).not.toContain('https://rpc.nano.to/');
+      expect(generate.calls.allArgs().map(args => args[3])).toEqual([30000, 20000, 20000]);
+      expect(app.settings.serverName).toBe('nano-to');
+      expect(app.settings.serverAPI).toBe('https://rpc.nano.to/');
+      expect(switchRpc).not.toHaveBeenCalled();
+    }
+  ));
+
   it('never selects a locked paid provider for PoW fallback or marks it unavailable', inject(
     [PowService, AppSettingsService, RpcNodeRankingService, PoWApiKeyVaultService],
     async (pow: PowService, app: AppSettingsService, ranking: RpcNodeRankingService,
