@@ -165,7 +165,7 @@ function checkData(value: unknown): VaultData {
   }
   return { entries, active: { ...active } };
 }
-function authenticatedMetadata(metadata: PoWApiKeySummary[]): Uint8Array {
+function authenticatedMetadata(metadata: PoWApiKeySummary[]): Uint8Array<ArrayBuffer> {
   return new TextEncoder().encode('nault:pow-api-keys:v2:' + JSON.stringify(metadata));
 }
 function readEnvelope(): VaultEnvelope | null {
