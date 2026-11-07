@@ -183,6 +183,7 @@ describe('PowService', () => {
       app.settings.powSource = 'custom';
       app.settings.customWorkServer = 'https://proxy.nanos.cc/proxy';
       ranking.ready = false;
+      spyOn(service, 'hasWebGLSupport').and.returnValue(false);
       const generate = spyOn(service, 'getHashServer').and.returnValue(Promise.resolve(null));
       await expectAsync(service.getPow('4'.repeat(64), 1)).toBeRejectedWith(
         jasmine.objectContaining({ state: workState.error }));
@@ -361,6 +362,7 @@ describe('PowService', () => {
       app.settings.serverAuth = null;
       ranking.ready = false;
       const switchRpc = spyOn(app, 'activateFailover');
+      spyOn(pow, 'hasWebGLSupport').and.returnValue(false);
       const generate = spyOn(pow, 'getHashServer').and.resolveTo(null);
 
       await expectAsync(pow.getPow('A'.repeat(64), 1)).toBeRejectedWith(
@@ -375,6 +377,79 @@ describe('PowService', () => {
     }
   ));
 
+  it('switches to local WebGL only after Twister32 fails on Desktop/ChromeOS', inject(
+    [PowService, AppSettingsService, PoWApiKeyVaultService],
+    async (pow: PowService, app: AppSettingsService, vault: PoWApiKeyVaultService) => {
+      vault.lock();
+      app.settings.powSource = 'server';
+      app.settings.serverName = 'nano-to';
+      app.settings.serverAPI = 'https://rpc.nano.to/';
+      app.settings.serverAuth = null;
+      spyOn<any>(pow, 'isAndroidInstalledPwa').and.returnValue(false);
+      spyOn(pow, 'hasWebGLSupport').and.returnValue(true);
+      const webGL = spyOn(pow, 'getHashWebGL').and.resolveTo('0123456789ABCDEF');
+      spyOn<any>((pow as any).util.nano, 'validateWork').and.returnValue(true);
+      const generate = spyOn(pow, 'getHashServer').and.resolveTo(null);
+      const switchRpc = spyOn(app, 'activateFailover');
+
+      const result = await pow.getPow('7'.repeat(64), 1);
+      expect(result.state).toBe(workState.success);
+      expect(generate.calls.allArgs().map(call => call[2]))
+        .toEqual(['https://twister32.changeip.net/pow']);
+      expect(webGL).toHaveBeenCalledOnceWith('7'.repeat(64), 1);
+      expect(pow.activeProvider$.value).toEqual({
+        source: 'server', name: 'WebGL', endpoint: '', status: 'available'
+      });
+      expect(app.settings.serverAPI).toBe('https://rpc.nano.to/');
+      expect(app.settings.powSource).toBe('server');
+      expect(switchRpc).not.toHaveBeenCalled();
+    }
+  ));
+
+  it('never uses WebGL or unreliable RPC PoW alternatives on Android PWA', inject(
+    [PowService, AppSettingsService, PoWApiKeyVaultService],
+    async (pow: PowService, app: AppSettingsService, vault: PoWApiKeyVaultService) => {
+      vault.lock();
+      app.settings.powSource = 'server';
+      app.settings.serverName = 'nano-to';
+      app.settings.serverAPI = 'https://rpc.nano.to/';
+      app.settings.serverAuth = null;
+      spyOn<any>(pow, 'isAndroidInstalledPwa').and.returnValue(true);
+      spyOn(pow, 'hasWebGLSupport').and.returnValue(true);
+      const webGL = spyOn(pow, 'getHashWebGL');
+      const generate = spyOn(pow, 'getHashServer').and.resolveTo(null);
+
+      await expectAsync(pow.getPow('6'.repeat(64), 1)).toBeRejectedWith(
+        jasmine.objectContaining({ state: workState.error }));
+      expect(generate.calls.allArgs().map(call => call[2]))
+        .toEqual(['https://twister32.changeip.net/pow']);
+      expect(webGL).not.toHaveBeenCalled();
+      expect(app.settings.serverName).toBe('nano-to');
+      expect(app.settings.serverAPI).toBe('https://rpc.nano.to/');
+    }
+  ));
+
+  it('prefers explicitly unlocked Nano.to over Twister32 on Android PWA', inject(
+    [PowService, AppSettingsService, PoWApiKeyVaultService],
+    async (pow: PowService, app: AppSettingsService, vault: PoWApiKeyVaultService) => {
+      await vault.saveKey('nano-to', 'NANO-TEST-PAID-KEY-123456', 'valid session phrase');
+      app.settings.powSource = 'server';
+      app.settings.serverName = 'nano-to';
+      app.settings.serverAPI = 'https://rpc.nano.to/';
+      app.settings.serverAuth = null;
+      spyOn<any>(pow, 'isAndroidInstalledPwa').and.returnValue(true);
+      const generate = spyOn(pow, 'getHashServer').and.callFake(async (_hash, _multi, url) =>
+        url === 'https://rpc.nano.to/' ? '0123456789ABCDEF' : null);
+      const result = await pow.getPow('5'.repeat(64), 1);
+      expect(result.state).toBe(workState.success);
+      expect(generate.calls.allArgs().map(call => call[2]))
+        .toEqual(['https://rpc.nano.to/']);
+      expect(pow.activeProvider$.value.name).toBe('Nano.to');
+      expect(app.settings.serverAPI).toBe('https://rpc.nano.to/');
+      vault.lock();
+    }
+  ));
+
   it('never selects a locked paid provider for PoW fallback or marks it unavailable', inject(
     [PowService, AppSettingsService, RpcNodeRankingService, PoWApiKeyVaultService],
     async (pow: PowService, app: AppSettingsService, ranking: RpcNodeRankingService,
@@ -384,6 +459,7 @@ describe('PowService', () => {
       app.settings.serverName = 'nano-to';
       app.settings.serverAPI = 'https://rpc.nano.to/';
       app.settings.serverAuth = null;
+      spyOn(pow, 'hasWebGLSupport').and.returnValue(false);
       const marked = spyOn(ranking, 'recordPoWResult');
       const generate = spyOn(pow, 'getHashServer').and.returnValue(Promise.resolve(null));
       await expectAsync(pow.getPow('F'.repeat(64), 1)).toBeRejectedWith(
