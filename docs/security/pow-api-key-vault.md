@@ -75,11 +75,17 @@ browser console, screenshot or exported Nault configuration.
   refuses credential-bearing URLs for the supported providers.
 - A provider's `work_generate` reply is validated locally against the
   requested PoW root and difficulty before use.
-- A failed PoW can trigger bounded work-only fallbacks. The **wallet's RPC
-  server and any signed block submission remain unchanged**.
-- The existing fallback policy pins authenticated/local RPC settings and
-  private network endpoints. Never forward private RPC authentication to
-  public PoW services.
+- After **Later**, the Nano.to vault remains locked: do not attempt an
+  anonymous Nano.to `work_generate` or report it as a failed RPC/PoW provider.
+- Automatic work-only fallback uses **Twister32 RsNano `/pow`** on installed
+  Android PWA. On Desktop Electron and ChromeOS PWA it tries Twister32 first,
+  then local WebGL only if supported and Twister32 fails. Other public wallet
+  RPC entries (including NanoOslo and Rainstorm City) are not automatic PoW
+  fallbacks. An explicitly selected unlocked Nano.to key remains usable.
+- Fallback work is bounded and validated locally. The **wallet's RPC server,
+  saved PoW selection and any signed block submission remain unchanged**.
+- Authenticated/local RPC settings and private network endpoints stay pinned.
+  Never forward private RPC authentication to public PoW services.
 - Nano.to authenticated requests from a browser require its CORS policy
   to permit the Authorization header. Successful **production**
   Android/desktop hardware tests are needed before considering the feature
