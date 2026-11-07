@@ -44,9 +44,12 @@ browser console, screenshot or exported Nault configuration.
   **does not auto-unlock**; unauthenticated/default PoW remains available.
 - Nano.to may have multiple encrypted named API keys, with a single **active**
   key used for `work_generate`. Creating a key adds it and makes it active.
-  Switching the active key requires the vault passphrase. Deleting a selected
-  key requires an unlocked vault and explicit confirmation, but not a new API
-  key or re-entry of the passphrase.
+  The first key requires a new vault passphrase. Later keys can only be added
+  when the vault is already unlocked; the existing session-only AES key
+  re-encrypts the collection with a fresh IV, without re-entering or changing
+  the vault passphrase. Switching the active key requires the vault passphrase.
+  Deleting a selected key requires an unlocked vault and explicit confirmation,
+  but not a new API key or re-entry of the passphrase.
 - The version 2 vault stores Nano.to credentials only. Removing an active
   key selects another saved Nano.to key when available.
 - Key labels, provider names and the active flag are **public non-secret metadata**
