@@ -8,22 +8,25 @@ import { Injectable } from '@angular/core';
  * Non-secret provider/key labels are exposed as metadata for the locked UI.
  * They are authenticated together with the ciphertext when unlocking.
  */
-export type PoWApiProvider = 'nano-to' | 'nanswap';
+export type PoWApiProvider = 'nano-to';
+// Read-only compatibility for old v2 vaults: obsolete credentials are erased
+// after successful unlock without sacrificing existing Nano.to entries.
+type StoredPoWApiProvider = PoWApiProvider | 'nanswap';
 export interface PoWApiKeySummary {
   id: string;
-  provider: PoWApiProvider;
+  provider: StoredPoWApiProvider;
   label: string;
   active: boolean;
 }
 interface StoredKey {
   id: string;
-  provider: PoWApiProvider;
+  provider: StoredPoWApiProvider;
   label: string;
   secret: string;
 }
 interface VaultData {
   entries: StoredKey[];
-  active: Partial<Record<PoWApiProvider, string>>;
+  active: Partial<Record<StoredPoWApiProvider, string>>;
 }
 interface VaultEnvelope {
   v: 2;
@@ -35,7 +38,7 @@ interface VaultEnvelope {
 
 const VAULT_KEY = 'nault-pow-provider-keys-v1'; // Preserve the storage key of already-migrated v2 vaults.
 const ITERATIONS = 600_000;
-const SUPPORTED: PoWApiProvider[] = ['nano-to', 'nanswap'];
+const STORED_PROVIDERS: StoredPoWApiProvider[] = ['nano-to', 'nanswap'];
 const MAX_KEYS = 16;
 const MAX_LABEL = 64;
 
@@ -100,7 +103,7 @@ function checkMetadata(value: unknown): PoWApiKeySummary[] {
   for (const element of value) {
     if (!element || typeof element !== 'object' ||
         !/^[0-9a-f]{32}$/.test(element.id) ||
-        !SUPPORTED.includes(element.provider) || typeof element.active !== 'boolean') {
+        !STORED_PROVIDERS.includes(element.provider) || typeof element.active !== 'boolean') {
       throw new Error('Invalid encrypted credentials');
     }
     const label = checkLabel(element.label);
@@ -130,7 +133,7 @@ function checkData(value: unknown): VaultData {
   const obj = value as Record<string, unknown>;
   if (!Array.isArray(obj.entries) || !obj.active || typeof obj.active !== 'object' ||
       Array.isArray(obj.active) || Object.keys(obj.active).some(key =>
-        !SUPPORTED.includes(key as PoWApiProvider))) throw new Error('Invalid encrypted credentials');
+        !STORED_PROVIDERS.includes(key as StoredPoWApiProvider))) throw new Error('Invalid encrypted credentials');
   const entries: StoredKey[] = obj.entries.map((entry: StoredKey) => ({
     id: entry?.id, provider: entry?.provider, label: checkLabel(entry?.label),
     secret: checkSecret(entry?.secret)
@@ -139,7 +142,7 @@ function checkData(value: unknown): VaultData {
   const verified = checkMetadata(entries.map(entry => ({
     id: entry.id, provider: entry.provider, label: entry.label, active: active[entry.provider] === entry.id
   })));
-  if (verified.length !== entries.length || SUPPORTED.some(provider =>
+  if (verified.length !== entries.length || STORED_PROVIDERS.some(provider =>
       !!active[provider] !== entries.some(entry => entry.provider === provider))) {
     throw new Error('Invalid encrypted credentials');
   }
@@ -197,14 +200,12 @@ export class PoWApiKeyVaultService {
   get isUnlocked(): boolean { return this.unlocked; }
   getKeySummaries(provider?: PoWApiProvider): PoWApiKeySummary[] {
     const all = this.unlocked ? summaries(this.data) : (readEnvelope()?.metadata || []);
-    return provider ? all.filter(entry => entry.provider === provider) : all;
+    // Never surface obsolete provider keys as available for API use.
+    return all.filter(entry => entry.provider === 'nano-to' && (!provider || entry.provider === provider));
   }
   hasKey(provider: PoWApiProvider): boolean {
     return this.unlocked && this.data.entries.some(entry =>
       entry.provider === provider && entry.id === this.data.active[provider]);
-  }
-  unlockedProviders(): PoWApiProvider[] {
-    return this.unlocked ? SUPPORTED.filter(provider => this.hasKey(provider)) : [];
   }
   static providerForUrl(url: string): PoWApiProvider | null {
     try {
@@ -212,7 +213,6 @@ export class PoWApiKeyVaultService {
       if (parsed.protocol !== 'https:' || parsed.username || parsed.password ||
           parsed.search || parsed.hash || parsed.port) return null;
       if (parsed.hostname === 'rpc.nano.to' && parsed.pathname === '/') return 'nano-to';
-      if (parsed.hostname === 'nodes.nanswap.com' && parsed.pathname === '/XNO') return 'nanswap';
     } catch (_) { /* Never attach credentials to invalid URLs. */ }
     return null;
   }
@@ -222,9 +222,7 @@ export class PoWApiKeyVaultService {
     const active = this.data.entries.find(entry =>
       entry.provider === provider && entry.id === this.data.active[provider]);
     if (!active) return null;
-    return provider === 'nano-to'
-      ? { Authorization: 'Bearer ' + active.secret }
-      : { 'nodes-api-key': active.secret };
+    return { Authorization: 'Bearer ' + active.secret };
   }
   lock(): void {
     this.data = { entries: [], active: {} };
@@ -266,6 +264,13 @@ export class PoWApiKeyVaultService {
       this.unlocked = true;
       this.sessionKey = key;
       this.sessionEnvelope = serialized;
+      // Clean up old Nanswap credentials that may coexist with Nano.to in a
+      // previously created v2 vault. Keep Nano.to keys, labels and active ID.
+      if (data.entries.some(entry => entry.provider === 'nanswap')) {
+        const entries = data.entries.filter(entry => entry.provider === 'nano-to');
+        if (!entries.length) this.clearVault();
+        else await this.sealUnlocked({ entries, active: { 'nano-to': data.active['nano-to'] } });
+      }
     } catch (_) {
       this.lock();
       throw new Error('Incorrect passphrase or corrupted credential vault');
@@ -326,14 +331,13 @@ export class PoWApiKeyVaultService {
   }
 
   async saveKey(provider: PoWApiProvider, rawKey: string, passphrase: string, label = ''): Promise<string> {
-    if (!SUPPORTED.includes(provider)) throw new Error('Unknown PoW API provider');
+    if (provider !== 'nano-to') throw new Error('Unknown PoW API provider');
     const secret = checkSecret(rawKey?.trim());
     checkPassphrase(passphrase);
     if (this.hasVault) await this.unlock(passphrase);
     if (this.data.entries.length >= MAX_KEYS) throw new Error('PoW key vault is full');
     const count = this.data.entries.filter(entry => entry.provider === provider).length;
-    const base = provider === 'nano-to' ? 'Nano.to' : 'Nanswap';
-    const proposed = label.trim() || base + ' ' + (count + 1);
+    const proposed = label.trim() || 'Nano.to ' + (count + 1);
     const name = checkLabel(proposed);
     if (this.data.entries.some(entry => entry.provider === provider &&
         entry.label.toLowerCase() === name.toLowerCase())) throw new Error('Duplicate key label');
@@ -343,7 +347,7 @@ export class PoWApiKeyVaultService {
     return id;
   }
   async activateKey(provider: PoWApiProvider, id: string, passphrase: string): Promise<void> {
-    if (!SUPPORTED.includes(provider)) throw new Error('Unknown PoW API provider');
+    if (provider !== 'nano-to') throw new Error('Unknown PoW API provider');
     checkPassphrase(passphrase);
     await this.unlock(passphrase);
     if (!this.data.entries.some(entry => entry.provider === provider && entry.id === id)) {
@@ -354,7 +358,7 @@ export class PoWApiKeyVaultService {
     }, passphrase);
   }
   async removeKey(provider: PoWApiProvider, passphrase: string | null, id?: string): Promise<void> {
-    if (!SUPPORTED.includes(provider)) throw new Error('Unknown PoW API provider');
+    if (provider !== 'nano-to') throw new Error('Unknown PoW API provider');
     if (!this.hasVault) throw new Error('No API keys have been saved');
     if (passphrase !== null) {
       checkPassphrase(passphrase);

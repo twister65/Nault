@@ -5,7 +5,7 @@ import {NotificationService} from '../../services/notification.service';
 import {AppSettingsService, AppSettings, PoWSource} from '../../services/app-settings.service';
 import {PriceService} from '../../services/price.service';
 import {PowService} from '../../services/pow.service';
-import {PoWApiKeyVaultService, PoWApiProvider} from '../../services/pow-api-key-vault.service';
+import {PoWApiKeyVaultService} from '../../services/pow-api-key-vault.service';
 import {WorkPoolService} from '../../services/work-pool.service';
 import {AddressBookService} from '../../services/address-book.service';
 import type {QRType} from '../qr-modal/qr-modal.component';
@@ -140,20 +140,14 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     { name: 'configure-app.pow-options.external-custom-server', value: 'custom' },
   ];
   selectedPoWOption = this.powOptions[0].value;
-  powApiProvider: PoWApiProvider = 'nano-to';
   powApiKeyInput = '';
   powApiKeyLabel = '';
   powSelectedKeyId = '';
   powVaultPassphrase = '';
   powVaultBusy = false;
 
-  onPowApiProviderChange(provider: PoWApiProvider): void {
-    this.powApiProvider = provider;
-    this.powSelectedKeyId = '';
-  }
-
   selectedPowKeyId(): string {
-    const options = this.powApiKeyVault.getKeySummaries(this.powApiProvider);
+    const options = this.powApiKeyVault.getKeySummaries('nano-to');
     const chosen = options.find(entry => entry.id === this.powSelectedKeyId) ||
       options.find(entry => entry.active) || options[0];
     return chosen?.id || '';
@@ -164,7 +158,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     this.powVaultBusy = true;
     try {
       this.powSelectedKeyId = await this.powApiKeyVault.saveKey(
-        this.powApiProvider, this.powApiKeyInput, this.powVaultPassphrase, this.powApiKeyLabel);
+        'nano-to', this.powApiKeyInput, this.powVaultPassphrase, this.powApiKeyLabel);
       this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.saved'));
     } catch (_) {
       this.notifications.sendWarning(this.translocoService.translate('configure-app.pow-api-vault.failed'));
@@ -194,7 +188,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     if (!id || !this.powApiKeyVault.isUnlocked || !this.powVaultPassphrase) return;
     this.powVaultBusy = true;
     try {
-      await this.powApiKeyVault.activateKey(this.powApiProvider, id, this.powVaultPassphrase);
+      await this.powApiKeyVault.activateKey('nano-to', id, this.powVaultPassphrase);
       this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.activated'));
     } catch (_) {
       this.notifications.sendWarning(this.translocoService.translate('configure-app.pow-api-vault.failed'));
@@ -219,7 +213,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
       // A non-extractable AES key is held only while the vault is unlocked.
       // Deleting one entry does not require an unrelated "new API key" input
       // or re-entering the vault phrase; the remaining secrets stay encrypted.
-      await this.powApiKeyVault.removeKey(this.powApiProvider, null, id);
+      await this.powApiKeyVault.removeKey('nano-to', null, id);
       this.powSelectedKeyId = '';
       this.pow.syncProviderFromSettings(true);
       this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.deleted'));

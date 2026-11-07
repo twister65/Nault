@@ -90,7 +90,6 @@ export class PowService {
     let name = matching?.name || 'External PoW';
     const authenticated = PoWApiKeyVaultService.providerForUrl(actualEndpoint);
     if (authenticated === 'nano-to') name = 'Nano.to';
-    else if (authenticated === 'nanswap') name = 'Nanswap';
     if (source === 'clientCPU') name = 'CPU';
     else if (source === 'clientWebGL') name = 'WebGL';
     else if (actualEndpoint && !matching && !authenticated) {
@@ -126,8 +125,8 @@ export class PowService {
   }
 
 
-  // Only explicit, unlocked credentials authorize these two exact HTTPS work
-  // endpoints. No key is transmitted to ordinary RPC nodes or diagnostics.
+  // Only explicit, unlocked Nano.to credentials authorize its exact HTTPS
+  // work endpoint. No key is sent to other RPC nodes or diagnostics.
   private canGenerateWorkAt(url: string): boolean {
     const provider = PoWApiKeyVaultService.providerForUrl(url);
     return !provider || this.powApiKeys.hasKey(provider);
@@ -140,11 +139,8 @@ export class PowService {
   }
 
   private getAuthenticatedWorkTargets(): Array<{ api: string; workUrl: string }> {
-    return this.powApiKeys.unlockedProviders().map(provider => {
-      const workUrl = provider === 'nano-to'
-        ? 'https://rpc.nano.to/' : 'https://nodes.nanswap.com/XNO';
-      return { api: workUrl, workUrl };
-    });
+    if (!this.powApiKeys.hasKey('nano-to')) return [];
+    return [{ api: 'https://rpc.nano.to/', workUrl: 'https://rpc.nano.to/' }];
   }
 
   private async generateAuthenticatedWork(

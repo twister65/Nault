@@ -2,18 +2,31 @@
 
 ## Scope
 
-Nault supports two opt-in **work_generate-only** credential providers:
+Nault optionally integrates **Nano.to** for authenticated `work_generate` requests only.
 
-| Provider | Exact HTTPS PoW endpoint | Authentication |
+| Third-party provider | Exact HTTPS PoW endpoint | Authentication |
 | --- | --- | --- |
 | Nano.to | `https://rpc.nano.to/` | `Authorization: Bearer <key>` |
-| Nanswap | `https://nodes.nanswap.com/XNO` | `nodes-api-key: <key>` |
 
-Generate a dedicated Nano.to RPC/PoW API key from the official [Nano.to key management page](https://rpc.nano.to/account/api-keys). The link is displayed under **PoW provider API keys** only when Nano.to is selected. API credentials are entered only in Nault's encrypted key vault, never in a URL.
+This integration is compatible with **Nault's MIT-licensed source code**, but
+Nano.to is an **independent third-party service**, not part of Nault and not
+licensed by Nault's MIT license. The service has its own contractual and privacy
+terms. Nault does not claim sponsorship, endorsement or affiliation.
 
-Only the **PoW service** may read decrypted credentials, and only after the user
-unlocks the local vault. No wallet RPC reads, signed `process` request, WebSocket,
-node-probe, backup QR code or saved AppSettings receive a credential.
+- [Nano.to privacy policy](https://rpc.nano.to/privacy)
+- [Nano.to terms of service](https://rpc.nano.to/terms)
+- [Nano.to API key management](https://rpc.nano.to/account/api-keys)
+- [Nault MIT license](https://github.com/twister65/Nault/blob/master/LICENSE)
+
+Users obtain and manage their own Nano.to API keys. The settings screen links
+to the key management page and both third-party policy pages. API keys are
+entered into the encrypted local vault, **never** into a URL.
+
+Only the **PoW service** may read decrypted credentials, and only after explicit
+unlock. The chosen key is sent exclusively in an HTTPS `Authorization: Bearer`
+header to `https://rpc.nano.to/` when generating `work_generate`; no wallet RPC
+reads, signed `process` request, WebSocket, node-probe, backup QR code,
+Nanswap endpoint or saved AppSettings receive any credential.
 
 Never put an API key in a URL, custom server string, source control, issue, log,
 browser console, screenshot or exported Nault configuration.
@@ -29,17 +42,18 @@ browser console, screenshot or exported Nault configuration.
 - Credentials are decrypted **into memory only after explicit unlock** and
   cleared on Lock or application reload. A fresh Android PWA / Electron launch
   **does not auto-unlock**; unauthenticated/default PoW remains available.
-- Each provider may have multiple encrypted named API keys with a single **active**
-  key used for `work_generate`. Creating a new key adds it (and makes it
-  active) rather than overwriting other keys. Switching the active key
-  currently requires the vault passphrase. Deleting a particular selected key
-  is possible after unlocking and explicit confirmation, without entering a
-  new API key or re-entering the passphrase.
+- Nano.to may have multiple encrypted named API keys, with a single **active**
+  key used for `work_generate`. Creating a key adds it and makes it active.
+  Switching the active key requires the vault passphrase. Deleting a selected
+  key requires an unlocked vault and explicit confirmation, but not a new API
+  key or re-entry of the passphrase.
 - Only the version 2 vault format is supported. Legacy v1 auto-migration was
   removed after successful migration testing. The original localStorage key
   name remains unchanged to preserve already-migrated encrypted v2 vaults.
-  Deleting an active key selects another saved key from the same provider
-  when available.
+  Deleting an active key selects another saved Nano.to key when available.
+  Former Nanswap credentials in already encrypted v2 vaults are discarded on
+  the next successful unlock while preserving all Nano.to credentials.
+  No Nanswap credential is transmitted or accepted for new storage.
 - Key labels, provider names and the active flag are **public non-secret metadata**
   visible while the vault is locked, and authenticated on unlock through AES-GCM
   associated data; API-key values stay encrypted.
@@ -54,7 +68,7 @@ browser console, screenshot or exported Nault configuration.
 
 ## Network and trust boundaries
 
-- Only the two strict HTTPS URL/path matches can receive a credential.
+- Only the exact Nano.to HTTPS URL/path match can receive a credential.
   Requests use `POST`, `redirect: error`, `credentials: omit`,
   `referrerPolicy: no-referrer`, and an abort timeout.
 - Never place credentials in query strings or URL userinfo. The settings UI
@@ -66,8 +80,8 @@ browser console, screenshot or exported Nault configuration.
 - The existing fallback policy pins authenticated/local RPC settings and
   private network endpoints. Never forward private RPC authentication to
   public PoW services.
-- Authenticated requests from a browser require the provider's CORS policy
-  to permit the required custom request header. Successful **production**
+- Nano.to authenticated requests from a browser require its CORS policy
+  to permit the Authorization header. Successful **production**
   Android/desktop hardware tests are needed before considering the feature
   ready.
 

@@ -12,6 +12,24 @@ Seamless integration with any nano compatible RPC backend/websocket and the aim 
 ![Nault Screenshot](/src/assets/img/preview.png)
 ___
 
+## Optional third-party Nano.to PoW API
+
+This fork can use a user-provided Nano.to API key to request Nano proof of work.
+The integration is optional and **compatible with Nault's MIT license**;
+[Nano.to](https://rpc.nano.to/) is an independent third-party service and
+has its own [privacy policy](https://rpc.nano.to/privacy) and
+[terms of service](https://rpc.nano.to/terms).
+Keys are encrypted locally in a separate WebCrypto vault and are decrypted only
+after explicit unlock. An unlocked Nano.to key is transmitted **only** in the
+HTTPS Authorization header for `work_generate` requests to
+`https://rpc.nano.to/` — never as part of a wallet seed, signed transaction,
+ordinary wallet RPC request, URL, QR backup or log. Other Nano RPC/PoW options
+continue to work without a paid provider key.
+
+See [Nano.to API key management](https://rpc.nano.to/account/api-keys) and the
+[PoW vault security design](docs/security/pow-api-key-vault.md). Use dedicated,
+revocable API keys and review Nano.to's own service terms before enabling them.
+
 ## How To Use
 Nault comes in different flavors to suit your needs.
 #### Desktop App
