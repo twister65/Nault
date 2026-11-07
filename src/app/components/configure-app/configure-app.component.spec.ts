@@ -54,6 +54,11 @@ describe('ConfigureAppComponent', () => {
     // The whole settings view is inside *transloco. Wait for its lazy-loaded
     // language chunk so the actual browser <details> element is rendered.
     spyOn(component, 'ngOnInit').and.stub();
+    const settings = (component as any).appSettings.settings;
+    settings.powSource = 'server';
+    settings.serverName = 'nano-to';
+    settings.serverAPI = 'https://rpc.nano.to/';
+    component.selectedPoWOption = 'server';
     const transloco = TestBed.inject(TranslocoService);
     await firstValueFrom(transloco.load(transloco.getActiveLang()));
     fixture.detectChanges();
@@ -72,6 +77,56 @@ describe('ConfigureAppComponent', () => {
     summary.click();
     expect(details.open).toBeFalse();
   });
+
+  it('shows Nano.to PoW API controls only while Nano.to is the selected PoW provider', async () => {
+    spyOn(component, 'ngOnInit').and.stub();
+    const settings = (component as any).appSettings.settings;
+    settings.powSource = 'server';
+    settings.serverName = 'nano-to';
+    settings.serverAPI = 'https://rpc.nano.to/';
+    component.selectedPoWOption = 'server';
+    const transloco = TestBed.inject(TranslocoService);
+    await firstValueFrom(transloco.load(transloco.getActiveLang()));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const nanoToControls = () => fixture.nativeElement.querySelector('#pow-vault-help');
+    expect(nanoToControls()).toBeTruthy();
+
+    component.selectedPoWOption = 'clientWebGL';
+    fixture.detectChanges();
+    expect(nanoToControls()).toBeNull();
+
+    component.selectedPoWOption = 'server';
+    fixture.detectChanges();
+    expect(nanoToControls()).toBeTruthy();
+
+    // A successful alternate provider hides the Nano.to credentials section.
+    component.pow.activeProvider$.next({
+      source: 'server', name: 'Rainstorm City', endpoint: 'https://rainstorm.city/api',
+      status: 'available'
+    });
+    fixture.detectChanges();
+    expect(nanoToControls()).toBeNull();
+
+    // An actual Nano.to work provider restores it, including on fallback.
+    component.pow.activeProvider$.next({
+      source: 'server', name: 'Nano.to', endpoint: 'https://rpc.nano.to/',
+      status: 'available'
+    });
+    fixture.detectChanges();
+    expect(nanoToControls()).toBeTruthy();
+
+    component.selectedPoWOption = 'custom';
+    component.customWorkServer = 'https://example.com/pow';
+    fixture.detectChanges();
+    expect(nanoToControls()).toBeNull();
+    component.customWorkServer = 'https://rpc.nano.to/';
+    fixture.detectChanges();
+    expect(nanoToControls()).toBeTruthy();
+  });
+
   it('keeps selector labels as translation keys until Transloco has loaded', () => {
     // Do not eagerly call translate() in the component constructor: the
     // asynchronous dictionary may not be ready, leaving raw keys visible.
