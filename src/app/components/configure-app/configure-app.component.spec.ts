@@ -3,6 +3,8 @@ import { ComponentFixture, TestBed, fakeAsync, tick, waitForAsync } from '@angul
 
 import { ConfigureAppComponent } from './configure-app.component';
 import { WebsocketService } from '../../services/websocket.service';
+import { TranslocoService } from '@jsverse/transloco';
+import { firstValueFrom } from 'rxjs';
 
 describe('ConfigureAppComponent', () => {
   let component: ConfigureAppComponent;
@@ -48,10 +50,14 @@ describe('ConfigureAppComponent', () => {
   }));
 
 
-  it('opens and closes the PoW API-key explanation on tap without a hover tooltip', () => {
-    // Keep the smoke test isolated from network/ledger work while rendering
-    // the actual Angular template and letting the browser handle <details>.
+  it('opens and closes the PoW API-key explanation on tap without a hover tooltip', async () => {
+    // The whole settings view is inside *transloco. Wait for its lazy-loaded
+    // language chunk so the actual browser <details> element is rendered.
     spyOn(component, 'ngOnInit').and.stub();
+    const transloco = TestBed.inject(TranslocoService);
+    await firstValueFrom(transloco.load(transloco.getActiveLang()));
+    fixture.detectChanges();
+    await fixture.whenStable();
     fixture.detectChanges();
     const details = fixture.nativeElement.querySelector('#pow-vault-help') as HTMLDetailsElement;
     expect(details).toBeTruthy();
