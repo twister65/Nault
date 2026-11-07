@@ -42,20 +42,18 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
     expect(vault.getAuthorizedHeaders('https://rpc.nano.to/?key=x')).toBeNull();
   });
 
-  it('keeps provider secrets isolated and rejects URL credentials and redirects', async () => {
-    await vault.saveKey('nanswap', 'nanswap-TEST-KEY-987654321', pass);
-    expect(vault.getAuthorizedHeaders('https://nodes.nanswap.com/XNO'))
-      .toEqual({ 'nodes-api-key': 'nanswap-TEST-KEY-987654321' });
-    expect(vault.getAuthorizedHeaders('https://nodes.nanswap.com/XNO/')).toBeNull();
-    expect(vault.getAuthorizedHeaders('https://nodes.nanswap.com/XNO?api_key=fake')).toBeNull();
-    expect(vault.getAuthorizedHeaders('https://user:pass@nodes.nanswap.com/XNO')).toBeNull();
-    expect(vault.getAuthorizedHeaders('https://rpc.nano.to/')).toBeNull();
-    await vault.removeKey('nanswap', pass);
-    expect(vault.hasVault).toBeFalse();
-    expect(vault.isUnlocked).toBeFalse();
+  it('never sends Nano.to credentials to a different endpoint or accepts removed providers', async () => {
+    await vault.saveKey('nano-to', 'nano-TEST-KEY-987654321', pass);
+    expect(vault.getAuthorizedHeaders('https://rpc.nano.to/'))
+      .toEqual({ Authorization: 'Bearer nano-TEST-KEY-987654321' });
+    expect(vault.getAuthorizedHeaders('https://nodes.nanswap.com/XNO')).toBeNull();
+    expect(vault.getAuthorizedHeaders('https://rpc.nano.to/XNO')).toBeNull();
+    expect(vault.getAuthorizedHeaders('http://rpc.nano.to/')).toBeNull();
+    expect(vault.getAuthorizedHeaders('https://rpc.nano.to/?key=secret')).toBeNull();
+    await expectAsync(vault.saveKey('nanswap' as any, 'FORBIDDEN-KEY-12345678', pass))
+      .toBeRejected();
+    expect(vault.getKeySummaries().map(key => key.provider)).toEqual(['nano-to']);
   });
-
-
   it('holds paid PoW until unlock/skip, without blocking public sources', async () => {
     await vault.saveKey('nano-to', 'nano-TEST-KEY-1234567', pass);
     vault.lock();
@@ -130,23 +128,19 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
     expect(vault.isUnlocked).toBeFalse();
   });
 
-  it('deleting an active Nano.to key promotes another without affecting Nanswap', async () => {
+  it('deleting an active Nano.to key promotes a saved key of the same provider', async () => {
     const firstId = await vault.saveKey('nano-to', 'FIRST-NANO-KEY-123456', pass, 'First');
     const secondId = await vault.saveKey('nano-to', 'SECOND-NANO-KEY-123456', pass, 'Second');
-    await vault.saveKey('nanswap', 'NANSWAP-KEY-12345678', pass, 'Swap');
-    await vault.removeKey('nano-to', pass, secondId);
+    const thirdId = await vault.saveKey('nano-to', 'THIRD-NANO-KEY-123456', pass, 'Third');
+    await vault.removeKey('nano-to', pass, thirdId);
     expect(vault.getKeySummaries('nano-to').find(key => key.active)?.id).toBe(firstId);
+    expect(vault.getKeySummaries('nano-to').map(key => key.id)).toEqual([firstId, secondId]);
     expect(vault.getAuthorizedHeaders('https://rpc.nano.to/'))
       .toEqual({ Authorization: 'Bearer FIRST-NANO-KEY-123456' });
-    expect(vault.getAuthorizedHeaders('https://nodes.nanswap.com/XNO'))
-      .toEqual({ 'nodes-api-key': 'NANSWAP-KEY-12345678' });
   });
-
-
-  it('deletes the active Nano.to key in an unlocked session without entering another API key or passphrase', async () => {
+  it('deletes the active Nano.to key after unlocking without another key or passphrase', async () => {
     const firstId = await vault.saveKey('nano-to', 'NANO-FIRST-KEY-12345678', pass, 'Original');
     const activeId = await vault.saveKey('nano-to', 'NANO-ACTIVE-KEY-12345678', pass, 'Active');
-    await vault.saveKey('nanswap', 'NANSWAP-TEST-KEY-12345678', pass, 'Independent');
     await vault.removeKey('nano-to', null, activeId);
     expect(vault.isUnlocked).toBeTrue();
     expect(vault.getKeySummaries('nano-to')).toEqual([
@@ -154,20 +148,13 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
     ]);
     expect(vault.getAuthorizedHeaders('https://rpc.nano.to/'))
       .toEqual({ Authorization: 'Bearer NANO-FIRST-KEY-12345678' });
-    expect(vault.getAuthorizedHeaders('https://nodes.nanswap.com/XNO'))
-      .toEqual({ 'nodes-api-key': 'NANSWAP-TEST-KEY-12345678' });
-    const encrypted = localStorage.getItem(keyName) || '';
-    expect(encrypted).not.toContain('NANO-FIRST-KEY-12345678');
-    expect(encrypted).not.toContain('NANSWAP-TEST-KEY-12345678');
+    expect(localStorage.getItem(keyName)).not.toContain('NANO-FIRST-KEY-12345678');
     vault.lock();
     await vault.unlock(pass);
     expect(vault.getKeySummaries('nano-to').find(key => key.active)?.id).toBe(firstId);
     await vault.removeKey('nano-to', null, firstId);
-    expect(vault.getKeySummaries('nano-to')).toEqual([]);
-    expect(vault.getKeySummaries('nanswap')).toHaveSize(1);
-    expect(vault.hasVault).toBeTrue();
+    expect(vault.hasVault).toBeFalse();
   });
-
   it('deleting the last key after unlocking destroys the encrypted vault', async () => {
     const id = await vault.saveKey('nano-to', 'ONE-NANO-KEY-12345678', pass, 'Last');
     await vault.removeKey('nano-to', null, id);
@@ -200,6 +187,53 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
     expect(vault.isUnlocked).toBeFalse();
   });
 
+
+  it('preserves Nano.to v2 keys when removing obsolete encrypted Nanswap entries on unlock', async () => {
+    const nanoId = await vault.saveKey('nano-to', 'NANO-KEEP-SECRET-123456', pass, 'Keep me');
+    const original = JSON.parse(localStorage.getItem(keyName)!);
+    const bytes = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+    const salt = bytes(original.salt);
+    const crypto = globalThis.crypto;
+    const base = await crypto.subtle.importKey(
+      'raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 600000 },
+      base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    const legacyId = 'abcdefabcdefabcdefabcdefabcdefab';
+    const metadata = [
+      { id: nanoId, provider: 'nano-to', label: 'Keep me', active: true },
+      { id: legacyId, provider: 'nanswap', label: 'Removed', active: true }
+    ];
+    const content = { entries: [
+      { id: nanoId, provider: 'nano-to', label: 'Keep me', secret: 'NANO-KEEP-SECRET-123456' },
+      { id: legacyId, provider: 'nanswap', label: 'Removed', secret: 'LEGACY-NANSWAP-KEY-123456' }
+    ], active: { 'nano-to': nanoId, nanswap: legacyId } };
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const aad = new TextEncoder().encode('nault:pow-api-keys:v2:' + JSON.stringify(metadata));
+    const ciphertext = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv, additionalData: aad, tagLength: 128 },
+      key, new TextEncoder().encode(JSON.stringify(content)));
+    const b64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
+    localStorage.setItem(keyName, JSON.stringify({
+      v: 2, salt: original.salt, iv: b64(iv), data: b64(new Uint8Array(ciphertext)), metadata
+    }));
+    vault.lock();
+    expect(vault.getKeySummaries()).toHaveSize(1);
+    await vault.unlock(pass);
+    expect(vault.getKeySummaries()).toEqual([
+      { id: nanoId, provider: 'nano-to', label: 'Keep me', active: true }
+    ]);
+    expect(vault.getAuthorizedHeaders('https://rpc.nano.to/'))
+      .toEqual({ Authorization: 'Bearer NANO-KEEP-SECRET-123456' });
+    expect(vault.getAuthorizedHeaders('https://nodes.nanswap.com/XNO')).toBeNull();
+    const rewritten = JSON.parse(localStorage.getItem(keyName)!);
+    expect(rewritten.metadata).toHaveSize(1);
+    expect(JSON.stringify(rewritten)).not.toContain('Removed');
+    vault.lock();
+    await vault.unlock(pass);
+    expect(vault.getKeySummaries()).toHaveSize(1);
+  });
+
   it('rejects altered cleartext key labels without releasing decrypted secrets', async () => {
     await vault.saveKey('nano-to', 'TEST-NANO-KEY-12345678', pass, 'Original');
     const stored = JSON.parse(localStorage.getItem(keyName) || '{}');
@@ -220,24 +254,21 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
   });
 
 
-  it('clears encrypted v2 keys, labels and in-memory credentials without the passphrase', async () => {
+  it('clears encrypted Nano.to keys, labels and in-memory credentials without a passphrase', async () => {
     const first = await vault.saveKey('nano-to', 'TEST-KEY-ONE-12345678', pass, 'Testing');
-    await vault.saveKey('nanswap', 'TEST-NANSWAP-KEY-123456', pass, 'Nanswap key');
+    await vault.saveKey('nano-to', 'TEST-KEY-TWO-12345678', pass, 'Another');
     expect(vault.hasVault).toBeTrue();
     expect(vault.isUnlocked).toBeTrue();
     expect(vault.getKeySummaries().length).toBe(2);
     expect(first).toBeTruthy();
-
     vault.clearVault();
     expect(localStorage.getItem(keyName)).toBeNull();
     expect(vault.hasVault).toBeFalse();
     expect(vault.isUnlocked).toBeFalse();
     expect(vault.getKeySummaries()).toEqual([]);
     expect(vault.getAuthorizedHeaders('https://rpc.nano.to/')).toBeNull();
-    expect(vault.getAuthorizedHeaders('https://nodes.nanswap.com/XNO')).toBeNull();
     await expectAsync(vault.unlock(pass)).toBeRejected();
   });
-
   it('deletes a locked vault and releases the pending paid-PoW startup decision', async () => {
     await vault.saveKey('nano-to', 'TEST-KEY-ONE-12345678', pass, 'Testing');
     vault.lock();
@@ -258,7 +289,7 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
       .toBeRejected();
     await vault.saveKey('nano-to', 'valid-TEST-KEY', pass);
     const previous = localStorage.getItem(keyName);
-    await expectAsync(vault.saveKey('nanswap', 'second-TEST-KEY', 'wrong passphrase'))
+    await expectAsync(vault.saveKey('nano-to', 'second-TEST-KEY', 'wrong passphrase', 'Another'))
       .toBeRejected();
     expect(localStorage.getItem(keyName)).toBe(previous);
   });

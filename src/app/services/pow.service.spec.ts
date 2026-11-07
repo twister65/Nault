@@ -306,22 +306,22 @@ describe('PowService', () => {
     }
   ));
 
-  it('uses the Nanswap nodes-api-key header without URL query parameters', inject(
+  it('does not attach Nano.to API keys to an unrelated external PoW endpoint', inject(
     [PowService, PoWApiKeyVaultService],
     async (pow: PowService, vault: PoWApiKeyVaultService) => {
-      spyOn(vault, 'getAuthorizedHeaders').and.returnValue({ 'nodes-api-key': 'NANSWAP-TEST-ONLY' });
-      const fetchSpy = spyOn(window, 'fetch').and.returnValue(Promise.resolve({
-        ok: true, json: async () => ({ work: '0123456789ABCDEF' })
-      } as Response));
+      await vault.saveKey('nano-to', 'NANO-ONLY-TEST-KEY-123456', 'valid vault phrase');
+      expect(vault.getAuthorizedHeaders('https://nodes.nanswap.com/XNO')).toBeNull();
+      const fetchSpy = spyOn(window, 'fetch');
+      const ordinary = spyOn<any>((pow as any).api, 'workGenerate')
+        .and.returnValue(Promise.resolve({ work: '0123456789ABCDEF' }));
       spyOn<any>((pow as any).util.nano, 'validateWork').and.returnValue(true);
-      expect(await pow.getHashServer('B'.repeat(64), 1, 'https://nodes.nanswap.com/XNO', 15000))
-        .toBe('0123456789ABCDEF');
-      expect(fetchSpy.calls.mostRecent().args[0]).toBe('https://nodes.nanswap.com/XNO');
-      expect((fetchSpy.calls.mostRecent().args[1] as RequestInit).headers)
-        .toEqual({ 'Content-Type': 'application/json', 'nodes-api-key': 'NANSWAP-TEST-ONLY' });
+      const result = await pow.getHashServer(
+        'B'.repeat(64), 1, 'https://nodes.nanswap.com/XNO', 15000);
+      expect(result).toBe('0123456789ABCDEF');
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(ordinary).toHaveBeenCalled();
     }
   ));
-
   it('chooses a separate verified external PoW server on installed Android PWA and retries work independently', inject(
     [PowService, AppSettingsService, RpcNodeRankingService],
     async (service: PowService, app: AppSettingsService, ranking: RpcNodeRankingService) => {
