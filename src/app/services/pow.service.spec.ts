@@ -23,6 +23,7 @@ describe('PowService', () => {
     async (service: PowService, settings: AppSettingsService) => {
       settings.settings.powSource = 'server';
       settings.settings.serverName = 'twister32-rsnano';
+      settings.settings.serverAPI = 'https://twister32.changeip.net/proxy';
       const getHashServer = spyOn(service, 'getHashServer').and.returnValue(Promise.resolve('0000000000000001'));
       const hash = 'A'.repeat(64);
 
