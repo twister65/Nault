@@ -29,8 +29,19 @@ browser console, screenshot or exported Nault configuration.
 - Credentials are decrypted **into memory only after explicit unlock** and
   cleared on Lock or application reload. A fresh Android PWA / Electron launch
   **does not auto-unlock**; unauthenticated/default PoW remains available.
-- Change the key by entering the API key and passphrase again. Removing the last
-  provider deletes the ciphertext entirely.
+- Each provider may have multiple encrypted named API keys with a single **active**
+  key used for `work_generate`. Creating a new key adds it (and makes it
+  active) rather than overwriting other keys. Switching the active key and
+  deleting a particular key require the vault passphrase. If the active key
+  is deleted, another saved key for that provider becomes active.
+- Vault version 1 (one key per provider) is migrated upon the first successful
+  unlock to version 2 without changing the localStorage key name or discarding
+  the existing secret. A key overwritten by version 1 before migration cannot
+  be reconstructed.
+- Key labels, provider names and the active flag are **public non-secret metadata**
+  visible while the vault is locked, and authenticated on unlock through AES-GCM
+  associated data; API-key values stay encrypted.
+- Removing the last saved key deletes the ciphertext entirely.
 
 ## Network and trust boundaries
 

@@ -99,3 +99,8 @@
 .pow-vault-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .pow-vault-actions .uk-button { flex: 1 1 115px; white-space: normal; }
 @media (max-width: 520px) { .pow-vault-actions .uk-button { flex-basis: 100%; } }
+
+/* Non-secret PoW API-key labels remain visible with the vault locked. */
+.pow-vault-key-list { list-style: none; margin: 6px 0 12px; padding: 0; }
+.pow-vault-key-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; overflow-wrap: anywhere; padding: 5px 0; }
+.pow-vault-key-list .uk-label { font-size: 10px; }
