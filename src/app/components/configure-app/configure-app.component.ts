@@ -864,10 +864,11 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
 
 
-  // The locally encrypted Nano.to vault is independent of the RPC and PoW
-  // source selection, and must stay accessible even before a key is unlocked.
+  // Show credential management only for the explicit Nano.to PoW source.
+  // This is presentation-only: saved credentials and vault unlock are still
+  // independent of the selected wallet RPC and automatic PoW fallback.
   showNanoToPowApiKeys(): boolean {
-    return true;
+    return this.selectedPoWOption === 'nanoTo';
   }
 
   getRemotePoWOptionName(mode: 'server' | 'best' | 'custom' = 'server'): string {

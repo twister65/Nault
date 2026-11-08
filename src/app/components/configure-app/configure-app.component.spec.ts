@@ -55,10 +55,10 @@ describe('ConfigureAppComponent', () => {
     // language chunk so the actual browser <details> element is rendered.
     spyOn(component, 'ngOnInit').and.stub();
     const settings = (component as any).appSettings.settings;
-    settings.powSource = 'server';
+    settings.powSource = 'nanoTo';
     settings.serverName = 'nano-to';
     settings.serverAPI = 'https://rpc.nano.to/';
-    component.selectedPoWOption = 'server';
+    component.selectedPoWOption = 'nanoTo';
     const transloco = TestBed.inject(TranslocoService);
     await firstValueFrom(transloco.load(transloco.getActiveLang()));
     fixture.detectChanges();
@@ -73,12 +73,20 @@ describe('ConfigureAppComponent', () => {
     expect(details.open).toBeFalse();
     summary.click();
     expect(details.open).toBeTrue();
-    expect(content.textContent?.trim()).toBeTruthy();
+    expect(content.textContent).toContain('Nano.to');
+    const privacyLink = content.querySelector('a[href="https://rpc.nano.to/privacy"]') as HTMLAnchorElement;
+    const termsLink = content.querySelector('a[href="https://rpc.nano.to/terms"]') as HTMLAnchorElement;
+    expect(privacyLink).toBeTruthy();
+    expect(termsLink).toBeTruthy();
+    expect(privacyLink.rel).toContain('noopener');
+    expect(termsLink.rel).toContain('noreferrer');
+    // Legal notice and links belong to the disclosure, not under the key fields.
+    expect(fixture.nativeElement.querySelectorAll('a[href="https://rpc.nano.to/privacy"]').length).toBe(1);
     summary.click();
     expect(details.open).toBeFalse();
   });
 
-  it('keeps the Nano.to vault accessible with any wallet RPC and PoW source', async () => {
+  it('shows Nano.to key management only for explicit Nano.to PoW, regardless of wallet RPC', async () => {
     spyOn(component, 'ngOnInit').and.stub();
     const settings = (component as any).appSettings.settings;
     const transloco = TestBed.inject(TranslocoService);
@@ -92,7 +100,7 @@ describe('ConfigureAppComponent', () => {
         fixture.detectChanges();
         await fixture.whenStable();
         fixture.detectChanges();
-        expect(fixture.nativeElement.querySelector('#pow-vault-help')).toBeTruthy();
+        expect(!!fixture.nativeElement.querySelector('#pow-vault-help')).toBe(source === 'nanoTo');
       }
     }
     expect(component.powOptions.some(option => option.value === 'nanoTo')).toBeTrue();
@@ -113,7 +121,7 @@ describe('ConfigureAppComponent', () => {
     });
     expect(component.getRemotePoWOptionName('best')).toContain('Twister32 RsNano');
     expect(component.getRemotePoWOptionName('best')).not.toContain('Nano.to');
-    expect(component.showNanoToPowApiKeys()).toBeTrue();
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
 
     hasKey.and.returnValue(true);
     component.pow.syncProviderFromSettings(true);
@@ -122,12 +130,12 @@ describe('ConfigureAppComponent', () => {
       endpoint: 'https://rpc.nano.to/', status: 'unverified'
     });
     expect(component.getRemotePoWOptionName('best')).toContain('Nano.to');
-    expect(component.showNanoToPowApiKeys()).toBeTrue();
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
 
     hasKey.and.returnValue(false);
     component.pow.syncProviderFromSettings(true);
     expect(component.getRemotePoWOptionName('best')).toContain('Twister32 RsNano');
-    expect(component.showNanoToPowApiKeys()).toBeTrue();
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
     expect(settings.serverName).toBe('nano-to');
     expect(settings.serverAPI).toBe('https://rpc.nano.to/');
   });
@@ -146,10 +154,10 @@ describe('ConfigureAppComponent', () => {
     };
     spyOn(component, 'ngOnInit').and.stub();
     const settings = (component as any).appSettings.settings;
-    settings.powSource = 'server';
+    settings.powSource = 'nanoTo';
     settings.serverName = 'nano-to';
     settings.serverAPI = 'https://rpc.nano.to/';
-    component.selectedPoWOption = 'server';
+    component.selectedPoWOption = 'nanoTo';
     const vault = component.powApiKeyVault;
     const hasVault = spyOnProperty(vault, 'hasVault', 'get').and.returnValue(true);
     const isUnlocked = spyOnProperty(vault, 'isUnlocked', 'get').and.returnValue(false);
@@ -205,10 +213,10 @@ describe('ConfigureAppComponent', () => {
     };
     spyOn(component, 'ngOnInit').and.stub();
     const settings = (component as any).appSettings.settings;
-    settings.powSource = 'server';
+    settings.powSource = 'nanoTo';
     settings.serverName = 'nano-to';
     settings.serverAPI = 'https://rpc.nano.to/';
-    component.selectedPoWOption = 'server';
+    component.selectedPoWOption = 'nanoTo';
     component.powApiKeyInput = 'NANO-NEW-API-KEY-123456';
     component.powVaultPassphrase = '';
     const vault = component.powApiKeyVault;

@@ -171,7 +171,14 @@
                       <span uk-icon="icon: info;" aria-hidden="true"></span>
                     </summary>
                     <div class="pow-vault-help-content uk-text-small">
-                      {{ 'configure-app.pow-api-vault.help' | transloco }}
+                      <p>{{ 'configure-app.pow-api-vault.help' | transloco }}</p>
+                      <a href="https://rpc.nano.to/privacy" target="_blank" rel="noopener noreferrer">
+                        {{ 'configure-app.pow-api-vault.privacy-policy' | transloco }}
+                      </a>
+                      ·
+                      <a href="https://rpc.nano.to/terms" target="_blank" rel="noopener noreferrer">
+                        {{ 'configure-app.pow-api-vault.terms-of-service' | transloco }}
+                      </a>
                     </div>
                   </details>
                   <div class="uk-form-controls">
@@ -200,18 +207,6 @@
                     <div class="uk-text-small uk-margin-small-bottom">
                       <a href="https://rpc.nano.to/account/api-keys" target="_blank" rel="noopener noreferrer">
                         {{ 'configure-app.pow-api-vault.nano-to-create-key' | transloco }}
-                      </a>
-                    </div>
-                    <p class="uk-text-meta uk-margin-small-bottom">
-                      {{ 'configure-app.pow-api-vault.third-party-notice' | transloco }}
-                    </p>
-                    <div class="uk-text-small uk-margin-small-bottom">
-                      <a href="https://rpc.nano.to/privacy" target="_blank" rel="noopener noreferrer">
-                        {{ 'configure-app.pow-api-vault.privacy-policy' | transloco }}
-                      </a>
-                      ·
-                      <a href="https://rpc.nano.to/terms" target="_blank" rel="noopener noreferrer">
-                        {{ 'configure-app.pow-api-vault.terms-of-service' | transloco }}
                       </a>
                     </div>
                     @if (powApiKeyVault.getKeySummaries('nano-to').length) {
