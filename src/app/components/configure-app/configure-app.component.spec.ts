@@ -169,16 +169,28 @@ describe('ConfigureAppComponent', () => {
 
   it('warns about irreversible erasure after three wrong vault passwords', async () => {
     spyOn(component, 'ngOnInit').and.stub();
+    const settings = (component as any).appSettings.settings;
+    settings.powSource = 'nanoTo';
+    settings.serverName = 'nano-to';
+    settings.serverAPI = 'https://rpc.nano.to/';
     component.selectedPoWOption = 'nanoTo';
     const vault = component.powApiKeyVault;
     spyOnProperty(vault, 'hasVault', 'get').and.returnValue(true);
     spyOnProperty(vault, 'isUnlocked', 'get').and.returnValue(false);
     const transloco = TestBed.inject(TranslocoService);
     await firstValueFrom(transloco.load(transloco.getActiveLang()));
+    // The view uses Eager change detection; explicitly mark changes made
+    // directly in this test before checking conditional template content.
+    fixture.changeDetectorRef.markForCheck();
     fixture.detectChanges();
     await fixture.whenStable();
+    fixture.changeDetectorRef.markForCheck();
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('[role="note"]')?.textContent)
+    expect(fixture.nativeElement.querySelector('#pow-vault-help')).toBeTruthy();
+    const warning = fixture.nativeElement.querySelector(
+      '#pow-vault-help + .uk-form-controls [role="note"]') as HTMLElement;
+    expect(warning).toBeTruthy();
+    expect(warning.textContent)
       .toContain(transloco.translate('configure-app.pow-api-vault.unlock-security-warning'));
   });
 
