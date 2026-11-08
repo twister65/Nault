@@ -893,6 +893,7 @@ async function main() {
       '../../services/ledger.service': { LedgerStatus: { READY: 'ready', NOT_CONNECTED: 'not-connected' } },
       '../../services/app-settings.service': {},
       '../../services/pow.service': {},
+       '../../services/device-unlock.service': {},
        '@jsverse/transloco': { TranslocoService: class {} }
     });
     const operations = [];
@@ -933,6 +934,7 @@ async function main() {
       '../../services/ledger.service': { LedgerStatus: { READY: 'ready', NOT_CONNECTED: 'not-connected' } },
       '../../services/app-settings.service': {},
       '../../services/pow.service': {},
+       '../../services/device-unlock.service': {},
        '@jsverse/transloco': { TranslocoService: class {} }
     }, { window: { location: { reload() { reloads++; } } } });
     const ledger = { ledger: {status: 'ready'}, isDesktop: true, transportMode: 'Bluetooth' };
