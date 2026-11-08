@@ -1,4 +1,17 @@
 {
+  
+    "device-unlock": {
+      "title": "Unlock with device security",
+      "help": "Optional quick unlock using your device's biometric or screen-lock verification. Nault encrypts a local copy of the existing password using a WebAuthn PRF key. This setting is specific to this app origin and device credential. Keep your password and recovery seed: device unlock is not a backup, and some devices allow a system PIN instead of biometrics.",
+      "enable": "Enable device unlock",
+      "enable-after-password": "Enable device unlock after the password is verified",
+      "unlock-first": "Unlock this wallet with its password first.",
+      "disable": "Disable device unlock",
+      "use": "Unlock with device",
+      "enabled": "Device unlock enabled for this encrypted data.",
+      "disabled": "Device unlock disabled on this app installation.",
+      "failed": "Device unlock unavailable, cancelled or expired. Use the normal password."
+    },
   "about-nault": {
     "title": "About Nault",
     "platform": "Application type",
