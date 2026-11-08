@@ -1,6 +1,8 @@
 # Optional device unlock (WebAuthn PRF) — security design and test plan
 
-Status: **experimental draft; do not merge until CI, security review and hardware validation**.
+Status: **PWA implementation validated on real Android and ChromeOS devices.**
+Native OS-backed unlock for Electron Desktop is outside this scope. The normal
+password flow remains available on all platforms.
 
 ## Motivation / reference
 
@@ -89,7 +91,32 @@ removing the system passkey, or updating the wallet/vault password may remove
 quick unlock. **Keep the normal wallet password, vault password and an offline
 seed backup**. There is no remote recovery path.
 
-## Validation required before review/merge
+## Validation evidence (PR #89)
+
+The staging build at `https://nault-tablet-css-test.vercel.app/` was
+manually tested against commit
+[`ab0074e`](https://github.com/twister65/Nault/commit/ab0074ef12548d412a404c41daed1dc99c3908a2).
+The finalized implementation at `5a23f43` has the same file contents.
+
+- **Android smartphone:** platform fingerprint unlock tested successfully
+  for the Nano.to PoW vault and a software wallet; the wallet was unlocked
+  for a test send and a receive after locking.
+- **Android tablet without a fingerprint sensor:** system unlock pattern
+  tested successfully with both the PoW vault and software wallet. The user
+  also confirmed failure and recovery scenarios on this tablet.
+- **ChromeOS PWA:** a platform passkey unlocked by PIN was accepted.
+  The available report does not establish every individual failure/recovery
+  permutation on ChromeOS.
+- **Automated gates:** Angular 22 validation, linting, regression/unit tests,
+  CodeQL, dependency audit, Electron packaging and the Merge Gate passed.
+  Automated packaging does not replace manual hardware tests.
+
+No claim is made that Electron Desktop supports device unlock. Additional
+manual checks on unsupported authenticators, Linux/Windows/macOS Desktop
+password fallback, Ledger hardware and edge-case storage lifecycles are
+tracked as follow-up regression work, not recorded as completed.
+
+## Additional security regression checklist
 
 Automated tests: PRF-derived AES-GCM round-trip; record contains neither
 password nor resource identity in clear; wrong PRF; cancelled prompt; unsupported
@@ -123,6 +150,9 @@ Manual tests **must use test-only seed and API key**:
 10. Inspect localStorage, wallet exports, console and network traces to confirm
     plaintext passwords/seeds/API keys and PRF outputs are not leaked.
 
-**Merge gate:** CI green, a second security review of the PRF wrapping and
-storage lifecycle, and real-device PWA testing. Do not ship Desktop biometric
-claims until the dedicated native integration is implemented and tested.
+**Security boundary:** a successful system prompt by itself does not unlock
+anything; the platform PRF must unwrap an authenticated AES-GCM password
+ciphertext. Device compromise/XSS and OS passkey-sync policies remain risks.
+The open manual test cases above must not be mistaken for completed checks.
+Do not ship Desktop biometric claims until a separate native integration
+has undergone security review and hardware testing.
