@@ -7,8 +7,12 @@ describe('S-01 WalletService persistence', () => {
   const pass = 'long testing passphrase';
   let service: any;
   const key = 's01-unit-test';
+  const deviceKey = 'nault-device-unlock-prf-v1-wallet';
+  let originalDevice: string | null;
 
   beforeEach(() => {
+    originalDevice = localStorage.getItem(deviceKey);
+    localStorage.removeItem(deviceKey);
     service = Object.create(WalletService.prototype) as any;
     service.storeKey = key;
     service.wallet = {
@@ -18,7 +22,11 @@ describe('S-01 WalletService persistence', () => {
     service.appSettings = { settings: { walletStore: 'localStorage' } };
   });
 
-  afterEach(() => localStorage.removeItem(key));
+  afterEach(() => {
+    localStorage.removeItem(key);
+    if (originalDevice === null) localStorage.removeItem(deviceKey);
+    else localStorage.setItem(deviceKey, originalDevice);
+  });
 
   it('does not persist plaintext before encryption', () => {
     service.saveWalletExport();
@@ -41,6 +49,16 @@ describe('S-01 WalletService persistence', () => {
     const before = localStorage.getItem(key);
     await expectAsync(service.setSoftwareWalletPassword('short')).toBeRejected();
     expect(localStorage.getItem(key)).toBe(before);
+  });
+
+  it('invalidates local device enrollment on password rotation and wallet removal', async () => {
+    await service.setSoftwareWalletPassword(pass);
+    localStorage.setItem(deviceKey, 'encrypted device wrapper placeholder');
+    await service.setSoftwareWalletPassword('different strong password for rotation');
+    expect(localStorage.getItem(deviceKey)).toBeNull();
+    localStorage.setItem(deviceKey, 'another encrypted device wrapper');
+    service.removeWalletData();
+    expect(localStorage.getItem(deviceKey)).toBeNull();
   });
 
   it('does not redirect a v2 QR to an incompatible upstream app', async () => {
