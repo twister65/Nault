@@ -1,4 +1,5 @@
-import {Component, ElementRef, HostListener, OnInit, OnDestroy, ViewChild, Renderer2, ChangeDetectionStrategy} from '@angular/core';
+import {Component, ElementRef, HostListener, OnInit, OnDestroy, ViewChild, Renderer2, ChangeDetectionStrategy, inject} from '@angular/core';
+import { DeviceUnlockService } from './services/device-unlock.service';
 import {WalletService, WalletAccount} from './services/wallet.service';
 import {AddressBookService} from './services/address-book.service';
 import {AppSettingsService} from './services/app-settings.service';
@@ -87,6 +88,8 @@ export class AppComponent implements OnInit, OnDestroy {
   powVaultUnlockError = false;
   powVaultUnlockErrorKey = 'configure-app.pow-api-vault.failed';
   powVaultUnlockRemainingAttempts = 0;
+  readonly deviceUnlock = inject(DeviceUnlockService);
+  deviceUnlockSupported = false;
 
   // Prompt to unlock any saved API vault after startup, independently of
   // the selected wallet RPC, PoW mode or configured wallet.
@@ -128,6 +131,34 @@ export class AppComponent implements OnInit, OnDestroy {
       this.powVaultUnlockBusy = false;
     }
   }
+  async unlockPowVaultWithDeviceOnStartup(): Promise<void> {
+    if (this.powVaultUnlockBusy || !this.showPowVaultUnlock || !this.deviceUnlockSupported) return;
+    const binding = this.powApiKeyVault.getDeviceUnlockBinding();
+    if (!binding) return;
+    this.powVaultUnlockBusy = true;
+    this.powVaultUnlockError = false;
+    try {
+      const password = await this.deviceUnlock.unlock('pow', binding);
+      if (binding !== this.powApiKeyVault.getDeviceUnlockBinding()) throw new Error('Vault changed');
+      await this.powApiKeyVault.unlock(password);
+      this.pow.syncProviderFromSettings(true);
+      this.showPowVaultUnlock = false;
+      this.powApiKeyVault.resolveStartupUnlockDecision();
+    } catch (error) {
+      if (error instanceof PoWVaultUnlockError && error.erased) {
+        this.showPowVaultUnlock = false;
+        this.pow.syncProviderFromSettings(true);
+        this.powApiKeyVault.resolveStartupUnlockDecision();
+        this.notifications.sendError(this.translate.translate('configure-app.pow-api-vault.unlock-erased'));
+      } else {
+        this.powVaultUnlockError = true;
+        this.powVaultUnlockErrorKey = 'device-unlock.failed';
+      }
+    } finally {
+      this.powVaultUnlockBusy = false;
+    }
+  }
+
   dismissPowVaultPrompt(): void {
     if (this.powVaultUnlockBusy) return;
     this.showPowVaultUnlock = false;
@@ -347,6 +378,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit() {
+    void this.deviceUnlock.isSupported().then(supported => this.deviceUnlockSupported = supported);
     this.onWindowResize(window);
     // Resolve Electron's native OS locale before choosing the initial Angular
     // language. Browsers fall back to their navigator culture as before.
