@@ -66,6 +66,22 @@ browser console, screenshot or exported Nault configuration.
   deleted as well. Cancel preserves the vault. **Clear PoW work cache**
   intentionally does not delete the credential vault.
 
+## Optional device unlock (PR #89; PWA)
+
+When explicitly enabled after a correct vault-password unlock, a separate
+per-origin WebAuthn PRF credential wraps an **encrypted local copy of the
+vault password** in `nault-device-unlock-prf-v1-pow`. The original PoW vault
+envelope remains PBKDF2/AES-GCM v2 and never stores the plaintext password.
+Platform biometric verification or a system PIN may release the PRF output;
+a mere successful OS prompt never bypasses decryption. Device unlock still
+requires an explicit click after every application restart; cancellation
+leaves the conventional password flow intact.
+
+This wrapper is optional, cannot be copied as a recovery backup, and is
+removed when the last PoW API key or entire vault is deleted. Unavailable
+WebAuthn PRF (notably some Electron/OS combinations) does not unlock keys.
+See [device unlock threat model](device-unlock-webauthn-prf.md).
+
 ## Three failed vault password attempts
 
 - Users enter a **vault password** (at least 12 characters when creating

@@ -1,5 +1,6 @@
 import { secureEndpoint } from '../../services/endpoint-policy';
-import { Component, OnInit, OnDestroy, Renderer2, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, Renderer2, ChangeDetectionStrategy, inject } from '@angular/core';
+import { DeviceUnlockService } from '../../services/device-unlock.service';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {AppSettingsService, AppSettings, PoWSource} from '../../services/app-settings.service';
@@ -146,6 +147,9 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   powSelectedKeyId = '';
   powVaultPassphrase = '';
   powVaultBusy = false;
+  readonly deviceUnlock = inject(DeviceUnlockService);
+  deviceUnlockSupported = false;
+  powEnableDeviceUnlock = false;
 
   selectedPowKeyId(): string {
     const options = this.powApiKeyVault.getKeySummaries('nano-to');
@@ -154,14 +158,61 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     return chosen?.id || '';
   }
 
+  private async registerPowDeviceUnlock(password: string): Promise<void> {
+    if (!this.powEnableDeviceUnlock || !this.deviceUnlockSupported) return;
+    const binding = this.powApiKeyVault.getDeviceUnlockBinding();
+    if (!binding || !this.powApiKeyVault.isUnlocked) return;
+    try {
+      await this.deviceUnlock.enroll('pow', password, binding);
+      if (binding !== this.powApiKeyVault.getDeviceUnlockBinding() || !this.powApiKeyVault.isUnlocked) {
+        this.deviceUnlock.remove('pow');
+        throw new Error('Vault changed during device enrollment');
+      }
+      this.notifications.sendSuccess(this.translocoService.translate('device-unlock.enabled'));
+    } catch {
+      // The password unlock has already succeeded: never roll it back.
+      this.notifications.sendWarning(this.translocoService.translate('device-unlock.failed'));
+    } finally {
+      this.powEnableDeviceUnlock = false;
+    }
+  }
+
+  async unlockPowWithDevice(): Promise<void> {
+    if (this.powVaultBusy || !this.deviceUnlockSupported ||
+        !this.powApiKeyVault.hasVault || this.powApiKeyVault.isUnlocked) return;
+    const binding = this.powApiKeyVault.getDeviceUnlockBinding();
+    if (!binding) return;
+    this.powVaultBusy = true;
+    try {
+      const password = await this.deviceUnlock.unlock('pow', binding);
+      if (binding !== this.powApiKeyVault.getDeviceUnlockBinding()) throw new Error('Vault changed');
+      await this.powApiKeyVault.unlock(password);
+      this.pow.syncProviderFromSettings(true);
+      this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.unlocked'));
+    } catch {
+      this.notifications.sendWarning(this.translocoService.translate('device-unlock.failed'));
+    } finally {
+      this.powVaultBusy = false;
+    }
+  }
+
+  disablePowDeviceUnlock(): void {
+    if (this.powVaultBusy) return;
+    this.deviceUnlock.remove('pow');
+    this.powEnableDeviceUnlock = false;
+    this.notifications.sendSuccess(this.translocoService.translate('device-unlock.disabled'));
+  }
+
   async savePowApiKey(): Promise<void> {
     if (this.powVaultBusy) return;
     this.powVaultBusy = true;
     try {
+      const password = this.powVaultPassphrase;
       this.powSelectedKeyId = await this.powApiKeyVault.saveKey(
         'nano-to', this.powApiKeyInput, this.powVaultPassphrase, this.powApiKeyLabel);
       this.pow.syncProviderFromSettings(true);
       this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.saved'));
+      await this.registerPowDeviceUnlock(password);
     } catch (_) {
       this.notifications.sendError(this.translocoService.translate('configure-app.pow-api-vault.failed'));
     } finally {
@@ -181,9 +232,11 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     }
     this.powVaultBusy = true;
     try {
-      await this.powApiKeyVault.unlock(this.powVaultPassphrase);
+      const password = this.powVaultPassphrase;
+      await this.powApiKeyVault.unlock(password);
       this.pow.syncProviderFromSettings(true);
       this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.unlocked'));
+      await this.registerPowDeviceUnlock(password);
     } catch (error) {
       if (error instanceof PoWVaultUnlockError) {
         const key = error.erased ? 'configure-app.pow-api-vault.unlock-erased'
@@ -343,6 +396,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit() {
+    void this.deviceUnlock.isSupported().then(supported => this.deviceUnlockSupported = supported);
     this.loadFromSettings();
     this.failoverSubscription.add(this.appSettings.serverFailover$.subscribe(() => {
       // Keep the visible Server Configuration in sync without discarding

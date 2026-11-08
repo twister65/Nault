@@ -260,6 +260,19 @@
                       [(ngModel)]="powVaultPassphrase"
                       [disabled]="powVaultBusy || powApiKeyVault.isUnlocked"
                       [placeholder]="'configure-app.pow-api-vault.passphrase-placeholder' | transloco">
+                    @if (deviceUnlockSupported && !powApiKeyVault.isUnlocked &&
+                          !deviceUnlock.has('pow')) {
+                      <label class="uk-text-small uk-display-block uk-margin-small-bottom">
+                        <input type="checkbox" class="uk-checkbox"
+                          [(ngModel)]="powEnableDeviceUnlock"
+                          [disabled]="powVaultBusy"
+                          [ngModelOptions]="{ standalone: true }">
+                        {{ 'device-unlock.enable-after-password' | transloco }}
+                      </label>
+                    }
+                    @if (deviceUnlockSupported && deviceUnlock.has('pow')) {
+                      <p class="uk-text-meta">{{ 'device-unlock.help' | transloco }}</p>
+                    }
                     <div class="pow-vault-actions">
                       <button class="uk-button uk-button-primary" type="button"
                         [disabled]="powVaultBusy || !powApiKeyInput || (powApiKeyVault.hasVault
@@ -268,6 +281,14 @@
                       <button id="pow-api-key-unlock" class="uk-button uk-button-default" type="button"
                         [disabled]="powVaultBusy || !powApiKeyVault.hasVault || powApiKeyVault.isUnlocked"
                         (click)="unlockPowApiKeys()">{{ 'configure-app.pow-api-vault.unlock' | transloco }}</button>
+                      @if (deviceUnlockSupported && deviceUnlock.has('pow')) {
+                        <button type="button" class="uk-button uk-button-default"
+                          [disabled]="powVaultBusy || !powApiKeyVault.hasVault || powApiKeyVault.isUnlocked"
+                          (click)="unlockPowWithDevice()">{{ 'device-unlock.use' | transloco }}</button>
+                        <button type="button" class="uk-button uk-button-default"
+                          [disabled]="powVaultBusy"
+                          (click)="disablePowDeviceUnlock()">{{ 'device-unlock.disable' | transloco }}</button>
+                      }
                       <button class="uk-button uk-button-default" type="button"
                         [disabled]="powVaultBusy || !powApiKeyVault.isUnlocked"
                         (click)="lockPowApiKeys()">{{ 'configure-app.pow-api-vault.lock' | transloco }}</button>

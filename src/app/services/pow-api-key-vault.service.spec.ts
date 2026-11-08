@@ -6,10 +6,14 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
   let original: string | null;
   let originalFailures: string | null;
   const keyName = 'nault-pow-provider-keys-v2';
+  const deviceName = 'nault-device-unlock-prf-v1-pow';
+  let originalDevice: string | null;
   const failuresName = 'nault-pow-provider-keys-v2-failed-attempts';
   const pass = 'a strong local PoW passphrase';
   beforeEach(() => {
     original = localStorage.getItem(keyName);
+    originalDevice = localStorage.getItem(deviceName);
+    localStorage.removeItem(deviceName);
     originalFailures = localStorage.getItem(failuresName);
     localStorage.removeItem(keyName);
     localStorage.removeItem(failuresName);
@@ -23,12 +27,15 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
     else localStorage.setItem(keyName, original);
     if (originalFailures === null) localStorage.removeItem(failuresName);
     else localStorage.setItem(failuresName, originalFailures);
+    if (originalDevice === null) localStorage.removeItem(deviceName);
+    else localStorage.setItem(deviceName, originalDevice);
   });
   it('erases only the encrypted PoW vault after exactly three consecutive bad passwords', async () => {
     const secret = 'NANO-TEST-KEY-98765432';
     await vault.saveKey('nano-to', secret, pass, 'My Nano key');
     vault.lock();
     const encrypted = localStorage.getItem(keyName);
+    localStorage.setItem(deviceName, 'encrypted device wrapper placeholder');
     for (let attempt = 1; attempt <= 3; attempt++) {
       let error: unknown;
       try { await vault.unlock('definitely not the vault password'); }
@@ -48,6 +55,7 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
       }
     }
     expect(vault.hasVault).toBeFalse();
+    expect(localStorage.getItem(deviceName)).toBeNull();
     expect(vault.getKeySummaries()).toEqual([]);
     expect(localStorage.getItem(keyName)).toBeNull();
     expect(localStorage.getItem(failuresName)).toBeNull();

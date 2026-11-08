@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { DeviceUnlockService } from './device-unlock.service';
 
 /**
  * Optional PoW provider credentials. Secrets and the active-key selection
@@ -216,6 +217,8 @@ export class PoWApiKeyVaultService {
   }
 
   get hasVault(): boolean { return localStorage.getItem(VAULT_KEY) !== null; }
+  /** Stable for key changes, rotated when a new vault/password is created. */
+  getDeviceUnlockBinding(): string | null { return readEnvelope()?.salt || null; }
   get isUnlocked(): boolean { return this.unlocked; }
   getKeySummaries(provider?: PoWApiProvider): PoWApiKeySummary[] {
     const all = this.unlocked ? summaries(this.data) : (readEnvelope()?.metadata || []);
@@ -255,6 +258,7 @@ export class PoWApiKeyVaultService {
     try {
       localStorage.removeItem(VAULT_KEY);
       resetFailedUnlocks();
+      DeviceUnlockService.removeStored('pow');
     } finally {
       this.lock();
       // Do not leave a queued paid PoW request waiting on a now-deleted vault.
@@ -326,6 +330,7 @@ export class PoWApiKeyVaultService {
     const serialized = JSON.stringify(envelope);
     localStorage.setItem(VAULT_KEY, serialized);
     resetFailedUnlocks();
+    DeviceUnlockService.removeStored('pow');
     this.data = checked;
     this.unlocked = true;
     this.sessionKey = key;
@@ -415,6 +420,7 @@ export class PoWApiKeyVaultService {
     if (!entries.length) {
       localStorage.removeItem(VAULT_KEY);
       resetFailedUnlocks();
+      DeviceUnlockService.removeStored('pow');
       this.lock();
       return;
     }

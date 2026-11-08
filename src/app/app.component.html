@@ -320,6 +320,11 @@
           {{ powVaultUnlockErrorKey | transloco: { remaining: powVaultUnlockRemainingAttempts } }}
         </p>
       }
+      @if (deviceUnlockSupported && deviceUnlock.has('pow')) {
+        <button type="button" class="uk-button uk-button-default uk-width-1-1 uk-margin-small-bottom"
+          [disabled]="powVaultUnlockBusy"
+          (click)="unlockPowVaultWithDeviceOnStartup()">{{ 'device-unlock.use' | transloco }}</button>
+      }
       <div class="pow-vault-dialog-actions">
         <button class="uk-button uk-button-default" type="button" [disabled]="powVaultUnlockBusy"
           (click)="dismissPowVaultPrompt()">{{ 'configure-app.pow-api-vault.startup-later' | transloco }}</button>

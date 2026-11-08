@@ -31,6 +31,28 @@
       </div>
     }
 
+    @if (deviceUnlockSupported && !walletService.isLedgerWallet() && walletService.getDeviceUnlockBinding()) {
+      <div class="uk-card uk-card-default uk-margin">
+        <div class="uk-card-header">
+          <h3 class="uk-card-title">{{ 'device-unlock.title' | transloco }}</h3>
+        </div>
+        <div class="uk-card-body">
+          <p class="uk-text-small">{{ 'device-unlock.help' | transloco }}</p>
+          @if (deviceUnlock.has('wallet')) {
+            <button type="button" class="uk-button uk-button-default" [disabled]="deviceUnlockBusy"
+              (click)="disableWalletDeviceUnlock()">{{ 'device-unlock.disable' | transloco }}</button>
+          } @else {
+            <button type="button" class="uk-button uk-button-primary"
+              [disabled]="deviceUnlockBusy || wallet.locked || !wallet.password"
+              (click)="enableWalletDeviceUnlock()">{{ 'device-unlock.enable' | transloco }}</button>
+            @if (wallet.locked) {
+              <p class="uk-text-meta">{{ 'device-unlock.unlock-first' | transloco }}</p>
+            }
+          }
+        </div>
+      </div>
+    }
+
     @if (!walletService.isLedgerWallet()) {
       <div class="uk-card uk-card-default uk-margin">
         <div class="uk-card-header">

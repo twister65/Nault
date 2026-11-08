@@ -13,6 +13,7 @@ import {AppSettingsService} from './app-settings.service';
 import {PriceService} from './price.service';
 import {LedgerService, LedgerStatus, LedgerUsbModel} from './ledger.service';
 import { NoPaddingZerosPipe } from 'app/pipes/no-padding-zeros.pipe';
+import { DeviceUnlockService } from './device-unlock.service';
 
 export type WalletType = 'seed' | 'ledger' | 'privateKey' | 'expandedKey';
 
@@ -475,6 +476,14 @@ export class WalletService {
       this.wallet.password = previousPassword;
       throw err;
     }
+    // Password rotation or explicit migration invalidates the old device wrapper.
+    DeviceUnlockService.removeStored('wallet');
+  }
+
+  /** Binds device unlock to the actual encrypted wallet, never to a seed or a Ledger. */
+  getDeviceUnlockBinding(): string | null {
+    return this.wallet.type !== 'ledger' && this.walletCiphertext
+      ? this.wallet.type + ':' + this.walletCiphertext : null;
   }
 
   isLegacySoftwareWallet(): boolean {
@@ -1318,6 +1327,7 @@ export class WalletService {
 
   removeWalletData() {
     localStorage.removeItem(this.storeKey);
+    DeviceUnlockService.removeStored('wallet');
   }
 
   generateWalletExport() {
