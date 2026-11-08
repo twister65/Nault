@@ -136,11 +136,22 @@
             <div class="uk-form-horizontal">
 
               <div class="uk-margin">
-                <label class="uk-form-label">{{ 'configure-app.pow-source' | transloco }}</label>
+                <!-- Use a native disclosure, consistent with Nano.to vault help:
+                     touch and keyboard work even without hover tooltips. -->
+                <details class="pow-vault-help" id="pow-source-help">
+                  <summary class="uk-form-label">
+                    {{ 'configure-app.pow-source' | transloco }}
+                    <span uk-icon="icon: info;" aria-hidden="true"></span>
+                  </summary>
+                  <div class="pow-vault-help-content uk-text-small">
+                    {{ 'configure-app.pow-source-help' | transloco }}
+                  </div>
+                </details>
                 <div class="uk-form-controls">
 
                   <div class="uk-inline uk-width-1-1">
-                    <select class="uk-select" [(ngModel)]="selectedPoWOption">
+                    <select class="uk-select" [(ngModel)]="selectedPoWOption"
+                      [attr.aria-label]="t('configure-app.pow-source')">
                       @for (pow of powOptions; track pow) {
                         <option [value]="pow.value">
                           @if (pow.value === 'server' || pow.value === 'best' || pow.value === 'custom') {

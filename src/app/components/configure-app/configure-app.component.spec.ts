@@ -50,6 +50,32 @@ describe('ConfigureAppComponent', () => {
   }));
 
 
+  it('discloses translated automatic PoW fallback guidance on touch and keyboard', async () => {
+    spyOn(component, 'ngOnInit').and.stub();
+    const transloco = TestBed.inject(TranslocoService);
+    await firstValueFrom(transloco.load(transloco.getActiveLang()));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const details = fixture.nativeElement.querySelector('#pow-source-help') as HTMLDetailsElement;
+    expect(details).toBeTruthy();
+    const summary = details.querySelector('summary') as HTMLElement;
+    const content = details.querySelector('.pow-vault-help-content') as HTMLElement;
+    expect(summary.textContent).toContain(transloco.translate('configure-app.pow-source'));
+    expect(summary.hasAttribute('uk-tooltip')).toBeFalse();
+    expect(details.open).toBeFalse();
+    summary.click();
+    expect(details.open).toBeTrue();
+    expect(content.textContent).toContain(transloco.translate('configure-app.pow-source-help'));
+    expect(content.textContent).toContain('Nano.to');
+
+    const selector = fixture.nativeElement.querySelector('select[aria-label]') as HTMLSelectElement;
+    expect(selector.getAttribute('aria-label')).toBe(transloco.translate('configure-app.pow-source'));
+    summary.click();
+    expect(details.open).toBeFalse();
+  });
+
   it('opens and closes the PoW API-key explanation on tap without a hover tooltip', async () => {
     // The whole settings view is inside *transloco. Wait for its lazy-loaded
     // language chunk so the actual browser <details> element is rendered.
