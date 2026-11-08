@@ -2,6 +2,7 @@ import { ComponentTestModule, isolateConstructorIO } from '../../../testing/comp
 import { ComponentFixture, TestBed, fakeAsync, tick, waitForAsync } from '@angular/core/testing';
 
 import { ConfigureAppComponent } from './configure-app.component';
+import { PoWVaultUnlockError } from '../../services/pow-api-key-vault.service';
 import { WebsocketService } from '../../services/websocket.service';
 import { TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
@@ -50,15 +51,41 @@ describe('ConfigureAppComponent', () => {
   }));
 
 
+  it('discloses translated automatic PoW fallback guidance on touch and keyboard', async () => {
+    spyOn(component, 'ngOnInit').and.stub();
+    const transloco = TestBed.inject(TranslocoService);
+    await firstValueFrom(transloco.load(transloco.getActiveLang()));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const details = fixture.nativeElement.querySelector('#pow-source-help') as HTMLDetailsElement;
+    expect(details).toBeTruthy();
+    const summary = details.querySelector('summary') as HTMLElement;
+    const content = details.querySelector('.pow-vault-help-content') as HTMLElement;
+    expect(summary.textContent).toContain(transloco.translate('configure-app.pow-source'));
+    expect(summary.hasAttribute('uk-tooltip')).toBeFalse();
+    expect(details.open).toBeFalse();
+    summary.click();
+    expect(details.open).toBeTrue();
+    expect(content.textContent).toContain(transloco.translate('configure-app.pow-source-help'));
+    expect(content.textContent).toContain('Nano.to');
+
+    const selector = fixture.nativeElement.querySelector('select[aria-label]') as HTMLSelectElement;
+    expect(selector.getAttribute('aria-label')).toBe(transloco.translate('configure-app.pow-source'));
+    summary.click();
+    expect(details.open).toBeFalse();
+  });
+
   it('opens and closes the PoW API-key explanation on tap without a hover tooltip', async () => {
     // The whole settings view is inside *transloco. Wait for its lazy-loaded
     // language chunk so the actual browser <details> element is rendered.
     spyOn(component, 'ngOnInit').and.stub();
     const settings = (component as any).appSettings.settings;
-    settings.powSource = 'server';
+    settings.powSource = 'nanoTo';
     settings.serverName = 'nano-to';
     settings.serverAPI = 'https://rpc.nano.to/';
-    component.selectedPoWOption = 'server';
+    component.selectedPoWOption = 'nanoTo';
     const transloco = TestBed.inject(TranslocoService);
     await firstValueFrom(transloco.load(transloco.getActiveLang()));
     fixture.detectChanges();
@@ -73,12 +100,20 @@ describe('ConfigureAppComponent', () => {
     expect(details.open).toBeFalse();
     summary.click();
     expect(details.open).toBeTrue();
-    expect(content.textContent?.trim()).toBeTruthy();
+    expect(content.textContent).toContain('Nano.to');
+    const privacyLink = content.querySelector('a[href="https://rpc.nano.to/privacy"]') as HTMLAnchorElement;
+    const termsLink = content.querySelector('a[href="https://rpc.nano.to/terms"]') as HTMLAnchorElement;
+    expect(privacyLink).toBeTruthy();
+    expect(termsLink).toBeTruthy();
+    expect(privacyLink.rel).toContain('noopener');
+    expect(termsLink.rel).toContain('noreferrer');
+    // Legal notice and links belong to the disclosure, not under the key fields.
+    expect(fixture.nativeElement.querySelectorAll('a[href="https://rpc.nano.to/privacy"]').length).toBe(1);
     summary.click();
     expect(details.open).toBeFalse();
   });
 
-  it('keeps the Nano.to vault accessible with any wallet RPC and PoW source', async () => {
+  it('shows Nano.to key management only for explicit Nano.to PoW, regardless of wallet RPC', async () => {
     spyOn(component, 'ngOnInit').and.stub();
     const settings = (component as any).appSettings.settings;
     const transloco = TestBed.inject(TranslocoService);
@@ -92,7 +127,7 @@ describe('ConfigureAppComponent', () => {
         fixture.detectChanges();
         await fixture.whenStable();
         fixture.detectChanges();
-        expect(fixture.nativeElement.querySelector('#pow-vault-help')).toBeTruthy();
+        expect(!!fixture.nativeElement.querySelector('#pow-vault-help')).toBe(source === 'nanoTo');
       }
     }
     expect(component.powOptions.some(option => option.value === 'nanoTo')).toBeTrue();
@@ -113,7 +148,7 @@ describe('ConfigureAppComponent', () => {
     });
     expect(component.getRemotePoWOptionName('best')).toContain('Twister32 RsNano');
     expect(component.getRemotePoWOptionName('best')).not.toContain('Nano.to');
-    expect(component.showNanoToPowApiKeys()).toBeTrue();
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
 
     hasKey.and.returnValue(true);
     component.pow.syncProviderFromSettings(true);
@@ -122,14 +157,64 @@ describe('ConfigureAppComponent', () => {
       endpoint: 'https://rpc.nano.to/', status: 'unverified'
     });
     expect(component.getRemotePoWOptionName('best')).toContain('Nano.to');
-    expect(component.showNanoToPowApiKeys()).toBeTrue();
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
 
     hasKey.and.returnValue(false);
     component.pow.syncProviderFromSettings(true);
     expect(component.getRemotePoWOptionName('best')).toContain('Twister32 RsNano');
-    expect(component.showNanoToPowApiKeys()).toBeTrue();
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
     expect(settings.serverName).toBe('nano-to');
     expect(settings.serverAPI).toBe('https://rpc.nano.to/');
+  });
+
+  it('warns about irreversible erasure after three wrong vault passwords', async () => {
+    spyOn(component, 'ngOnInit').and.stub();
+    const settings = (component as any).appSettings.settings;
+    settings.powSource = 'nanoTo';
+    settings.serverName = 'nano-to';
+    settings.serverAPI = 'https://rpc.nano.to/';
+    component.selectedPoWOption = 'nanoTo';
+    const vault = component.powApiKeyVault;
+    spyOnProperty(vault, 'hasVault', 'get').and.returnValue(true);
+    spyOnProperty(vault, 'isUnlocked', 'get').and.returnValue(false);
+    const transloco = TestBed.inject(TranslocoService);
+    await firstValueFrom(transloco.load(transloco.getActiveLang()));
+    // The view uses Eager change detection; explicitly mark changes made
+    // directly in this test before checking conditional template content.
+    fixture.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('#pow-vault-help')).toBeTruthy();
+    const warning = fixture.nativeElement.querySelector(
+      '#pow-vault-help + .uk-form-controls [role="note"]') as HTMLElement;
+    expect(warning).toBeTruthy();
+    expect(warning.textContent)
+      .toContain(transloco.translate('configure-app.pow-api-vault.unlock-security-warning'));
+  });
+
+  it('reports failed vault unlock attempts and updates PoW after vault erasure', async () => {
+    const vault = component.powApiKeyVault;
+    spyOnProperty(vault, 'hasVault', 'get').and.returnValue(true);
+    spyOnProperty(vault, 'isUnlocked', 'get').and.returnValue(false);
+    const unlock = spyOn(vault, 'unlock').and.rejectWith(new PoWVaultUnlockError(2, false));
+    const notifications = (component as any).notifications;
+    const notify = spyOn(notifications, 'sendError');
+    const refresh = spyOn(component.pow, 'syncProviderFromSettings');
+
+    component.powVaultPassphrase = 'wrong vault password';
+    await component.unlockPowApiKeys();
+    expect(unlock).toHaveBeenCalledTimes(1);
+    expect(component.powVaultPassphrase).toBe('');
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+
+    unlock.and.rejectWith(new PoWVaultUnlockError(0, true));
+    component.powVaultPassphrase = 'wrong password again';
+    await component.unlockPowApiKeys();
+    expect(notify).toHaveBeenCalledTimes(2);
+    expect(refresh).toHaveBeenCalledOnceWith(true);
   });
 
   it('enables Unlock keys for a locked Nano.to vault even with an empty passphrase', async () => {
@@ -146,10 +231,10 @@ describe('ConfigureAppComponent', () => {
     };
     spyOn(component, 'ngOnInit').and.stub();
     const settings = (component as any).appSettings.settings;
-    settings.powSource = 'server';
+    settings.powSource = 'nanoTo';
     settings.serverName = 'nano-to';
     settings.serverAPI = 'https://rpc.nano.to/';
-    component.selectedPoWOption = 'server';
+    component.selectedPoWOption = 'nanoTo';
     const vault = component.powApiKeyVault;
     const hasVault = spyOnProperty(vault, 'hasVault', 'get').and.returnValue(true);
     const isUnlocked = spyOnProperty(vault, 'isUnlocked', 'get').and.returnValue(false);
@@ -205,10 +290,10 @@ describe('ConfigureAppComponent', () => {
     };
     spyOn(component, 'ngOnInit').and.stub();
     const settings = (component as any).appSettings.settings;
-    settings.powSource = 'server';
+    settings.powSource = 'nanoTo';
     settings.serverName = 'nano-to';
     settings.serverAPI = 'https://rpc.nano.to/';
-    component.selectedPoWOption = 'server';
+    component.selectedPoWOption = 'nanoTo';
     component.powApiKeyInput = 'NANO-NEW-API-KEY-123456';
     component.powVaultPassphrase = '';
     const vault = component.powApiKeyVault;

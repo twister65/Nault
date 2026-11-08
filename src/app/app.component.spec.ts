@@ -6,7 +6,7 @@ import { DesktopService } from './services/desktop.service';
 import { AppComponent } from './app.component';
 import { WalletService } from './services/wallet.service';
 import { NotificationService } from './services/notification.service';
-import { PoWApiKeyVaultService } from './services/pow-api-key-vault.service';
+import { PoWApiKeyVaultService, PoWVaultUnlockError } from './services/pow-api-key-vault.service';
 import { PowService } from './services/pow.service';
 import { ComponentTestModule, isolateConstructorIO } from '../testing/component-test.module';
 
@@ -70,6 +70,33 @@ describe('AppComponent', () => {
     app.dismissPowVaultPrompt();
     expect(app.showPowVaultUnlock).toBeFalse();
     expect(resolveDecision).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows remaining vault attempts and closes the startup prompt on erasure', async () => {
+    const app = TestBed.inject(AppComponent);
+    const vault = TestBed.inject(PoWApiKeyVaultService);
+    const unlock = spyOn(vault, 'unlock').and.rejectWith(new PoWVaultUnlockError(2, false));
+    const refresh = spyOn(TestBed.inject(PowService), 'syncProviderFromSettings');
+    const resolve = spyOn(vault, 'resolveStartupUnlockDecision');
+    const notify = spyOn(TestBed.inject(NotificationService), 'sendError');
+
+    app.showPowVaultUnlock = true;
+    app.powVaultUnlockPassphrase = 'bad password one';
+    await app.unlockPowVaultOnStartup();
+    expect(app.showPowVaultUnlock).toBeTrue();
+    expect(app.powVaultUnlockError).toBeTrue();
+    expect(app.powVaultUnlockErrorKey).toBe('configure-app.pow-api-vault.unlock-incorrect');
+    expect(app.powVaultUnlockRemainingAttempts).toBe(2);
+    expect(resolve).not.toHaveBeenCalled();
+
+    unlock.and.rejectWith(new PoWVaultUnlockError(0, true));
+    app.powVaultUnlockPassphrase = 'bad password three';
+    await app.unlockPowVaultOnStartup();
+    expect(app.showPowVaultUnlock).toBeFalse();
+    expect(app.powVaultUnlockPassphrase).toBe('');
+    expect(resolve).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveBeenCalledOnceWith(true);
+    expect(notify).toHaveBeenCalledTimes(1);
   });
 
   it('constructs the application with its real dependency graph', () => {

@@ -5,7 +5,7 @@ import {NotificationService} from '../../services/notification.service';
 import {AppSettingsService, AppSettings, PoWSource} from '../../services/app-settings.service';
 import {PriceService} from '../../services/price.service';
 import {PowService} from '../../services/pow.service';
-import {PoWApiKeyVaultService} from '../../services/pow-api-key-vault.service';
+import {PoWApiKeyVaultService, PoWVaultUnlockError} from '../../services/pow-api-key-vault.service';
 import {WorkPoolService} from '../../services/work-pool.service';
 import {AddressBookService} from '../../services/address-book.service';
 import type {QRType} from '../qr-modal/qr-modal.component';
@@ -184,8 +184,17 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
       await this.powApiKeyVault.unlock(this.powVaultPassphrase);
       this.pow.syncProviderFromSettings(true);
       this.notifications.sendSuccess(this.translocoService.translate('configure-app.pow-api-vault.unlocked'));
-    } catch (_) {
-      this.notifications.sendError(this.translocoService.translate('configure-app.pow-api-vault.failed'));
+    } catch (error) {
+      if (error instanceof PoWVaultUnlockError) {
+        const key = error.erased ? 'configure-app.pow-api-vault.unlock-erased'
+          : 'configure-app.pow-api-vault.unlock-incorrect';
+        this.notifications.sendError(this.translocoService.translate(key, {
+          remaining: error.remainingAttempts
+        }));
+        if (error.erased) this.pow.syncProviderFromSettings(true);
+      } else {
+        this.notifications.sendError(this.translocoService.translate('configure-app.pow-api-vault.failed'));
+      }
     } finally {
       this.powVaultPassphrase = '';
       this.powVaultBusy = false;
@@ -864,10 +873,11 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
 
 
-  // The locally encrypted Nano.to vault is independent of the RPC and PoW
-  // source selection, and must stay accessible even before a key is unlocked.
+  // Show credential management only for the explicit Nano.to PoW source.
+  // This is presentation-only: saved credentials and vault unlock are still
+  // independent of the selected wallet RPC and automatic PoW fallback.
   showNanoToPowApiKeys(): boolean {
-    return true;
+    return this.selectedPoWOption === 'nanoTo';
   }
 
   getRemotePoWOptionName(mode: 'server' | 'best' | 'custom' = 'server'): string {

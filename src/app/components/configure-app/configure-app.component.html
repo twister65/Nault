@@ -136,11 +136,22 @@
             <div class="uk-form-horizontal">
 
               <div class="uk-margin">
-                <label class="uk-form-label">{{ 'configure-app.pow-source' | transloco }}</label>
+                <!-- Use a native disclosure, consistent with Nano.to vault help:
+                     touch and keyboard work even without hover tooltips. -->
+                <details class="pow-vault-help" id="pow-source-help">
+                  <summary class="uk-form-label">
+                    {{ 'configure-app.pow-source' | transloco }}
+                    <span uk-icon="icon: info;" aria-hidden="true"></span>
+                  </summary>
+                  <div class="pow-vault-help-content uk-text-small">
+                    {{ 'configure-app.pow-source-help' | transloco }}
+                  </div>
+                </details>
                 <div class="uk-form-controls">
 
                   <div class="uk-inline uk-width-1-1">
-                    <select class="uk-select" [(ngModel)]="selectedPoWOption">
+                    <select class="uk-select" [(ngModel)]="selectedPoWOption"
+                      [attr.aria-label]="t('configure-app.pow-source')">
                       @for (pow of powOptions; track pow) {
                         <option [value]="pow.value">
                           @if (pow.value === 'server' || pow.value === 'best' || pow.value === 'custom') {
@@ -171,10 +182,22 @@
                       <span uk-icon="icon: info;" aria-hidden="true"></span>
                     </summary>
                     <div class="pow-vault-help-content uk-text-small">
-                      {{ 'configure-app.pow-api-vault.help' | transloco }}
+                      <p>{{ 'configure-app.pow-api-vault.help' | transloco }}</p>
+                      <a href="https://rpc.nano.to/privacy" target="_blank" rel="noopener noreferrer">
+                        {{ 'configure-app.pow-api-vault.privacy-policy' | transloco }}
+                      </a>
+                      ·
+                      <a href="https://rpc.nano.to/terms" target="_blank" rel="noopener noreferrer">
+                        {{ 'configure-app.pow-api-vault.terms-of-service' | transloco }}
+                      </a>
                     </div>
                   </details>
                   <div class="uk-form-controls">
+                    @if (powApiKeyVault.hasVault && !powApiKeyVault.isUnlocked) {
+                      <p class="uk-text-danger uk-text-small" role="note">
+                        {{ 'configure-app.pow-api-vault.unlock-security-warning' | transloco }}
+                      </p>
+                    }
                     <div class="uk-text-meta uk-margin-small-bottom">
                       {{ (powApiKeyVault.isUnlocked
                          ? 'configure-app.pow-api-vault.status-unlocked'
@@ -200,18 +223,6 @@
                     <div class="uk-text-small uk-margin-small-bottom">
                       <a href="https://rpc.nano.to/account/api-keys" target="_blank" rel="noopener noreferrer">
                         {{ 'configure-app.pow-api-vault.nano-to-create-key' | transloco }}
-                      </a>
-                    </div>
-                    <p class="uk-text-meta uk-margin-small-bottom">
-                      {{ 'configure-app.pow-api-vault.third-party-notice' | transloco }}
-                    </p>
-                    <div class="uk-text-small uk-margin-small-bottom">
-                      <a href="https://rpc.nano.to/privacy" target="_blank" rel="noopener noreferrer">
-                        {{ 'configure-app.pow-api-vault.privacy-policy' | transloco }}
-                      </a>
-                      ·
-                      <a href="https://rpc.nano.to/terms" target="_blank" rel="noopener noreferrer">
-                        {{ 'configure-app.pow-api-vault.terms-of-service' | transloco }}
                       </a>
                     </div>
                     @if (powApiKeyVault.getKeySummaries('nano-to').length) {

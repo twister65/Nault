@@ -308,12 +308,17 @@
       role="dialog" aria-modal="true" aria-labelledby="pow-vault-title">
       <h3 id="pow-vault-title">{{ 'configure-app.pow-api-vault.startup-title' | transloco }}</h3>
       <p>{{ 'configure-app.pow-api-vault.startup-description' | transloco }}</p>
+      <p class="uk-text-danger uk-text-small" role="note">
+        {{ 'configure-app.pow-api-vault.unlock-security-warning' | transloco }}
+      </p>
       <label for="pow-vault-startup-passphrase">{{ 'configure-app.pow-api-vault.passphrase' | transloco }}</label>
       <input id="pow-vault-startup-passphrase" class="uk-input uk-margin-small-bottom"
         type="password" name="powVaultStartupPassphrase" autocomplete="off"
         [(ngModel)]="powVaultUnlockPassphrase" />
       @if (powVaultUnlockError) {
-        <p class="uk-text-danger" role="alert">{{ 'configure-app.pow-api-vault.failed' | transloco }}</p>
+        <p class="uk-text-danger" role="alert">
+          {{ powVaultUnlockErrorKey | transloco: { remaining: powVaultUnlockRemainingAttempts } }}
+        </p>
       }
       <div class="pow-vault-dialog-actions">
         <button class="uk-button uk-button-default" type="button" [disabled]="powVaultUnlockBusy"

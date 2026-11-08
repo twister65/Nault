@@ -66,6 +66,23 @@ browser console, screenshot or exported Nault configuration.
   deleted as well. Cancel preserves the vault. **Clear PoW work cache**
   intentionally does not delete the credential vault.
 
+## Three failed vault password attempts
+
+- Users enter a **vault password** (at least 12 characters when creating
+  the vault). It is independent of the wallet password and Ledger PIN.
+- Three consecutive AES-GCM authentication failures erase **only** the local
+  encrypted Nano.to PoW API-key vault, its keys and labels. Wallets, seeds,
+  Ledger keys, RPC selection and saved application settings are unaffected.
+- The first two errors display the attempts left. Both the startup prompt
+  and configuration page share the counter, which survives reloads and contains
+  no secret. A successful unlock or vault deletion/creation resets it.
+- Malformed envelopes, crypto setup errors and concurrent changes must not
+  count as bad passwords. An AES-GCM authentication failure can also indicate
+  corrupted/tampered ciphertext: cryptography cannot distinguish this from a
+  wrong password. Both count toward three failures.
+- API keys may need to be recreated after erasure. Same-origin code with
+  storage access can still delete the vault or tamper with the counter.
+
 ## Network and trust boundaries
 
 - Only the exact Nano.to HTTPS URL/path match can receive a credential.
