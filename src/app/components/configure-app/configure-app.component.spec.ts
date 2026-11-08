@@ -2,6 +2,7 @@ import { ComponentTestModule, isolateConstructorIO } from '../../../testing/comp
 import { ComponentFixture, TestBed, fakeAsync, tick, waitForAsync } from '@angular/core/testing';
 
 import { ConfigureAppComponent } from './configure-app.component';
+import { PoWVaultUnlockError } from '../../services/pow-api-key-vault.service';
 import { WebsocketService } from '../../services/websocket.service';
 import { TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
@@ -164,6 +165,44 @@ describe('ConfigureAppComponent', () => {
     expect(component.showNanoToPowApiKeys()).toBeFalse();
     expect(settings.serverName).toBe('nano-to');
     expect(settings.serverAPI).toBe('https://rpc.nano.to/');
+  });
+
+  it('warns about irreversible erasure after three wrong vault passwords', async () => {
+    spyOn(component, 'ngOnInit').and.stub();
+    component.selectedPoWOption = 'nanoTo';
+    const vault = component.powApiKeyVault;
+    spyOnProperty(vault, 'hasVault', 'get').and.returnValue(true);
+    spyOnProperty(vault, 'isUnlocked', 'get').and.returnValue(false);
+    const transloco = TestBed.inject(TranslocoService);
+    await firstValueFrom(transloco.load(transloco.getActiveLang()));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[role="note"]')?.textContent)
+      .toContain(transloco.translate('configure-app.pow-api-vault.unlock-security-warning'));
+  });
+
+  it('reports failed vault unlock attempts and updates PoW after vault erasure', async () => {
+    const vault = component.powApiKeyVault;
+    spyOnProperty(vault, 'hasVault', 'get').and.returnValue(true);
+    spyOnProperty(vault, 'isUnlocked', 'get').and.returnValue(false);
+    const unlock = spyOn(vault, 'unlock').and.rejectWith(new PoWVaultUnlockError(2, false));
+    const notifications = (component as any).notifications;
+    const notify = spyOn(notifications, 'sendError');
+    const refresh = spyOn(component.pow, 'syncProviderFromSettings');
+
+    component.powVaultPassphrase = 'wrong vault password';
+    await component.unlockPowApiKeys();
+    expect(unlock).toHaveBeenCalledTimes(1);
+    expect(component.powVaultPassphrase).toBe('');
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+
+    unlock.and.rejectWith(new PoWVaultUnlockError(0, true));
+    component.powVaultPassphrase = 'wrong password again';
+    await component.unlockPowApiKeys();
+    expect(notify).toHaveBeenCalledTimes(2);
+    expect(refresh).toHaveBeenCalledOnceWith(true);
   });
 
   it('enables Unlock keys for a locked Nano.to vault even with an empty passphrase', async () => {
