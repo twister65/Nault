@@ -1,4 +1,17 @@
 {
+  
+    "device-unlock": {
+      "title": "Desbloqueo con seguridad del dispositivo",
+      "help": "Desbloqueo opcional con biometría o bloqueo del sistema. Nault cifra una copia local de la contraseña existente mediante WebAuthn PRF. Conserve la contraseña y la frase de recuperación. Algunos dispositivos permiten usar el PIN del sistema.",
+      "enable": "Activar desbloqueo con dispositivo",
+      "enable-after-password": "Activar desbloqueo con dispositivo tras verificar la contraseña",
+      "unlock-first": "Primero desbloquee la cartera con su contraseña.",
+      "disable": "Desactivar desbloqueo con dispositivo",
+      "use": "Desbloquear con dispositivo",
+      "enabled": "Desbloqueo con dispositivo activado.",
+      "disabled": "Desbloqueo con dispositivo desactivado.",
+      "failed": "Desbloqueo con dispositivo no disponible o cancelado. Use la contraseña."
+    },
   "about-nault": {
     "title": "Acerca de Nault",
     "platform": "Tipo de aplicación",
