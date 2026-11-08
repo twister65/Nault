@@ -193,6 +193,11 @@
                     </div>
                   </details>
                   <div class="uk-form-controls">
+                    @if (powApiKeyVault.hasVault && !powApiKeyVault.isUnlocked) {
+                      <p class="uk-text-danger uk-text-small" role="note">
+                        {{ 'configure-app.pow-api-vault.unlock-security-warning' | transloco }}
+                      </p>
+                    }
                     <div class="uk-text-meta uk-margin-small-bottom">
                       {{ (powApiKeyVault.isUnlocked
                          ? 'configure-app.pow-api-vault.status-unlocked'

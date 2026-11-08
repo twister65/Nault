@@ -8,7 +8,7 @@ import {UtilService} from './services/util.service';
 import {NotificationService} from './services/notification.service';
 import {WorkPoolService} from './services/work-pool.service';
 import {PowService} from './services/pow.service';
-import {PoWApiKeyVaultService} from './services/pow-api-key-vault.service';
+import {PoWApiKeyVaultService, PoWVaultUnlockError} from './services/pow-api-key-vault.service';
 import {Router} from '@angular/router';
 import {SwUpdate} from '@angular/service-worker';
 import {RepresentativeService} from './services/representative.service';
@@ -85,6 +85,8 @@ export class AppComponent implements OnInit, OnDestroy {
   powVaultUnlockPassphrase = '';
   powVaultUnlockBusy = false;
   powVaultUnlockError = false;
+  powVaultUnlockErrorKey = 'configure-app.pow-api-vault.failed';
+  powVaultUnlockRemainingAttempts = 0;
 
   // Prompt to unlock any saved API vault after startup, independently of
   // the selected wallet RPC, PoW mode or configured wallet.
@@ -98,6 +100,7 @@ export class AppComponent implements OnInit, OnDestroy {
     if (this.powVaultUnlockBusy || !this.powVaultUnlockPassphrase) return;
     this.powVaultUnlockBusy = true;
     this.powVaultUnlockError = false;
+    this.powVaultUnlockErrorKey = 'configure-app.pow-api-vault.failed';
     try {
       await this.powApiKeyVault.unlock(this.powVaultUnlockPassphrase);
       // The best provider is now eligible for Nano.to; refresh its session-
@@ -105,8 +108,21 @@ export class AppComponent implements OnInit, OnDestroy {
       this.pow.syncProviderFromSettings(true);
       this.showPowVaultUnlock = false;
       this.powApiKeyVault.resolveStartupUnlockDecision();
-    } catch (_) {
-      this.powVaultUnlockError = true;
+    } catch (error) {
+      if (error instanceof PoWVaultUnlockError) {
+        if (error.erased) {
+          this.showPowVaultUnlock = false;
+          this.pow.syncProviderFromSettings(true);
+          this.powApiKeyVault.resolveStartupUnlockDecision();
+          this.notifications.sendError(this.translate.translate('configure-app.pow-api-vault.unlock-erased'));
+        } else {
+          this.powVaultUnlockError = true;
+          this.powVaultUnlockErrorKey = 'configure-app.pow-api-vault.unlock-incorrect';
+          this.powVaultUnlockRemainingAttempts = error.remainingAttempts;
+        }
+      } else {
+        this.powVaultUnlockError = true;
+      }
     } finally {
       this.powVaultUnlockPassphrase = '';
       this.powVaultUnlockBusy = false;

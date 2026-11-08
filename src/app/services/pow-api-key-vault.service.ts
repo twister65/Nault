@@ -34,6 +34,28 @@ interface VaultEnvelope {
 }
 
 const VAULT_KEY = 'nault-pow-provider-keys-v2';
+const FAILED_ATTEMPTS_KEY = 'nault-pow-provider-keys-v2-failed-attempts';
+const MAX_FAILED_UNLOCKS = 3;
+
+// Only PoW API keys are erased. Wallet data and Ledger secrets are untouched.
+export class PoWVaultUnlockError extends Error {
+  constructor(public readonly remainingAttempts: number, public readonly erased: boolean) {
+    super(erased ? 'PoW API-key vault erased after three failed unlocks' : 'Incorrect vault password');
+    this.name = 'PoWVaultUnlockError';
+  }
+}
+// The counter survives reloads and belongs to one vault, identified by its random salt.
+// No password or decrypted API key is stored in this record.
+function failedUnlocks(salt: string): number {
+  try {
+    const stored = localStorage.getItem(FAILED_ATTEMPTS_KEY);
+    const obj = stored ? JSON.parse(stored) as {salt?: unknown; count?: unknown} : null;
+    if (obj?.salt !== salt || typeof obj?.count !== 'number' ||
+        !Number.isInteger(obj.count) || obj.count < 0 || obj.count >= MAX_FAILED_UNLOCKS) return 0;
+    return obj.count;
+  } catch (_) { return 0; }
+}
+function resetFailedUnlocks(): void { localStorage.removeItem(FAILED_ATTEMPTS_KEY); }
 const ITERATIONS = 600_000;
 const SUPPORTED: PoWApiProvider[] = ['nano-to'];
 const MAX_KEYS = 16;
@@ -232,6 +254,7 @@ export class PoWApiKeyVaultService {
   clearVault(): void {
     try {
       localStorage.removeItem(VAULT_KEY);
+      resetFailedUnlocks();
     } finally {
       this.lock();
       // Do not leave a queued paid PoW request waiting on a now-deleted vault.
@@ -245,24 +268,43 @@ export class PoWApiKeyVaultService {
     if (!envelope || !serialized) throw new Error('No API keys have been saved');
     try {
       const key = await keyFromPassphrase(passphrase, decodeBase64(envelope.salt));
-      const plaintext = await getCrypto().subtle.decrypt(
-        { name: 'AES-GCM', iv: decodeBase64(envelope.iv),
-          additionalData: authenticatedMetadata(envelope.metadata) },
-        key, decodeBase64(envelope.data)
-      );
+      let plaintext: ArrayBuffer;
+      try {
+        plaintext = await getCrypto().subtle.decrypt(
+          { name: 'AES-GCM', iv: decodeBase64(envelope.iv),
+            additionalData: authenticatedMetadata(envelope.metadata) },
+          key, decodeBase64(envelope.data)
+        );
+      } catch (error) {
+        // AES-GCM cannot distinguish a wrong password from tampered ciphertext.
+        // Do not count malformed vaults, crypto setup errors or storage races.
+        if (!(error instanceof DOMException) || error.name !== 'OperationError') throw error;
+        if (localStorage.getItem(VAULT_KEY) !== serialized) {
+          throw new Error('Vault changed during unlock');
+        }
+        const count = failedUnlocks(envelope.salt) + 1;
+        if (count >= MAX_FAILED_UNLOCKS) {
+          this.clearVault();
+          throw new PoWVaultUnlockError(0, true);
+        }
+        localStorage.setItem(FAILED_ATTEMPTS_KEY, JSON.stringify({salt: envelope.salt, count}));
+        throw new PoWVaultUnlockError(MAX_FAILED_UNLOCKS - count, false);
+      }
       const parsed: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(plaintext));
       const data = checkData(parsed);
       if (JSON.stringify(summaries(data)) !== JSON.stringify(envelope.metadata) ||
           localStorage.getItem(VAULT_KEY) !== serialized) {
         throw new Error('Authenticated key labels or vault changed');
       }
+      resetFailedUnlocks();
       this.data = data;
       this.unlocked = true;
       this.sessionKey = key;
       this.sessionEnvelope = serialized;
-    } catch (_) {
+    } catch (error) {
       this.lock();
-      throw new Error('Incorrect passphrase or corrupted credential vault');
+      if (error instanceof PoWVaultUnlockError) throw error;
+      throw new Error('Unable to unlock credential vault');
     }
   }
   private async seal(data: VaultData, passphrase: string): Promise<void> {
@@ -283,6 +325,7 @@ export class PoWApiKeyVaultService {
     };
     const serialized = JSON.stringify(envelope);
     localStorage.setItem(VAULT_KEY, serialized);
+    resetFailedUnlocks();
     this.data = checked;
     this.unlocked = true;
     this.sessionKey = key;
@@ -371,6 +414,7 @@ export class PoWApiKeyVaultService {
     const entries = this.data.entries.filter(entry => entry.id !== chosen);
     if (!entries.length) {
       localStorage.removeItem(VAULT_KEY);
+      resetFailedUnlocks();
       this.lock();
       return;
     }
