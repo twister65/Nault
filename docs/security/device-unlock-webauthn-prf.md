@@ -25,16 +25,9 @@ claim to enforce biometrics-only authentication.
   the user can explicitly opt in to device unlock. It is offered in the
   startup vault dialog and in PoW settings. The original PoW AES-GCM/PBKDF2
   ciphertext and three-wrong-password destructive policy remain unchanged.
-- **Software wallets** (`seed`, `privateKey`, `expandedKey`):
-  the encrypted wallet must first be unlocked with its normal password.
-  An **unchecked opt-in checkbox in the regular password-unlock dialog**
-  allows enabling device unlock during the first wallet unlock (including
-  a prompt initiated by sending XNO). A successful password verification
-  is required before the device's biometric/system unlock enrollment is
-  attempted; subsequent prompts show the device-unlock button. The user
-  can also enroll from Manage Wallet while the wallet is already unlocked.
-  If the device prompt is cancelled or PRF is unavailable, wallet unlocking
-  still succeeds and sending can continue using the normal password.
+- **Software wallets** (`seed`, `privateKey`, `expandedKey`): the user must
+  first unlock the software wallet with its normal password and explicitly
+  enroll. Subsequent locked-wallet prompts can offer device unlock.
   Existing `nault:v2:` wallet ciphertext is not re-encrypted or replaced.
 - **Ledger wallets**: excluded. No Ledger seed is extracted, cached or bypassed;
   WebHID/BLE and transaction confirmations remain independent.

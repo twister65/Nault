@@ -128,30 +128,19 @@
       <input #passwordInput autofocus type="password" [(ngModel)]="unlockPassword" (keyup.enter)="unlockWallet()"
         [class]="{ 'uk-input': true, 'password-input': true, 'uk-form-danger': !mayAttemptUnlock }"
         [placeholder]="( mayAttemptUnlock ? 'Enter wallet password' : 'Incorrect password' )"
-        [disabled]="!mayAttemptUnlock || walletPasswordUnlockBusy || deviceUnlockBusy"
+        [disabled]="!mayAttemptUnlock"
         >
     </div>
-    @if (deviceUnlockSupported && wallet.locked && wallet.type !== 'ledger' &&
-          walletService.getDeviceUnlockBinding() && !deviceUnlock.has('wallet')) {
-      <div class="uk-modal-body uk-padding-small">
-        <label class="uk-text-small uk-display-block">
-          <input class="uk-checkbox" type="checkbox" [(ngModel)]="enableDeviceUnlockAfterPassword"
-            [ngModelOptions]="{ standalone: true }"
-            [disabled]="walletPasswordUnlockBusy || deviceUnlockBusy || !mayAttemptUnlock">
-          {{ 'device-unlock.enable-after-password' | transloco }}
-        </label>
-      </div>
-    }
     @if (deviceUnlockSupported && deviceUnlock.has('wallet') && walletService.getDeviceUnlockBinding()) {
       <div class="uk-modal-body uk-padding-small">
         <button type="button" class="uk-button uk-button-default uk-width-1-1"
-          [disabled]="deviceUnlockBusy || walletPasswordUnlockBusy || !mayAttemptUnlock"
+          [disabled]="deviceUnlockBusy || !mayAttemptUnlock"
           (click)="unlockWalletWithDevice()">{{ 'device-unlock.use' | transloco }}</button>
       </div>
     }
     <div class="uk-modal-footer uk-text-right nlt-button-group">
-      <button class="uk-button uk-button-default uk-modal-close" type="button" [disabled]="walletPasswordUnlockBusy || deviceUnlockBusy">{{ 'general.cancel' | transloco }}</button>
-      <button class="uk-button uk-button-primary" type="button" (click)="unlockWallet()" [disabled]="!mayAttemptUnlock || walletPasswordUnlockBusy || deviceUnlockBusy">{{ 'ui-ledger.unlock' | transloco }}</button>
+      <button class="uk-button uk-button-default uk-modal-close" type="button">{{ 'general.cancel' | transloco }}</button>
+      <button class="uk-button uk-button-primary" type="button" (click)="unlockWallet()" [disabled]="!mayAttemptUnlock">{{ 'ui-ledger.unlock' | transloco }}</button>
     </div>
   </div>
 </div>
