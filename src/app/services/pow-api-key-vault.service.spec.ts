@@ -1,14 +1,18 @@
 import { TestBed } from '@angular/core/testing';
-import { PoWApiKeyVaultService } from './pow-api-key-vault.service';
+import { PoWApiKeyVaultService, PoWVaultUnlockError } from './pow-api-key-vault.service';
 
 describe('PoWApiKeyVaultService encrypted local credentials', () => {
   let vault: PoWApiKeyVaultService;
   let original: string | null;
+  let originalFailures: string | null;
   const keyName = 'nault-pow-provider-keys-v2';
+  const failuresName = 'nault-pow-provider-keys-v2-failed-attempts';
   const pass = 'a strong local PoW passphrase';
   beforeEach(() => {
     original = localStorage.getItem(keyName);
+    originalFailures = localStorage.getItem(failuresName);
     localStorage.removeItem(keyName);
+    localStorage.removeItem(failuresName);
     TestBed.configureTestingModule({});
     vault = TestBed.inject(PoWApiKeyVaultService);
     vault.lock();
@@ -17,7 +21,85 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
     vault.lock();
     if (original === null) localStorage.removeItem(keyName);
     else localStorage.setItem(keyName, original);
+    if (originalFailures === null) localStorage.removeItem(failuresName);
+    else localStorage.setItem(failuresName, originalFailures);
   });
+  it('erases only the encrypted PoW vault after exactly three consecutive bad passwords', async () => {
+    const secret = 'NANO-TEST-KEY-98765432';
+    await vault.saveKey('nano-to', secret, pass, 'My Nano key');
+    vault.lock();
+    const encrypted = localStorage.getItem(keyName);
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      let error: unknown;
+      try { await vault.unlock('definitely not the vault password'); }
+      catch (caught) { error = caught; }
+      expect(error instanceof PoWVaultUnlockError).toBeTrue();
+      const failure = error as PoWVaultUnlockError;
+      expect(failure.remainingAttempts).toBe(3 - attempt);
+      expect(failure.erased).toBe(attempt === 3);
+      expect(vault.isUnlocked).toBeFalse();
+      expect(vault.getAuthorizedHeaders('https://rpc.nano.to/')).toBeNull();
+      if (attempt < 3) {
+        expect(localStorage.getItem(keyName)).toBe(encrypted);
+        expect(vault.getKeySummaries('nano-to').length).toBe(1);
+        const stored = localStorage.getItem(failuresName) || '';
+        expect(stored).not.toContain(pass);
+        expect(stored).not.toContain(secret);
+      }
+    }
+    expect(vault.hasVault).toBeFalse();
+    expect(vault.getKeySummaries()).toEqual([]);
+    expect(localStorage.getItem(keyName)).toBeNull();
+    expect(localStorage.getItem(failuresName)).toBeNull();
+    await expectAsync(vault.unlock(pass)).toBeRejected(); // Cannot recover erased keys.
+  });
+
+  it('persists the shared failed-unlock counter across sessions and resets after success', async () => {
+    await vault.saveKey('nano-to', 'NANO-PERSIST-KEY-1234567', pass);
+    vault.lock();
+    let firstError: unknown;
+    try { await vault.unlock('wrong password for vault'); } catch (error) { firstError = error; }
+    expect((firstError as PoWVaultUnlockError).remainingAttempts).toBe(2);
+    // A new service instance simulates startup/reloading the PWA.
+    const restartedVault = new PoWApiKeyVaultService();
+    let secondError: unknown;
+    try { await restartedVault.unlock('wrong again on restart'); } catch (error) { secondError = error; }
+    expect((secondError as PoWVaultUnlockError).remainingAttempts).toBe(1);
+    expect(restartedVault.hasVault).toBeTrue();
+    await restartedVault.unlock(pass);
+    expect(localStorage.getItem(failuresName)).toBeNull();
+    restartedVault.lock();
+    let afterSuccess: unknown;
+    try { await restartedVault.unlock('wrong after success'); } catch (error) { afterSuccess = error; }
+    expect((afterSuccess as PoWVaultUnlockError).remainingAttempts).toBe(2);
+    expect(restartedVault.hasVault).toBeTrue();
+  });
+
+  it('does not count malformed vault storage as an incorrect password', async () => {
+    await vault.saveKey('nano-to', 'NANO-ERROR-KEY-1234567', pass);
+    const valid = localStorage.getItem(keyName)!;
+    vault.lock();
+    localStorage.setItem(keyName, '{"v":2,"salt":"corrupt"}');
+    await expectAsync(vault.unlock('wrong-password')).toBeRejected();
+    expect(localStorage.getItem(failuresName)).toBeNull();
+    expect(vault.hasVault).toBeTrue();
+    localStorage.setItem(keyName, valid);
+    await vault.unlock(pass);
+    expect(vault.isUnlocked).toBeTrue();
+  });
+
+  it('removes the failed-unlock counter when clearing the vault', async () => {
+    await vault.saveKey('nano-to', 'NANO-ERASE-KEY-1234567', pass);
+    vault.lock();
+    await expectAsync(vault.unlock('wrong-password')).toBeRejected();
+    expect(localStorage.getItem(failuresName)).toBeTruthy();
+    vault.clearVault();
+    expect(localStorage.getItem(failuresName)).toBeNull();
+    expect(localStorage.getItem(keyName)).toBeNull();
+    await vault.saveKey('nano-to', 'NANO-NEW-KEY-1234567', 'new vault password 123');
+    expect(localStorage.getItem(failuresName)).toBeNull();
+  });
+
   it('encrypts AES-GCM at rest and requires an explicit unlock after restart', async () => {
     const secret = 'nano-TEST-KEY-987654321';
     await vault.saveKey('nano-to', secret, pass);
