@@ -1,4 +1,17 @@
 {
+  
+    "device-unlock": {
+      "title": "Déverrouillage avec l'appareil",
+      "help": "Déverrouillage rapide facultatif avec la biométrie ou le verrouillage système. Nault chiffre localement une copie du mot de passe existant avec une clé WebAuthn PRF. Cette option est liée à cette origine et à l'identifiant de l'appareil. Conservez votre mot de passe et votre phrase de récupération : ce n'est pas une sauvegarde. Certains appareils acceptent le code système à la place de la biométrie.",
+      "enable": "Activer le déverrouillage par l'appareil",
+      "enable-after-password": "Activer le déverrouillage par l'appareil après vérification du mot de passe",
+      "unlock-first": "Déverrouillez d'abord ce portefeuille avec son mot de passe.",
+      "disable": "Désactiver le déverrouillage par l'appareil",
+      "use": "Déverrouiller avec l'appareil",
+      "enabled": "Déverrouillage par l'appareil activé pour ces données chiffrées.",
+      "disabled": "Déverrouillage par l'appareil désactivé pour cette installation.",
+      "failed": "Déverrouillage par l'appareil indisponible, annulé ou expiré. Utilisez le mot de passe."
+    },
   "about-nault": {
     "title": "À propos de Nault",
     "platform": "Type d’application",
