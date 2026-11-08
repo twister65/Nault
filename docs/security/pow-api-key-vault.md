@@ -66,7 +66,7 @@ browser console, screenshot or exported Nault configuration.
   deleted as well. Cancel preserves the vault. **Clear PoW work cache**
   intentionally does not delete the credential vault.
 
-## Optional device unlock (PR #89; draft)
+## Optional device unlock (PR #89; PWA)
 
 When explicitly enabled after a correct vault-password unlock, a separate
 per-origin WebAuthn PRF credential wraps an **encrypted local copy of the
