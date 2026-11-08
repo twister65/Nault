@@ -1,4 +1,17 @@
 {
+  
+    "device-unlock": {
+      "title": "Mit Geräteschutz entsperren",
+      "help": "Optionales Entsperren mit Biometrie oder Gerätesperre. Nault verschlüsselt eine lokale Kopie des bestehenden Passworts mit WebAuthn PRF. Bewahren Sie Passwort und Wiederherstellungsphrase auf. Auf manchen Geräten ist auch die System-PIN zulässig.",
+      "enable": "Geräte-Entsperrung aktivieren",
+      "enable-after-password": "Geräte-Entsperrung nach Passwortprüfung aktivieren",
+      "unlock-first": "Entsperren Sie zuerst die Wallet mit dem Passwort.",
+      "disable": "Geräte-Entsperrung deaktivieren",
+      "use": "Mit Gerät entsperren",
+      "enabled": "Geräte-Entsperrung aktiviert.",
+      "disabled": "Geräte-Entsperrung deaktiviert.",
+      "failed": "Geräte-Entsperrung nicht verfügbar oder abgebrochen. Verwenden Sie das Passwort."
+    },
   "change-rep-widget": {
     "acceptable-representative": "Akzeptabler Repräsentant",
     "bad-representative": "Schlechter Repräsentant",
