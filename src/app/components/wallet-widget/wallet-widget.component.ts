@@ -20,6 +20,9 @@ export class WalletWidgetComponent implements OnInit {
   readonly deviceUnlock = inject(DeviceUnlockService);
   deviceUnlockSupported = false;
   deviceUnlockBusy = false;
+  walletPasswordUnlockBusy = false;
+  // Enrollment needs explicit consent; it is never enabled automatically.
+  enableDeviceUnlockAfterPassword = false;
 
   wallet = this.walletService.wallet;
 
@@ -96,11 +99,13 @@ export class WalletWidgetComponent implements OnInit {
   }
 
   showModal() {
+    this.enableDeviceUnlockAfterPassword = false;
     this.unlockPassword = '';
     this.modal.show();
   }
 
   onModalHidden() {
+    this.enableDeviceUnlockAfterPassword = false;
     this.unlockPassword = '';
     this.walletService.wallet.unlockModalRequested$.next(false);
   }
@@ -197,46 +202,69 @@ export class WalletWidgetComponent implements OnInit {
   }
 
   async unlockWallet() {
-    if (this.mayAttemptUnlock === false) {
-      return;
-    }
+    if (!this.mayAttemptUnlock || this.walletPasswordUnlockBusy || this.deviceUnlockBusy ||
+        this.wallet.type === 'ledger' || !this.wallet.locked) return;
 
+    // Capture the password before clearing the input or presenting a native
+    // authenticator prompt; the password and enrollment are never persisted in plaintext.
+    const password = this.unlockPassword;
+    const enroll = this.deviceUnlockSupported && this.enableDeviceUnlockAfterPassword &&
+      !this.deviceUnlock.has('wallet');
+    const binding = enroll ? this.walletService.getDeviceUnlockBinding() : null;
+
+    this.walletPasswordUnlockBusy = true;
     this.mayAttemptUnlock = false;
-
     if (this.timeoutIdAllowingUnlock !== null) {
       clearTimeout(this.timeoutIdAllowingUnlock);
+      this.timeoutIdAllowingUnlock = null;
     }
 
-    this.timeoutIdAllowingUnlock = setTimeout(
-      () => {
-        this.allowUnlock({ focusInputElement: true });
-      },
-      500
-    );
+    try {
+      const unlocked = await this.walletService.unlockWallet(password);
+      if (!unlocked) {
+        this.notificationService.sendError(this.translocoService.translate('ui-notifications.wallet-password-incorrect'));
+        // Keep the existing retry delay only for an incorrect password, not
+        // for an in-progress PBKDF2/WebAuthn operation.
+        this.timeoutIdAllowingUnlock = setTimeout(
+          () => this.allowUnlock({ focusInputElement: true }), 500
+        );
+        return;
+      }
 
-    const unlocked = await this.walletService.unlockWallet(this.unlockPassword);
-
-    if (unlocked) {
       this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.wallet-unlocked'));
-      this.modal.hide();
-      if (this.unlockPassword.trim().length < 12) {
-        // eslint-disable-next-line max-len
+      if (password.trim().length < 12) {
         this.notificationService.sendWarning(this.translocoService.translate('ui-notifications.wallet-password-weak'));
       }
 
-      if (this.timeoutIdAllowingUnlock !== null) {
-        clearTimeout(this.timeoutIdAllowingUnlock);
-        this.timeoutIdAllowingUnlock = null;
+      if (enroll && binding && !this.walletService.isLocked() &&
+          binding === this.walletService.getDeviceUnlockBinding()) {
+        // The checkbox is opt-in, and this native ceremony is performed only
+        // after the existing wallet password has been verified successfully.
+        try {
+          await this.deviceUnlock.enroll('wallet', password, binding);
+          if (this.walletService.isLocked() || binding !== this.walletService.getDeviceUnlockBinding()) {
+            this.deviceUnlock.remove('wallet');
+            throw new Error('Wallet changed during device enrollment');
+          }
+          this.notificationService.sendSuccess(this.translocoService.translate('device-unlock.enabled'));
+        } catch {
+          // Failure or cancellation must not undo a valid wallet unlock or
+          // interrupt the requested send. The password remains usable.
+          this.notificationService.sendWarning(this.translocoService.translate('device-unlock.failed'));
+        }
       }
 
+      this.modal.hide();
       this.allowUnlock({ focusInputElement: false });
-    } else {
-      this.notificationService.sendError(this.translocoService.translate('ui-notifications.wallet-password-incorrect'));
+    } finally {
+      this.walletPasswordUnlockBusy = false;
+      this.enableDeviceUnlockAfterPassword = false;
     }
   }
 
   async unlockWalletWithDevice(): Promise<void> {
-    if (this.deviceUnlockBusy || !this.mayAttemptUnlock || !this.wallet.locked) return;
+    if (this.deviceUnlockBusy || this.walletPasswordUnlockBusy || !this.mayAttemptUnlock ||
+        this.wallet.type === 'ledger' || !this.wallet.locked) return;
     const binding = this.walletService.getDeviceUnlockBinding();
     if (!binding) return;
     this.deviceUnlockBusy = true;
