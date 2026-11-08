@@ -224,4 +224,113 @@ describe('WalletWidgetComponent', () => {
     expect(loadLedger).toHaveBeenCalledWith(false, false);
     expect(component.ledgerService.transportMode).toBe('USB');
   });
+  describe('hot-wallet device unlock enrollment from the password prompt', () => {
+    function fakePrompt(options: {
+      enrolled?: boolean;
+      consent?: boolean;
+      unlockSuccessful?: boolean;
+      enrollmentFails?: boolean;
+    } = {}) {
+      const widget = Object.create(WalletWidgetComponent.prototype) as any;
+      const { enrolled = false, consent = false, unlockSuccessful = true,
+        enrollmentFails = false } = options;
+      widget.wallet = { type: 'seed', locked: true };
+      widget.unlockPassword = 'correct test password 1234';
+      widget.enableDeviceUnlockAfterPassword = consent;
+      widget.mayAttemptUnlock = true;
+      widget.walletPasswordUnlockBusy = false;
+      widget.deviceUnlockBusy = false;
+      widget.deviceUnlockSupported = true;
+      widget.timeoutIdAllowingUnlock = null;
+      widget.modal = { hide: jasmine.createSpy('hide') };
+      widget.translocoService = { translate: (key: string) => key };
+      widget.notificationService = {
+        sendSuccess: jasmine.createSpy('sendSuccess'),
+        sendError: jasmine.createSpy('sendError'),
+        sendWarning: jasmine.createSpy('sendWarning')
+      };
+      const passwordUnlock = jasmine.createSpy('unlockWallet').and.callFake(async () => {
+        if (unlockSuccessful) widget.wallet.locked = false;
+        return unlockSuccessful;
+      });
+      widget.walletService = {
+        unlockWallet: passwordUnlock,
+        getDeviceUnlockBinding: jasmine.createSpy('binding').and.returnValue('seed:encrypted-v2-wallet'),
+        isLocked: () => widget.wallet.locked
+      };
+      const enroll = jasmine.createSpy('enroll').and.callFake(async () => {
+        if (enrollmentFails) throw new Error('PRF cancelled');
+      });
+      widget.deviceUnlock = {
+        has: jasmine.createSpy('has').and.returnValue(enrolled),
+        enroll,
+        remove: jasmine.createSpy('remove')
+      };
+      return { widget, passwordUnlock, enroll };
+    }
+
+    it('offers opt-in only and enrolls after verifying the software wallet password', async () => {
+      const { widget, passwordUnlock, enroll } = fakePrompt({ consent: true });
+      await widget.unlockWallet();
+      expect(passwordUnlock).toHaveBeenCalledWith('correct test password 1234');
+      expect(enroll).toHaveBeenCalledOnceWith('wallet', 'correct test password 1234', 'seed:encrypted-v2-wallet');
+      expect(widget.modal.hide).toHaveBeenCalled();
+      expect(widget.unlockPassword).toBe('');
+      expect(widget.enableDeviceUnlockAfterPassword).toBeFalse();
+      expect(widget.walletPasswordUnlockBusy).toBeFalse();
+    });
+
+    it('never enrolls without explicit checkbox consent', async () => {
+      const { widget, enroll } = fakePrompt();
+      await widget.unlockWallet();
+      expect(enroll).not.toHaveBeenCalled();
+      expect(widget.modal.hide).toHaveBeenCalled();
+    });
+
+    it('never enrolls on a wrong password and keeps the prompt open', async () => {
+      const { widget, enroll } = fakePrompt({ consent: true, unlockSuccessful: false });
+      await widget.unlockWallet();
+      expect(enroll).not.toHaveBeenCalled();
+      expect(widget.modal.hide).not.toHaveBeenCalled();
+      expect(widget.notificationService.sendError)
+        .toHaveBeenCalledWith('ui-notifications.wallet-password-incorrect');
+      clearTimeout(widget.timeoutIdAllowingUnlock);
+    });
+
+    it('does not block a valid send unlock when biometric enrollment is cancelled', async () => {
+      const { widget, enroll } = fakePrompt({ consent: true, enrollmentFails: true });
+      await widget.unlockWallet();
+      expect(enroll).toHaveBeenCalled();
+      expect(widget.modal.hide).toHaveBeenCalled();
+      expect(widget.notificationService.sendWarning).toHaveBeenCalledWith('device-unlock.failed');
+    });
+
+    it('does not replace an existing device enrollment', async () => {
+      const { widget, enroll } = fakePrompt({ enrolled: true, consent: true });
+      await widget.unlockWallet();
+      expect(enroll).not.toHaveBeenCalled();
+    });
+
+    it('keeps Ledger wallets independent from biometric enrollment', async () => {
+      const { widget, passwordUnlock, enroll } = fakePrompt({ consent: true });
+      widget.wallet.type = 'ledger';
+      await widget.unlockWallet();
+      expect(passwordUnlock).not.toHaveBeenCalled();
+      expect(enroll).not.toHaveBeenCalled();
+    });
+
+    it('resets transient opt-in when the dialog is dismissed or reopened', () => {
+      const { widget } = fakePrompt({ consent: true });
+      widget.wallet = { type: 'seed', locked: true, unlockModalRequested$: {
+        next: jasmine.createSpy('next')
+      } };
+      widget.onModalHidden();
+      expect(widget.enableDeviceUnlockAfterPassword).toBeFalse();
+      widget.enableDeviceUnlockAfterPassword = true;
+      widget.modal.show = jasmine.createSpy('show');
+      widget.showModal();
+      expect(widget.enableDeviceUnlockAfterPassword).toBeFalse();
+    });
+  });
+
 });
