@@ -410,7 +410,7 @@ export class WalletService {
     }
 
     this.wallet.selectedAccountId = walletJson.selectedAccountId || null;
-    this.accountsChanged$.next();
+    this.accountsChanged$?.next();
 
     return this.wallet;
   }
@@ -457,7 +457,7 @@ export class WalletService {
       this.websocket.subscribeAccounts(this.wallet.accounts.map(a => a.id));
     }
 
-    this.accountsChanged$.next();
+    this.accountsChanged$?.next();
     return true;
   }
 
@@ -739,7 +739,7 @@ export class WalletService {
     this.wallet.accounts = accounts;
     this.websocket.subscribeAccounts(accounts.map(account => account.id));
     this.saveWalletExport();
-    this.accountsChanged$.next();
+    this.accountsChanged$?.next();
     this.informNewWallet();
     void this.reloadBalances().catch(() =>
       this.notifications.sendWarning('Unable to refresh balances. Check your connection.'));
@@ -856,7 +856,6 @@ export class WalletService {
     this.wallet.selectedAccount = null;
     this.wallet.selectedAccount$.next(null);
     this.wallet.pendingBlocks = [];
-    this.accountsChanged$.next();
   }
 
   isConfigured() {
@@ -1188,7 +1187,7 @@ export class WalletService {
     this.websocket.subscribeAccounts([newAccount.id]);
 
     this.saveWalletExport();
-    this.accountsChanged$.next();
+    this.accountsChanged$?.next();
 
     return newAccount;
   }
@@ -1207,7 +1206,7 @@ export class WalletService {
     // Reload the balances, save new wallet state
     await this.reloadBalances();
     this.saveWalletExport();
-    this.accountsChanged$.next();
+    this.accountsChanged$?.next();
 
     return true;
   }
