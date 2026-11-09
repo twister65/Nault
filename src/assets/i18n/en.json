@@ -157,6 +157,20 @@
     "you-have-marked-this-representative-as-trusted": "You have marked this representative as trusted, meaning its status will remain \"Good\" even in case of severe issues with uptime or weight distribution."
   },
   "configure-app": {
+    "receivable-push": {
+      "title": "Android receivable notifications",
+      "description": "Opt in to system Web Push alerts when new XNO becomes receivable, even while this PWA is closed. Your public account addresses and a browser push endpoint are shared with the notification server. No seed or private key is sent.",
+      "enable": "Enable notifications",
+      "disable": "Disable notifications",
+      "failed": "Unable to update Web Push registration. Check the service and try again.",
+      "deleted": "Notifications must be disabled on the server before wallet data can be deleted. Connect to the Internet and retry.",
+      "status.unsupported": "Not supported on this platform or browser.",
+      "status.unavailable": "Push server is not configured or is unavailable.",
+      "status.ready": "Available (not enabled).",
+      "status.enabled": "Enabled for this browser.",
+      "status.busy": "Updating registration...",
+      "status.error": "Registration needs attention. Retry or disable it."
+    },
     "advanced-options": "Advanced Options",
     "allow-external-requests": "Allow External Requests",
     "api-server": "API Server",

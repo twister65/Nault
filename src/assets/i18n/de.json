@@ -41,6 +41,20 @@
     "you-have-marked-this-representative-as-trusted": "Sie haben diesen Repräsentanten als vertrauenswürdig markiert. Sein Status bleibt daher auch bei schwerwiegenden Problemen mit Verfügbarkeit oder Stimmgewicht „Gut“."
   },
   "configure-app": {
+    "receivable-push": {
+      "title": "Android-Benachrichtigungen für ausstehende Eingänge",
+      "description": "Aktivieren Sie Web-Push-Hinweise für empfangsbereite XNO, auch bei geschlossener PWA. Öffentliche Kontoadressen und Browser-Push-Endpunkt werden an den Benachrichtigungsserver gesendet. Seeds und private Schlüssel werden nie übertragen.",
+      "enable": "Benachrichtigungen aktivieren",
+      "disable": "Benachrichtigungen deaktivieren",
+      "failed": "Web-Push-Abonnement konnte nicht aktualisiert werden. Dienst prüfen und erneut versuchen.",
+      "deleted": "Vor dem Löschen der Wallet-Daten müssen die Benachrichtigungen auf dem Server deaktiviert werden. Internetverbindung herstellen und erneut versuchen.",
+      "status.unsupported": "Auf dieser Plattform oder in diesem Browser nicht unterstützt.",
+      "status.unavailable": "Push-Server nicht eingerichtet oder nicht verfügbar.",
+      "status.ready": "Verfügbar (nicht aktiviert).",
+      "status.enabled": "Für diesen Browser aktiviert.",
+      "status.busy": "Abonnement wird aktualisiert...",
+      "status.error": "Abonnement benötigt Aufmerksamkeit. Erneut versuchen oder deaktivieren."
+    },
     "advanced-options": "Erweiterte Optionen",
     "allow-external-requests": "Externe Anfragen erlauben",
     "api-server": "API-Server",

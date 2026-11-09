@@ -157,6 +157,20 @@
     "you-have-marked-this-representative-as-trusted": "Has marcado este representante como de confianza, por lo que su estado seguirá siendo «Bueno» incluso si presenta problemas graves de disponibilidad o de distribución del peso de voto."
   },
   "configure-app": {
+    "receivable-push": {
+      "title": "Notificaciones Android de fondos pendientes",
+      "description": "Active las alertas Web Push cuando haya XNO pendientes de recibir, incluso con la PWA cerrada. Sus direcciones públicas y el identificador push del navegador se comparten con el servidor. Nunca se envían semillas ni claves privadas.",
+      "enable": "Activar notificaciones",
+      "disable": "Desactivar notificaciones",
+      "failed": "No se pudo actualizar la suscripción Web Push. Compruebe el servicio e inténtelo de nuevo.",
+      "deleted": "Debe desactivar las notificaciones en el servidor antes de borrar la cartera. Conéctese a Internet e inténtelo de nuevo.",
+      "status.unsupported": "No disponible en esta plataforma o navegador.",
+      "status.unavailable": "Servidor push no configurado o no disponible.",
+      "status.ready": "Disponible (sin activar).",
+      "status.enabled": "Activado para este navegador.",
+      "status.busy": "Actualizando suscripción...",
+      "status.error": "La suscripción requiere atención. Reintente o desactívela."
+    },
     "advanced-options": "Opciones avanzadas",
     "allow-external-requests": "Permitir solicitudes externas",
     "api-server": "Servidor API",

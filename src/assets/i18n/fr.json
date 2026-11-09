@@ -157,6 +157,20 @@
     "you-have-marked-this-representative-as-trusted": "Vous avez marqué ce représentant comme fiable : son statut restera « Bon », même si sa disponibilité ou son poids de vote posent de sérieux problèmes."
   },
   "configure-app": {
+    "receivable-push": {
+      "title": "Notifications Android des réceptions en attente",
+      "description": "Recevoir, après activation volontaire, des notifications système lorsqu'un XNO devient recevable, même si cette PWA est fermée. Vos adresses publiques et un identifiant de notification du navigateur sont transmis au serveur. Aucune seed ni clé privée n'est envoyée.",
+      "enable": "Activer les notifications",
+      "disable": "Désactiver les notifications",
+      "failed": "Impossible de modifier l'abonnement Web Push. Vérifiez le service et réessayez.",
+      "deleted": "Les notifications doivent être désactivées côté serveur avant la suppression des données du portefeuille. Reconnectez-vous à Internet et réessayez.",
+      "status.unsupported": "Non pris en charge sur cette plateforme ou ce navigateur.",
+      "status.unavailable": "Serveur de notifications non configuré ou indisponible.",
+      "status.ready": "Disponible (non activé).",
+      "status.enabled": "Activé pour ce navigateur.",
+      "status.busy": "Mise à jour de l'abonnement...",
+      "status.error": "L'abonnement nécessite une intervention. Réessayez ou désactivez-le."
+    },
     "advanced-options": "Options avancées",
     "allow-external-requests": "Autoriser les requêtes externes",
     "api-server": "Serveur API",

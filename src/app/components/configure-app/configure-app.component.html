@@ -374,6 +374,34 @@
 
           <div class="uk-width-1-1">
             <div class="uk-form-horizontal">
+              <div class="uk-margin">
+                <label class="uk-form-label">{{ 'configure-app.receivable-push.title' | transloco }}</label>
+                <div class="uk-form-controls">
+                  <p class="uk-text-small uk-text-meta">
+                    {{ 'configure-app.receivable-push.description' | transloco }}
+                  </p>
+                  <p class="uk-text-small" role="status" aria-live="polite">
+                    {{ ('configure-app.receivable-push.status.' + receivablePush.status) | transloco }}
+                  </p>
+                  @if (receivablePush.hasSubscription) {
+                    <button type="button" class="uk-button uk-button-default"
+                      [disabled]="receivablePush.busy" (click)="disableReceivablePush()">
+                      {{ 'configure-app.receivable-push.disable' | transloco }}
+                    </button>
+                  } @else {
+                    <button type="button" class="uk-button uk-button-primary"
+                      [disabled]="receivablePush.busy || receivablePush.status !== 'ready' || !wallet.accounts.length"
+                      (click)="enableReceivablePush()">
+                      {{ 'configure-app.receivable-push.enable' | transloco }}
+                    </button>
+                  }
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="uk-width-1-1">
+            <div class="uk-form-horizontal">
 
               <div class="uk-margin">
                 <label class="uk-form-label">{{ 'configure-app.decentralized-aliases' | transloco }} <span uk-icon="icon: info;" uk-tooltip [title]="t('configure-app.decentralized-aliases-require-external-requests')"></span></label>
