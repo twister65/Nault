@@ -2,6 +2,7 @@ import { ComponentTestModule, isolateConstructorIO } from '../../testing/compone
 import { TestBed, inject } from '@angular/core/testing';
 
 import { NanoBlockService } from './nano-block.service';
+import { DEFAULT_REPRESENTATIVE } from './default-representative';
 
 describe('NanoBlockService', () => {
   beforeEach(() => {
@@ -79,5 +80,19 @@ describe('NanoBlockService Ledger signing boundary (#58)', () => {
     expect(service.ledgerService.signBlock).toHaveBeenCalledTimes(1);
     expect(service.api.process).not.toHaveBeenCalled();
     expect(service.notifications.sendWarning).toHaveBeenCalledWith('Transaction denied on Ledger device');
+  });
+
+  it('uses the Twister32 default on account opening but keeps the existing representative', async () => {
+    const {service, account} = setup();
+    service.settings.settings.defaultRepresentative = DEFAULT_REPRESENTATIVE.id;
+    service.api.blocksInfo = jasmine.createSpy('blocksInfo').and.resolveTo({ blocks: { source: { amount: '1' } } });
+    service.signStateBlock = jasmine.createSpy('signStateBlock');
+    service.informNewRep = jasmine.createSpy('informNewRep');
+    service.api.accountInfo.and.resolveTo(null);
+    expect(await service.generateReceive(account, 'source', false)).toBe('processed');
+    expect(service.api.process.calls.mostRecent().args[0].representative).toBe(DEFAULT_REPRESENTATIVE.id);
+    service.api.accountInfo.and.resolveTo({ frontier: 'existing', balance: '1', representative: 'nano_existing' });
+    expect(await service.generateReceive(account, 'source', false)).toBe('processed');
+    expect(service.api.process.calls.mostRecent().args[0].representative).toBe('nano_existing');
   });
 });

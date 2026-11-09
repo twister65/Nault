@@ -44,12 +44,14 @@
                       <div uk-grid>
                         <div class="uk-width-expand uk-text-truncate">
                           <a (click)="editEntry(representative)" class="uk-link-text" [title]="'ui-manage-representatives.edit' | transloco" uk-tooltip>{{ representative.name }}</a>
+                          @if (representative.trusted) {
+                            <div class="uk-text-small uk-text-success" uk-tooltip [title]="'ui-manage-representatives.trusted-tip' | transloco">
+                              <span uk-icon="icon: star"></span> {{ 'ui-manage-representatives.trusted' | transloco }}
+                            </div>
+                          }
                         </div>
                         <ul class="uk-iconnav uk-width-auto" style="padding-left: 0;">
                           <!--<li><span class="uk-sortable-handle uk-margin-small-right" uk-icon="icon: table"></span></li>-->
-                          @if (representative.trusted) {
-                            <li><span class="uk-text-success" uk-icon="icon: star" uk-tooltip [title]="'ui-manage-representatives.trusted-tip' | transloco"></span></li>
-                          }
                           @if (representative.warn) {
                             <li><span class="uk-text-small uk-text-warning" uk-tooltip [title]="'ui-manage-representatives.avoid-tip' | transloco"><span uk-icon="icon: warning"></span> {{ 'general.avoid' | transloco }}</span></li>
                           }

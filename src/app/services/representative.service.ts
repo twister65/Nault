@@ -6,6 +6,7 @@ import BigNumber from 'bignumber.js';
 import {ApiService} from './api.service';
 import {UtilService} from './util.service';
 import { NinjaService } from './ninja.service';
+import { DEFAULT_REPRESENTATIVE } from './default-representative';
 
 export interface RepresentativeStatus {
   online: boolean | null;
@@ -60,6 +61,7 @@ export interface FullRepresentativeOverview extends RepresentativeApiOverview {
 @Injectable()
 export class RepresentativeService {
   storeKey = `nanovault-representatives`;
+  private readonly defaultRepresentativeMigrationKey = 'nanovault-known-representative-twister32-v1';
 
   representatives$ = new BehaviorSubject<StoredRepresentative[]>([]);
   representatives: StoredRepresentative[] = [];
@@ -81,7 +83,7 @@ export class RepresentativeService {
     private util: UtilService,
     private ninja: NinjaService
   ) {
-    this.representatives = this.defaultRepresentatives;
+    this.representatives = this.defaultRepresentatives.map(rep => ({ ...rep }));
   }
 
   /**
@@ -254,7 +256,7 @@ export class RepresentativeService {
           repStatus.lowUptime = true;
           repStatus.warn = true;
         }
-      } else if (knownRepNinja === false) {
+      } else if (knownRepNinja === false && !repStatus.trusted) {
         // does not exist (404)
         status = 'alert';
         repStatus.uptime = 0;
@@ -366,10 +368,19 @@ export class RepresentativeService {
   loadRepresentativeList(): StoredRepresentative[] {
     if (this.loaded) return this.representatives;
 
-    let list = this.defaultRepresentatives;
+    let list = this.defaultRepresentatives.map(rep => ({ ...rep }));
     const representativeStore = localStorage.getItem(this.storeKey);
     if (representativeStore) {
       list = JSON.parse(representativeStore);
+    }
+    // Seed a trusted Twister32 once into previously saved address books.
+    // Preserve existing entries and user changes made after migration.
+    if (localStorage.getItem(this.defaultRepresentativeMigrationKey) !== '1') {
+      if (!list.some(rep => rep.id.toLowerCase() === DEFAULT_REPRESENTATIVE.id)) {
+        list.unshift({ ...DEFAULT_REPRESENTATIVE });
+        localStorage.setItem(this.storeKey, JSON.stringify(list));
+      }
+      localStorage.setItem(this.defaultRepresentativeMigrationKey, '1');
     }
     this.representatives = list;
     this.representatives$.next(list);
@@ -403,7 +414,8 @@ export class RepresentativeService {
   // Reset representatives list to the default one
   resetRepresentativeList() {
     localStorage.removeItem(this.storeKey);
-    this.representatives = this.defaultRepresentatives;
+    this.representatives = this.defaultRepresentatives.map(rep => ({ ...rep }));
+    this.representatives$.next(this.representatives);
     this.loaded = false;
   }
 
@@ -463,7 +475,7 @@ export class RepresentativeService {
   }
 
   // Default representatives list
-  defaultRepresentatives: StoredRepresentative[] = [];
+  defaultRepresentatives: StoredRepresentative[] = [{ ...DEFAULT_REPRESENTATIVE }];
 
   // Bad representatives hardcoded to be avoided. Not visible in the user rep list
   nfReps = [
