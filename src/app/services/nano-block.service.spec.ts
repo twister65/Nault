@@ -85,6 +85,7 @@ describe('NanoBlockService Ledger signing boundary (#58)', () => {
   it('uses the Twister32 default on account opening but keeps the existing representative', async () => {
     const {service, account} = setup();
     service.settings.settings.defaultRepresentative = DEFAULT_REPRESENTATIVE.id;
+    service.zeroHash = '0'.repeat(64);
     service.api.blocksInfo = jasmine.createSpy('blocksInfo').and.resolveTo({ blocks: { source: { amount: '1' } } });
     service.signStateBlock = jasmine.createSpy('signStateBlock');
     service.informNewRep = jasmine.createSpy('informNewRep');
