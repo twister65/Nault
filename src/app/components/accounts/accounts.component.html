@@ -1,10 +1,21 @@
-<div class="uk-animation-slide-left-small" uk-grid>
+<div class="uk-animation-slide-left-small" uk-grid
+  (touchstart)="onAccountsTouchStart($event)"
+  (touchend)="onAccountsTouchEnd($event)"
+  (touchcancel)="onAccountsTouchCancel()">
   <div class="uk-width-1-1">
 
     <div class="uk-margin-bottom" uk-grid>
       <div class="uk-width-expand@s uk-width-1-1">
         <h2 class="uk-heading-divider uk-text-truncate">
           {{ 'general.accounts' | transloco }}
+          <button type="button" class="accounts-refresh-button"
+            (click)="overviewRefresh.refresh()"
+            [disabled]="overviewRefresh.disabled"
+            [attr.aria-label]="'ui-shell.refresh' | transloco"
+            [title]="'ui-shell.refresh' | transloco">
+            <span *ngIf="overviewRefresh.refreshing || walletService.wallet.updatingBalance" uk-spinner="ratio: 0.55;"></span>
+            <span *ngIf="!overviewRefresh.refreshing && !walletService.wallet.updatingBalance" uk-icon="icon: refresh; ratio: 0.9;"></span>
+          </button>
           <a (click)="viewAdvanced = !viewAdvanced" class="uk-text-truncate" style="font-size: 12px; margin-left: 25px;">{{ viewAdvanced ? ('accounts.simple-mode' | transloco | uppercase) : ('accounts.advanced-mode' | transloco | uppercase) }}</a>
         </h2>
       </div>
