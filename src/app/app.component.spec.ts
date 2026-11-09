@@ -19,12 +19,12 @@ describe('AppComponent', () => {
     const nav = { scrollTop: 0 } as HTMLElement;
     const touch = (x: number, y: number) => [{ clientX: x, clientY: y }] as unknown as TouchList;
     app.navExpanded = true;
-    app.onNavTouchStart({ touches: touch(100, 90), currentTarget: nav } as TouchEvent);
-    app.onNavTouchEnd({ changedTouches: touch(105, 195), currentTarget: nav } as TouchEvent);
+    app.onNavTouchStart({ touches: touch(100, 90), currentTarget: nav } as unknown as TouchEvent);
+    app.onNavTouchEnd({ changedTouches: touch(105, 195), currentTarget: nav } as unknown as TouchEvent);
     expect(refresh).toHaveBeenCalledTimes(1);
 
-    app.onNavTouchStart({ touches: touch(150, 100), currentTarget: nav } as TouchEvent);
-    app.onNavTouchEnd({ changedTouches: touch(40, 100), currentTarget: nav } as TouchEvent);
+    app.onNavTouchStart({ touches: touch(150, 100), currentTarget: nav } as unknown as TouchEvent);
+    app.onNavTouchEnd({ changedTouches: touch(40, 100), currentTarget: nav } as unknown as TouchEvent);
     expect(app.navExpanded).toBeFalse();
     expect(refresh).toHaveBeenCalledTimes(1);
   });
