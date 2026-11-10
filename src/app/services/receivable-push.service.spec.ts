@@ -75,9 +75,94 @@ describe('ReceivablePushService', () => {
     expect(requestSubscription).toHaveBeenCalledTimes(1);
     const registered = JSON.parse((fetchSpy.calls.mostRecent().args[1] as RequestInit).body as string);
     expect(registered.accounts.length).toBe(1);
+    expect(registered.notifyReceivable).toBeTrue();
+    expect(registered.notifyUpdates).toBeFalse();
     expect(registered.minimumReceiveRaw).toBe('1000000000000000000000000');
     expect(JSON.stringify(registered)).not.toContain('seed');
     expect(service.hasSubscription).toBeTrue();
+  });
+
+  it('allows update-only subscriptions without a configured wallet', async () => {
+    wallet.isConfigured = () => false;
+    wallet.wallet.accounts = [];
+    fetchSpy.and.callFake(async (url: string) =>
+      url.endsWith('/config')
+        ? configResponse({ enabled: true, vapidPublicKey: 'A'.repeat(87) })
+        : configResponse({ id: 'updates-1', managementToken: 'management-token' }));
+
+    await service.checkAvailability();
+    expect(await service.enableUpdates()).toBeTrue();
+
+    const registered = JSON.parse((fetchSpy.calls.mostRecent().args[1] as RequestInit).body as string);
+    expect(registered.accounts).toEqual([]);
+    expect(registered.notifyReceivable).toBeFalse();
+    expect(registered.notifyUpdates).toBeTrue();
+    expect(service.updatesEnabled).toBeTrue();
+    expect(service.receivableEnabled).toBeFalse();
+    expect(requestSubscription).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses one subscription while toggling independent notification kinds', async () => {
+    fetchSpy.and.callFake(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/config')) {
+        return configResponse({ enabled: true, vapidPublicKey: 'A'.repeat(87) });
+      }
+      if (init?.method === 'POST') {
+        return configResponse({ id: 'one-sub', managementToken: 'management-token' }, 201);
+      }
+      return configResponse({});
+    });
+    await service.checkAvailability();
+    expect(await service.enable()).toBeTrue();
+    expect(await service.enableUpdates()).toBeTrue();
+    expect(requestSubscription).toHaveBeenCalledTimes(1);
+
+    expect(await service.disableReceivable()).toBeTrue();
+    const changed = JSON.parse((fetchSpy.calls.mostRecent().args[1] as RequestInit).body as string);
+    expect(changed.accounts).toEqual([]);
+    expect(changed.notifyReceivable).toBeFalse();
+    expect(changed.notifyUpdates).toBeTrue();
+    expect(service.hasSubscription).toBeTrue();
+    expect(unsubscribe).not.toHaveBeenCalled();
+
+    expect(await service.disableUpdates()).toBeTrue();
+    expect(service.hasSubscription).toBeFalse();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect((fetchSpy.calls.mostRecent().args[1] as RequestInit).method).toBe('DELETE');
+  });
+
+  it('preserves the update preference when wallet data is removed', async () => {
+    store.set('nault-receivable-push-v1', JSON.stringify({
+      id: 'updates-1', managementToken: 'token',
+      endpoint: 'https://push.example.invalid/sub',
+      snapshot: JSON.stringify({
+        notifyReceivable: false, notifyUpdates: true,
+        accounts: [], minimumReceiveRaw: '0'
+      })
+    }));
+    wallet.isConfigured = () => false;
+    wallet.wallet.accounts = [];
+    fetchSpy.and.resolveTo(configResponse({}));
+    expect(await service.disableReceivable()).toBeTrue();
+    expect(service.updatesEnabled).toBeTrue();
+    expect(service.hasSubscription).toBeTrue();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not lose a previously enabled alert kind on a failed preference update', async () => {
+    store.set('nault-receivable-push-v1', JSON.stringify({
+      id: 'one-sub', managementToken: 'token',
+      endpoint: 'https://push.example.invalid/sub',
+      snapshot: JSON.stringify({
+        notifyReceivable: true, notifyUpdates: true,
+        accounts: ['nano_' + '1'.repeat(60)], minimumReceiveRaw: '0'
+      })
+    }));
+    fetchSpy.and.resolveTo(configResponse({}, 503));
+    expect(await service.disableReceivable()).toBeFalse();
+    expect(service.receivableEnabled).toBeTrue();
+    expect(service.updatesEnabled).toBeTrue();
+    expect(unsubscribe).not.toHaveBeenCalled();
   });
 
   it('does not erase the management token when server revocation fails', async () => {

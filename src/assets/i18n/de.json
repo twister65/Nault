@@ -42,6 +42,10 @@
   },
   "configure-app": {
     "receivable-push": {
+      "update-title": "PWA-Update-Benachrichtigungen",
+      "update-description": "Optionale Android-Benachrichtigungen, wenn eine neue Nault-PWA-Version erfolgreich bereitgestellt wurde. Auch ohne Wallet und bei geschlossener PWA.",
+      "update-enable": "Update-Hinweise aktivieren",
+      "update-disable": "Update-Hinweise deaktivieren",
       "title": "Android-Benachrichtigungen für ausstehende Eingänge",
       "description": "Aktivieren Sie Web-Push-Hinweise für empfangsbereite XNO, auch bei geschlossener PWA. Öffentliche Kontoadressen und Browser-Push-Endpunkt werden an den Benachrichtigungsserver gesendet. Seeds und private Schlüssel werden nie übertragen.",
       "enable": "Benachrichtigungen aktivieren",

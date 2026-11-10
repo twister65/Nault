@@ -605,13 +605,25 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
 
   async enableReceivablePush(): Promise<void> {
-    if (!(await this.receivablePush.enable())) {
+    if (!(await this.receivablePush.enableReceivable())) {
       this.notifications.sendWarning(this.translocoService.translate('configure-app.receivable-push.failed'));
     }
   }
 
   async disableReceivablePush(): Promise<void> {
-    if (!(await this.receivablePush.disable())) {
+    if (!(await this.receivablePush.disableReceivable())) {
+      this.notifications.sendWarning(this.translocoService.translate('configure-app.receivable-push.failed'));
+    }
+  }
+
+  async enableUpdatePush(): Promise<void> {
+    if (!(await this.receivablePush.enableUpdates())) {
+      this.notifications.sendWarning(this.translocoService.translate('configure-app.receivable-push.failed'));
+    }
+  }
+
+  async disableUpdatePush(): Promise<void> {
+    if (!(await this.receivablePush.disableUpdates())) {
       this.notifications.sendWarning(this.translocoService.translate('configure-app.receivable-push.failed'));
     }
   }
@@ -1019,7 +1031,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     const UIkit = (window as unknown as {UIkit: {modal: {confirm(message: string): Promise<void>}}}).UIkit;
     try {
       await UIkit.modal.confirm('<p class="uk-alert uk-alert-danger"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">' + this.translocoService.translate('configure-app.you-are-about-to-delete-all-locally-stored-data-about-your') + '</span><br><br><b style="font-size: 18px;">' + this.translocoService.translate('reset-wallet.before-continuing-make-sure-you-have-saved-the-nano-seed') + '</b><br><br><span style="font-size: 18px;"><b>' + this.translocoService.translate('reset-wallet.you-will-not-be-able-to-recover-the-funds-without-a-backup') + '</b></span><br><br><span style="font-size: 16px;">' + this.translocoService.translate('configure-app.pow-api-vault.delete-with-wallet') + '</span></p><br>');
-      if (!(await this.receivablePush.disable())) {
+      if (!(await this.receivablePush.disableReceivable())) {
         this.notifications.sendWarning(this.translocoService.translate('configure-app.receivable-push.deleted'));
         return;
       }

@@ -30,6 +30,20 @@ interface RegistrationResult {
   managementToken: string;
 }
 
+// Both preferences share one browser PushSubscription and one backend record.
+// Update alerts can be enabled without a wallet.
+export type PushNotificationKind = 'notifyReceivable' | 'notifyUpdates';
+
+interface PushPreferences {
+  notifyReceivable: boolean;
+  notifyUpdates: boolean;
+}
+
+interface PushSnapshot extends PushPreferences {
+  accounts: string[];
+  minimumReceiveRaw: string;
+}
+
 export type ReceivablePushStatus =
   'unsupported' | 'unavailable' | 'ready' | 'enabled' | 'busy' | 'error';
 
@@ -79,16 +93,47 @@ export class ReceivablePushService {
     }
   }
 
+  get receivableEnabled(): boolean {
+    return this.preferences().notifyReceivable;
+  }
+
+  get updatesEnabled(): boolean {
+    return this.preferences().notifyUpdates;
+  }
+
+  private preferences(): PushPreferences {
+    const binding = this.readBinding();
+    if (!binding) return { notifyReceivable: false, notifyUpdates: false };
+    try {
+      const snapshot = JSON.parse(binding.snapshot) as Partial<PushSnapshot>;
+      // Backward-compatible with opt-in registrations from the first draft.
+      // They only enrolled receivable notifications, never release alerts.
+      if (typeof snapshot.notifyReceivable !== 'boolean' &&
+          typeof snapshot.notifyUpdates !== 'boolean') {
+        return { notifyReceivable: true, notifyUpdates: false };
+      }
+      return {
+        notifyReceivable: snapshot.notifyReceivable === true,
+        notifyUpdates: snapshot.notifyUpdates === true,
+      };
+    } catch {
+      return { notifyReceivable: true, notifyUpdates: false };
+    }
+  }
+
   private accounts(): string[] {
     return [...new Set(this.wallet.wallet.accounts.map(account => account.id))]
       .filter(id => /^nano_[13][13456789abcdefghijkmnopqrstuwxyz]{59}$/.test(id))
       .sort();
   }
 
-  private snapshot(): { accounts: string[]; minimumReceiveRaw: string } {
+  private snapshot(preferences: PushPreferences = this.preferences()): PushSnapshot {
     const minimum = this.settings.settings.minimumReceive || '0';
     return {
-      accounts: this.accounts(),
+      notifyReceivable: preferences.notifyReceivable,
+      notifyUpdates: preferences.notifyUpdates,
+      // A release-only subscription must not disclose or retain wallet accounts.
+      accounts: preferences.notifyReceivable && this.wallet.isConfigured() ? this.accounts() : [],
       minimumReceiveRaw: this.util.nano.mnanoToRaw(minimum).toString(10),
     };
   }
@@ -135,42 +180,91 @@ export class ReceivablePushService {
     }
   }
 
+  // Keep the original entry point for existing callers.
   async enable(): Promise<boolean> {
-    if (this.busy || !this.supported || !this.vapidPublicKey ||
-        this.hasSubscription || !this.wallet.isConfigured()) return false;
-    const snapshot = this.snapshot();
-    if (!snapshot.accounts.length) return false;
+    return this.enableReceivable();
+  }
 
+  async enableReceivable(): Promise<boolean> {
+    return this.setPreference('notifyReceivable', true);
+  }
+
+  async enableUpdates(): Promise<boolean> {
+    return this.setPreference('notifyUpdates', true);
+  }
+
+  async disableReceivable(): Promise<boolean> {
+    return this.setPreference('notifyReceivable', false);
+  }
+
+  async disableUpdates(): Promise<boolean> {
+    return this.setPreference('notifyUpdates', false);
+  }
+
+  private async setPreference(kind: PushNotificationKind, enabled: boolean): Promise<boolean> {
+    if (this.busy) return false;
+    const original = this.preferences();
+    if (original[kind] === enabled) return true;
+    if (enabled && (!this.supported || !this.vapidPublicKey)) return false;
+    if (enabled && kind === 'notifyReceivable' &&
+        (!this.wallet.isConfigured() || !this.accounts().length)) return false;
+
+    const preferences = { ...original, [kind]: enabled };
+    if (!preferences.notifyReceivable && !preferences.notifyUpdates) {
+      return this.disable();
+    }
+    const snapshot = this.snapshot(preferences);
+    if (preferences.notifyReceivable && !snapshot.accounts.length) return false;
+
+    const binding = this.readBinding();
     this.busy = true;
     this.status = 'busy';
     let subscription: PushSubscription | null = null;
     try {
-      // Call requestSubscription directly in the click handler: browser
-      // notification permission must never be requested during startup.
-      subscription = await this.swPush.requestSubscription({
-        serverPublicKey: this.vapidPublicKey
-      });
-      const response: RegistrationResult = await (await this.request('/subscriptions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription: subscription.toJSON(), ...snapshot }),
-      })).json();
-      if (!response || typeof response.id !== 'string' || !response.id ||
-          typeof response.managementToken !== 'string' || !response.managementToken) {
-        throw new Error('Invalid push registration response');
+      if (binding) {
+        // An already-permitted browser receives its second notification kind
+        // without a new browser permission prompt or a second subscription.
+        await this.request('/subscriptions/' + encodeURIComponent(binding.id), {
+          method: 'PUT',
+          headers: {
+            'Authorization': 'Bearer ' + binding.managementToken,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(snapshot),
+        });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          ...binding, snapshot: JSON.stringify(snapshot)
+        } satisfies PushBinding));
+      } else {
+        // Must be called directly from a user click: no await before the
+        // permission request, and never during application startup.
+        subscription = await this.swPush.requestSubscription({
+          serverPublicKey: this.vapidPublicKey as string
+        });
+        const response: RegistrationResult = await (await this.request('/subscriptions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription: subscription.toJSON(), ...snapshot }),
+        })).json();
+        if (!response || typeof response.id !== 'string' || !response.id ||
+            typeof response.managementToken !== 'string' || !response.managementToken) {
+          throw new Error('Invalid push registration response');
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          id: response.id,
+          managementToken: response.managementToken,
+          endpoint: subscription.endpoint,
+          snapshot: JSON.stringify(snapshot),
+        } satisfies PushBinding));
       }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        id: response.id,
-        managementToken: response.managementToken,
-        endpoint: subscription.endpoint,
-        snapshot: JSON.stringify(snapshot),
-      } satisfies PushBinding));
       this.status = 'enabled';
       return true;
     } catch {
       if (subscription) {
-        try { await this.swPush.unsubscribe(); } catch { /* no server registration confirmed */ }
+        try { await this.swPush.unsubscribe(); } catch { /* no registration confirmed */ }
       }
+      // Keep the previous preferences and management capability if the server
+      // cannot apply an update. An opt-out must not falsely report success.
       this.status = 'error';
       return false;
     } finally {
@@ -221,8 +315,12 @@ export class ReceivablePushService {
     try {
       const binding = this.readBinding();
       if (!binding) return;
-      if (!this.wallet.isConfigured() || !this.accounts().length) {
-        await this.disable();
+      const preferences = this.preferences();
+      // Wallet removal must stop account monitoring, but must not silently
+      // revoke a separate release-alert subscription on the same device.
+      if (preferences.notifyReceivable &&
+          (!this.wallet.isConfigured() || !this.accounts().length)) {
+        if (!(await this.disableReceivable())) this.status = 'error';
         return;
       }
       const subscription = await firstValueFrom(this.swPush.subscription.pipe(take(1)));

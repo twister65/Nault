@@ -158,6 +158,10 @@
   },
   "configure-app": {
     "receivable-push": {
+      "update-title": "Notifications des mises à jour PWA",
+      "update-description": "Notifications Android facultatives lorsqu'une nouvelle version de la PWA Nault a été déployée avec succès. Fonctionne même sans portefeuille ou avec la PWA fermée.",
+      "update-enable": "Activer les alertes de mise à jour",
+      "update-disable": "Désactiver les alertes de mise à jour",
       "title": "Notifications Android des réceptions en attente",
       "description": "Recevoir, après activation volontaire, des notifications système lorsqu'un XNO devient recevable, même si cette PWA est fermée. Vos adresses publiques et un identifiant de notification du navigateur sont transmis au serveur. Aucune seed ni clé privée n'est envoyée.",
       "enable": "Activer les notifications",

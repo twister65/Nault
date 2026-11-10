@@ -158,6 +158,10 @@
   },
   "configure-app": {
     "receivable-push": {
+      "update-title": "PWA update notifications",
+      "update-description": "Optional Android system alerts when a new Nault PWA version has been successfully deployed. Works even without a wallet or while the PWA is closed.",
+      "update-enable": "Enable update alerts",
+      "update-disable": "Disable update alerts",
       "title": "Android receivable notifications",
       "description": "Opt in to system Web Push alerts when new XNO becomes receivable, even while this PWA is closed. Your public account addresses and a browser push endpoint are shared with the notification server. No seed or private key is sent.",
       "enable": "Enable notifications",
