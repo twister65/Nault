@@ -61,7 +61,7 @@ import {MusigService} from './services/musig.service';
 
 // QR code module
 import { ZXingScannerModule } from '@zxing/ngx-scanner';
-import { DeeplinkService, NinjaService } from './services';
+import { DeeplinkService } from './services';
 import { ConverterComponent } from './components/converter/converter.component';
 import { QrGeneratorComponent } from './components/qr-generator/qr-generator.component';
 import { ServiceWorkerModule } from '@angular/service-worker';
@@ -140,7 +140,6 @@ import { AboutNaultComponent } from './components/about-nault/about-nault.compon
         LedgerService,
         DesktopService,
         RemoteSignService,
-        NinjaService,
         NgbActiveModal,
         QrModalService,
         DeeplinkService,

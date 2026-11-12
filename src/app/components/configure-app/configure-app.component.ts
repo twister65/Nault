@@ -17,7 +17,8 @@ import {NodeService} from '../../services/node.service';
 import {UtilService} from '../../services/util.service';
 import {BehaviorSubject, Subscription} from 'rxjs';
 import {RepresentativeService, StoredRepresentative} from '../../services/representative.service';
-import {NinjaService} from '../../services/ninja.service';
+import { getDirectoryRepresentativeName, getDirectoryRepresentatives } from '../../services/representative-directory';
+import { RepresentativeMonitorService, RepresentativeMonitorSnapshot } from '../../services/representative-monitor.service';
 import {QrModalService} from '../../services/qr-modal.service';
 import { TranslocoService } from '@jsverse/transloco';
 
@@ -47,10 +48,10 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     private node: NodeService,
     private util: UtilService,
     private price: PriceService,
-    private ninja: NinjaService,
     private renderer: Renderer2,
     private qrModalService: QrModalService,
-    private translocoService: TranslocoService) { }
+    private translocoService: TranslocoService,
+    private representativeMonitor: RepresentativeMonitorService) { }
   wallet = this.walletService.wallet;
 
   languages = this.translocoService.getAvailableLangs() as [{id: string, label: string}];
@@ -348,6 +349,9 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   representativeListMatch = '';
   repStatus: number | null = null;
   representativeList: StoredRepresentative[] = [];
+  defaultRepMonitor: RepresentativeMonitorSnapshot | null = null;
+  browseDefaultReps = false;
+  defaultRepSearch = '';
 
   serverAPI: string | null = null;
   serverAPIUpdated: string | null = null;
@@ -429,26 +433,22 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
 
   async populateRepresentativeList() {
-    // add trusted/regular local reps to the list
+    this.defaultRepMonitor = await this.representativeMonitor.getSnapshot();
     const localReps = this.repService.getSortedRepresentatives();
-    this.representativeList.push( ...localReps.filter(rep => (!rep.warn)) );
+    const monitoredReps: StoredRepresentative[] = (this.defaultRepMonitor?.representatives || [])
+      .filter(rep => !!rep.name).map(rep => ({ id: rep.account, name: rep.name! }));
+    this.representativeList = [...localReps, ...monitoredReps, ...getDirectoryRepresentatives()]
+      .filter((rep, index, list) =>
+        list.findIndex(item => item.id.toLowerCase() === rep.id.toLowerCase()) === index);
+    // Refresh options if the user opened the inline browser while its sources loaded.
+    // Do not change whether it is open or the representative already selected.
+    this.searchRepresentatives();
+  }
 
-    if (this.serverAPI) {
-      const verifiedReps = await this.ninja.recommendedRandomized().catch(() => []);
-
-      // add random recommended reps to the list
-      for (const representative of verifiedReps) {
-        const temprep = {
-          id: representative.account,
-          name: representative.alias
-        };
-
-        this.representativeList.push(temprep);
-      }
-    }
-
-    // add untrusted local reps to the list
-    this.representativeList.push( ...localReps.filter(rep => (rep.warn)) );
+  toggleDefaultRepBrowser() {
+    this.browseDefaultReps = !this.browseDefaultReps;
+    this.defaultRepSearch = '';
+    this.searchRepresentatives();
   }
 
   private resetNodeStats() {
@@ -858,47 +858,37 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
 
   searchRepresentatives() {
-    if (this.defaultRepresentative && !this.util.account.isValidAccount(this.defaultRepresentative)) this.repStatus = 0;
-    else this.repStatus = null;
-
-    this.showRepresentatives = true;
-    const search = this.defaultRepresentative || '';
-
-    const matches = this.representativeList
-      .filter(a => a.name.toLowerCase().indexOf(search.toLowerCase()) !== -1)
-      // remove duplicate accounts
-      .filter((item, pos, self) => this.util.array.findWithAttr(self, 'id', item.id) === pos)
-      .slice(0, 5);
-
+    this.repStatus = this.defaultRepresentative && !this.util.account.isValidAccount(this.defaultRepresentative) ? 0 : null;
+    const search = this.defaultRepSearch.trim().toLowerCase();
+    this.showRepresentatives = this.browseDefaultReps;
+    const matches = this.showRepresentatives ? this.representativeList
+      .filter(rep => !rep.warn)
+      .filter(rep => !search || rep.name.toLowerCase().includes(search) || rep.id.toLowerCase().includes(search))
+      .slice(0, 12) : [];
     this.representativeResults$.next(matches);
   }
 
   selectRepresentative(rep: string) {
+    this.browseDefaultReps = false;
+    this.defaultRepSearch = '';
     this.showRepresentatives = false;
     this.defaultRepresentative = rep;
-    this.searchRepresentatives();
-    this.validateRepresentative();
+    this.representativeResults$.next([]);
+    void this.validateRepresentative();
   }
 
   async validateRepresentative() {
-    setTimeout(() => this.showRepresentatives = false, 400);
+    // The inline browser is controlled only by its Browse button/selection.
+    // An address-input blur must never close a list opened by the same click.
     if (this.defaultRepresentative) this.defaultRepresentative = this.defaultRepresentative.replace(/ /g, '');
-
     if (!this.defaultRepresentative) {
       this.representativeListMatch = '';
       return;
     }
-
-    const rep = this.repService.getRepresentative(this.defaultRepresentative);
-    const ninjaRep = await this.ninja.getAccount(this.defaultRepresentative);
-
-    if (rep) {
-      this.representativeListMatch = rep.name;
-    } else if (ninjaRep) {
-      this.representativeListMatch = ninjaRep.alias;
-    } else {
-      this.representativeListMatch = '';
-    }
+    const localName = this.repService.getRepresentative(this.defaultRepresentative)?.name;
+    const liveName = this.defaultRepMonitor?.byAccount[this.defaultRepresentative.toLowerCase()]?.name;
+    const directoryName = getDirectoryRepresentativeName(this.defaultRepresentative);
+    this.representativeListMatch = localName || liveName || directoryName || '';
   }
 
   // When changing the Server Config option, prefill values
