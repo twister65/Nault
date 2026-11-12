@@ -425,11 +425,11 @@
     },
     "any-node-always-available": {
       "1": {
-        "1": "Even if the official",
-        "3": "domain would become inaccessible, you would still be able to use the",
+        "1": "Even if the site at",
+        "3": "became inaccessible, you could still use the",
         "5": "or",
         "7": ".",
-        "2-link-nault": "nault.cc",
+        "2-link-nault": "twister32.changeip.org",
         "4-link-github-releases": "desktop application",
         "6-link-github-web-app": "host the web application yourself"
       },
