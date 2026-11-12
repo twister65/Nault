@@ -146,6 +146,28 @@ export class RepresentativesComponent implements OnInit {
     return this.monitorSnapshot?.byAccount[id.toLowerCase()] ?? null;
   }
 
+  /**
+   * NanoNode.de's share is a fraction (0.000015 = 0.0015%), not a percentage.
+   * Preserve four decimal places below 0.01% so small representatives are not
+   * incorrectly displayed as having 0.00% voting weight.
+   */
+  formatVotingWeightShare(share: number | null): string {
+    if (share === null || !Number.isFinite(share) || share < 0 || share > 1) return '';
+    const locale = this.translocoService.getActiveLang() || 'en';
+    const percentage = share * 100;
+    const decimals = percentage > 0 && percentage < 0.01 ? 4 : 2;
+    const formatter = new Intl.NumberFormat(locale, {
+      style: 'percent',
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+    // An even smaller positive share must not be displayed as a literal zero.
+    if (percentage > 0 && percentage < 0.00005) {
+      return '< ' + formatter.format(0.000001);
+    }
+    return formatter.format(share);
+  }
+
   toggleRepresentativeBrowser() {
     this.browseRepresentativeList = !this.browseRepresentativeList;
     this.representativeSearch = '';
