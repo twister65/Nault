@@ -47,7 +47,7 @@
           @default {
             <div class="representative-health-row health-unknown">
               <div class="health-icon"></div>
-              <div class="label">{{ 'change-rep-widget.unknown-status' | transloco }}</div>
+              <div class="label">{{ (hasVotesWithUnverifiedHealth(rep) ? 'change-rep-widget.votes-detected' : 'change-rep-widget.unknown-status') | transloco }}</div>
             </div>
           }
         }
