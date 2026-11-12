@@ -113,11 +113,12 @@ describe('ConfigureAppComponent', () => {
     expect(details.open).toBeFalse();
   });
 
-  it('shows Nano.to key management only for explicit Nano.to PoW, regardless of wallet RPC', async () => {
+  it('shows Nano.to key management for Nano.to PoW and selected-server Nano.to only', async () => {
     spyOn(component, 'ngOnInit').and.stub();
     const settings = (component as any).appSettings.settings;
     const transloco = TestBed.inject(TranslocoService);
     await firstValueFrom(transloco.load(transloco.getActiveLang()));
+    component.selectedServer = '';
     for (const source of ['best', 'nanoTo', 'server', 'custom', 'clientWebGL', 'clientCPU'] as const) {
       component.selectedPoWOption = source;
       settings.powSource = source;
@@ -127,9 +128,28 @@ describe('ConfigureAppComponent', () => {
         fixture.detectChanges();
         await fixture.whenStable();
         fixture.detectChanges();
-        expect(!!fixture.nativeElement.querySelector('#pow-vault-help')).toBe(source === 'nanoTo');
+        const expected = source === 'nanoTo' || (source === 'server' && rpc === 'https://rpc.nano.to/');
+        expect(!!fixture.nativeElement.querySelector('#pow-vault-help')).toBe(expected);
       }
     }
+    // Reject misleading domains, invalid URLs and unrelated PoW modes.
+    component.selectedPoWOption = 'server';
+    settings.serverAPI = 'https://rpc.nano.to.evil.example/';
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
+    settings.serverAPI = 'not-a-url';
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
+
+    // Changing the selected RPC node in the UI immediately updates the vault
+    // visibility, without committing any wallet settings.
+    (component as any).appSettings.serverOptions = [
+      { value: 'nano-to', api: 'https://rpc.nano.to/' },
+      { value: 'other', api: 'https://rainstorm.city/api' },
+    ];
+    settings.serverAPI = 'https://rainstorm.city/api';
+    component.selectedServer = 'nano-to';
+    expect(component.showNanoToPowApiKeys()).toBeTrue();
+    component.selectedServer = 'other';
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
     expect(component.powOptions.some(option => option.value === 'nanoTo')).toBeTrue();
   });
 
