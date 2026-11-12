@@ -425,6 +425,12 @@
                   <button class="uk-button uk-button-small uk-button-default uk-margin-small-top" type="button"
                     (click)="toggleDefaultRepBrowser()">{{ 'ui-representatives.browse-representatives' | transloco }}</button>
                   @if (showRepresentatives) {
+                    <div class="uk-margin-small-top">
+                      <input class="uk-input" type="search" name="nault-default-rep-directory-query"
+                        autocomplete="off" [(ngModel)]="defaultRepSearch" (input)="searchRepresentatives()"
+                        [placeholder]="'ui-representatives.search-names' | transloco"
+                        [attr.aria-label]="'ui-representatives.search-names' | transloco">
+                    </div>
                     <div class="rep-config-picker" role="listbox" [attr.aria-label]="'representative-search.representative-list-results' | transloco">
                       @for (rep of representativeResults$ | async; track rep.id) {
                         <button type="button" class="rep-config-picker-item" (mousedown)="$event.preventDefault()"
