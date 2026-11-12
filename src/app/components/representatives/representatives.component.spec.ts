@@ -112,6 +112,7 @@ describe('Inline representative picker', () => {
     const component = Object.create(RepresentativesComponent.prototype) as any;
     component.toRepresentativeID = '';
     component.browseRepresentativeList = false;
+    component.representativeSearch = '';
     component.onlyOnlineReps = false;
     component.showRepresentatives = false;
     component.representativeResults$ = new BehaviorSubject<any[]>([]);
@@ -139,14 +140,15 @@ describe('Inline representative picker', () => {
 
   it('finds representatives by name or address and excludes offline observations on request', () => {
     const component = setup();
-    component.toRepresentativeID = 'TRUSTABLE';
+    component.browseRepresentativeList = true;
+    component.representativeSearch = 'TRUSTABLE';
     component.searchRepresentatives();
     expect(component.representativeResults$.value[0].id).toBe(trustable);
-    component.toRepresentativeID = '3hn3r6bn';
+    component.representativeSearch = '3hn3r6bn';
     component.searchRepresentatives();
     expect(component.representativeResults$.value[0].id).toBe(twister);
     component.onlyOnlineReps = true;
-    component.toRepresentativeID = 'TRUSTABLE';
+    component.representativeSearch = 'TRUSTABLE';
     component.searchRepresentatives();
     expect(component.representativeResults$.value).toEqual([]);
   });
