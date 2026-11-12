@@ -8,7 +8,25 @@ import {UtilService} from './util.service';
 import { NinjaService } from './ninja.service';
 import { DEFAULT_REPRESENTATIVE } from './default-representative';
 import { getDirectoryRepresentativeName } from './representative-directory';
-import { RepresentativeMonitorService } from './representative-monitor.service';
+import { RepresentativeMonitorService, MonitoredRepresentative } from './representative-monitor.service';
+
+/**
+ * A narrowly scoped, indicative POSITIVE assessment from one third-party
+ * monitor, not a proof of safety, uptime over time or local Trusted status.
+ *
+ * Its "good" verdict does not itself check inSync, and treats null outdated
+ * as acceptable. We require independent sync evidence in its snapshot.
+ * RsNano cannot be compared to nano-node versions (outdated:null is expected).
+ */
+export function hasPositiveNanoNodeHealthEvidence(rep: MonitoredRepresentative | null): boolean {
+  if (!rep || rep.online !== true || rep.principal !== true ||
+      rep.verdict !== 'good' || rep.node?.inSync !== true ||
+      rep.crowded !== false || rep.share === null ||
+      !Number.isFinite(rep.share) || rep.share <= 0 || rep.share >= 0.02) return false;
+  const versionComparable = rep.outdated === false ||
+    (rep.outdated === null && rep.node?.implementation === 'rsnano');
+  return versionComparable;
+}
 
 export interface RepresentativeStatus {
   online: boolean | null;
@@ -268,7 +286,7 @@ export class RepresentativeService {
           repStatus.lowUptime = true;
           repStatus.warn = true;
         }
-      } else if (knownRepNinja === false && !repStatus.trusted) {
+      } else if (knownRepNinja === false && !repStatus.trusted && !monitorRep) {
         // does not exist (404)
         status = 'alert';
         repStatus.uptime = 0;
@@ -279,6 +297,16 @@ export class RepresentativeService {
       } else {
         // any other api error
         status = status === 'none' ? 'unknown' : status;
+      }
+
+      // Only promote a genuinely unknown evaluation. Positive independent
+      // observations never cancel local warnings, high voting weight, or
+      // a poor historical uptime reported by another source.
+      // The UI will explicitly attribute this indicative status to NanoNode.de.
+      if ((status === 'none' || status === 'unknown') &&
+          !repStatus.warn && !repStatus.changeRequired &&
+          hasPositiveNanoNodeHealthEvidence(monitorRep)) {
+        status = 'monitorGood';
       }
 
       const additionalData = {
