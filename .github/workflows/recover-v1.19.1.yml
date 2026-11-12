@@ -1,0 +1,165 @@
+name: Recover Nault v1.19.1 without Apple Silicon
+on:
+  push:
+    branches: [master]
+    paths: ['.github/workflows/recover-v1.19.1.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: recover-v1.19.1
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Verify and assemble 6 existing artifacts
+    if: github.repository == 'twister65/Nault'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v7
+        with: {node-version: '22', cache: npm}
+      - name: Verify immutable tag points at the intended release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./package.json').version")" = 1.19.1
+          node -e "const l=require('./package-lock.json'); if(l.version!=='1.19.1'||l.packages[''].version!=='1.19.1') process.exit(1)"
+          tag_sha="$(gh api "repos/$GH_REPO/git/ref/tags/v1.19.1" --jq '.object.sha')"
+          test "$(gh api "repos/$GH_REPO/git/ref/tags/v1.19.1" --jq '.object.type')" = tag
+          test "$(gh api "repos/$GH_REPO/git/tags/$tag_sha" --jq '.object.sha')" = 1c7654fae0626039c63bcb4eb54c3cfa530b5f17
+      - name: Install metadata parser
+        run: npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Download artifacts from original release attempt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh run download 43261538404 --pattern 'desktop-*' --dir desktop-platforms
+          test -d desktop-platforms/desktop-windows-2022
+          test -d desktop-platforms/desktop-macos-15-intel
+          test ! -d desktop-platforms/desktop-macos-15
+          for pkg in deb rpm pacman appimage; do test -d "desktop-platforms/desktop-linux-$pkg"; done
+      - name: Apply isolated v1.19.1 Intel-only assembly adjustment
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = 'scripts/assemble-release-assets.cjs';
+          let source = fs.readFileSync(path, 'utf8');
+          const pairs = [
+            ["const expected = ['desktop-windows-2022', 'desktop-macos-15-intel',\n  'desktop-macos-15', ...Object.keys(linuxArtifacts)];\nconst macHosts = ['desktop-macos-15-intel', 'desktop-macos-15'];",
+             "const expected = ['desktop-windows-2022', 'desktop-macos-15-intel', ...Object.keys(linuxArtifacts)];\nconst macHosts = ['desktop-macos-15-intel'];"],
+            ["assert.equal(combined.files.length, 4, 'macOS updater must contain 2 DMG + 2 ZIP');",
+             "assert.equal(combined.files.length, 2, 'Intel macOS feed needs one DMG and one ZIP');"],
+            ["    ...nativeMac.map(m => link(m.dmg, label(m.arch) + ' (DMG)')),\n    '',",
+             "    ...nativeMac.map(m => link(m.dmg, label(m.arch) + ' (DMG)')),\n    '',\n    '**macOS Apple Silicon (arm64) is not available in v1.19.1.** Remain on v1.19.0 until a native package is available; the updater feed for 1.19.1 only contains Intel x64 packages.',\n    '',"],
+            ["console.log('PASS: grouped release preview, 2 native macOS architectures and 4 Linux formats');",
+             "console.log('PASS: v1.19.1 Intel macOS release and four Linux formats');"]
+          ];
+          for (const [before, after] of pairs) {
+            if (source.split(before).length !== 2) throw Error('Unexpected release script version: ' + before);
+            source = source.replace(before, after);
+          }
+          fs.writeFileSync(path, source);
+          NODE
+      - name: Validate files and platform-specific SHA512 updater feeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/assemble-release-assets.cjs desktop-platforms release-ready release-downloads.md v1.19.1
+          test "$(find release-ready -maxdepth 1 -name '*.dmg' | wc -l)" -eq 1
+          test "$(find release-ready -maxdepth 1 -name '*.zip' | wc -l)" -eq 1
+          test -z "$(find release-ready -maxdepth 1 -iname '*arm64*' -print -quit)"
+          (cd release-ready && sha256sum --check SHA256SUMS)
+          cat release-downloads.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with: {name: recovered-v1-19-1-assets, path: 'release-ready/*', if-no-files-found: error, retention-days: 7}
+      - uses: actions/upload-artifact@v7
+        with: {name: recovered-v1-19-1-notes, path: release-downloads.md, if-no-files-found: error, retention-days: 7}
+
+  linux-install-tests:
+    name: Validate native Linux install/uninstall (${{ matrix.distro }})
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {distro: ubuntu, image: 'ubuntu:26.04'}
+          - {distro: debian, image: 'debian:13'}
+          - {distro: fedora, image: 'fedora:44'}
+          - {distro: opensuse, image: 'opensuse/leap:16.0'}
+          - {distro: arch, image: 'archlinux/archlinux:base'}
+    steps:
+      - uses: actions/checkout@v7
+        with: {persist-credentials: false}
+      - uses: actions/download-artifact@v8
+        with: {name: recovered-v1-19-1-assets, path: packages}
+      - name: Install and uninstall the actual release package in isolated container
+        shell: bash
+        env:
+          DISTRO: ${{ matrix.distro }}
+          DISTRO_IMAGE: ${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          docker run --rm --pull=always \
+            --security-opt no-new-privileges \
+            --mount "type=bind,source=$PWD/packages,target=/packages,readonly" \
+            --mount "type=bind,source=$PWD/scripts/test-linux-install-container.sh,target=/test-linux-install.sh,readonly" \
+            --env DISTRO="$DISTRO" --env EXPECTED_VERSION=1.19.1 \
+            "$DISTRO_IMAGE" /bin/bash /test-linux-install.sh
+
+  publish:
+    name: Publish verified v1.19.1 without Apple Silicon
+    needs: [prepare, linux-install-tests]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions: {contents: write, actions: read}
+    steps:
+      - uses: actions/checkout@v7
+        with: {persist-credentials: false}
+      - uses: actions/download-artifact@v8
+        with: {name: recovered-v1-19-1-assets, path: packages}
+      - uses: actions/download-artifact@v8
+        with: {name: recovered-v1-19-1-notes, path: .}
+      - name: Verify SHA-256 and publish existing tagged artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          (cd packages && sha256sum --check SHA256SUMS)
+          for ext in '.AppImage' '.deb' '.rpm' '.pkg.tar.zst' '.exe' '.dmg' '.zip'; do
+            test "$(find packages -maxdepth 1 -type f -name "*$ext" | wc -l)" -eq 1
+          done
+          for feed in latest.yml latest-linux.yml latest-mac.yml; do test -s "packages/$feed"; done
+          test -z "$(find packages -maxdepth 1 -iname '*arm64*' -print -quit)"
+          {
+            echo '## v1.19.1: Apple Silicon build unavailable'
+            echo
+            echo '**macOS Apple Silicon (arm64) is not included.** Keep using v1.19.0 on ARM Macs. The macOS update feed for v1.19.1 contains only Intel x64 downloads.'
+            echo
+            cat docs/releases/v1.19.1.md
+            echo
+            cat release-downloads.md
+          } > prepared-notes.md
+          if gh release view v1.19.1 --json isDraft --jq .isDraft > release-state; then
+            test "$(cat release-state)" = true || { echo 'Public release already exists; refusing to overwrite'; exit 1; }
+            gh release edit v1.19.1 --notes-file prepared-notes.md
+          else
+            gh release create v1.19.1 --verify-tag --draft --title '1.19.1 (twister65 fork)' --notes-file prepared-notes.md
+          fi
+          gh release upload v1.19.1 packages/* --clobber
+          gh release edit v1.19.1 --draft=false
+          gh release view v1.19.1 --json isDraft,url --jq '{isDraft,url}'
