@@ -589,6 +589,7 @@
     "telemetry-out-of-sync": "Télémétrie : désynchronisé",
     "nanoticker-details": "Santé NanoTicker",
     "search-names": "Rechercher par nom ou adresse Nano",
+    "show-more": "Afficher plus de représentants",
     "browse-representatives": "Parcourir les représentants",
     "online-filter": "Votes récents uniquement",
     "no-results": "Aucun représentant trouvé. Vous pouvez coller une adresse Nano valide.",
