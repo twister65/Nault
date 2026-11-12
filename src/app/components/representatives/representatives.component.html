@@ -64,17 +64,21 @@
                     <tr class="representative-row">
                       <td class="representative-health-column uk-visible-toggle uk-text-truncate hide-on-small-viewports">
                         <ng-template [ngTemplateOutlet]="representativeHealth"></ng-template>
-                        <div class="rep-observation" [class.rep-observation-online]="rep.networkObservation?.online === true"
-                          [class.rep-observation-offline]="rep.networkObservation?.online === false">
-                          @if (rep.networkObservation?.online === true) {
-                            {{ 'ui-representatives.observed-online' | transloco }}
-                          } @else if (rep.networkObservation?.online === false) {
-                            {{ 'ui-representatives.not-observed' | transloco }}
-                          } @else {
-                            {{ 'ui-representatives.observation-unavailable' | transloco }}
+                        <div class="rep-observation">
+                          @if (rep.networkObservation?.rpcOnline !== null && rep.networkObservation?.rpcOnline !== undefined) {
+                            <div [class.rep-observation-online]="rep.networkObservation?.rpcOnline === true"
+                              [class.rep-observation-offline]="rep.networkObservation?.rpcOnline === false">
+                              RPC : {{ (rep.networkObservation?.rpcOnline ? 'ui-representatives.observed-online' : 'ui-representatives.not-observed') | transloco }}
+                            </div>
                           }
-                          @if (rep.networkObservation?.source) {
-                            <span class="rep-observation-source">({{ rep.networkObservation?.source === 'rpc' ? 'RPC' : 'NanoNode.de' }})</span>
+                          @if (rep.networkObservation?.nanonodeOnline !== null && rep.networkObservation?.nanonodeOnline !== undefined) {
+                            <div [class.rep-observation-online]="rep.networkObservation?.nanonodeOnline === true"
+                              [class.rep-observation-offline]="rep.networkObservation?.nanonodeOnline === false">
+                              NanoNode.de : {{ (rep.networkObservation?.nanonodeOnline ? 'ui-representatives.observed-online' : 'ui-representatives.not-observed') | transloco }}
+                            </div>
+                          }
+                          @if (rep.networkObservation?.rpcOnline == null && rep.networkObservation?.nanonodeOnline == null) {
+                            {{ 'ui-representatives.observation-unavailable' | transloco }}
                           }
                         </div>
                       </td>
@@ -96,6 +100,8 @@
                           }
                           @if (rep.networkObservation?.version) {
                             <span>{{ rep.networkObservation?.version }}</span>
+                          } @else if (rep.networkObservation?.nanonodeOnline !== null && rep.networkObservation?.nanonodeOnline !== undefined) {
+                            <span>{{ 'ui-representatives.telemetry-unavailable' | transloco }}</span>
                           }
                           @if (rep.networkObservation?.inSync === true) {
                             <span>{{ 'ui-representatives.telemetry-in-sync' | transloco }}</span>
