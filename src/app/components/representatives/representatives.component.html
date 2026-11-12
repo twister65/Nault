@@ -272,10 +272,10 @@
                         } @else {
                           <p class="uk-text-muted uk-margin-small">{{ 'ui-representatives.no-results' | transloco }}</p>
                         }
-                        @if (matchingRepresentativeCount > (representativeResults$ | async)?.length) {
+                        @if (matchingRepresentativeCount > ((representativeResults$ | async)?.length ?? 0)) {
                           <button type="button" class="rep-picker-more" (click)="showMoreRepresentatives()">
                             {{ 'ui-representatives.show-more' | transloco }}
-                            ({{ (representativeResults$ | async)?.length }} / {{ matchingRepresentativeCount }})
+                            ({{ (representativeResults$ | async)?.length ?? 0 }} / {{ matchingRepresentativeCount }})
                           </button>
                         }
                       </div>
