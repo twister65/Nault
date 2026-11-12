@@ -5,7 +5,6 @@ import type {BaseApiAccount, WalletApiAccount} from './wallet.service';
 import BigNumber from 'bignumber.js';
 import {ApiService} from './api.service';
 import {UtilService} from './util.service';
-import { NinjaService } from './ninja.service';
 import { DEFAULT_REPRESENTATIVE } from './default-representative';
 import { getDirectoryRepresentativeName } from './representative-directory';
 import { RepresentativeMonitorService, MonitoredRepresentative } from './representative-monitor.service';
@@ -102,7 +101,6 @@ export class RepresentativeService {
     private wallet: WalletService,
     private api: ApiService,
     private util: UtilService,
-    private ninja: NinjaService,
     private representativeMonitor: RepresentativeMonitorService
   ) {
     this.representatives = this.defaultRepresentatives.map(rep => ({ ...rep }));
@@ -166,7 +164,6 @@ export class RepresentativeService {
       // Prefer the selected RPC's view of recent voting to a remote observer.
       const repOnline = onlineReps === null ? (monitorRep?.online ?? null) : onlineReps.includes(representative.account);
       const knownRep = this.getRepresentative(representative.account);
-      const knownRepNinja = await this.ninja.getAccount(representative.account);
 
       const nanoWeight = this.util.nano.rawToMnano(representative.weight || 0);
       const percent = this.onlineStakeTotal ? nanoWeight.div(this.onlineStakeTotal).times(100) : new BigNumber(0);
@@ -211,93 +208,29 @@ export class RepresentativeService {
         status = 'alert';
       }
 
+      // A locally saved name is an alias, not an independent health check.
+      // Trusted and explicitly avoided are deliberate local user decisions.
       if (knownRep) {
-        // in the list of known representatives
-        status = status === 'none' ? 'ok' : status;
         label = knownRep.name;
         repStatus.known = true;
         if (knownRep.trusted) {
-          status = 'trusted'; // marked as trusted
+          status = 'trusted';
           repStatus.trusted = true;
           repStatus.changeRequired = false;
           repStatus.warn = false;
         }
         if (knownRep.warn) {
-          status = 'alert'; // marked to avoid
+          status = 'alert';
           repStatus.markedToAvoid = true;
           repStatus.warn = true;
           repStatus.changeRequired = true;
         }
-      } else if (knownRepNinja) {
-        status = status === 'none' ? 'ok' : status;
-        label = knownRepNinja.alias;
       } else {
-        // An alias in the community directory does not grant Trusted status.
         label = monitorRep?.name || getDirectoryRepresentativeName(representative.account);
       }
-
-      const uptimeIntervalDays = 7;
-
-      if (knownRepNinja && !repStatus.trusted) {
-        if (knownRepNinja.closing === true) {
-          status = 'alert';
-          repStatus.closing = true;
-          repStatus.warn = true;
-          repStatus.changeRequired = true;
-        }
-
-        let uptimeIntervalValue = knownRepNinja.uptime_over.week;
-
-        // temporary fix for knownRepNinja.uptime_over.week always returning 0
-        // uptimeIntervalValue = knownRepNinja.uptime_over.month;
-        // uptimeIntervalDays = 30;
-        // /temporary fix
-
-        // consider uptime value at least 1/<interval days> of daily uptime
-        uptimeIntervalValue = Math.max(
-          uptimeIntervalValue,
-          (knownRepNinja.uptime_over.day / uptimeIntervalDays)
-        );
-
-        if (repOnline === true) {
-          // consider uptime value at least 1% if the rep is currently online
-          uptimeIntervalValue = Math.max(uptimeIntervalValue, 1);
-        }
-
-        repStatus.uptime = uptimeIntervalValue;
-        repStatus.score = knownRepNinja.score;
-
-        const msSinceLastVoted = knownRepNinja.lastVoted ? ( Date.now() - new Date(knownRepNinja.lastVoted).getTime() ) : 0;
-        repStatus.daysSinceLastVoted = Math.floor(msSinceLastVoted / 86400000);
-        if (uptimeIntervalValue === 0) {
-          // display a minimum of <interval days> if the uptime value is 0%
-          repStatus.daysSinceLastVoted = Math.max(repStatus.daysSinceLastVoted, uptimeIntervalDays);
-        }
-
-        if (uptimeIntervalValue < 50) {
-          status = 'alert';
-          repStatus.veryLowUptime = true;
-          repStatus.warn = true;
-          repStatus.changeRequired = true;
-        } else if (uptimeIntervalValue < 60) {
-          if (status !== 'alert') {
-            status = 'warn';
-          }
-          repStatus.lowUptime = true;
-          repStatus.warn = true;
-        }
-      } else if (knownRepNinja === false && !repStatus.trusted && monitorRep?.online !== true) {
-        // does not exist (404)
-        status = 'alert';
-        repStatus.uptime = 0;
-        repStatus.veryLowUptime = true;
-        repStatus.daysSinceLastVoted = uptimeIntervalDays;
-        repStatus.warn = true;
-        repStatus.changeRequired = true;
-      } else {
-        // any other api error
-        status = status === 'none' ? 'unknown' : status;
-      }
+      // No inferred negative rating from missing archived directory entries.
+      // Lack of third-party telemetry is unknown, not unhealthy.
+      if (status === 'none') status = 'unknown';
 
       // Only promote a genuinely unknown evaluation. Positive independent
       // observations never cancel local warnings, high voting weight, or
@@ -315,7 +248,7 @@ export class RepresentativeService {
         statusText: status,
         label: label ?? null,
         status: repStatus,
-        donationAddress: knownRepNinja?.donation?.account,
+
         networkObservation: {
           online: repOnline,
           source: onlineReps !== null ? 'rpc' as const : monitorRep ? 'nanonode' as const : null,
