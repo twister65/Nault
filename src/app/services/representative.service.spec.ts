@@ -200,14 +200,15 @@ describe('Positive NanoNode health evidence', () => {
     service.representativeMonitor = {getSnapshot: async () => ({
       takenAt: Math.floor(Date.now() / 1000), byAccount: {[id]: rep}
     })};
-    service.api = {confirmationQuorum: async () => ({online_stake_total:'100'})};
+    service.api = {confirmationQuorum: async () => ({online_stake_total:'10'})};
     service.util = {nano:{rawToMnano: (raw: string) => new BigNumber(raw)}};
     service.ninja = {getAccount: async () => null};
     service.getRepresentative = () => undefined;
     service.nfReps = [];
     service.walletReps$ = {next: jasmine.createSpy('next')};
     const overview = (await service.getRepresentativesOverview())[0];
-    expect(overview.statusText).toBe('unknown');
+    expect(overview.statusText).toBe('alert');
+    expect(overview.status.veryHighWeight).toBeTrue();
     expect(overview.status.trusted).toBeFalse();
   });
 });
