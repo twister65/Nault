@@ -8,6 +8,7 @@ import {UtilService} from './util.service';
 import { NinjaService } from './ninja.service';
 import { DEFAULT_REPRESENTATIVE } from './default-representative';
 import { getDirectoryRepresentativeName } from './representative-directory';
+import { RepresentativeMonitorService } from './representative-monitor.service';
 
 export interface RepresentativeStatus {
   online: boolean | null;
@@ -56,6 +57,7 @@ export interface FullRepresentativeOverview extends RepresentativeApiOverview {
   label: string|null;
   status: RepresentativeStatus;
   donationAddress?: string;
+  networkObservation?: { online: boolean | null; source: 'rpc' | 'nanonode' | null; observedAt: number | null; version: string | null; inSync: boolean | null; verdict: string | null };
 }
 
 
@@ -82,7 +84,8 @@ export class RepresentativeService {
     private wallet: WalletService,
     private api: ApiService,
     private util: UtilService,
-    private ninja: NinjaService
+    private ninja: NinjaService,
+    private representativeMonitor: RepresentativeMonitorService
   ) {
     this.representatives = this.defaultRepresentatives.map(rep => ({ ...rep }));
   }
@@ -128,7 +131,10 @@ export class RepresentativeService {
     const accounts = await this.wallet.getAccountsDetails();
     const uniqueReps = this.getUniqueRepresentatives(accounts);
     const representatives = await this.getRepresentativesDetails(uniqueReps);
-    const onlineReps = await this.getOnlineRepresentatives();
+    const [onlineReps, monitored] = await Promise.all([
+      this.getOnlineRepresentatives(),
+      this.representativeMonitor?.getSnapshot?.() ?? Promise.resolve(null)
+    ]);
     const quorum = await this.api.confirmationQuorum();
 
     const online_stake_total = quorum ? this.util.nano.rawToMnano(quorum.online_stake_total) : null;
@@ -138,7 +144,9 @@ export class RepresentativeService {
 
     // Now, loop through each representative and determine some details about it
     for (const representative of representatives) {
-      const repOnline = onlineReps === null ? null : onlineReps.indexOf(representative.account) !== -1;
+      const monitorRep = monitored?.byAccount[representative.account.toLowerCase()] || null;
+      // Prefer the selected RPC's view of recent voting to a remote observer.
+      const repOnline = onlineReps === null ? (monitorRep?.online ?? null) : onlineReps.includes(representative.account);
       const knownRep = this.getRepresentative(representative.account);
       const knownRepNinja = await this.ninja.getAccount(representative.account);
 
@@ -207,7 +215,7 @@ export class RepresentativeService {
         label = knownRepNinja.alias;
       } else {
         // An alias in the community directory does not grant Trusted status.
-        label = getDirectoryRepresentativeName(representative.account);
+        label = monitorRep?.name || getDirectoryRepresentativeName(representative.account);
       }
 
       const uptimeIntervalDays = 7;
@@ -280,6 +288,14 @@ export class RepresentativeService {
         label: label ?? null,
         status: repStatus,
         donationAddress: knownRepNinja?.donation?.account,
+        networkObservation: {
+          online: repOnline,
+          source: onlineReps !== null ? 'rpc' as const : monitorRep ? 'nanonode' as const : null,
+          observedAt: onlineReps === null && monitorRep ? monitored!.takenAt : null,
+          version: monitorRep?.node?.version ?? null,
+          inSync: monitorRep?.node?.inSync ?? null,
+          verdict: monitorRep?.verdict ?? null
+        }
       };
 
       const fullRep = { ...representative, ...additionalData };
