@@ -57,7 +57,7 @@ export interface FullRepresentativeOverview extends RepresentativeApiOverview {
   label: string|null;
   status: RepresentativeStatus;
   donationAddress?: string;
-  networkObservation?: { online: boolean | null; source: 'rpc' | 'nanonode' | null; observedAt: number | null; version: string | null; inSync: boolean | null; verdict: string | null };
+  networkObservation?: { online: boolean | null; source: 'rpc' | 'nanonode' | null; rpcOnline: boolean | null; nanonodeOnline: boolean | null; observedAt: number | null; version: string | null; inSync: boolean | null; verdict: string | null };
 }
 
 
@@ -291,7 +291,9 @@ export class RepresentativeService {
         networkObservation: {
           online: repOnline,
           source: onlineReps !== null ? 'rpc' as const : monitorRep ? 'nanonode' as const : null,
-          observedAt: onlineReps === null && monitorRep ? monitored!.takenAt : null,
+          rpcOnline: onlineReps === null ? null : onlineReps.includes(representative.account),
+          nanonodeOnline: monitorRep?.online ?? null,
+          observedAt: monitorRep ? monitored!.takenAt : null,
           version: monitorRep?.node?.version ?? null,
           inSync: monitorRep?.node?.inSync ?? null,
           verdict: monitorRep?.verdict ?? null
