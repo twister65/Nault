@@ -41,6 +41,13 @@
                             <div class="label">{{ 'ui-representatives.good' | transloco }}</div>
                           </div>
                         }
+                        @case ((rep.statusText == 'monitorGood')) {
+                          <div class="representative-health-status health-green" uk-tooltip
+                               [title]="'ui-representatives.monitor-good-tip' | transloco">
+                            <div class="health-icon"></div>
+                            <div class="label">{{ 'ui-representatives.monitor-good' | transloco }}</div>
+                          </div>
+                        }
                         @case ((rep.statusText == 'warn')) {
                           <div class="representative-health-status health-yellow">
                             <div class="health-icon"></div>
