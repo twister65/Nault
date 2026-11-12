@@ -927,11 +927,21 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
 
 
-  // Show the vault when Nano.to is the explicit PoW provider or is the
-  // selected RPC server used as the external PoW source. Other PoW modes,
-  // including automatic fallback, must not expose unrelated key controls.
+  // Show Nano.to credentials only when they are relevant to the selected PoW
+  // mode, never merely because the unrelated wallet RPC uses Nano.to.
   showNanoToPowApiKeys(): boolean {
     if (this.selectedPoWOption === 'nanoTo') return true;
+
+    if (this.selectedPoWOption === 'best') {
+      // "Best available (Nano.to)" must allow managing its key. Also keep
+      // encrypted Nano.to keys accessible after the vault is locked: that
+      // temporarily makes Twister32 the best usable provider, but the user
+      // must still be able to unlock Nano.to without changing PoW mode.
+      const preferred = this.pow.getPreferredBestPoWProvider();
+      return PoWApiKeyVaultService.providerForUrl(preferred?.endpoint || '') === 'nano-to' ||
+        this.powApiKeyVault.getKeySummaries('nano-to').length > 0;
+    }
+
     if (this.selectedPoWOption !== 'server') return false;
 
     // Prefer the server currently selected in the form (even before Apply);
