@@ -571,6 +571,7 @@
     "new-payment": "Nouveau paiement"
   },
   "ui-representatives": {
+    "monitor-good-filter": "Bon (NanoNode.de) uniquement",
     "monitor-good": "Bon (NanoNode.de)",
     "monitor-good-tip": "Évaluation indicative : votes récents, représentant principal, moins de 2 % de poids, verdict favorable et synchronisation signalée par NanoNode.de. La télémétrie peut être falsifiée et ne garantit pas la disponibilité sur la durée.",
     "title": "Représentants",
