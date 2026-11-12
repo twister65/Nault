@@ -103,6 +103,16 @@ export class ChangeRepWidgetComponent implements OnInit {
     await this.repService.detectChangeableReps(this.representatives);
   }
 
+  /**
+   * A third-party observation of recent votes is not a health score.
+   * Only replace the generic "unknown status" label when the health itself
+   * is unknown and NanoNode.de explicitly reports recent votes.
+   */
+  hasVotesWithUnverifiedHealth(rep: FullRepresentativeOverview): boolean {
+    return (rep.statusText === 'unknown' || rep.statusText === 'none') &&
+      rep.networkObservation?.nanonodeOnline === true;
+  }
+
   updateDisplayedRepresentatives() {
     this.updateSelectedAccountHasRep();
     this.displayedRepresentatives = this.getDisplayedRepresentatives(this.representatives);
@@ -205,14 +215,14 @@ export class ChangeRepWidgetComponent implements OnInit {
     );
 
     this.router.navigate(['/representatives'], {
-      queryParams: { hideOverview: true, accounts: accountsToChangeRepFor, showRecommended: true }
+      queryParams: { accounts: accountsToChangeRepFor }
     });
   }
 
   showRepSelectionForAllChangeableReps() {
     const allAccounts = this.changeableRepresentatives.map(rep => rep.accounts.map(a => a.id).join(',')).join(',');
 
-    this.router.navigate(['/representatives'], { queryParams: { hideOverview: true, accounts: allAccounts, showRecommended: true } });
+    this.router.navigate(['/representatives'], { queryParams: { accounts: allAccounts } });
   }
 
 }

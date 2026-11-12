@@ -29,6 +29,49 @@ describe('ConfigureAppComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('does not close the default representative picker after an address-input blur', fakeAsync(() => {
+    component.defaultRepresentative = null;
+    component.defaultRepSearch = '';
+    component.browseDefaultReps = false;
+    component.showRepresentatives = false;
+    component.representativeList = [
+      {id: 'nano_3hn3r6bnnmcy39gu6fgtisgnqh384gmt5mnh71a5xo4cb1d38ps16p8sg5c3', name: 'Twister32'}
+    ];
+    void component.validateRepresentative(); // blur previously scheduled an auto-close
+    component.toggleDefaultRepBrowser();
+    expect(component.showRepresentatives).toBeTrue();
+    expect(component.representativeResults$.value.length).toBe(1);
+    tick(450);
+    expect(component.browseDefaultReps).toBeTrue();
+    expect(component.showRepresentatives).toBeTrue();
+    component.toggleDefaultRepBrowser();
+    expect(component.showRepresentatives).toBeFalse();
+    component.toggleDefaultRepBrowser();
+    expect(component.showRepresentatives).toBeTrue();
+  }));
+
+  it('updates results without collapsing the default representative browser on async refresh', fakeAsync(() => {
+    const twister = 'nano_3hn3r6bnnmcy39gu6fgtisgnqh384gmt5mnh71a5xo4cb1d38ps16p8sg5c3';
+    component.defaultRepresentative = null;
+    component.defaultRepSearch = '';
+    component.browseDefaultReps = false;
+    component.showRepresentatives = false;
+    component.representativeList = [];
+    (component as any).representativeMonitor = {getSnapshot: () => Promise.resolve({
+      representatives: [{account: twister, name: 'Twister32', online: true}],
+      byAccount: {[twister]: {name: 'Twister32', online: true}}
+    })};
+    (component as any).repService = {getSortedRepresentatives: () => [], getRepresentative: () => undefined};
+    component.toggleDefaultRepBrowser();
+    expect(component.showRepresentatives).toBeTrue();
+    void component.populateRepresentativeList();
+    tick(0);
+    expect(component.browseDefaultReps).toBeTrue();
+    expect(component.showRepresentatives).toBeTrue();
+    expect(component.representativeResults$.value.some(rep => rep.id === twister)).toBeTrue();
+  }));
+
+
   it('refreshes missing node statistics when WebSocket reconnects after offline startup', fakeAsync(() => {
     (component as any).appSettings.settings.serverAPI = 'https://rainstorm.city/api';
     spyOn(component, 'loadFromSettings').and.stub();

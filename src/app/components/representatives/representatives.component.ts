@@ -1,33 +1,24 @@
 import {Component, OnInit, ViewChild, ElementRef, ChangeDetectionStrategy} from '@angular/core';
 import {ActivatedRoute} from '@angular/router';
-import BigNumber from 'bignumber.js';
 import {BehaviorSubject} from 'rxjs';
 import { QrModalService } from '../../services/qr-modal.service';
 import type {QRType} from '../qr-modal/qr-modal.component';
 import type {WalletApiAccount} from '../../services/wallet.service';
+import { hasPositiveNanoNodeHealthEvidence } from '../../services/representative.service';
 import type {StoredRepresentative} from '../../services/representative.service';
 
 import {
-  ApiService,
   AppSettingsService,
   FullRepresentativeOverview,
   NanoBlockService,
   NotificationService,
   RepresentativeService,
   UtilService,
-  WalletService,
-  NinjaService
+  WalletService
 } from '../../services';
 import { TranslocoService } from '@jsverse/transloco';
-
-interface RecommendedRepresentative {
-  account: string;
-  alias: string;
-  votingweight: number | string;
-  weight?: BigNumber;
-  percent?: string;
-  [field: string]: unknown;
-}
+import { getDirectoryRepresentativeName, getDirectoryRepresentatives } from '../../services/representative-directory';
+import { RepresentativeMonitorService, RepresentativeMonitorSnapshot, MonitoredRepresentative } from '../../services/representative-monitor.service';
 
 @Component({
     selector: 'app-representatives',
@@ -52,40 +43,38 @@ export class RepresentativesComponent implements OnInit {
   selectedAccounts: Array<{id: string}> = [];
   fullAccounts: Array<WalletApiAccount & {error?: string}> = [];
 
-  recommendedReps: RecommendedRepresentative[] = [];
-  recommendedRepsPaginated: RecommendedRepresentative[] = [];
-  recommendedRepsLoading = false;
-  selectedRecommendedRep: RecommendedRepresentative | null = null;
-  showRecommendedReps = false;
   loadingRepresentatives = false;
 
-  repsPerPage = 5;
-  currentRepPage = 0;
-
-  hideOverview = false;
-
   representativeList: StoredRepresentative[] = [];
+  monitorSnapshot: RepresentativeMonitorSnapshot | null = null;
+  browseRepresentativeList = false;
+  representativeSearch = '';
+  onlyOnlineReps = false;
+  onlyMonitoredGoodReps = false;
+  visibleRepresentativeLimit = 12;
+  matchingRepresentativeCount = 0;
+  private lastRepresentativeSearch = '';
 
   constructor(
     private router: ActivatedRoute,
     public walletService: WalletService,
-    private api: ApiService,
     private notifications: NotificationService,
     private nanoBlock: NanoBlockService,
     private util: UtilService,
     private representativeService: RepresentativeService,
     public settings: AppSettingsService,
-    private ninja: NinjaService,
     private qrModalService: QrModalService,
-    private translocoService: TranslocoService) { }
+    private translocoService: TranslocoService,
+    public representativeMonitor: RepresentativeMonitorService) { }
 
   async ngOnInit() {
     this.representativeService.loadRepresentativeList();
 
     // Listen for query parameters that set defaults
     this.router.queryParams.subscribe(params => {
-      this.hideOverview = params && params.hideOverview;
-      this.showRecommendedReps = params && params.showRecommended;
+      // Historical hideOverview/showRecommended flags are intentionally ignored:
+      // the representative summary must remain visible after opening the
+      // change-required action and after an accepted representative change.
 
       if (params && params.accounts) {
         this.selectedAccounts = []; // Reset the preselected accounts
@@ -106,35 +95,120 @@ export class RepresentativesComponent implements OnInit {
       (a: FullRepresentativeOverview, b: FullRepresentativeOverview) => b.delegatedWeight.toNumber() - a.delegatedWeight.toNumber()
     );
     this.representativeOverview = repOverview;
-    repOverview.forEach(o => this.fullAccounts.push(...o.accounts));
+    this.fullAccounts = repOverview.flatMap(o => o.accounts);
     this.loadingRepresentatives = false;
 
-    this.populateRepresentativeList();
-
-    await this.loadRecommendedReps();
+    await this.populateRepresentativeList();
   }
 
   async populateRepresentativeList() {
-    // add trusted/regular local reps to the list
+    // No wallet addresses are sent to the third-party service: one global
+    // JSON listing is shared for autocomplete and the representative overview.
+    this.monitorSnapshot = await this.representativeMonitor.getSnapshot();
     const localReps = this.representativeService.getSortedRepresentatives();
-    this.representativeList.push( ...localReps.filter(rep => (!rep.warn)) );
+    const monitoredReps: StoredRepresentative[] = (this.monitorSnapshot?.representatives ?? [])
+      .filter(rep => !!rep.name).map(rep => ({ id: rep.account, name: rep.name! }));
+    const fallback = getDirectoryRepresentatives();
+    // Keep the user's local names and avoid flags ahead of third-party aliases.
+    this.representativeList = [
+      ...localReps, ...monitoredReps, ...fallback
+    ].filter((rep, index, list) =>
+      list.findIndex(item => item.id.toLowerCase() === rep.id.toLowerCase()) === index
+    );
+    this.searchRepresentatives();
+  }
 
-    if (this.settings.settings.serverAPI) {
-      const verifiedReps = await this.ninja.recommendedRandomized();
+  getMonitoredRepresentative(id: string): MonitoredRepresentative | null {
+    return this.monitorSnapshot?.byAccount[id.toLowerCase()] ?? null;
+  }
 
-      // add random recommended reps to the list
-      for (const representative of verifiedReps) {
-        const temprep = {
-          id: representative.account,
-          name: representative.alias
-        };
+  isMonitoredGoodRepresentative(id: string): boolean {
+    return hasPositiveNanoNodeHealthEvidence(this.getMonitoredRepresentative(id));
+  }
 
-        this.representativeList.push(temprep);
-      }
+  /**
+   * NanoNode.de's share is a fraction (0.000015 = 0.0015%), not a percentage.
+   * Preserve four decimal places below 0.01% so small representatives are not
+   * incorrectly displayed as having 0.00% voting weight.
+   */
+  formatVotingWeightShare(share: number | null): string {
+    if (share === null || !Number.isFinite(share) || share < 0 || share > 1) return '';
+    const locale = this.translocoService.getActiveLang() || 'en';
+    const percentage = share * 100;
+    const decimals = percentage > 0 && percentage < 0.01 ? 4 : 2;
+    const formatter = new Intl.NumberFormat(locale, {
+      style: 'percent',
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+    // An even smaller positive share must not be displayed as a literal zero.
+    if (percentage > 0 && percentage < 0.00005) {
+      return '< ' + formatter.format(0.000001);
     }
+    return formatter.format(share);
+  }
 
-    // add untrusted local reps to the list
-    this.representativeList.push( ...localReps.filter(rep => (rep.warn)) );
+  /**
+   * Node votes are independent observations. An absent RPC response is
+   * unknown; disagreement with NanoNode.de is not proof of an offline node.
+   * This tooltip is not a health or trusted-status assessment.
+   */
+  getVoteObservationsTooltip(rep: FullRepresentativeOverview): string {
+    const observation = rep.networkObservation;
+    const status = (value: boolean | null | undefined): string => {
+      const key = value === true ? 'observed-online'
+        : value === false ? 'not-observed' : 'observation-unavailable';
+      return this.translocoService.translate('ui-representatives.' + key);
+    };
+    return [
+      'RPC : ' + status(observation?.rpcOnline),
+      'NanoNode.de : ' + status(observation?.nanonodeOnline)
+    ].join(' • ');
+  }
+
+  /** The online-only picker accepts observed votes from either RPC or NanoNode. */
+  private hasRecentObservedVote(id: string): boolean {
+    const rpc = this.representativeOverview.find(rep => rep.id.toLowerCase() === id.toLowerCase())
+      ?.networkObservation?.rpcOnline;
+    return rpc === true || this.getMonitoredRepresentative(id)?.online === true;
+  }
+
+  /**
+   * Representative-list ranking is UI-only and never selects a delegate.
+   * Always show the wallet's current representative before truncating results.
+   */
+  private representativePriority(rep: StoredRepresentative): number {
+    const current = this.representativeOverview.some(item => item.id.toLowerCase() === rep.id.toLowerCase());
+    if (current) return 5;
+    if (rep.trusted) return 4;
+    if (this.isMonitoredGoodRepresentative(rep.id)) return 3;
+    if (this.hasRecentObservedVote(rep.id)) return 2;
+    return 1;
+  }
+
+  showMoreRepresentatives() {
+    this.visibleRepresentativeLimit += 12;
+    this.searchRepresentatives();
+  }
+
+  toggleRepresentativeBrowser() {
+    this.browseRepresentativeList = !this.browseRepresentativeList;
+    this.representativeSearch = '';
+    this.visibleRepresentativeLimit = 12;
+    this.lastRepresentativeSearch = '';
+    this.searchRepresentatives();
+  }
+
+  toggleOnlineOnly() {
+    this.onlyOnlineReps = !this.onlyOnlineReps;
+    this.visibleRepresentativeLimit = 12;
+    this.searchRepresentatives();
+  }
+
+  toggleMonitoredGoodOnly() {
+    this.onlyMonitoredGoodReps = !this.onlyMonitoredGoodReps;
+    this.visibleRepresentativeLimit = 12;
+    this.searchRepresentatives();
   }
 
   getAccountLabel(account: WalletApiAccount) {
@@ -198,193 +272,152 @@ export class RepresentativesComponent implements OnInit {
   }
 
   searchRepresentatives() {
-    this.showRepresentatives = true;
-    const search = this.toRepresentativeID || '';
-
+    const search = (this.representativeSearch || '').trim().toLowerCase();
+    if (search !== this.lastRepresentativeSearch) {
+      this.visibleRepresentativeLimit = 12;
+      this.lastRepresentativeSearch = search;
+    }
+    this.showRepresentatives = this.browseRepresentativeList;
+    if (!this.showRepresentatives) {
+      this.matchingRepresentativeCount = 0;
+      this.representativeResults$.next([]);
+      return;
+    }
     const matches = this.representativeList
-      .filter(a => a.name.toLowerCase().indexOf(search.toLowerCase()) !== -1)
-      // remove duplicate accounts
-      .filter((item, pos, self) => this.util.array.findWithAttr(self, 'id', item.id) === pos)
-      .slice(0, 5);
-
-    this.representativeResults$.next(matches);
+      .filter(rep => !rep.warn)
+      .filter(rep => !this.onlyOnlineReps || this.hasRecentObservedVote(rep.id))
+      .filter(rep => !this.onlyMonitoredGoodReps || this.isMonitoredGoodRepresentative(rep.id))
+      .filter(rep => !search || rep.name.toLowerCase().includes(search) || rep.id.toLowerCase().includes(search))
+      .sort((a, b) => this.representativePriority(b) - this.representativePriority(a) ||
+        a.name.localeCompare(b.name));
+    this.matchingRepresentativeCount = matches.length;
+    this.representativeResults$.next(matches.slice(0, this.visibleRepresentativeLimit));
   }
 
-  selectRepresentative(rep: string) {
+  selectRepresentative(account: string) {
+    this.browseRepresentativeList = false;
+    this.representativeSearch = '';
     this.showRepresentatives = false;
-    this.toRepresentativeID = rep;
-    this.searchRepresentatives();
-    this.validateRepresentative();
+    this.toRepresentativeID = account;
+    this.representativeResults$.next([]);
+    void this.validateRepresentative();
   }
 
   async validateRepresentative() {
-    setTimeout(() => this.showRepresentatives = false, 400);
+    // The inline browser is controlled only by its Browse button/selection.
+    // An address-input blur must never close a list opened by the same click.
     this.toRepresentativeID = this.toRepresentativeID.replace(/ /g, '');
-
-    if (this.toRepresentativeID === '') {
+    if (!this.toRepresentativeID) {
       this.representativeListMatch = '';
       return;
     }
-
-    const rep = this.representativeService.getRepresentative(this.toRepresentativeID);
-    const ninjaRep = await this.ninja.getAccount(this.toRepresentativeID);
-
-    if (rep) {
-      this.representativeListMatch = rep.name;
-    } else if (ninjaRep) {
-      this.representativeListMatch = ninjaRep.alias;
-    } else {
-      this.representativeListMatch = '';
-    }
+    const localName = this.representativeService.getRepresentative(this.toRepresentativeID)?.name;
+    const liveName = this.getMonitoredRepresentative(this.toRepresentativeID)?.name;
+    const directoryName = getDirectoryRepresentativeName(this.toRepresentativeID);
+    this.representativeListMatch = localName || liveName || directoryName || '';
   }
 
-  async loadRecommendedReps() {
-    this.recommendedRepsLoading = true;
-    try {
-      const scores = await this.ninja.recommended() as RecommendedRepresentative[];
-      const totalSupply = new BigNumber(133248289);
-
-      const reps = scores.map(rep => {
-        const nanoWeight = this.util.nano.rawToMnano(rep.votingweight.toString() || 0);
-        const percent = nanoWeight.div(totalSupply).times(100);
-
-        // rep.weight = nanoWeight.toString(10);
-        rep.weight = this.util.nano.mnanoToRaw(nanoWeight);
-        rep.percent = percent.toFixed(3);
-
-        return rep;
-      });
-
-      this.recommendedReps = reps;
-
-      this.calculatePage();
-      this.recommendedRepsLoading = false;
-    } catch (err) {
-      this.recommendedRepsLoading = false;
-    }
-
-  }
-
-  previousReps() {
-    if (this.currentRepPage > 0) {
-      this.currentRepPage--;
-      this.calculatePage();
-    }
-  }
-  nextReps() {
-    if (this.currentRepPage < (this.recommendedReps.length / this.repsPerPage) - 1) {
-      this.currentRepPage++;
-    } else {
-      this.currentRepPage = 0;
-    }
-    this.calculatePage();
-  }
-
-  calculatePage() {
-    this.recommendedRepsPaginated = this.recommendedReps.slice(
-      (this.currentRepPage * this.repsPerPage),
-      (this.currentRepPage * this.repsPerPage) + this.repsPerPage
-    );
-  }
-
-  selectRecommendedRep(rep: RecommendedRepresentative) {
-    this.selectedRecommendedRep = rep;
-    this.toRepresentativeID = rep.account;
-    this.showRecommendedReps = false;
-    this.representativeListMatch = rep.alias; // We will save if they use this, so this is a nice little helper
-  }
 
   async changeRepresentatives() {
-    const accounts = this.selectedAccounts;
-    const newRep = this.toRepresentativeID;
+    if (this.changingRepresentatives) return;
 
-    if (this.changingRepresentatives) {
-      return; // Already running
-    }
+    const selectedAccounts = this.selectedAccounts;
+    const newRep = this.toRepresentativeID;
     if (this.walletService.isLocked()) {
       const wasUnlocked = await this.walletService.requestWalletUnlock();
-
-      if (wasUnlocked === false) {
-        return;
-      }
+      if (!wasUnlocked) return;
     }
-    if (!accounts || !accounts.length) {
-      return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.rep-select-account'));
+    if (!selectedAccounts.length) {
+      this.notifications.sendWarning(this.translocoService.translate('ui-notifications.rep-select-account'));
+      return;
+    }
+    if (!this.util.account.isValidAccount(newRep)) {
+      this.notifications.sendWarning(this.translocoService.translate('ui-notifications.rep-invalid'));
+      return;
+    }
+
+    const allAccounts = selectedAccounts.some(account => account.id === 'All Current Accounts');
+    const accountsToChange = allAccounts ? this.walletService.wallet.accounts : selectedAccounts;
+    const failedAccounts: Array<{id: string}> = [];
+    const accountsNeedingChange = accountsToChange.filter(account => {
+      const info = this.fullAccounts.find(a => a.id === account.id);
+      if (!info || info.error || !info.representative) {
+        failedAccounts.push({ id: account.id });
+        this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-change-failed-account', { account: account.id }));
+        return false;
+      }
+      return info.representative.toLowerCase() !== newRep.toLowerCase();
+    });
+
+    if (!accountsNeedingChange.length && !failedAccounts.length) {
+      this.notifications.sendInfo(this.translocoService.translate('ui-notifications.rep-no-change'));
+      return;
     }
 
     this.changingRepresentatives = true;
-
-    const valid = this.util.account.isValidAccount(newRep);
-    if (!valid) {
-      this.changingRepresentatives = false;
-      return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.rep-invalid'));
-    }
-
-    const allAccounts = accounts.find(a => a.id === 'All Current Accounts');
-    const accountsToChange = allAccounts ? this.walletService.wallet.accounts : accounts;
-
-    // Remove any that don't need their represetatives to be changed
-    const accountsNeedingChange = accountsToChange.filter(account => {
-      const accountInfo = this.fullAccounts.find(a => a.id === account.id);
-      if (!accountInfo || accountInfo.error) {
-        return false; // Cant find info, update the account
-      }
-
-      if (accountInfo.representative.toLowerCase() === newRep.toLowerCase()) {
-        return false; // This account already has this representative, reject it
-      }
-
-      return true;
-    });
-
-    if (!accountsNeedingChange.length) {
-      this.changingRepresentatives = false;
-      return this.notifications.sendInfo(this.translocoService.translate('ui-notifications.rep-no-change'));
-    }
-
-    // Now loop and change them
-    for (const account of accountsNeedingChange) {
-      const walletAccount = this.walletService.getWalletAccount(account.id);
-      if (!walletAccount) {
-        continue; // Unable to find account in the wallet? wat?
-      }
-
-      try {
-        const changed = await this.nanoBlock.generateChange(walletAccount, newRep, this.walletService.isLedgerWallet());
-        if (!changed) {
+    let successes = 0;
+    try {
+      for (const account of accountsNeedingChange) {
+        const walletAccount = this.walletService.getWalletAccount(account.id);
+        if (!walletAccount) {
+          failedAccounts.push({ id: account.id });
           this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-change-failed-account', { account: account.id }));
+          continue;
         }
-      } catch (err) {
-        this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-change-failed', { error: err instanceof Error ? err.message : String(err) }));
+
+        try {
+          // Only an RPC-accepted block hash counts as a successful change.
+          // Failed/rejected/disconnected Ledger signing returns no block hash.
+          const hash = await this.nanoBlock.generateChange(walletAccount, newRep, this.walletService.isLedgerWallet());
+          if (!hash) {
+            failedAccounts.push({ id: account.id });
+            this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-change-failed-account', { account: account.id }));
+            continue;
+          }
+          successes++;
+          const cached = this.fullAccounts.find(a => a.id === account.id);
+          if (cached) cached.representative = newRep;
+        } catch (err) {
+          failedAccounts.push({ id: account.id });
+          this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-change-failed', {
+            error: err instanceof Error ? err.message : String(err)
+          }));
+        }
       }
+
+      if (successes === 0) {
+        // Preserve the selected representative and accounts when all changes fail.
+        if (failedAccounts.length) this.selectedAccounts = failedAccounts;
+        return;
+      }
+
+      if (failedAccounts.length) {
+        this.selectedAccounts = failedAccounts;
+        this.notifications.sendWarning(this.translocoService.translate('ui-notifications.rep-updated-partial', {
+          succeeded: successes, failed: failedAccounts.length
+        }));
+      } else {
+        this.selectedAccounts = [];
+        this.toRepresentativeID = '';
+        this.representativeListMatch = '';
+        this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.rep-updated'));
+      }
+
+      // The block is already accepted: an overview refresh failure does not
+      // undo that transaction or turn a partial result into a false success.
+      try {
+        this.loadingRepresentatives = true;
+        this.representativeOverview = await this.representativeService.getRepresentativesOverview();
+        this.fullAccounts = this.representativeOverview.flatMap(rep => rep.accounts);
+        await this.representativeService.detectChangeableReps(this.representativeOverview);
+      } catch (_) {
+        console.warn('Unable to refresh representative overview after the update.');
+      } finally {
+        this.loadingRepresentatives = false;
+      }
+    } finally {
+      this.changingRepresentatives = false;
     }
-
-    // Determine if a recommended rep was selected, if so we save an entry in the rep list
-    if (this.selectedRecommendedRep && this.selectedRecommendedRep.account && this.selectedRecommendedRep.account === newRep) {
-      this.representativeService.saveRepresentative(newRep, this.selectedRecommendedRep.alias, false, false);
-    }
-
-    // Good to go!
-    this.selectedAccounts = [];
-    this.toRepresentativeID = '';
-    this.representativeListMatch = '';
-    this.changingRepresentatives = false;
-    this.selectedRecommendedRep = null;
-
-    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.rep-updated'));
-
-    let useCachedReps = false;
-
-    // If the overview panel is displayed, reload its data now
-    if (!this.hideOverview) {
-      this.loadingRepresentatives = true;
-      this.representativeOverview = await this.representativeService.getRepresentativesOverview();
-      this.loadingRepresentatives = false;
-      useCachedReps = true;
-    }
-
-    // Detect if any new reps should be changed
-    await this.representativeService.detectChangeableReps(useCachedReps ? this.representativeOverview : undefined);
   }
 
   // open qr reader modal

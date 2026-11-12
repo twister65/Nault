@@ -83,6 +83,9 @@ Special thanks to the following!
 - [Angular](https://angular.dev/) - Deliver web apps with confidence 🚀
 - [rsnano-node](https://github.com/rsnano-node/rsnano-node) - RsNano is a Rust port of nano-node
 - [nano-work-server](https://github.com/nanocurrency/nano-work-server) - A dedicated work server for the Nano cryptocurrency
+- [Nano.to](https://rpc.nano.to/) - Nano RPC infrastructure and proof-of-work services
+- [Nanonode.de](https://nanonode.de/) - Nano node monitoring and network data API
+- [NanoTicker](https://www.nanoticker.org/) - Nano network monitoring, representative statistics, and decentralization metrics
 - [ChatGPT](https://chatgpt.com/) - ChatGPT helped me improve the stability and security of Nault.
   
 Thanks a lot!

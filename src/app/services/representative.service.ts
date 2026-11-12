@@ -5,7 +5,27 @@ import type {BaseApiAccount, WalletApiAccount} from './wallet.service';
 import BigNumber from 'bignumber.js';
 import {ApiService} from './api.service';
 import {UtilService} from './util.service';
-import { NinjaService } from './ninja.service';
+import { DEFAULT_REPRESENTATIVE } from './default-representative';
+import { getDirectoryRepresentativeName } from './representative-directory';
+import { RepresentativeMonitorService, MonitoredRepresentative } from './representative-monitor.service';
+
+/**
+ * A narrowly scoped, indicative POSITIVE assessment from one third-party
+ * monitor, not a proof of safety, uptime over time or local Trusted status.
+ *
+ * Its "good" verdict does not itself check inSync, and treats null outdated
+ * as acceptable. We require independent sync evidence in its snapshot.
+ * RsNano cannot be compared to nano-node versions (outdated:null is expected).
+ */
+export function hasPositiveNanoNodeHealthEvidence(rep: MonitoredRepresentative | null): boolean {
+  if (!rep || rep.online !== true || rep.principal !== true ||
+      rep.verdict !== 'good' || rep.node?.inSync !== true ||
+      rep.crowded !== false || rep.share === null ||
+      !Number.isFinite(rep.share) || rep.share <= 0 || rep.share >= 0.02) return false;
+  const versionComparable = rep.outdated === false ||
+    (rep.outdated === null && rep.node?.implementation === 'rsnano');
+  return versionComparable;
+}
 
 export interface RepresentativeStatus {
   online: boolean | null;
@@ -54,12 +74,14 @@ export interface FullRepresentativeOverview extends RepresentativeApiOverview {
   label: string|null;
   status: RepresentativeStatus;
   donationAddress?: string;
+  networkObservation?: { online: boolean | null; source: 'rpc' | 'nanonode' | null; rpcOnline: boolean | null; nanonodeOnline: boolean | null; observedAt: number | null; version: string | null; inSync: boolean | null; verdict: string | null };
 }
 
 
 @Injectable()
 export class RepresentativeService {
   storeKey = `nanovault-representatives`;
+  private readonly defaultRepresentativeMigrationKey = 'nanovault-known-representative-twister32-v1';
 
   representatives$ = new BehaviorSubject<StoredRepresentative[]>([]);
   representatives: StoredRepresentative[] = [];
@@ -79,9 +101,9 @@ export class RepresentativeService {
     private wallet: WalletService,
     private api: ApiService,
     private util: UtilService,
-    private ninja: NinjaService
+    private representativeMonitor: RepresentativeMonitorService
   ) {
-    this.representatives = this.defaultRepresentatives;
+    this.representatives = this.defaultRepresentatives.map(rep => ({ ...rep }));
   }
 
   /**
@@ -125,7 +147,10 @@ export class RepresentativeService {
     const accounts = await this.wallet.getAccountsDetails();
     const uniqueReps = this.getUniqueRepresentatives(accounts);
     const representatives = await this.getRepresentativesDetails(uniqueReps);
-    const onlineReps = await this.getOnlineRepresentatives();
+    const [onlineReps, monitored] = await Promise.all([
+      this.getOnlineRepresentatives(),
+      this.representativeMonitor?.getSnapshot?.() ?? Promise.resolve(null)
+    ]);
     const quorum = await this.api.confirmationQuorum();
 
     const online_stake_total = quorum ? this.util.nano.rawToMnano(quorum.online_stake_total) : null;
@@ -135,9 +160,10 @@ export class RepresentativeService {
 
     // Now, loop through each representative and determine some details about it
     for (const representative of representatives) {
-      const repOnline = onlineReps === null ? null : onlineReps.indexOf(representative.account) !== -1;
+      const monitorRep = monitored?.byAccount[representative.account.toLowerCase()] || null;
+      // Prefer the selected RPC's view of recent voting to a remote observer.
+      const repOnline = onlineReps === null ? (monitorRep?.online ?? null) : onlineReps.includes(representative.account);
       const knownRep = this.getRepresentative(representative.account);
-      const knownRepNinja = await this.ninja.getAccount(representative.account);
 
       const nanoWeight = this.util.nano.rawToMnano(representative.weight || 0);
       const percent = this.onlineStakeTotal ? nanoWeight.div(this.onlineStakeTotal).times(100) : new BigNumber(0);
@@ -182,89 +208,38 @@ export class RepresentativeService {
         status = 'alert';
       }
 
+      // A locally saved name is an alias, not an independent health check.
+      // Trusted and explicitly avoided are deliberate local user decisions.
       if (knownRep) {
-        // in the list of known representatives
-        status = status === 'none' ? 'ok' : status;
         label = knownRep.name;
         repStatus.known = true;
         if (knownRep.trusted) {
-          status = 'trusted'; // marked as trusted
+          status = 'trusted';
           repStatus.trusted = true;
           repStatus.changeRequired = false;
           repStatus.warn = false;
         }
         if (knownRep.warn) {
-          status = 'alert'; // marked to avoid
+          status = 'alert';
           repStatus.markedToAvoid = true;
           repStatus.warn = true;
           repStatus.changeRequired = true;
         }
-      } else if (knownRepNinja) {
-        status = status === 'none' ? 'ok' : status;
-        label = knownRepNinja.alias;
-      }
-
-      const uptimeIntervalDays = 7;
-
-      if (knownRepNinja && !repStatus.trusted) {
-        if (knownRepNinja.closing === true) {
-          status = 'alert';
-          repStatus.closing = true;
-          repStatus.warn = true;
-          repStatus.changeRequired = true;
-        }
-
-        let uptimeIntervalValue = knownRepNinja.uptime_over.week;
-
-        // temporary fix for knownRepNinja.uptime_over.week always returning 0
-        // uptimeIntervalValue = knownRepNinja.uptime_over.month;
-        // uptimeIntervalDays = 30;
-        // /temporary fix
-
-        // consider uptime value at least 1/<interval days> of daily uptime
-        uptimeIntervalValue = Math.max(
-          uptimeIntervalValue,
-          (knownRepNinja.uptime_over.day / uptimeIntervalDays)
-        );
-
-        if (repOnline === true) {
-          // consider uptime value at least 1% if the rep is currently online
-          uptimeIntervalValue = Math.max(uptimeIntervalValue, 1);
-        }
-
-        repStatus.uptime = uptimeIntervalValue;
-        repStatus.score = knownRepNinja.score;
-
-        const msSinceLastVoted = knownRepNinja.lastVoted ? ( Date.now() - new Date(knownRepNinja.lastVoted).getTime() ) : 0;
-        repStatus.daysSinceLastVoted = Math.floor(msSinceLastVoted / 86400000);
-        if (uptimeIntervalValue === 0) {
-          // display a minimum of <interval days> if the uptime value is 0%
-          repStatus.daysSinceLastVoted = Math.max(repStatus.daysSinceLastVoted, uptimeIntervalDays);
-        }
-
-        if (uptimeIntervalValue < 50) {
-          status = 'alert';
-          repStatus.veryLowUptime = true;
-          repStatus.warn = true;
-          repStatus.changeRequired = true;
-        } else if (uptimeIntervalValue < 60) {
-          if (status !== 'alert') {
-            status = 'warn';
-          }
-          repStatus.lowUptime = true;
-          repStatus.warn = true;
-        }
-      } else if (knownRepNinja === false) {
-        // does not exist (404)
-        status = 'alert';
-        repStatus.uptime = 0;
-        repStatus.veryLowUptime = true;
-        repStatus.daysSinceLastVoted = uptimeIntervalDays;
-        repStatus.warn = true;
-        repStatus.changeRequired = true;
       } else {
-        // any other api error
-        status = status === 'none' ? 'unknown' : status;
+        label = monitorRep?.name || getDirectoryRepresentativeName(representative.account);
+      }
+      // No inferred negative rating from missing archived directory entries.
+      // Lack of third-party telemetry is unknown, not unhealthy.
+      if (status === 'none') status = 'unknown';
+
+      // Only promote a genuinely unknown evaluation. Positive independent
+      // observations never cancel local warnings, high voting weight, or
+      // a poor historical uptime reported by another source.
+      // The UI will explicitly attribute this indicative status to NanoNode.de.
+      if ((status === 'none' || status === 'unknown') &&
+          !repStatus.warn && !repStatus.changeRequired &&
+          hasPositiveNanoNodeHealthEvidence(monitorRep)) {
+        status = 'monitorGood';
       }
 
       const additionalData = {
@@ -273,7 +248,17 @@ export class RepresentativeService {
         statusText: status,
         label: label ?? null,
         status: repStatus,
-        donationAddress: knownRepNinja?.donation?.account,
+
+        networkObservation: {
+          online: repOnline,
+          source: onlineReps !== null ? 'rpc' as const : monitorRep ? 'nanonode' as const : null,
+          rpcOnline: onlineReps === null ? null : onlineReps.includes(representative.account),
+          nanonodeOnline: monitorRep?.online ?? null,
+          observedAt: monitorRep ? monitored!.takenAt : null,
+          version: monitorRep?.node?.version ?? null,
+          inSync: monitorRep?.node?.inSync ?? null,
+          verdict: monitorRep?.verdict ?? null
+        }
       };
 
       const fullRep = { ...representative, ...additionalData };
@@ -366,10 +351,19 @@ export class RepresentativeService {
   loadRepresentativeList(): StoredRepresentative[] {
     if (this.loaded) return this.representatives;
 
-    let list = this.defaultRepresentatives;
+    let list = this.defaultRepresentatives.map(rep => ({ ...rep }));
     const representativeStore = localStorage.getItem(this.storeKey);
     if (representativeStore) {
       list = JSON.parse(representativeStore);
+    }
+    // Seed a trusted Twister32 once into previously saved address books.
+    // Preserve existing entries and user changes made after migration.
+    if (localStorage.getItem(this.defaultRepresentativeMigrationKey) !== '1') {
+      if (!list.some(rep => rep.id.toLowerCase() === DEFAULT_REPRESENTATIVE.id)) {
+        list.unshift({ ...DEFAULT_REPRESENTATIVE });
+        localStorage.setItem(this.storeKey, JSON.stringify(list));
+      }
+      localStorage.setItem(this.defaultRepresentativeMigrationKey, '1');
     }
     this.representatives = list;
     this.representatives$.next(list);
@@ -403,7 +397,8 @@ export class RepresentativeService {
   // Reset representatives list to the default one
   resetRepresentativeList() {
     localStorage.removeItem(this.storeKey);
-    this.representatives = this.defaultRepresentatives;
+    this.representatives = this.defaultRepresentatives.map(rep => ({ ...rep }));
+    this.representatives$.next(this.representatives);
     this.loaded = false;
   }
 
@@ -463,7 +458,7 @@ export class RepresentativeService {
   }
 
   // Default representatives list
-  defaultRepresentatives: StoredRepresentative[] = [];
+  defaultRepresentatives: StoredRepresentative[] = [{ ...DEFAULT_REPRESENTATIVE }];
 
   // Bad representatives hardcoded to be avoided. Not visible in the user rep list
   nfReps = [

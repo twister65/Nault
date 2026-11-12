@@ -218,3 +218,38 @@
     background: rgba(127, 127, 127, 0.12);
     overflow-wrap: anywhere;
 }
+
+/* Representative search is an in-flow, keyboard/touch-friendly list.
+   It does not share input IDs or browser history with WebSocket fields. */
+.rep-config-picker {
+  position: relative;
+  margin-top: 8px;
+  max-height: 290px;
+  overflow-y: auto;
+  border: 1px solid rgba(139, 145, 174, 0.35);
+  border-radius: 6px;
+}
+.rep-config-picker-item {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 3px;
+  min-width: 0;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid rgba(139, 145, 174, 0.2);
+  padding: 9px 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.rep-config-picker-item:hover, .rep-config-picker-item:focus-visible {
+  outline: 2px solid #4a93db;
+  outline-offset: -2px;
+}
+.rep-config-picker-address {
+  overflow-wrap: anywhere;
+  color: #979cb1;
+  font-size: 0.72rem;
+}
