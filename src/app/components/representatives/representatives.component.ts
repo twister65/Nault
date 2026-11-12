@@ -71,6 +71,9 @@ export class RepresentativesComponent implements OnInit {
   browseRepresentativeList = false;
   representativeSearch = '';
   onlyOnlineReps = false;
+  visibleRepresentativeLimit = 12;
+  matchingRepresentativeCount = 0;
+  private lastRepresentativeSearch = '';
 
   constructor(
     private router: ActivatedRoute,
@@ -168,14 +171,52 @@ export class RepresentativesComponent implements OnInit {
     return formatter.format(share);
   }
 
+  /**
+   * Node votes are independent observations. An absent RPC response is
+   * unknown; disagreement with NanoNode.de is not proof of an offline node.
+   * This tooltip is not a health or trusted-status assessment.
+   */
+  getVoteObservationsTooltip(rep: FullRepresentativeOverview): string {
+    const observation = rep.networkObservation;
+    const status = (value: boolean | null | undefined): string => {
+      const key = value === true ? 'observed-online'
+        : value === false ? 'not-observed' : 'observation-unavailable';
+      return this.translocoService.translate('ui-representatives.' + key);
+    };
+    return [
+      'RPC : ' + status(observation?.rpcOnline),
+      'NanoNode.de : ' + status(observation?.nanonodeOnline)
+    ].join(' • ');
+  }
+
+  /**
+   * Representative-list ranking is UI-only and never selects a delegate.
+   * Always show the wallet's current representative before truncating results.
+   */
+  private representativePriority(rep: StoredRepresentative): number {
+    const current = this.representativeOverview.some(item => item.id.toLowerCase() === rep.id.toLowerCase());
+    if (current) return 4;
+    if (rep.trusted) return 3;
+    if (this.getMonitoredRepresentative(rep.id)?.online === true) return 2;
+    return 1;
+  }
+
+  showMoreRepresentatives() {
+    this.visibleRepresentativeLimit += 12;
+    this.searchRepresentatives();
+  }
+
   toggleRepresentativeBrowser() {
     this.browseRepresentativeList = !this.browseRepresentativeList;
     this.representativeSearch = '';
+    this.visibleRepresentativeLimit = 12;
+    this.lastRepresentativeSearch = '';
     this.searchRepresentatives();
   }
 
   toggleOnlineOnly() {
     this.onlyOnlineReps = !this.onlyOnlineReps;
+    this.visibleRepresentativeLimit = 12;
     this.searchRepresentatives();
   }
 
@@ -241,13 +282,24 @@ export class RepresentativesComponent implements OnInit {
 
   searchRepresentatives() {
     const search = (this.representativeSearch || '').trim().toLowerCase();
+    if (search !== this.lastRepresentativeSearch) {
+      this.visibleRepresentativeLimit = 12;
+      this.lastRepresentativeSearch = search;
+    }
     this.showRepresentatives = this.browseRepresentativeList;
-    const matches = this.showRepresentatives ? this.representativeList
-      .filter(rep => (!this.onlyOnlineReps || this.getMonitoredRepresentative(rep.id)?.online === true))
-      .filter(rep => !search || rep.name.toLowerCase().includes(search) || rep.id.toLowerCase().includes(search))
+    if (!this.showRepresentatives) {
+      this.matchingRepresentativeCount = 0;
+      this.representativeResults$.next([]);
+      return;
+    }
+    const matches = this.representativeList
       .filter(rep => !rep.warn)
-      .slice(0, 12) : [];
-    this.representativeResults$.next(matches);
+      .filter(rep => !this.onlyOnlineReps || this.getMonitoredRepresentative(rep.id)?.online === true)
+      .filter(rep => !search || rep.name.toLowerCase().includes(search) || rep.id.toLowerCase().includes(search))
+      .sort((a, b) => this.representativePriority(b) - this.representativePriority(a) ||
+        a.name.localeCompare(b.name));
+    this.matchingRepresentativeCount = matches.length;
+    this.representativeResults$.next(matches.slice(0, this.visibleRepresentativeLimit));
   }
 
   selectRepresentative(account: string) {
