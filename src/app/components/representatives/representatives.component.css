@@ -229,7 +229,7 @@
   overscroll-behavior: contain;
   border: 1px solid rgba(139, 145, 174, 0.3);
   border-radius: 7px;
-  background: var(--nault-card-bg, rgba(35, 38, 48, 0.98));
+  background: transparent;
 }
 .rep-picker-heading {
   padding: 10px 12px 6px;
