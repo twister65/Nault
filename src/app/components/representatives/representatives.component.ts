@@ -20,6 +20,7 @@ import {
 } from '../../services';
 import { TranslocoService } from '@jsverse/transloco';
 import { getDirectoryRepresentativeName, getDirectoryRepresentatives } from '../../services/representative-directory';
+import { RepresentativeMonitorService, RepresentativeMonitorSnapshot, MonitoredRepresentative } from '../../services/representative-monitor.service';
 
 interface RecommendedRepresentative {
   account: string;
@@ -66,6 +67,9 @@ export class RepresentativesComponent implements OnInit {
   hideOverview = false;
 
   representativeList: StoredRepresentative[] = [];
+  monitorSnapshot: RepresentativeMonitorSnapshot | null = null;
+  browseRepresentativeList = false;
+  onlyOnlineReps = false;
 
   constructor(
     private router: ActivatedRoute,
@@ -78,7 +82,8 @@ export class RepresentativesComponent implements OnInit {
     public settings: AppSettingsService,
     private ninja: NinjaService,
     private qrModalService: QrModalService,
-    private translocoService: TranslocoService) { }
+    private translocoService: TranslocoService,
+    public representativeMonitor: RepresentativeMonitorService) { }
 
   async ngOnInit() {
     this.representativeService.loadRepresentativeList();
@@ -116,27 +121,38 @@ export class RepresentativesComponent implements OnInit {
   }
 
   async populateRepresentativeList() {
-    // add trusted/regular local reps to the list
+    // No wallet addresses are sent to the third-party service: one global
+    // JSON listing is shared for autocomplete and the representative overview.
+    this.monitorSnapshot = await this.representativeMonitor.getSnapshot();
     const localReps = this.representativeService.getSortedRepresentatives();
-    this.representativeList.push( ...localReps.filter(rep => (!rep.warn)) );
-    this.representativeList.push(...getDirectoryRepresentatives());
+    const monitoredReps: StoredRepresentative[] = (this.monitorSnapshot?.representatives ?? [])
+      .filter(rep => !!rep.name).map(rep => ({ id: rep.account, name: rep.name! }));
+    const fallback = getDirectoryRepresentatives();
+    const verified = await this.ninja.recommendedRandomized().catch(() => []);
+    const ninjaReps: StoredRepresentative[] = Array.isArray(verified)
+      ? verified.filter(rep => !!rep?.account && !!rep?.alias)
+        .map(rep => ({ id: rep.account, name: rep.alias })) : [];
+    // Keep the user's local names and avoid flags ahead of third-party aliases.
+    this.representativeList = [
+      ...localReps, ...monitoredReps, ...fallback, ...ninjaReps
+    ].filter((rep, index, list) =>
+      list.findIndex(item => item.id.toLowerCase() === rep.id.toLowerCase()) === index
+    );
+    this.searchRepresentatives();
+  }
 
-    if (this.settings.settings.serverAPI) {
-      const verifiedReps = await this.ninja.recommendedRandomized();
+  getMonitoredRepresentative(id: string): MonitoredRepresentative | null {
+    return this.monitorSnapshot?.byAccount[id.toLowerCase()] ?? null;
+  }
 
-      // add random recommended reps to the list
-      for (const representative of verifiedReps) {
-        const temprep = {
-          id: representative.account,
-          name: representative.alias
-        };
+  toggleRepresentativeBrowser() {
+    this.browseRepresentativeList = !this.browseRepresentativeList;
+    this.searchRepresentatives();
+  }
 
-        this.representativeList.push(temprep);
-      }
-    }
-
-    // add untrusted local reps to the list
-    this.representativeList.push( ...localReps.filter(rep => (rep.warn)) );
+  toggleOnlineOnly() {
+    this.onlyOnlineReps = !this.onlyOnlineReps;
+    this.searchRepresentatives();
   }
 
   getAccountLabel(account: WalletApiAccount) {
@@ -200,38 +216,41 @@ export class RepresentativesComponent implements OnInit {
   }
 
   searchRepresentatives() {
-    this.showRepresentatives = true;
-    const search = this.toRepresentativeID || '';
+    const search = (this.toRepresentativeID || '').trim().toLowerCase();
+    this.showRepresentatives = (search.length >= 2 || this.browseRepresentativeList);
+    if (!this.showRepresentatives) {
+      this.representativeResults$.next([]);
+      return;
+    }
 
     const matches = this.representativeList
-      .filter(a => a.name.toLowerCase().indexOf(search.toLowerCase()) !== -1)
-      // remove duplicate accounts
-      .filter((item, pos, self) => this.util.array.findWithAttr(self, 'id', item.id) === pos)
-      .slice(0, 5);
-
+      .filter(rep => (!this.onlyOnlineReps || this.getMonitoredRepresentative(rep.id)?.online === true))
+      .filter(rep => !search || rep.name.toLowerCase().includes(search) || rep.id.toLowerCase().includes(search))
+      .filter(rep => !rep.warn)
+      .slice(0, 8);
     this.representativeResults$.next(matches);
   }
 
-  selectRepresentative(rep: string) {
+  selectRepresentative(account: string) {
+    this.browseRepresentativeList = false;
     this.showRepresentatives = false;
-    this.toRepresentativeID = rep;
-    this.searchRepresentatives();
-    this.validateRepresentative();
+    this.toRepresentativeID = account;
+    this.representativeResults$.next([]);
+    void this.validateRepresentative();
   }
 
   async validateRepresentative() {
     setTimeout(() => this.showRepresentatives = false, 400);
     this.toRepresentativeID = this.toRepresentativeID.replace(/ /g, '');
-
-    if (this.toRepresentativeID === '') {
+    if (!this.toRepresentativeID) {
       this.representativeListMatch = '';
       return;
     }
-
     const localName = this.representativeService.getRepresentative(this.toRepresentativeID)?.name;
+    const liveName = this.getMonitoredRepresentative(this.toRepresentativeID)?.name;
     const directoryName = getDirectoryRepresentativeName(this.toRepresentativeID);
-    const ninjaRep = localName || directoryName ? null : await this.ninja.getAccount(this.toRepresentativeID);
-    this.representativeListMatch = localName || directoryName || ninjaRep?.alias || '';
+    const ninjaRep = localName || liveName || directoryName ? null : await this.ninja.getAccount(this.toRepresentativeID);
+    this.representativeListMatch = localName || liveName || directoryName || ninjaRep?.alias || '';
   }
 
   async loadRecommendedReps() {
