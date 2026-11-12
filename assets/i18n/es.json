@@ -469,6 +469,8 @@
     "incoming-balance": "Saldo pendiente de recepción",
     "server-unavailable": "No se puede conectar al servidor",
     "refresh": "Actualizar",
+    "balance-refresh-failed": "No se pudieron actualizar los saldos. Comprueba la conexión.",
+    "representative-refresh-failed": "No se pudo actualizar el representante. Comprueba la conexión.",
     "or": "o",
     "select-other-server": "seleccionar otro servidor",
     "offline-mode": "La cartera está sin conexión",

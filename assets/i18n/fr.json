@@ -469,6 +469,8 @@
     "incoming-balance": "Solde entrant",
     "server-unavailable": "Impossible de se connecter au serveur",
     "refresh": "Actualiser",
+    "balance-refresh-failed": "Impossible d’actualiser les soldes. Vérifiez votre connexion.",
+    "representative-refresh-failed": "Impossible d’actualiser le représentant. Vérifiez votre connexion.",
     "or": "ou",
     "select-other-server": "choisir un autre serveur",
     "offline-mode": "Le portefeuille est hors ligne",
