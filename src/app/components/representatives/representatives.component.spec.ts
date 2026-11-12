@@ -27,6 +27,30 @@ describe('RepresentativesComponent', () => {
   });
 });
 
+describe('Representative overview navigation', () => {
+  it('loads representative health even from old hideOverview=true deep links', async () => {
+    const component = Object.create(RepresentativesComponent.prototype) as any;
+    const rep = {
+      id: 'nano_rep',
+      delegatedWeight: {toNumber: () => 1},
+      accounts: [{id: 'nano_account', representative: 'nano_rep'}]
+    };
+    component.router = {queryParams: new BehaviorSubject({hideOverview: 'true', showRecommended: 'true'})};
+    component.representativeService = {
+      loadRepresentativeList: jasmine.createSpy('loadRepresentativeList'),
+      getRepresentativesOverview: jasmine.createSpy('getRepresentativesOverview').and.resolveTo([rep])
+    };
+    component.fullAccounts = [];
+    component.selectedAccounts = [];
+    component.populateRepresentativeList = jasmine.createSpy('populateRepresentativeList').and.resolveTo();
+    await component.ngOnInit();
+    expect(component.representativeOverview).toEqual([rep]);
+    expect(component.fullAccounts).toEqual(rep.accounts);
+    expect(component.representativeService.getRepresentativesOverview).toHaveBeenCalledTimes(1);
+    expect(component.populateRepresentativeList).toHaveBeenCalled();
+  });
+});
+
 describe('Representative change transaction outcome', () => {
   function setup(result: string | null | undefined) {
     // Test RPC acceptance/failure without any physical Ledger or transactions.
@@ -89,6 +113,15 @@ describe('Representative change transaction outcome', () => {
     expect(component.toRepresentativeID).toBe('');
     expect(component.representativeService.getRepresentativesOverview).toHaveBeenCalled();
     expect(component.changingRepresentatives).toBeFalse();
+  });
+
+  it('refreshes the overview after an accepted change even if the old route carried hideOverview', async () => {
+    const component = setup('block-hash');
+    component.hideOverview = true; // ignored legacy query parameter
+    await component.changeRepresentatives();
+    expect(component.representativeService.getRepresentativesOverview).toHaveBeenCalledTimes(1);
+    expect(component.representativeService.detectChangeableReps).toHaveBeenCalled();
+    expect(component.notifications.sendSuccess).toHaveBeenCalledTimes(1);
   });
 
   it('reports partial success and retains only failed accounts for retry', async () => {
