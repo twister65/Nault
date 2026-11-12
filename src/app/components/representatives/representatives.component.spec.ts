@@ -1,5 +1,5 @@
 import { ComponentTestModule, isolateConstructorIO } from '../../../testing/component-test.module';
-import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick, waitForAsync } from '@angular/core/testing';
 
 import { RepresentativesComponent } from './representatives.component';
 import { BehaviorSubject } from 'rxjs';
@@ -140,6 +140,42 @@ describe('Inline representative picker', () => {
     expect(component.showRepresentatives).toBeFalse();
     expect(component.representativeResults$.value).toEqual([]);
   });
+
+  it('keeps the inline list open when an address field loses focus before a browse click', fakeAsync(() => {
+    const component = setup();
+    component.toRepresentativeID = '';
+    // The blur previously scheduled a 400 ms close, after the Browse click.
+    void component.validateRepresentative();
+    component.toggleRepresentativeBrowser();
+    expect(component.showRepresentatives).toBeTrue();
+    expect(component.representativeResults$.value.length).toBe(2);
+    tick(450);
+    expect(component.browseRepresentativeList).toBeTrue();
+    expect(component.showRepresentatives).toBeTrue();
+    // The very next click closes it; no desynchronised third-click behaviour.
+    component.toggleRepresentativeBrowser();
+    expect(component.showRepresentatives).toBeFalse();
+    component.toggleRepresentativeBrowser();
+    expect(component.showRepresentatives).toBeTrue();
+  }));
+
+  it('does not close the browser when a pending monitor/directory refresh completes', fakeAsync(() => {
+    const component = setup();
+    component.representativeMonitor = {getSnapshot: () => Promise.resolve({
+      representatives: [{account: twister, name: 'Twister32', online: true}],
+      byAccount: {[twister]: {account: twister, online: true}}
+    })};
+    component.representativeService.getSortedRepresentatives = () => [{id: twister, name: 'Twister32', trusted: true}];
+    component.ninja.recommendedRandomized = () => Promise.resolve([]);
+    component.representativeList = [];
+    component.toggleRepresentativeBrowser(); // opened before fetch finishes
+    expect(component.showRepresentatives).toBeTrue();
+    void component.populateRepresentativeList();
+    tick(0);
+    expect(component.browseRepresentativeList).toBeTrue();
+    expect(component.showRepresentatives).toBeTrue();
+    expect(component.representativeResults$.value.some((rep: {id: string}) => rep.id === twister)).toBeTrue();
+  }));
 
   it('finds representatives by name or address and excludes offline observations on request', () => {
     const component = setup();
