@@ -18,6 +18,7 @@ import {UtilService} from '../../services/util.service';
 import {BehaviorSubject, Subscription} from 'rxjs';
 import {RepresentativeService, StoredRepresentative} from '../../services/representative.service';
 import {NinjaService} from '../../services/ninja.service';
+import { getDirectoryRepresentativeName } from '../../services/representative-directory';
 import {QrModalService} from '../../services/qr-modal.service';
 import { TranslocoService } from '@jsverse/transloco';
 
@@ -889,16 +890,10 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const rep = this.repService.getRepresentative(this.defaultRepresentative);
-    const ninjaRep = await this.ninja.getAccount(this.defaultRepresentative);
-
-    if (rep) {
-      this.representativeListMatch = rep.name;
-    } else if (ninjaRep) {
-      this.representativeListMatch = ninjaRep.alias;
-    } else {
-      this.representativeListMatch = '';
-    }
+    const localName = this.repService.getRepresentative(this.defaultRepresentative)?.name;
+    const directoryName = getDirectoryRepresentativeName(this.defaultRepresentative);
+    const ninjaRep = localName || directoryName ? null : await this.ninja.getAccount(this.defaultRepresentative);
+    this.representativeListMatch = localName || directoryName || ninjaRep?.alias || '';
   }
 
   // When changing the Server Config option, prefill values

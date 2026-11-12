@@ -7,6 +7,7 @@ import {ApiService} from './api.service';
 import {UtilService} from './util.service';
 import { NinjaService } from './ninja.service';
 import { DEFAULT_REPRESENTATIVE } from './default-representative';
+import { getDirectoryRepresentativeName } from './representative-directory';
 
 export interface RepresentativeStatus {
   online: boolean | null;
@@ -204,6 +205,9 @@ export class RepresentativeService {
       } else if (knownRepNinja) {
         status = status === 'none' ? 'ok' : status;
         label = knownRepNinja.alias;
+      } else {
+        // An alias in the community directory does not grant Trusted status.
+        label = getDirectoryRepresentativeName(representative.account);
       }
 
       const uptimeIntervalDays = 7;

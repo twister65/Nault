@@ -19,6 +19,7 @@ import {
   NinjaService
 } from '../../services';
 import { TranslocoService } from '@jsverse/transloco';
+import { getDirectoryRepresentativeName, getDirectoryRepresentatives } from '../../services/representative-directory';
 
 interface RecommendedRepresentative {
   account: string;
@@ -118,6 +119,7 @@ export class RepresentativesComponent implements OnInit {
     // add trusted/regular local reps to the list
     const localReps = this.representativeService.getSortedRepresentatives();
     this.representativeList.push( ...localReps.filter(rep => (!rep.warn)) );
+    this.representativeList.push(...getDirectoryRepresentatives());
 
     if (this.settings.settings.serverAPI) {
       const verifiedReps = await this.ninja.recommendedRandomized();
@@ -226,16 +228,10 @@ export class RepresentativesComponent implements OnInit {
       return;
     }
 
-    const rep = this.representativeService.getRepresentative(this.toRepresentativeID);
-    const ninjaRep = await this.ninja.getAccount(this.toRepresentativeID);
-
-    if (rep) {
-      this.representativeListMatch = rep.name;
-    } else if (ninjaRep) {
-      this.representativeListMatch = ninjaRep.alias;
-    } else {
-      this.representativeListMatch = '';
-    }
+    const localName = this.representativeService.getRepresentative(this.toRepresentativeID)?.name;
+    const directoryName = getDirectoryRepresentativeName(this.toRepresentativeID);
+    const ninjaRep = localName || directoryName ? null : await this.ninja.getAccount(this.toRepresentativeID);
+    this.representativeListMatch = localName || directoryName || ninjaRep?.alias || '';
   }
 
   async loadRecommendedReps() {

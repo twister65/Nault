@@ -4,6 +4,7 @@ import { TestBed, inject } from '@angular/core/testing';
 import { RepresentativeService } from './representative.service';
 import { DEFAULT_REPRESENTATIVE } from './default-representative';
 import BigNumber from 'bignumber.js';
+import { getDirectoryRepresentativeName } from './representative-directory';
 
 describe('RepresentativeService', () => {
   beforeEach(() => {
@@ -79,4 +80,24 @@ describe('RepresentativeService', () => {
     expect(overview[0].statusText).toBe('trusted');
     expect(overview[0].status.trusted).toBeTrue();
   });
+  it('recognizes Nano Community aliases without marking them Trusted', async () => {
+    const account = 'nano_1b9wguhh39at8qtm93oghd6r4f4ubk7zmqc9oi5ape6yyz4s1gamuwn3jjit';
+    const service = Object.create(RepresentativeService.prototype) as any;
+    service.wallet = { getAccountsDetails: async () => [{ id: 'nano_wallet', representative: account, balance: '1' }] };
+    service.getUniqueRepresentatives = () => [{ id: account, weight: new BigNumber(1), accounts: [] }];
+    service.getRepresentativesDetails = async () => [{ account, weight: '0', delegatedWeight: new BigNumber(1), accounts: [] }];
+    service.getOnlineRepresentatives = async () => null;
+    service.api = { confirmationQuorum: async () => null };
+    service.util = { nano: { rawToMnano: (raw: string) => new BigNumber(raw) } };
+    service.ninja = { getAccount: async () => null };
+    service.nfReps = [];
+    service.getRepresentative = () => undefined;
+    service.walletReps$ = { next: jasmine.createSpy('next') };
+    const overview = await service.getRepresentativesOverview();
+    expect(getDirectoryRepresentativeName(account)).toBe('TRUSTABLE - NN1');
+    expect(overview[0].label).toBe('TRUSTABLE - NN1');
+    expect(overview[0].status.trusted).toBeFalse();
+    expect(overview[0].statusText).toBe('unknown');
+  });
+
 });
