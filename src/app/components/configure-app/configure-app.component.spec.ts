@@ -62,7 +62,6 @@ describe('ConfigureAppComponent', () => {
       byAccount: {[twister]: {name: 'Twister32', online: true}}
     })};
     (component as any).repService = {getSortedRepresentatives: () => [], getRepresentative: () => undefined};
-    (component as any).ninja = {recommendedRandomized: () => Promise.resolve([]), getAccount: async () => null};
     component.toggleDefaultRepBrowser();
     expect(component.showRepresentatives).toBeTrue();
     void component.populateRepresentativeList();
