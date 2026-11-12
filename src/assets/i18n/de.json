@@ -269,6 +269,7 @@
     "rep-change-failed-account": "Repräsentant für {{account}} konnte nicht geändert werden. Bitte erneut versuchen.",
     "rep-change-failed": "Fehler beim Ändern des Repräsentanten: {{error}}",
     "rep-updated": "Repräsentanten erfolgreich aktualisiert!",
+    "rep-updated-partial": "Teilweise aktualisiert: {{succeeded}} erfolgreich, {{failed}} fehlgeschlagen. Versuchen Sie die fehlgeschlagenen Konten erneut.",
     "rep-name-required": "Konto und Name sind erforderlich.",
     "rep-name-duplicate": "Dieser Name wird bereits verwendet. Wählen Sie einen eindeutigen Namen.",
     "rep-id-invalid": "Ungültige Repräsentantenadresse.",

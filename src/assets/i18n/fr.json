@@ -874,6 +874,7 @@
     "rep-change-failed-account": "Échec du changement de représentant pour {{account}}. Réessayez.",
     "rep-change-failed": "Erreur lors du changement de représentant : {{error}}",
     "rep-updated": "Représentants mis à jour avec succès !",
+    "rep-updated-partial": "Changement partiel : {{succeeded}} compte(s) modifié(s), {{failed}} échec(s). Réessayez pour les comptes en échec.",
     "rep-name-required": "Le compte et le nom sont obligatoires.",
     "rep-name-duplicate": "Ce nom est déjà utilisé. Choisissez un nom unique.",
     "rep-id-invalid": "Adresse du représentant invalide.",

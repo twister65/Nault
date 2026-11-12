@@ -874,6 +874,7 @@
     "rep-change-failed-account": "Failed to change representative for {{account}}. Please try again.",
     "rep-change-failed": "Error changing representative: {{error}}",
     "rep-updated": "Representatives updated successfully!",
+    "rep-updated-partial": "Some representatives were updated ({{succeeded}} succeeded, {{failed}} failed). Retry the failed accounts.",
     "rep-name-required": "Account and name are required.",
     "rep-name-duplicate": "This name is already in use. Choose a unique name.",
     "rep-id-invalid": "Invalid representative address.",

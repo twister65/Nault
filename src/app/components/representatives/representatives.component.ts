@@ -291,96 +291,112 @@ export class RepresentativesComponent implements OnInit {
   }
 
   async changeRepresentatives() {
-    const accounts = this.selectedAccounts;
-    const newRep = this.toRepresentativeID;
+    if (this.changingRepresentatives) return;
 
-    if (this.changingRepresentatives) {
-      return; // Already running
-    }
+    const selectedAccounts = this.selectedAccounts;
+    const newRep = this.toRepresentativeID;
     if (this.walletService.isLocked()) {
       const wasUnlocked = await this.walletService.requestWalletUnlock();
-
-      if (wasUnlocked === false) {
-        return;
-      }
+      if (!wasUnlocked) return;
     }
-    if (!accounts || !accounts.length) {
-      return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.rep-select-account'));
+    if (!selectedAccounts.length) {
+      this.notifications.sendWarning(this.translocoService.translate('ui-notifications.rep-select-account'));
+      return;
+    }
+    if (!this.util.account.isValidAccount(newRep)) {
+      this.notifications.sendWarning(this.translocoService.translate('ui-notifications.rep-invalid'));
+      return;
+    }
+
+    const allAccounts = selectedAccounts.some(account => account.id === 'All Current Accounts');
+    const accountsToChange = allAccounts ? this.walletService.wallet.accounts : selectedAccounts;
+    const failedAccounts: Array<{id: string}> = [];
+    const accountsNeedingChange = accountsToChange.filter(account => {
+      const info = this.fullAccounts.find(a => a.id === account.id);
+      if (!info || info.error || !info.representative) {
+        failedAccounts.push({ id: account.id });
+        this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-change-failed-account', { account: account.id }));
+        return false;
+      }
+      return info.representative.toLowerCase() !== newRep.toLowerCase();
+    });
+
+    if (!accountsNeedingChange.length && !failedAccounts.length) {
+      this.notifications.sendInfo(this.translocoService.translate('ui-notifications.rep-no-change'));
+      return;
     }
 
     this.changingRepresentatives = true;
-
-    const valid = this.util.account.isValidAccount(newRep);
-    if (!valid) {
-      this.changingRepresentatives = false;
-      return this.notifications.sendWarning(this.translocoService.translate('ui-notifications.rep-invalid'));
-    }
-
-    const allAccounts = accounts.find(a => a.id === 'All Current Accounts');
-    const accountsToChange = allAccounts ? this.walletService.wallet.accounts : accounts;
-
-    // Remove any that don't need their represetatives to be changed
-    const accountsNeedingChange = accountsToChange.filter(account => {
-      const accountInfo = this.fullAccounts.find(a => a.id === account.id);
-      if (!accountInfo || accountInfo.error) {
-        return false; // Cant find info, update the account
-      }
-
-      if (accountInfo.representative.toLowerCase() === newRep.toLowerCase()) {
-        return false; // This account already has this representative, reject it
-      }
-
-      return true;
-    });
-
-    if (!accountsNeedingChange.length) {
-      this.changingRepresentatives = false;
-      return this.notifications.sendInfo(this.translocoService.translate('ui-notifications.rep-no-change'));
-    }
-
-    // Now loop and change them
-    for (const account of accountsNeedingChange) {
-      const walletAccount = this.walletService.getWalletAccount(account.id);
-      if (!walletAccount) {
-        continue; // Unable to find account in the wallet? wat?
-      }
-
-      try {
-        const changed = await this.nanoBlock.generateChange(walletAccount, newRep, this.walletService.isLedgerWallet());
-        if (!changed) {
+    let successes = 0;
+    try {
+      for (const account of accountsNeedingChange) {
+        const walletAccount = this.walletService.getWalletAccount(account.id);
+        if (!walletAccount) {
+          failedAccounts.push({ id: account.id });
           this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-change-failed-account', { account: account.id }));
+          continue;
         }
-      } catch (err) {
-        this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-change-failed', { error: err instanceof Error ? err.message : String(err) }));
+
+        try {
+          // Only an RPC-accepted block hash counts as a successful change.
+          // Failed/rejected/disconnected Ledger signing returns no block hash.
+          const hash = await this.nanoBlock.generateChange(walletAccount, newRep, this.walletService.isLedgerWallet());
+          if (!hash) {
+            failedAccounts.push({ id: account.id });
+            this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-change-failed-account', { account: account.id }));
+            continue;
+          }
+          successes++;
+          const cached = this.fullAccounts.find(a => a.id === account.id);
+          if (cached) cached.representative = newRep;
+        } catch (err) {
+          failedAccounts.push({ id: account.id });
+          this.notifications.sendError(this.translocoService.translate('ui-notifications.rep-change-failed', {
+            error: err instanceof Error ? err.message : String(err)
+          }));
+        }
       }
+
+      if (successes === 0) {
+        // Preserve the selected representative and accounts when all changes fail.
+        if (failedAccounts.length) this.selectedAccounts = failedAccounts;
+        return;
+      }
+
+      if (this.selectedRecommendedRep?.account === newRep) {
+        this.representativeService.saveRepresentative(newRep, this.selectedRecommendedRep.alias, false, false);
+      }
+
+      if (failedAccounts.length) {
+        this.selectedAccounts = failedAccounts;
+        this.notifications.sendWarning(this.translocoService.translate('ui-notifications.rep-updated-partial', {
+          succeeded: successes, failed: failedAccounts.length
+        }));
+      } else {
+        this.selectedAccounts = [];
+        this.toRepresentativeID = '';
+        this.representativeListMatch = '';
+        this.selectedRecommendedRep = null;
+        this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.rep-updated'));
+      }
+
+      // The block is already accepted: an overview refresh failure does not
+      // undo that transaction or turn a partial result into a false success.
+      try {
+        if (!this.hideOverview) {
+          this.loadingRepresentatives = true;
+          this.representativeOverview = await this.representativeService.getRepresentativesOverview();
+          this.fullAccounts = this.representativeOverview.flatMap(rep => rep.accounts);
+        }
+        await this.representativeService.detectChangeableReps(this.hideOverview ? undefined : this.representativeOverview);
+      } catch (_) {
+        console.warn('Unable to refresh representative overview after the update.');
+      } finally {
+        this.loadingRepresentatives = false;
+      }
+    } finally {
+      this.changingRepresentatives = false;
     }
-
-    // Determine if a recommended rep was selected, if so we save an entry in the rep list
-    if (this.selectedRecommendedRep && this.selectedRecommendedRep.account && this.selectedRecommendedRep.account === newRep) {
-      this.representativeService.saveRepresentative(newRep, this.selectedRecommendedRep.alias, false, false);
-    }
-
-    // Good to go!
-    this.selectedAccounts = [];
-    this.toRepresentativeID = '';
-    this.representativeListMatch = '';
-    this.changingRepresentatives = false;
-    this.selectedRecommendedRep = null;
-
-    this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.rep-updated'));
-
-    let useCachedReps = false;
-
-    // If the overview panel is displayed, reload its data now
-    if (!this.hideOverview) {
-      this.loadingRepresentatives = true;
-      this.representativeOverview = await this.representativeService.getRepresentativesOverview();
-      this.loadingRepresentatives = false;
-      useCachedReps = true;
-    }
-
-    // Detect if any new reps should be changed
-    await this.representativeService.detectChangeableReps(useCachedReps ? this.representativeOverview : undefined);
   }
 
   // open qr reader modal
