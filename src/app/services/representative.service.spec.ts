@@ -63,7 +63,7 @@ describe('RepresentativeService', () => {
     }
   ));
 
-  it('keeps a locally trusted representative trusted if Ninja reports it missing', async () => {
+  it('keeps a locally trusted representative trusted without external data', async () => {
     const service = Object.create(RepresentativeService.prototype) as any;
     service.wallet = { getAccountsDetails: async () => [{ id: 'nano_account', representative: DEFAULT_REPRESENTATIVE.id, balance: '1' }] };
     service.getUniqueRepresentatives = () => [{ id: DEFAULT_REPRESENTATIVE.id, weight: new BigNumber(1), accounts: [] }];
@@ -72,7 +72,6 @@ describe('RepresentativeService', () => {
     service.api = { confirmationQuorum: async () => null };
     service.representativeMonitor = { getSnapshot: async () => null };
     service.util = { nano: { rawToMnano: (raw: string) => new BigNumber(raw) } };
-    service.ninja = { getAccount: async () => false };
     service.nfReps = [];
     service.getRepresentative = () => ({ ...DEFAULT_REPRESENTATIVE });
     service.walletReps$ = { next: jasmine.createSpy('next') };
@@ -91,7 +90,6 @@ describe('RepresentativeService', () => {
     service.api = { confirmationQuorum: async () => null };
     service.representativeMonitor = { getSnapshot: async () => null };
     service.util = { nano: { rawToMnano: (raw: string) => new BigNumber(raw) } };
-    service.ninja = { getAccount: async () => null };
     service.nfReps = [];
     service.getRepresentative = () => undefined;
     service.walletReps$ = { next: jasmine.createSpy('next') };
@@ -115,7 +113,6 @@ describe('RepresentativeService', () => {
     })};
     service.api = {confirmationQuorum: async () => null};
     service.util = {nano: {rawToMnano: (raw: string) => new BigNumber(raw)}};
-    service.ninja = {getAccount: async () => null};
     service.nfReps = [];
     service.getRepresentative = () => undefined;
     service.walletReps$ = {next: jasmine.createSpy('next')};
@@ -165,7 +162,7 @@ describe('Positive NanoNode health evidence', () => {
     expect(hasPositiveNanoNodeHealthEvidence({...valid, outdated: null})).toBeFalse();
   });
 
-  it('does not turn a Ninja 404 into a bad representative when NanoNode has positive evidence', async () => {
+  it('accepts positively monitored representative without an archived directory', async () => {
     const rep = sample();
     const service = Object.create(RepresentativeService.prototype) as any;
     service.wallet = {getAccountsDetails: async () => []};
@@ -177,7 +174,6 @@ describe('Positive NanoNode health evidence', () => {
     })};
     service.api = {confirmationQuorum: async () => null};
     service.util = {nano:{rawToMnano: (raw: string) => new BigNumber(raw)}};
-    service.ninja = {getAccount: async () => false};
     service.getRepresentative = () => undefined;
     service.nfReps = [];
     service.walletReps$ = {next: jasmine.createSpy('next')};
@@ -202,7 +198,6 @@ describe('Positive NanoNode health evidence', () => {
     })};
     service.api = {confirmationQuorum: async () => ({online_stake_total:'10'})};
     service.util = {nano:{rawToMnano: (raw: string) => new BigNumber(raw)}};
-    service.ninja = {getAccount: async () => null};
     service.getRepresentative = () => undefined;
     service.nfReps = [];
     service.walletReps$ = {next: jasmine.createSpy('next')};
