@@ -129,6 +129,8 @@
     }
   },
   "change-rep-widget": {
+    "monitor-good": "Bueno (NanoNode.de)",
+    "monitor-good-tip": "Evaluación orientativa: votos recientes, representante principal, menos del 2 % del peso de voto, valoración favorable y sincronización según NanoNode.de. La telemetría puede falsificarse y no garantiza disponibilidad a largo plazo.",
     "acceptable-representative": "Representante aceptable",
     "bad-representative": "Representante no recomendado",
     "checking-status": "Comprobando estado...",
@@ -569,6 +571,8 @@
     "new-payment": "Nuevo pago"
   },
   "ui-representatives": {
+    "monitor-good": "Bueno (NanoNode.de)",
+    "monitor-good-tip": "Evaluación orientativa: votos recientes, representante principal, menos del 2 % del peso de voto, valoración favorable y sincronización según NanoNode.de. La telemetría puede falsificarse y no garantiza disponibilidad a largo plazo.",
     "title": "Representantes",
     "manage": "Gestionar representantes conocidos",
     "intro-before": "Los representantes participan en el",
