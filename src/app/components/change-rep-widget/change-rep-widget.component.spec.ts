@@ -24,4 +24,41 @@ describe('ChangeRepWidgetComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+
+  it('displays votes detected for unknown health when NanoNode.de observes recent votes', () => {
+    const rep = {
+      statusText: 'unknown',
+      networkObservation: { rpcOnline: false, nanonodeOnline: true }
+    };
+    expect(component.hasVotesWithUnverifiedHealth(rep as any)).toBeTrue();
+    expect(rep.statusText).toBe('unknown'); // The actual health state is unchanged.
+  });
+
+  it('retains unknown status without a positive NanoNode.de observation', () => {
+    for (const observation of [false, null, undefined]) {
+      expect(component.hasVotesWithUnverifiedHealth({
+        statusText: 'unknown',
+        networkObservation: {nanonodeOnline: observation}
+      } as any)).toBeFalse();
+    }
+    expect(component.hasVotesWithUnverifiedHealth({
+      statusText: 'unknown'
+    } as any)).toBeFalse();
+  });
+
+  it('does not mask reliable health assessments even when votes were detected', () => {
+    for (const statusText of ['trusted', 'ok', 'warn', 'alert']) {
+      expect(component.hasVotesWithUnverifiedHealth({
+        statusText, networkObservation: {nanonodeOnline: true}
+      } as any)).toBeFalse();
+    }
+  });
+
+  it('does not report votes detected solely from a different RPC observer', () => {
+    expect(component.hasVotesWithUnverifiedHealth({
+      statusText: 'unknown',
+      networkObservation: { rpcOnline: true, nanonodeOnline: false }
+    } as any)).toBeFalse();
+  });
+
 });
