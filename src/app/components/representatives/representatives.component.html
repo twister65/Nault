@@ -32,7 +32,7 @@
                         @case ((rep.statusText == 'trusted')) {
                           <div class="representative-health-status health-green">
                             <div class="health-icon"></div>
-                            <div class="label">{{ 'ui-representatives.good' | transloco }}</div>
+                            <div class="label">{{ 'ui-representatives.local-trusted' | transloco }}</div>
                           </div>
                         }
                         @case ((rep.statusText == 'ok')) {
@@ -56,7 +56,7 @@
                         @default {
                           <div class="representative-health-status health-unknown">
                             <div class="health-icon"></div>
-                            <div class="label">{{ 'ui-representatives.unknown' | transloco }}</div>
+                            <div class="label">{{ 'ui-representatives.health-unverified' | transloco }}</div>
                           </div>
                         }
                       }
@@ -64,6 +64,19 @@
                     <tr class="representative-row">
                       <td class="representative-health-column uk-visible-toggle uk-text-truncate hide-on-small-viewports">
                         <ng-template [ngTemplateOutlet]="representativeHealth"></ng-template>
+                        <div class="rep-observation" [class.rep-observation-online]="rep.networkObservation?.online === true"
+                          [class.rep-observation-offline]="rep.networkObservation?.online === false">
+                          @if (rep.networkObservation?.online === true) {
+                            {{ 'ui-representatives.observed-online' | transloco }}
+                          } @else if (rep.networkObservation?.online === false) {
+                            {{ 'ui-representatives.not-observed' | transloco }}
+                          } @else {
+                            {{ 'ui-representatives.observation-unavailable' | transloco }}
+                          }
+                          @if (rep.networkObservation?.source) {
+                            <span class="rep-observation-source">({{ rep.networkObservation?.source === 'rpc' ? 'RPC' : 'NanoNode.de' }})</span>
+                          }
+                        </div>
                       </td>
                       <td class="representative-name-column uk-text-truncate rep-container" (click)="addSelectedAccounts(rep.accounts)">
                         <div class="representative-label-container">
@@ -76,6 +89,21 @@
                         </div>
                         <div class="representative-address uk-text-small uk-text-truncate">
                           <app-nano-account-id [accountID]="rep.id" middle="auto" class="nano-address-monospace"></app-nano-account-id>
+                        </div>
+                        <div class="rep-external-details">
+                          @if (rep.status.trusted) {
+                            <span class="rep-trusted-tag">{{ 'ui-representatives.local-trusted' | transloco }}</span>
+                          }
+                          @if (rep.networkObservation?.version) {
+                            <span>{{ rep.networkObservation?.version }}</span>
+                          }
+                          @if (rep.networkObservation?.inSync === true) {
+                            <span>{{ 'ui-representatives.telemetry-in-sync' | transloco }}</span>
+                          } @else if (rep.networkObservation?.inSync === false) {
+                            <span class="uk-text-warning">{{ 'ui-representatives.telemetry-out-of-sync' | transloco }}</span>
+                          }
+                          <a [href]="'https://www.nanoticker.org/representatives/' + rep.id" target="_blank"
+                             rel="noopener noreferrer" (click)="$event.stopPropagation()">{{ 'ui-representatives.nanoticker-details' | transloco }}</a>
                         </div>
                         <div class="representative-health-compact only-on-small-viewports uk-margin-small-top">
                           <ng-template [ngTemplateOutlet]="representativeHealth"></ng-template>
