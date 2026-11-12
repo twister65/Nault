@@ -588,6 +588,7 @@
     "telemetry-unavailable": "Telemetría no disponible",
     "telemetry-out-of-sync": "Telemetría: sin sincronizar",
     "nanoticker-details": "Salud en NanoTicker",
+    "search-names": "Buscar por nombre o dirección Nano",
     "browse-representatives": "Explorar representantes",
     "online-filter": "Solo votos observados recientemente",
     "no-results": "No hay representantes coincidentes. Puedes introducir una dirección Nano válida.",
