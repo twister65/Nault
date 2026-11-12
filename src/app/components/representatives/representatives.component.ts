@@ -189,6 +189,13 @@ export class RepresentativesComponent implements OnInit {
     ].join(' • ');
   }
 
+  /** The online-only picker accepts observed votes from either RPC or NanoNode. */
+  private hasRecentObservedVote(id: string): boolean {
+    const rpc = this.representativeOverview.find(rep => rep.id.toLowerCase() === id.toLowerCase())
+      ?.networkObservation?.rpcOnline;
+    return rpc === true || this.getMonitoredRepresentative(id)?.online === true;
+  }
+
   /**
    * Representative-list ranking is UI-only and never selects a delegate.
    * Always show the wallet's current representative before truncating results.
@@ -197,7 +204,7 @@ export class RepresentativesComponent implements OnInit {
     const current = this.representativeOverview.some(item => item.id.toLowerCase() === rep.id.toLowerCase());
     if (current) return 4;
     if (rep.trusted) return 3;
-    if (this.getMonitoredRepresentative(rep.id)?.online === true) return 2;
+    if (this.hasRecentObservedVote(rep.id)) return 2;
     return 1;
   }
 
@@ -294,7 +301,7 @@ export class RepresentativesComponent implements OnInit {
     }
     const matches = this.representativeList
       .filter(rep => !rep.warn)
-      .filter(rep => !this.onlyOnlineReps || this.getMonitoredRepresentative(rep.id)?.online === true)
+      .filter(rep => !this.onlyOnlineReps || this.hasRecentObservedVote(rep.id))
       .filter(rep => !search || rep.name.toLowerCase().includes(search) || rep.id.toLowerCase().includes(search))
       .sort((a, b) => this.representativePriority(b) - this.representativePriority(a) ||
         a.name.localeCompare(b.name));
