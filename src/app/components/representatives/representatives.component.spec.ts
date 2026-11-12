@@ -131,7 +131,6 @@ describe('Inline representative picker', () => {
       }
     };
     component.representativeService = {getRepresentative: () => undefined};
-    component.ninja = {getAccount: async () => null};
     return component;
   }
 
@@ -190,7 +189,6 @@ describe('Inline representative picker', () => {
       byAccount: {[twister]: {account: twister, online: true}}
     })};
     component.representativeService.getSortedRepresentatives = () => [{id: twister, name: 'Twister32', trusted: true}];
-    component.ninja.recommendedRandomized = () => Promise.resolve([]);
     component.representativeList = [];
     component.toggleRepresentativeBrowser(); // opened before fetch finishes
     expect(component.showRepresentatives).toBeTrue();
