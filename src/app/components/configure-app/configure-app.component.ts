@@ -446,6 +446,9 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     this.representativeList = [...localReps, ...monitoredReps, ...getDirectoryRepresentatives(), ...ninjaReps]
       .filter((rep, index, list) =>
         list.findIndex(item => item.id.toLowerCase() === rep.id.toLowerCase()) === index);
+    // Refresh options if the user opened the inline browser while its sources loaded.
+    // Do not change whether it is open or the representative already selected.
+    this.searchRepresentatives();
   }
 
   toggleDefaultRepBrowser() {
