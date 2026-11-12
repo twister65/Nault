@@ -2,6 +2,7 @@ import { ComponentTestModule, isolateConstructorIO } from '../../../testing/comp
 import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
 
 import { RepresentativesComponent } from './representatives.component';
+import { BehaviorSubject } from 'rxjs';
 
 describe('RepresentativesComponent', () => {
   let component: RepresentativesComponent;
@@ -101,5 +102,59 @@ describe('Representative change transaction outcome', () => {
     expect(component.notifications.sendWarning).toHaveBeenCalledWith('ui-notifications.rep-updated-partial');
     expect(component.selectedAccounts).toEqual([{ id: 'nano_second' }]);
     expect(component.toRepresentativeID).toBe('nano_target');
+  });
+});
+
+describe('Inline representative picker', () => {
+  const twister = 'nano_3hn3r6bnnmcy39gu6fgtisgnqh384gmt5mnh71a5xo4cb1d38ps16p8sg5c3';
+  const trustable = 'nano_1b9wguhh39at8qtm93oghd6r4f4ubk7zmqc9oi5ape6yyz4s1gamuwn3jjit';
+  function setup() {
+    const component = Object.create(RepresentativesComponent.prototype) as any;
+    component.toRepresentativeID = '';
+    component.browseRepresentativeList = false;
+    component.onlyOnlineReps = false;
+    component.showRepresentatives = false;
+    component.representativeResults$ = new BehaviorSubject<any[]>([]);
+    component.representativeList = [
+      {id: twister, name: 'Twister32', trusted: true},
+      {id: trustable, name: 'TRUSTABLE - NN1'},
+    ];
+    component.monitorSnapshot = {
+      byAccount: {
+        [twister]: {account:twister,online:true,share:0.00001,node:null},
+        [trustable]: {account:trustable,online:false,share:0.0002,node:null}
+      }
+    };
+    component.representativeService = {getRepresentative: () => undefined};
+    component.ninja = {getAccount: async () => null};
+    return component;
+  }
+
+  it('does not show an unrequested drop-down on empty input', () => {
+    const component = setup();
+    component.searchRepresentatives();
+    expect(component.showRepresentatives).toBeFalse();
+    expect(component.representativeResults$.value).toEqual([]);
+  });
+
+  it('finds representatives by name or address and excludes offline observations on request', () => {
+    const component = setup();
+    component.toRepresentativeID = 'TRUSTABLE';
+    component.searchRepresentatives();
+    expect(component.representativeResults$.value[0].id).toBe(trustable);
+    component.toRepresentativeID = '3hn3r6bn';
+    component.searchRepresentatives();
+    expect(component.representativeResults$.value[0].id).toBe(twister);
+    component.onlyOnlineReps = true;
+    component.toRepresentativeID = 'TRUSTABLE';
+    component.searchRepresentatives();
+    expect(component.representativeResults$.value).toEqual([]);
+  });
+
+  it('preserves a local trusted flag independently of monitor data', () => {
+    const component = setup();
+    component.toggleRepresentativeBrowser();
+    expect(component.representativeResults$.value[0].trusted).toBeTrue();
+    expect(component.getMonitoredRepresentative(trustable).online).toBeFalse();
   });
 });
