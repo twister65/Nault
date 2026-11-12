@@ -542,7 +542,9 @@ export class NanoBlockService {
         ? 'Ledger is busy. Wait a moment and try signing again.'
         : issue === 'not-ready'
           ? 'Ledger is not ready. Unlock your Ledger, open the Nano app, then click Reconnect.'
-          : 'Ledger signing failed. Check the connection and try again.';
+          : issue === 'timed-out'
+            ? 'Ledger confirmation timed out. Check the device, reconnect and try again.'
+            : 'Ledger signing failed. Check the connection and try again.';
     this.notifications.sendWarning(message);
   }
   sendLedgerNotification() {

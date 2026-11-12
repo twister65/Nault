@@ -102,6 +102,15 @@ export default class LedgerHidWorkerTransport extends Transport {
     if (this.ready && !this.closed) this.emit('disconnect');
   }
 
+  // The native renderer reservation changes only the worker's read timeout.
+  // It does not alter WebUSB, BLE, device polling or transport ownership.
+  setSigningMode(enabled: boolean): void {
+    if (!this.ready || this.failed || this.closed) {
+      throw new Error('Ledger HID worker is not connected');
+    }
+    this.worker.postMessage({ type: 'signing-mode', enabled });
+  }
+
   exchange(apdu: Buffer): Promise<Buffer> {
     // Retain Ledger's exchange lock and ordering semantics.
     return this.exchangeAtomicImpl(() => new Promise<Buffer>((resolve, reject) => {
