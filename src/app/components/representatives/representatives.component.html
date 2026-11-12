@@ -215,28 +215,57 @@
                   <div class="uk-form-controls">
                     <div class="uk-inline uk-width-1-1">
                       <a class="uk-form-icon uk-form-icon-flip" uk-icon="icon: camera" (click)="openQR('rep1','account')" uk-tooltip [title]="'ui-send.scan-qr' | transloco"></a>
-                      <input (blur)="validateRepresentative()" (input)="searchRepresentatives()" (focus)="searchRepresentatives()" [(ngModel)]="toRepresentativeID" class="uk-input" id="form-horizontal-text2" type="text" [placeholder]="'ui-representatives.representative-account' | transloco" #repInput>
-                      @if ((representativeResults$ | async).length) {
-                        <div [hidden]="!showRepresentatives" class="nlt-dropdown uk-animation-slide-down-small uk-width-1-1 uk-card uk-card-default uk-card-body uk-position-absolute" style="z-index: 15000">
-                          <ul class="uk-nav uk-nav-default">
-                            <li class="uk-nav-header">{{ 'representative-search.representative-list-results' | transloco }}</li>
-                            <li class="uk-nav-divider"></li>
-                            @for (rep of representativeResults$ | async; track rep) {
-                              <li>
-                                <a (click)="selectRepresentative(rep.id)">
-                                  {{ rep.name }}
+                      <input (blur)="validateRepresentative()" (input)="searchRepresentatives()" (focus)="searchRepresentatives()"
+                        [(ngModel)]="toRepresentativeID" class="uk-input" id="nault-representative-account"
+                        name="nault-representative-account-search" autocomplete="off" autocapitalize="off"
+                        spellcheck="false" type="text" [placeholder]="'ui-representatives.representative-account' | transloco" #repInput>
+                    </div>
+                    <div class="rep-picker-tools">
+                      <button type="button" class="uk-button uk-button-small uk-button-default" (click)="toggleRepresentativeBrowser()"
+                        [attr.aria-expanded]="showRepresentatives">
+                        {{ 'ui-representatives.browse-representatives' | transloco }}
+                      </button>
+                      <label class="rep-online-filter">
+                        <input type="checkbox" class="uk-checkbox" [checked]="onlyOnlineReps" (change)="toggleOnlineOnly()">
+                        {{ 'ui-representatives.online-filter' | transloco }}
+                      </label>
+                    </div>
+                    @if (showRepresentatives) {
+                      <div class="rep-picker-results" role="listbox" [attr.aria-label]="'representative-search.representative-list-results' | transloco">
+                        <div class="rep-picker-heading">{{ 'representative-search.representative-list-results' | transloco }}</div>
+                        @if ((representativeResults$ | async)?.length) {
+                          @for (rep of representativeResults$ | async; track rep.id) {
+                            <div class="rep-picker-result" role="option" [attr.aria-label]="rep.name" [attr.aria-selected]="toRepresentativeID === rep.id">
+                              <button type="button" class="rep-picker-select" (mousedown)="$event.preventDefault()" (click)="selectRepresentative(rep.id)">
+                                <span class="rep-picker-name">{{ rep.name }}</span>
+                                <span class="rep-picker-address">{{ rep.id }}</span>
+                                <span class="rep-picker-meta">
                                   @if (rep.trusted) {
-                                    <span class="uk-text-success" style="margin-left: 4px;"><span uk-icon="icon: star;"></span></span>
+                                    <span class="rep-trusted-tag">{{ 'ui-representatives.local-trusted' | transloco }}</span>
                                   }
-                                  @if (rep.warn) {
-                                    <span class="uk-text-warning" style="margin-left: 4px;"><span uk-icon="icon: warning;"></span> {{ 'general.avoid' | transloco }}</span>
+                                  @if (getMonitoredRepresentative(rep.id); as monitorRep) {
+                                    <span [class.rep-observation-online]="monitorRep.online" [class.rep-observation-offline]="!monitorRep.online">
+                                      {{ (monitorRep.online ? 'ui-representatives.observed-online' : 'ui-representatives.not-observed') | transloco }}
+                                    </span>
+                                    @if (monitorRep.share !== null) {
+                                      <span>{{ (monitorRep.share * 100).toFixed(2) }}%</span>
+                                    }
+                                    <span>NanoNode.de</span>
                                   }
-                                </a>
-                              </li>
-                            }
-                          </ul>
-                        </div>
-                      }
+                                </span>
+                              </button>
+                              <a class="rep-picker-details" [href]="'https://www.nanoticker.org/representatives/' + rep.id"
+                                target="_blank" rel="noopener noreferrer" [attr.aria-label]="'ui-representatives.nanoticker-details' | transloco"
+                                (mousedown)="$event.preventDefault()">{{ 'ui-representatives.nanoticker-details' | transloco }}</a>
+                            </div>
+                          }
+                        } @else {
+                          <p class="uk-text-muted uk-margin-small">{{ 'ui-representatives.no-results' | transloco }}</p>
+                        }
+                      </div>
+                    }
+                    <div class="uk-text-small text-half-muted uk-margin-small-top">
+                      {{ 'ui-representatives.observation-disclaimer' | transloco }}
                     </div>
                   </div>
                   @if (representativeListMatch) {
