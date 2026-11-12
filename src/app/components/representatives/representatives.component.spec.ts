@@ -182,6 +182,18 @@ describe('Inline representative picker', () => {
     expect(component.representativeResults$.value.map((rep: {id: string}) => rep.id)).toEqual([currentRep.id]);
   });
 
+  it('keeps a current representative in the online-only list if RPC saw votes but NanoNode did not', () => {
+    const component = setup();
+    component.representativeOverview = [{
+      id: trustable,
+      networkObservation: {rpcOnline: true, nanonodeOnline: false}
+    }];
+    component.browseRepresentativeList = true;
+    component.onlyOnlineReps = true;
+    component.searchRepresentatives();
+    expect(component.representativeResults$.value.some((rep: {id: string}) => rep.id === trustable)).toBeTrue();
+  });
+
   it('displays RPC and NanoNode.de votes independently in the status information bubble', () => {
     const component = setup();
     component.translocoService = {translate: (key: string) => ({
