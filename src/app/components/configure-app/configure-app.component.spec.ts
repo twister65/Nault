@@ -324,8 +324,7 @@ describe('ConfigureAppComponent', () => {
     await render();
     await fixture.whenStable();
     await render();
-    const buttons = fixture.nativeElement.querySelectorAll('.pow-vault-actions button') as NodeListOf<HTMLButtonElement>;
-    const save = Array.from(buttons).find(button => button.classList.contains('uk-button-primary'))!;
+    const save = fixture.nativeElement.querySelector('#pow-api-key-save') as HTMLButtonElement;
     const labelInput = fixture.nativeElement.querySelector('#pow-api-key-label') as HTMLInputElement;
     const keyInput = fixture.nativeElement.querySelector('#pow-api-key') as HTMLInputElement;
     const passphraseInput = fixture.nativeElement.querySelector('#pow-vault-passphrase') as HTMLInputElement;
