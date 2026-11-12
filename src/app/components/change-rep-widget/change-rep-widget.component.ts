@@ -103,6 +103,16 @@ export class ChangeRepWidgetComponent implements OnInit {
     await this.repService.detectChangeableReps(this.representatives);
   }
 
+  /**
+   * A third-party observation of recent votes is not a health score.
+   * Only replace the generic "unknown status" label when the health itself
+   * is unknown and NanoNode.de explicitly reports recent votes.
+   */
+  hasVotesWithUnverifiedHealth(rep: FullRepresentativeOverview): boolean {
+    return (rep.statusText === 'unknown' || rep.statusText === 'none') &&
+      rep.networkObservation?.nanonodeOnline === true;
+  }
+
   updateDisplayedRepresentatives() {
     this.updateSelectedAccountHasRep();
     this.displayedRepresentatives = this.getDisplayedRepresentatives(this.representatives);
