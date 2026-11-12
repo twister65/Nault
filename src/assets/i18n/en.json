@@ -589,6 +589,7 @@
     "telemetry-out-of-sync": "Telemetry: out of sync",
     "nanoticker-details": "NanoTicker health",
     "search-names": "Search by name or Nano address",
+    "show-more": "Show more representatives",
     "browse-representatives": "Browse representatives",
     "online-filter": "Observed online only",
     "no-results": "No matching representatives. You can paste a valid Nano address.",
