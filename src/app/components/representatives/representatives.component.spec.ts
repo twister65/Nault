@@ -114,6 +114,7 @@ describe('Inline representative picker', () => {
     component.browseRepresentativeList = false;
     component.representativeSearch = '';
     component.onlyOnlineReps = false;
+    component.onlyMonitoredGoodReps = false;
     component.representativeOverview = [];
     component.visibleRepresentativeLimit = 12;
     component.matchingRepresentativeCount = 0;
@@ -133,6 +134,29 @@ describe('Inline representative picker', () => {
     component.ninja = {getAccount: async () => null};
     return component;
   }
+
+  it('prioritizes and filters representatives with positive NanoNode health evidence', () => {
+    const component = setup();
+    const nanolove = 'nano_34amtofxstsfyqcgphp8piij9u33widykg9wbz6ysjpxhbgmqu8btu1eexer';
+    component.representativeList.push({id: nanolove, name: 'Nanolove'});
+    component.monitorSnapshot.byAccount[nanolove] = {
+      account: nanolove, name: 'Nanolove', online: true, principal: true,
+      weight: 624047, share: 0.007, verdict: 'good', crowded: false,
+      outdated: false, node: {implementation: 'nano-node', version: '28.2', inSync: true}
+    };
+    component.browseRepresentativeList = true;
+    component.searchRepresentatives();
+    expect(component.isMonitoredGoodRepresentative(nanolove)).toBeTrue();
+    expect(component.representativeResults$.value[0].id).toBe(twister); // Locally trusted stays first
+    expect(component.representativeResults$.value[1].id).toBe(nanolove);
+    component.toggleMonitoredGoodOnly();
+    expect(component.onlyMonitoredGoodReps).toBeTrue();
+    expect(component.representativeResults$.value.map((rep: {id: string}) => rep.id)).toEqual([nanolove]);
+    component.onlyMonitoredGoodReps = false;
+    component.monitorSnapshot.byAccount[nanolove].node.inSync = false;
+    component.searchRepresentatives();
+    expect(component.isMonitoredGoodRepresentative(nanolove)).toBeFalse();
+  });
 
   it('does not show an unrequested drop-down on empty input', () => {
     const component = setup();
