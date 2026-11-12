@@ -17,7 +17,6 @@ import {NodeService} from '../../services/node.service';
 import {UtilService} from '../../services/util.service';
 import {BehaviorSubject, Subscription} from 'rxjs';
 import {RepresentativeService, StoredRepresentative} from '../../services/representative.service';
-import {NinjaService} from '../../services/ninja.service';
 import { getDirectoryRepresentativeName, getDirectoryRepresentatives } from '../../services/representative-directory';
 import { RepresentativeMonitorService, RepresentativeMonitorSnapshot } from '../../services/representative-monitor.service';
 import {QrModalService} from '../../services/qr-modal.service';
@@ -49,7 +48,6 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     private node: NodeService,
     private util: UtilService,
     private price: PriceService,
-    private ninja: NinjaService,
     private renderer: Renderer2,
     private qrModalService: QrModalService,
     private translocoService: TranslocoService,
@@ -439,11 +437,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     const localReps = this.repService.getSortedRepresentatives();
     const monitoredReps: StoredRepresentative[] = (this.defaultRepMonitor?.representatives || [])
       .filter(rep => !!rep.name).map(rep => ({ id: rep.account, name: rep.name! }));
-    const otherReps = await this.ninja.recommendedRandomized().catch(() => []);
-    const ninjaReps: StoredRepresentative[] = Array.isArray(otherReps)
-      ? otherReps.filter(rep => !!rep?.account && !!rep?.alias).map(rep => ({ id: rep.account, name: rep.alias }))
-      : [];
-    this.representativeList = [...localReps, ...monitoredReps, ...getDirectoryRepresentatives(), ...ninjaReps]
+    this.representativeList = [...localReps, ...monitoredReps, ...getDirectoryRepresentatives()]
       .filter((rep, index, list) =>
         list.findIndex(item => item.id.toLowerCase() === rep.id.toLowerCase()) === index);
     // Refresh options if the user opened the inline browser while its sources loaded.
@@ -894,8 +888,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     const localName = this.repService.getRepresentative(this.defaultRepresentative)?.name;
     const liveName = this.defaultRepMonitor?.byAccount[this.defaultRepresentative.toLowerCase()]?.name;
     const directoryName = getDirectoryRepresentativeName(this.defaultRepresentative);
-    const ninjaRep = localName || liveName || directoryName ? null : await this.ninja.getAccount(this.defaultRepresentative);
-    this.representativeListMatch = localName || liveName || directoryName || ninjaRep?.alias || '';
+    this.representativeListMatch = localName || liveName || directoryName || '';
   }
 
   // When changing the Server Config option, prefill values
