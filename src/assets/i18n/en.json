@@ -129,6 +129,8 @@
     }
   },
   "change-rep-widget": {
+    "monitor-good": "Good (NanoNode.de)",
+    "monitor-good-tip": "Indicative assessment: recent votes, principal representative, less than 2% voting share, positive verdict and sync reported by NanoNode.de. Telemetry can be forged and does not guarantee long-term availability.",
     "acceptable-representative": "Acceptable Representative",
     "bad-representative": "Bad Representative",
     "checking-status": "Checking Status...",
@@ -569,6 +571,8 @@
     "new-payment": "New Payment"
   },
   "ui-representatives": {
+    "monitor-good": "Good (NanoNode.de)",
+    "monitor-good-tip": "Indicative assessment: recent votes, principal representative, less than 2% voting share, positive verdict and sync reported by NanoNode.de. Telemetry can be forged and does not guarantee long-term availability.",
     "title": "Representatives",
     "manage": "Manage Known Reps",
     "intro-before": "Representatives participate in the",
