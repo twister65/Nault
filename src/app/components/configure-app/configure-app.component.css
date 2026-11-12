@@ -96,9 +96,95 @@
     line-height: 1.5;
 }
 
-.pow-vault-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-.pow-vault-actions .uk-button { flex: 1 1 115px; white-space: normal; }
-@media (max-width: 520px) { .pow-vault-actions .uk-button { flex-basis: 100%; } }
+/* One coherent panel, aligned form rows, and only relevant vault actions. */
+.pow-vault-panel {
+    min-width: 0;
+    padding: clamp(14px, 2vw, 22px);
+    border: 1px solid rgba(127, 127, 127, .28);
+    border-radius: 10px;
+    background: rgba(127, 127, 127, .055);
+}
+.pow-vault-overview {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 18px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+.pow-vault-overview a { font-size: .9rem; }
+.pow-vault-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    font-weight: 500;
+    min-width: 0;
+}
+.pow-vault-status-indicator {
+    flex: 0 0 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #c28547;
+}
+.pow-vault-status-indicator.is-unlocked { background: #399b66; }
+.pow-vault-group {
+    border-top: 1px solid rgba(127, 127, 127, .22);
+    padding-top: 18px;
+    margin-top: 18px;
+    min-width: 0;
+}
+.pow-vault-heading {
+    margin: 0 0 13px;
+    font-size: 1rem;
+    font-weight: 600;
+}
+.pow-vault-field {
+    display: grid;
+    grid-template-columns: minmax(140px, 190px) minmax(0, 1fr);
+    gap: 6px 16px;
+    align-items: center;
+    margin: 12px 0;
+    min-width: 0;
+}
+.pow-vault-field label { font-size: .9rem; line-height: 1.4; }
+.pow-vault-field > .uk-input,
+.pow-vault-field > .uk-select {
+    min-width: 0;
+    width: 100%;
+    margin: 0;
+}
+.pow-vault-device-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    font-size: .88rem;
+    line-height: 1.5;
+    margin: 14px 0;
+}
+.pow-vault-device-option .uk-checkbox { margin-top: 3px; flex-shrink: 0; }
+.pow-vault-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 10px; margin-top: 14px; }
+.pow-vault-actions .uk-button {
+    min-width: 135px;
+    min-height: 38px;
+    padding: 8px 14px;
+    border-radius: 5px;
+    line-height: 1.35;
+    white-space: normal;
+}
+.pow-vault-warning { margin: 18px 0 0; line-height: 1.5; }
+/* Explicitly override UIKit/button display and grid styles for state-based actions. */
+.pow-vault-field[hidden],
+.pow-vault-group[hidden],
+.pow-vault-actions .uk-button[hidden] { display: none !important; }
+@media (max-width: 700px) {
+    .pow-vault-field { grid-template-columns: 1fr; gap: 5px; }
+    .pow-vault-actions .uk-button { flex: 1 1 180px; }
+}
+@media (max-width: 520px) {
+    .pow-vault-actions .uk-button { flex-basis: 100%; }
+    .pow-vault-overview { align-items: flex-start; }
+}
 
 /* Non-secret PoW API-key labels remain visible with the vault locked. */
 .pow-vault-key-list { list-style: none; margin: 6px 0 12px; padding: 0; }

@@ -198,109 +198,124 @@
                         {{ 'configure-app.pow-api-vault.unlock-security-warning' | transloco }}
                       </p>
                     }
-                    <div class="uk-text-meta uk-margin-small-bottom">
-                      {{ (powApiKeyVault.isUnlocked
-                         ? 'configure-app.pow-api-vault.status-unlocked'
-                         : powApiKeyVault.hasVault
-                           ? 'configure-app.pow-api-vault.status-locked'
-                           : 'configure-app.pow-api-vault.status-empty') | transloco }}
-                    </div>
-                    @if (powApiKeyVault.getKeySummaries().length) {
-                      <div class="uk-margin-small-bottom">
-                        <div class="uk-text-small uk-text-bold">{{ 'configure-app.pow-api-vault.stored-keys' | transloco }}</div>
-                        <ul class="pow-vault-key-list">
-                          @for (storedKey of powApiKeyVault.getKeySummaries(); track storedKey.id) {
-                            <li>
-                              <span>Nano.to — {{ storedKey.label }}</span>
-                              @if (storedKey.active) {
-                                <span class="uk-label">{{ 'configure-app.pow-api-vault.active' | transloco }}</span>
-                              }
-                            </li>
-                          }
-                        </ul>
+                    <div class="pow-vault-panel">
+                      <div class="pow-vault-overview">
+                        <span class="pow-vault-status" aria-live="polite">
+                          <span class="pow-vault-status-indicator" [class.is-unlocked]="powApiKeyVault.isUnlocked" aria-hidden="true"></span>
+                          {{ (powApiKeyVault.isUnlocked
+                             ? 'configure-app.pow-api-vault.status-unlocked'
+                             : powApiKeyVault.hasVault
+                               ? 'configure-app.pow-api-vault.status-locked'
+                               : 'configure-app.pow-api-vault.status-empty') | transloco }}
+                        </span>
+                        <a href="https://rpc.nano.to/account/api-keys" target="_blank" rel="noopener noreferrer">
+                          {{ 'configure-app.pow-api-vault.nano-to-create-key' | transloco }}
+                        </a>
                       </div>
-                    }
-                    <div class="uk-text-small uk-margin-small-bottom">
-                      <a href="https://rpc.nano.to/account/api-keys" target="_blank" rel="noopener noreferrer">
-                        {{ 'configure-app.pow-api-vault.nano-to-create-key' | transloco }}
-                      </a>
-                    </div>
-                    @if (powApiKeyVault.getKeySummaries('nano-to').length) {
-                      <label class="uk-text-small" for="pow-api-key-selected">
-                        {{ 'configure-app.pow-api-vault.choose-key' | transloco }}
-                      </label>
-                      <select id="pow-api-key-selected" class="uk-select uk-margin-small-bottom"
-                        [ngModel]="selectedPowKeyId()" (ngModelChange)="powSelectedKeyId = $event">
-                        @for (storedKey of powApiKeyVault.getKeySummaries('nano-to'); track storedKey.id) {
-                          <option [value]="storedKey.id">{{ storedKey.label }}{{ storedKey.active ? ' — ' + ('configure-app.pow-api-vault.active' | transloco) : '' }}</option>
+
+                      <div class="pow-vault-group">
+                        <h4 class="pow-vault-heading">{{ 'configure-app.pow-api-vault.vault-access' | transloco }}</h4>
+                        <div class="pow-vault-field" [hidden]="powApiKeyVault.isUnlocked">
+                          <label for="pow-vault-passphrase">{{ 'configure-app.pow-api-vault.passphrase' | transloco }}</label>
+                          <input id="pow-vault-passphrase" class="uk-input" type="password"
+                            autocomplete="off" spellcheck="false" [(ngModel)]="powVaultPassphrase"
+                            [disabled]="powVaultBusy || powApiKeyVault.isUnlocked"
+                            [placeholder]="'configure-app.pow-api-vault.passphrase-placeholder' | transloco">
+                        </div>
+                        @if (deviceUnlockSupported && !powApiKeyVault.isUnlocked &&
+                              !deviceUnlock.has('pow')) {
+                          <label class="pow-vault-device-option">
+                            <input type="checkbox" class="uk-checkbox" [(ngModel)]="powEnableDeviceUnlock"
+                              [disabled]="powVaultBusy" [ngModelOptions]="{ standalone: true }">
+                            {{ 'device-unlock.enable-after-password' | transloco }}
+                          </label>
                         }
-                      </select>
-                      @if (powApiKeyVault.hasKey('nano-to')) {
-                        <div class="uk-text-meta uk-margin-small-bottom">
-                          {{ 'configure-app.pow-api-vault.key-ready' | transloco }}
+                        @if (deviceUnlockSupported && deviceUnlock.has('pow')) {
+                          <p class="uk-text-meta uk-margin-small-bottom">{{ 'device-unlock.help' | transloco }}</p>
+                        }
+                        <div class="pow-vault-actions">
+                          <button id="pow-api-key-unlock" class="uk-button uk-button-primary" type="button"
+                            [hidden]="!powApiKeyVault.hasVault || powApiKeyVault.isUnlocked"
+                            [disabled]="powVaultBusy || !powApiKeyVault.hasVault || powApiKeyVault.isUnlocked"
+                            (click)="unlockPowApiKeys()">{{ 'configure-app.pow-api-vault.unlock' | transloco }}</button>
+                          @if (deviceUnlockSupported && deviceUnlock.has('pow')) {
+                            <button type="button" class="uk-button uk-button-default"
+                              [hidden]="powApiKeyVault.isUnlocked"
+                              [disabled]="powVaultBusy || !powApiKeyVault.hasVault || powApiKeyVault.isUnlocked"
+                              (click)="unlockPowWithDevice()">{{ 'device-unlock.use' | transloco }}</button>
+                            <button type="button" class="uk-button uk-button-default"
+                              [disabled]="powVaultBusy"
+                              (click)="disablePowDeviceUnlock()">{{ 'device-unlock.disable' | transloco }}</button>
+                          }
+                          <button class="uk-button uk-button-default" type="button"
+                            [hidden]="!powApiKeyVault.isUnlocked"
+                            [disabled]="powVaultBusy || !powApiKeyVault.isUnlocked"
+                            (click)="lockPowApiKeys()">{{ 'configure-app.pow-api-vault.lock' | transloco }}</button>
+                        </div>
+                      </div>
+
+                      @if (powApiKeyVault.getKeySummaries('nano-to').length) {
+                        <div class="pow-vault-group">
+                          <h4 class="pow-vault-heading">{{ 'configure-app.pow-api-vault.stored-keys' | transloco }}</h4>
+                          <ul class="pow-vault-key-list">
+                            @for (storedKey of powApiKeyVault.getKeySummaries('nano-to'); track storedKey.id) {
+                              <li>
+                                <span>Nano.to — {{ storedKey.label }}</span>
+                                @if (storedKey.active) {
+                                  <span class="uk-label">{{ 'configure-app.pow-api-vault.active' | transloco }}</span>
+                                }
+                              </li>
+                            }
+                          </ul>
+                          <div class="pow-vault-field">
+                            <label for="pow-api-key-selected">{{ 'configure-app.pow-api-vault.choose-key' | transloco }}</label>
+                            <select id="pow-api-key-selected" class="uk-select"
+                              [ngModel]="selectedPowKeyId()" (ngModelChange)="powSelectedKeyId = $event">
+                              @for (storedKey of powApiKeyVault.getKeySummaries('nano-to'); track storedKey.id) {
+                                <option [value]="storedKey.id">{{ storedKey.label }}{{ storedKey.active ? ' — ' + ('configure-app.pow-api-vault.active' | transloco) : '' }}</option>
+                              }
+                            </select>
+                          </div>
+                          @if (powApiKeyVault.hasKey('nano-to')) {
+                            <p class="uk-text-meta uk-margin-small-bottom">{{ 'configure-app.pow-api-vault.key-ready' | transloco }}</p>
+                          }
+                          <div class="pow-vault-actions">
+                            <button class="uk-button uk-button-default" type="button"
+                              [hidden]="!powApiKeyVault.isUnlocked"
+                              [disabled]="powVaultBusy || !powApiKeyVault.isUnlocked || !selectedPowKeyId()"
+                              (click)="activatePowApiKey()">{{ 'configure-app.pow-api-vault.activate' | transloco }}</button>
+                            <button class="uk-button uk-button-danger" type="button"
+                              [hidden]="!powApiKeyVault.isUnlocked"
+                              [disabled]="powVaultBusy || !powApiKeyVault.isUnlocked || !selectedPowKeyId()"
+                              (click)="removePowApiKey()">{{ 'configure-app.pow-api-vault.delete' | transloco }}</button>
+                          </div>
                         </div>
                       }
-                    }
-                    <label class="uk-text-small" for="pow-api-key-label">
-                      {{ 'configure-app.pow-api-vault.new-key-label' | transloco }}
-                    </label>
-                    <input id="pow-api-key-label" class="uk-input uk-margin-small-bottom"
-                      type="text" maxlength="64" autocomplete="off" [(ngModel)]="powApiKeyLabel"
-                      [disabled]="powVaultBusy || (powApiKeyVault.hasVault && !powApiKeyVault.isUnlocked)"
-                      [placeholder]="'configure-app.pow-api-vault.new-key-label-placeholder' | transloco">
-                    <label class="uk-text-small" for="pow-api-key">{{ 'configure-app.pow-api-vault.api-key' | transloco }}</label>
-                    <input id="pow-api-key" class="uk-input uk-margin-small-bottom"
-                      type="password" autocomplete="off" spellcheck="false"
-                      [(ngModel)]="powApiKeyInput"
-                      [disabled]="powVaultBusy || (powApiKeyVault.hasVault && !powApiKeyVault.isUnlocked)"
-                      [placeholder]="'configure-app.pow-api-vault.key-placeholder' | transloco">
-                    <label class="uk-text-small" for="pow-vault-passphrase">{{ 'configure-app.pow-api-vault.passphrase' | transloco }}</label>
-                    <input id="pow-vault-passphrase" class="uk-input uk-margin-small-bottom"
-                      type="password" autocomplete="off" spellcheck="false"
-                      [(ngModel)]="powVaultPassphrase"
-                      [disabled]="powVaultBusy || powApiKeyVault.isUnlocked"
-                      [placeholder]="'configure-app.pow-api-vault.passphrase-placeholder' | transloco">
-                    @if (deviceUnlockSupported && !powApiKeyVault.isUnlocked &&
-                          !deviceUnlock.has('pow')) {
-                      <label class="uk-text-small uk-display-block uk-margin-small-bottom">
-                        <input type="checkbox" class="uk-checkbox"
-                          [(ngModel)]="powEnableDeviceUnlock"
-                          [disabled]="powVaultBusy"
-                          [ngModelOptions]="{ standalone: true }">
-                        {{ 'device-unlock.enable-after-password' | transloco }}
-                      </label>
-                    }
-                    @if (deviceUnlockSupported && deviceUnlock.has('pow')) {
-                      <p class="uk-text-meta">{{ 'device-unlock.help' | transloco }}</p>
-                    }
-                    <div class="pow-vault-actions">
-                      <button class="uk-button uk-button-primary" type="button"
-                        [disabled]="powVaultBusy || !powApiKeyInput || (powApiKeyVault.hasVault
-                          ? !powApiKeyVault.isUnlocked : !powVaultPassphrase)"
-                        (click)="savePowApiKey()">{{ 'configure-app.pow-api-vault.save' | transloco }}</button>
-                      <button id="pow-api-key-unlock" class="uk-button uk-button-default" type="button"
-                        [disabled]="powVaultBusy || !powApiKeyVault.hasVault || powApiKeyVault.isUnlocked"
-                        (click)="unlockPowApiKeys()">{{ 'configure-app.pow-api-vault.unlock' | transloco }}</button>
-                      @if (deviceUnlockSupported && deviceUnlock.has('pow')) {
-                        <button type="button" class="uk-button uk-button-default"
-                          [disabled]="powVaultBusy || !powApiKeyVault.hasVault || powApiKeyVault.isUnlocked"
-                          (click)="unlockPowWithDevice()">{{ 'device-unlock.use' | transloco }}</button>
-                        <button type="button" class="uk-button uk-button-default"
-                          [disabled]="powVaultBusy"
-                          (click)="disablePowDeviceUnlock()">{{ 'device-unlock.disable' | transloco }}</button>
-                      }
-                      <button class="uk-button uk-button-default" type="button"
-                        [disabled]="powVaultBusy || !powApiKeyVault.isUnlocked"
-                        (click)="lockPowApiKeys()">{{ 'configure-app.pow-api-vault.lock' | transloco }}</button>
-                      <button class="uk-button uk-button-default" type="button"
-                        [disabled]="powVaultBusy || !powApiKeyVault.isUnlocked || !selectedPowKeyId()"
-                        (click)="activatePowApiKey()">{{ 'configure-app.pow-api-vault.activate' | transloco }}</button>
-                      <button class="uk-button uk-button-danger" type="button"
-                        [disabled]="powVaultBusy || !powApiKeyVault.isUnlocked || !selectedPowKeyId()"
-                        (click)="removePowApiKey()">{{ 'configure-app.pow-api-vault.delete' | transloco }}</button>
-                    </div>
-                    <div class="uk-text-meta uk-margin-small-top">
-                      {{ 'configure-app.pow-api-vault.warning' | transloco }}
+
+                      <div class="pow-vault-group" [hidden]="powApiKeyVault.hasVault && !powApiKeyVault.isUnlocked">
+                        <h4 class="pow-vault-heading">{{ 'configure-app.pow-api-vault.add-new-key' | transloco }}</h4>
+                        <div class="pow-vault-field">
+                          <label for="pow-api-key-label">{{ 'configure-app.pow-api-vault.new-key-label' | transloco }}</label>
+                          <input id="pow-api-key-label" class="uk-input" type="text"
+                            maxlength="64" autocomplete="off" [(ngModel)]="powApiKeyLabel"
+                            [disabled]="powVaultBusy || (powApiKeyVault.hasVault && !powApiKeyVault.isUnlocked)"
+                            [placeholder]="'configure-app.pow-api-vault.new-key-label-placeholder' | transloco">
+                        </div>
+                        <div class="pow-vault-field">
+                          <label for="pow-api-key">{{ 'configure-app.pow-api-vault.api-key' | transloco }}</label>
+                          <input id="pow-api-key" class="uk-input" type="password"
+                            autocomplete="off" spellcheck="false" [(ngModel)]="powApiKeyInput"
+                            [disabled]="powVaultBusy || (powApiKeyVault.hasVault && !powApiKeyVault.isUnlocked)"
+                            [placeholder]="'configure-app.pow-api-vault.key-placeholder' | transloco">
+                        </div>
+                        <div class="pow-vault-actions">
+                          <button id="pow-api-key-save" class="uk-button uk-button-primary" type="button"
+                            [disabled]="powVaultBusy || !powApiKeyInput || (powApiKeyVault.hasVault
+                              ? !powApiKeyVault.isUnlocked : !powVaultPassphrase)"
+                            (click)="savePowApiKey()">{{ 'configure-app.pow-api-vault.save' | transloco }}</button>
+                        </div>
+                      </div>
+                      <p class="uk-text-meta pow-vault-warning">{{ 'configure-app.pow-api-vault.warning' | transloco }}</p>
                     </div>
                   </div>
                 </div>

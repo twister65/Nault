@@ -927,11 +927,34 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
 
 
-  // Show credential management only for the explicit Nano.to PoW source.
-  // This is presentation-only: saved credentials and vault unlock are still
-  // independent of the selected wallet RPC and automatic PoW fallback.
+  // Show Nano.to credentials only when they are relevant to the selected PoW
+  // mode, never merely because the unrelated wallet RPC uses Nano.to.
   showNanoToPowApiKeys(): boolean {
-    return this.selectedPoWOption === 'nanoTo';
+    if (this.selectedPoWOption === 'nanoTo') return true;
+
+    if (this.selectedPoWOption === 'best') {
+      // "Best available (Nano.to)" must allow managing its key. Also keep
+      // encrypted Nano.to keys accessible after the vault is locked: that
+      // temporarily makes Twister32 the best usable provider, but the user
+      // must still be able to unlock Nano.to without changing PoW mode.
+      const preferred = this.pow.getPreferredBestPoWProvider();
+      return PoWApiKeyVaultService.providerForUrl(preferred?.endpoint || '') === 'nano-to' ||
+        this.powApiKeyVault.getKeySummaries('nano-to').length > 0;
+    }
+
+    if (this.selectedPoWOption !== 'server') return false;
+
+    // Prefer the server currently selected in the form (even before Apply);
+    // otherwise use the saved endpoint. Match the hostname exactly, not a
+    // substring such as rpc.nano.to.example.com.
+    const selected = this.appSettings.serverOptions.find(node =>
+      node.value === this.selectedServer && !!node.api);
+    const endpoint = selected?.api || this.appSettings.settings.serverAPI;
+    try {
+      return new URL(endpoint || '').hostname.toLowerCase() === 'rpc.nano.to';
+    } catch {
+      return false;
+    }
   }
 
   getRemotePoWOptionName(mode: 'server' | 'best' | 'custom' = 'server'): string {
