@@ -114,6 +114,9 @@ describe('Inline representative picker', () => {
     component.browseRepresentativeList = false;
     component.representativeSearch = '';
     component.onlyOnlineReps = false;
+    component.representativeOverview = [];
+    component.visibleRepresentativeLimit = 12;
+    component.matchingRepresentativeCount = 0;
     component.showRepresentatives = false;
     component.representativeResults$ = new BehaviorSubject<any[]>([]);
     component.representativeList = [
@@ -151,6 +154,46 @@ describe('Inline representative picker', () => {
     component.representativeSearch = 'TRUSTABLE';
     component.searchRepresentatives();
     expect(component.representativeResults$.value).toEqual([]);
+  });
+
+  it('keeps the wallet current representative in the first 12 results even without the online-only filter', () => {
+    const component = setup();
+    const currentRep = {id: 'nano_1tk1xkcokgw4gmoq7fjbb7hd8gpzfofnrbjtqijk16u5jw19qjx9zqj9y6gw', name: 'RsNano.com - Nano Rust Port'};
+    component.representativeOverview = [{id: currentRep.id, networkObservation: {rpcOnline: false, nanonodeOnline: true}}];
+    component.representativeList = [
+      ...Array.from({length: 25}, (_, i) => ({id: 'nano_other_' + i, name: 'Example node ' + i})),
+      currentRep
+    ];
+    component.monitorSnapshot.byAccount[currentRep.id] = {account: currentRep.id, online: true, share: 0.0227};
+    component.browseRepresentativeList = true;
+    component.searchRepresentatives();
+
+    expect(component.onlyOnlineReps).toBeFalse();
+    expect(component.matchingRepresentativeCount).toBe(26);
+    expect(component.representativeResults$.value[0].id).toBe(currentRep.id);
+    expect(component.representativeResults$.value.length).toBe(12);
+
+    component.showMoreRepresentatives();
+    expect(component.representativeResults$.value.length).toBe(24);
+    component.showMoreRepresentatives();
+    expect(component.representativeResults$.value.length).toBe(26);
+    component.onlyOnlineReps = true;
+    component.searchRepresentatives();
+    expect(component.representativeResults$.value.map((rep: {id: string}) => rep.id)).toEqual([currentRep.id]);
+  });
+
+  it('displays RPC and NanoNode.de votes independently in the status information bubble', () => {
+    const component = setup();
+    component.translocoService = {translate: (key: string) => ({
+      'ui-representatives.observed-online': 'Votes observés',
+      'ui-representatives.not-observed': 'Aucun vote récent observé',
+      'ui-representatives.observation-unavailable': 'Observation indisponible'
+    } as Record<string, string>)[key]};
+    const rep = {networkObservation: {rpcOnline: false, nanonodeOnline: true}};
+    expect(component.getVoteObservationsTooltip(rep))
+      .toBe('RPC : Aucun vote récent observé • NanoNode.de : Votes observés');
+    expect(component.getVoteObservationsTooltip({networkObservation: {rpcOnline: null, nanonodeOnline: undefined}}))
+      .toBe('RPC : Observation indisponible • NanoNode.de : Observation indisponible');
   });
 
   it('preserves a local trusted flag independently of monitor data', () => {
