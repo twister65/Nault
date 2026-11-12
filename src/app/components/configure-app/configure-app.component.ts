@@ -18,7 +18,8 @@ import {UtilService} from '../../services/util.service';
 import {BehaviorSubject, Subscription} from 'rxjs';
 import {RepresentativeService, StoredRepresentative} from '../../services/representative.service';
 import {NinjaService} from '../../services/ninja.service';
-import { getDirectoryRepresentativeName } from '../../services/representative-directory';
+import { getDirectoryRepresentativeName, getDirectoryRepresentatives } from '../../services/representative-directory';
+import { RepresentativeMonitorService, RepresentativeMonitorSnapshot } from '../../services/representative-monitor.service';
 import {QrModalService} from '../../services/qr-modal.service';
 import { TranslocoService } from '@jsverse/transloco';
 
@@ -51,7 +52,8 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     private ninja: NinjaService,
     private renderer: Renderer2,
     private qrModalService: QrModalService,
-    private translocoService: TranslocoService) { }
+    private translocoService: TranslocoService,
+    private representativeMonitor: RepresentativeMonitorService) { }
   wallet = this.walletService.wallet;
 
   languages = this.translocoService.getAvailableLangs() as [{id: string, label: string}];
@@ -349,6 +351,8 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   representativeListMatch = '';
   repStatus: number | null = null;
   representativeList: StoredRepresentative[] = [];
+  defaultRepMonitor: RepresentativeMonitorSnapshot | null = null;
+  browseDefaultReps = false;
 
   serverAPI: string | null = null;
   serverAPIUpdated: string | null = null;
@@ -430,26 +434,22 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
 
   async populateRepresentativeList() {
-    // add trusted/regular local reps to the list
+    this.defaultRepMonitor = await this.representativeMonitor.getSnapshot();
     const localReps = this.repService.getSortedRepresentatives();
-    this.representativeList.push( ...localReps.filter(rep => (!rep.warn)) );
+    const monitoredReps: StoredRepresentative[] = (this.defaultRepMonitor?.representatives || [])
+      .filter(rep => !!rep.name).map(rep => ({ id: rep.account, name: rep.name! }));
+    const otherReps = await this.ninja.recommendedRandomized().catch(() => []);
+    const ninjaReps: StoredRepresentative[] = Array.isArray(otherReps)
+      ? otherReps.filter(rep => !!rep?.account && !!rep?.alias).map(rep => ({ id: rep.account, name: rep.alias }))
+      : [];
+    this.representativeList = [...localReps, ...monitoredReps, ...getDirectoryRepresentatives(), ...ninjaReps]
+      .filter((rep, index, list) =>
+        list.findIndex(item => item.id.toLowerCase() === rep.id.toLowerCase()) === index);
+  }
 
-    if (this.serverAPI) {
-      const verifiedReps = await this.ninja.recommendedRandomized().catch(() => []);
-
-      // add random recommended reps to the list
-      for (const representative of verifiedReps) {
-        const temprep = {
-          id: representative.account,
-          name: representative.alias
-        };
-
-        this.representativeList.push(temprep);
-      }
-    }
-
-    // add untrusted local reps to the list
-    this.representativeList.push( ...localReps.filter(rep => (rep.warn)) );
+  toggleDefaultRepBrowser() {
+    this.browseDefaultReps = !this.browseDefaultReps;
+    this.searchRepresentatives();
   }
 
   private resetNodeStats() {
@@ -859,41 +859,36 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
 
   searchRepresentatives() {
-    if (this.defaultRepresentative && !this.util.account.isValidAccount(this.defaultRepresentative)) this.repStatus = 0;
-    else this.repStatus = null;
-
-    this.showRepresentatives = true;
-    const search = this.defaultRepresentative || '';
-
-    const matches = this.representativeList
-      .filter(a => a.name.toLowerCase().indexOf(search.toLowerCase()) !== -1)
-      // remove duplicate accounts
-      .filter((item, pos, self) => this.util.array.findWithAttr(self, 'id', item.id) === pos)
-      .slice(0, 5);
-
+    this.repStatus = this.defaultRepresentative && !this.util.account.isValidAccount(this.defaultRepresentative) ? 0 : null;
+    const search = (this.defaultRepresentative || '').trim().toLowerCase();
+    this.showRepresentatives = search.length >= 2 || this.browseDefaultReps;
+    const matches = this.showRepresentatives ? this.representativeList
+      .filter(rep => !rep.warn)
+      .filter(rep => !search || rep.name.toLowerCase().includes(search) || rep.id.toLowerCase().includes(search))
+      .slice(0, 8) : [];
     this.representativeResults$.next(matches);
   }
 
   selectRepresentative(rep: string) {
+    this.browseDefaultReps = false;
     this.showRepresentatives = false;
     this.defaultRepresentative = rep;
-    this.searchRepresentatives();
-    this.validateRepresentative();
+    this.representativeResults$.next([]);
+    void this.validateRepresentative();
   }
 
   async validateRepresentative() {
     setTimeout(() => this.showRepresentatives = false, 400);
     if (this.defaultRepresentative) this.defaultRepresentative = this.defaultRepresentative.replace(/ /g, '');
-
     if (!this.defaultRepresentative) {
       this.representativeListMatch = '';
       return;
     }
-
     const localName = this.repService.getRepresentative(this.defaultRepresentative)?.name;
+    const liveName = this.defaultRepMonitor?.byAccount[this.defaultRepresentative.toLowerCase()]?.name;
     const directoryName = getDirectoryRepresentativeName(this.defaultRepresentative);
-    const ninjaRep = localName || directoryName ? null : await this.ninja.getAccount(this.defaultRepresentative);
-    this.representativeListMatch = localName || directoryName || ninjaRep?.alias || '';
+    const ninjaRep = localName || liveName || directoryName ? null : await this.ninja.getAccount(this.defaultRepresentative);
+    this.representativeListMatch = localName || liveName || directoryName || ninjaRep?.alias || '';
   }
 
   // When changing the Server Config option, prefill values
