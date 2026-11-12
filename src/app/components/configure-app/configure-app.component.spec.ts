@@ -177,7 +177,7 @@ describe('ConfigureAppComponent', () => {
       endpoint: 'https://rpc.nano.to/', status: 'unverified'
     });
     expect(component.getRemotePoWOptionName('best')).toContain('Nano.to');
-    expect(component.showNanoToPowApiKeys()).toBeFalse();
+    expect(component.showNanoToPowApiKeys()).toBeTrue();
 
     hasKey.and.returnValue(false);
     component.pow.syncProviderFromSettings(true);
@@ -185,6 +185,61 @@ describe('ConfigureAppComponent', () => {
     expect(component.showNanoToPowApiKeys()).toBeFalse();
     expect(settings.serverName).toBe('nano-to');
     expect(settings.serverAPI).toBe('https://rpc.nano.to/');
+  });
+
+  it('shows Nano.to key management in best mode when Nano.to is preferred, independent of wallet RPC', async () => {
+    spyOn(component, 'ngOnInit').and.stub();
+    const settings = (component as any).appSettings.settings;
+    const hasKey = spyOn(component.powApiKeyVault, 'hasKey').and.returnValue(true);
+    const transloco = TestBed.inject(TranslocoService);
+    await firstValueFrom(transloco.load(transloco.getActiveLang()));
+
+    settings.powSource = 'best';
+    component.selectedPoWOption = 'best';
+    for (const rpc of ['https://rainstorm.city/api', 'https://rpc.nano.to/']) {
+      settings.serverAPI = rpc;
+      component.pow.syncProviderFromSettings(true);
+      fixture.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+      expect(component.getRemotePoWOptionName('best')).toContain('Nano.to');
+      expect(fixture.nativeElement.querySelector('#pow-vault-help')).toBeTruthy();
+    }
+
+    hasKey.and.returnValue(false);
+    component.pow.syncProviderFromSettings(true);
+    fixture.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(component.getRemotePoWOptionName('best')).not.toContain('Nano.to');
+    expect(fixture.nativeElement.querySelector('#pow-vault-help')).toBeFalsy();
+  });
+
+  it('allows unlocking a stored Nano.to key from best mode, but hides unrelated empty vaults', () => {
+    const settings = (component as any).appSettings.settings;
+    settings.powSource = 'best';
+    component.selectedPoWOption = 'best';
+    spyOn(component.powApiKeyVault, 'hasKey').and.returnValue(false);
+    const summaries = spyOn(component.powApiKeyVault, 'getKeySummaries')
+      .and.returnValue([]);
+
+    component.pow.syncProviderFromSettings(true);
+    expect(component.pow.getPreferredBestPoWProvider()?.name).not.toBe('Nano.to');
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
+
+    // Keys remain encrypted but visible as non-secret metadata in a locked
+    // vault. Keep the UI accessible so users can re-enable Nano.to directly.
+    summaries.and.returnValue([
+      { id: 'saved-key', provider: 'nano-to', label: 'Saved Nano.to key', active: true }
+    ]);
+    expect(component.showNanoToPowApiKeys()).toBeTrue();
+
+    // After a reset/three failed passwords erases the vault, hide the panel.
+    summaries.and.returnValue([]);
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
   });
 
   it('warns about irreversible erasure after three wrong vault passwords', async () => {
