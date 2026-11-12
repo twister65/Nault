@@ -688,6 +688,7 @@
     "new-payment": "Neue Zahlung"
   },
   "ui-representatives": {
+    "monitor-good-filter": "Nur Gut (NanoNode.de)",
     "monitor-good": "Gut (NanoNode.de)",
     "monitor-good-tip": "Unverbindliche Einschätzung: aktuelle Stimmen, Principal-Repräsentant, unter 2 % Stimmgewicht, positives Urteil und Synchronisation laut NanoNode.de. Telemetrie kann gefälscht werden und garantiert keine langfristige Verfügbarkeit.",
     "title": "Repräsentanten",
