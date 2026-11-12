@@ -151,6 +151,7 @@
     "this-representative-is-sometimes-offline": "This representative is sometimes offline ({{ percent }}% uptime).",
     "unknown-rep": "Unknown Rep",
     "unknown-status": "Unknown Status",
+    "votes-detected": "Votes detected",
     "we-could-not-determine-status-of-this-representative": "We could not determine status of this representative.",
     "we-found-no-issues-with-uptime-or-weight": "We found no issues with uptime or weight distribution of your current representative.",
     "you-can-change-representative-at-any-time": "You can change representative at any time by clicking on its name above.",

@@ -151,6 +151,7 @@
     "this-representative-is-sometimes-offline": "Ce représentant est parfois hors ligne (disponibilité : {{ percent }} %).",
     "unknown-rep": "Représentant inconnu",
     "unknown-status": "Statut inconnu",
+    "votes-detected": "Votes détectés",
     "we-could-not-determine-status-of-this-representative": "Impossible de déterminer l'état de ce représentant.",
     "we-found-no-issues-with-uptime-or-weight": "Aucun problème de disponibilité ou de répartition du poids de vote n'a été détecté pour votre représentant actuel.",
     "you-can-change-representative-at-any-time": "Vous pouvez changer de représentant à tout moment en cliquant sur son nom ci-dessus.",

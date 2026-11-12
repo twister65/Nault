@@ -35,6 +35,7 @@
     "this-representative-is-sometimes-offline": "Dieser Repräsentant ist gelegentlich offline ({{ percent }} % Verfügbarkeit).",
     "unknown-rep": "Unbekannter Repräsentant",
     "unknown-status": "Unbekannter Status",
+    "votes-detected": "Stimmen erkannt",
     "we-could-not-determine-status-of-this-representative": "Der Status dieses Repräsentanten konnte nicht ermittelt werden.",
     "we-found-no-issues-with-uptime-or-weight": "Bei Verfügbarkeit und Stimmgewicht Ihres aktuellen Repräsentanten wurden keine Probleme festgestellt.",
     "you-can-change-representative-at-any-time": "Sie können den Repräsentanten jederzeit ändern, indem Sie oben auf seinen Namen klicken.",
