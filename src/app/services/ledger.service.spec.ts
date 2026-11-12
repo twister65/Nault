@@ -610,6 +610,23 @@ describe('Desktop Ledger IPC command correlation', () => {
     expect(messages.observers.length).toBe(0);
   });
 
+  it('keeps hardware signing IPC pending until a physical decision rather than a timer', async () => {
+    const service = Object.create(LedgerService.prototype) as LedgerService;
+    const messages = new Subject<any>();
+    (service as any).desktopMessage$ = messages;
+    const timeoutSpy = spyOn(globalThis, 'setTimeout').and.callThrough();
+
+    const signing = service.getDesktopResponse('sign-block', 57);
+    const caching = service.getDesktopResponse('cache-block', 58);
+    expect(timeoutSpy).not.toHaveBeenCalled();
+
+    messages.next({ event: 'sign-block', data: { requestId: 57, signature: 'signed' } });
+    messages.next({ event: 'cache-block', data: { requestId: 58, signature: 'cached' } });
+    expect((await signing).signature).toBe('signed');
+    expect((await caching).signature).toBe('cached');
+    expect(messages.observers.length).toBe(0);
+  });
+
   it('preserves user-denied APDU status instead of losing it at the IPC boundary', async () => {
     const service = Object.create(LedgerService.prototype) as LedgerService;
     const messages = new Subject<any>();

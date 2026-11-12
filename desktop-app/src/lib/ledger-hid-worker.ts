@@ -83,11 +83,14 @@ async function initialize() {
     (opened as any).readHID = (): Promise<Buffer> =>
       new Promise<Buffer>((resolve, reject) => {
         const started = Date.now();
-        // Snapshot the limit for this HID read, even if signing mode changes later.
-        const readTimeoutMs = signingMode ? 120000 : 30000;
+        // A confirmation is controlled by the Ledger user, not an application
+        // deadline. Capture the mode once per HID read; a later mode switch
+        // must not interrupt an already pending APDU. Actual HID errors,
+        // explicit transport closes, and APDU refusal still end the request.
+        const boundedRead = !signingMode;
         const poll = () => {
           if (closing) return reject(new Error('Ledger HID worker closing'));
-          if (Date.now() - started >= readTimeoutMs) {
+          if (boundedRead && Date.now() - started >= 30000) {
             return reject(new Error('Ledger HID read timed out'));
           }
           try {

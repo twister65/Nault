@@ -254,8 +254,12 @@ async function main() {
 
   await check('native USB signing extends only the HID confirmation timeout', async () => {
     const workerSource = fs.readFileSync(path.join(root, 'desktop-app/src/lib/ledger-hid-worker.ts'), 'utf8');
-    assert.match(workerSource, /signingMode\s*\?\s*120000\s*:\s*30000/,
-      'signing must tolerate two minutes; normal USB health reads stay at 30 seconds');
+    assert.match(workerSource, /const boundedRead\s*=\s*!signingMode/,
+      'human confirmation must have no arbitrary wall-clock deadline');
+    assert.match(workerSource, /boundedRead && Date\.now\(\) - started >= 30000/,
+      'ordinary HID health reads must still time out after 30 seconds');
+    assert.doesNotMatch(workerSource, /signingMode\s*\?\s*\d{4,}/,
+      'do not restore a finite signing deadline');
     const { LedgerService: NativeLedgerService } = load(
       fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8'), {
         './ledger-hid-worker-transport': {}, 'hw-app-nano': {},
@@ -272,6 +276,12 @@ async function main() {
     await assert.rejects(native.beginSigning(), /already in progress/);
     native.endSigning();
     assert.deepEqual(modes, [true, false], 'the original timeout must be restored afterward');
+  });
+
+  await check('send confirmation cannot be dismissed while the Ledger signature is pending', async () => {
+    const confirmTemplate = fs.readFileSync(path.join(root, 'src/app/components/send/send.component.html'), 'utf8');
+    assert.match(confirmTemplate, /\(click\)="activePanel = 'send'"\s+\[disabled\]="confirmingTransaction"/,
+      'UI cancel must not hide a live Ledger signing operation');
   });
 
   await check('USB rejection 0x6985 preserves session and a subsequent signature succeeds', async () => {

@@ -431,23 +431,31 @@ export class LedgerService {
    * @returns {Promise<any>}
    */
   // Correlate replies with commands, not just account indices: background HID
-  // polls and replies from timed-out requests must never resolve a new command.
+  // polls and late replies from a previous command must never resolve a new one.
+  // Unlike account/status probes, hardware signing waits for explicit device
+  // approval/refusal, transport failure or disconnection, without a deadline.
   async getDesktopResponse(eventType: string, requestId: number): Promise<any> {
     return new Promise((resolve, reject) => {
       let settled = false;
       let subscription: { unsubscribe(): void } | null = null;
-      const timeout = setTimeout(() => {
+      // Neither cacheBlock nor signBlock may time out while the physical Ledger
+      // still displays a confirmation. USB worker failures report via IPC.
+      const awaitingHardwareDecision = eventType === 'sign-block' || eventType === 'cache-block';
+      const timeout = awaitingHardwareDecision ? null : setTimeout(() => {
         if (settled) return;
         settled = true;
         subscription?.unsubscribe();
         reject(new Error('Desktop Ledger ' + eventType + ' response timed out'));
-      }, (eventType === 'sign-block' || eventType === 'cache-block') ? 150000 : 45000);
+      }, 45000);
+      const clearDeadline = () => {
+        if (timeout !== null) clearTimeout(timeout);
+      };
 
       subscription = this.desktopMessage$.subscribe((response: any) => {
         if (settled || response?.event !== eventType ||
             response.data?.requestId !== requestId) return;
         settled = true;
-        clearTimeout(timeout);
+        clearDeadline();
         subscription?.unsubscribe();
         if (response.data.error === true) {
           const error = new Error(String(response.data.errorMessage || 'Ledger command failed')) as Error & { statusCode?: number };
@@ -463,7 +471,7 @@ export class LedgerService {
       }, error => {
         if (settled) return;
         settled = true;
-        clearTimeout(timeout);
+        clearDeadline();
         subscription?.unsubscribe();
         reject(error);
       });
