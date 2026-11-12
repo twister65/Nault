@@ -881,7 +881,8 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
 
   async validateRepresentative() {
-    setTimeout(() => this.showRepresentatives = false, 400);
+    // The inline browser is controlled only by its Browse button/selection.
+    // An address-input blur must never close a list opened by the same click.
     if (this.defaultRepresentative) this.defaultRepresentative = this.defaultRepresentative.replace(/ /g, '');
     if (!this.defaultRepresentative) {
       this.representativeListMatch = '';
