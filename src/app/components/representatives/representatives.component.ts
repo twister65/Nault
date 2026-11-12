@@ -5,6 +5,7 @@ import {BehaviorSubject} from 'rxjs';
 import { QrModalService } from '../../services/qr-modal.service';
 import type {QRType} from '../qr-modal/qr-modal.component';
 import type {WalletApiAccount} from '../../services/wallet.service';
+import { hasPositiveNanoNodeHealthEvidence } from '../../services/representative.service';
 import type {StoredRepresentative} from '../../services/representative.service';
 
 import {
@@ -71,6 +72,7 @@ export class RepresentativesComponent implements OnInit {
   browseRepresentativeList = false;
   representativeSearch = '';
   onlyOnlineReps = false;
+  onlyMonitoredGoodReps = false;
   visibleRepresentativeLimit = 12;
   matchingRepresentativeCount = 0;
   private lastRepresentativeSearch = '';
@@ -149,6 +151,10 @@ export class RepresentativesComponent implements OnInit {
     return this.monitorSnapshot?.byAccount[id.toLowerCase()] ?? null;
   }
 
+  isMonitoredGoodRepresentative(id: string): boolean {
+    return hasPositiveNanoNodeHealthEvidence(this.getMonitoredRepresentative(id));
+  }
+
   /**
    * NanoNode.de's share is a fraction (0.000015 = 0.0015%), not a percentage.
    * Preserve four decimal places below 0.01% so small representatives are not
@@ -202,8 +208,9 @@ export class RepresentativesComponent implements OnInit {
    */
   private representativePriority(rep: StoredRepresentative): number {
     const current = this.representativeOverview.some(item => item.id.toLowerCase() === rep.id.toLowerCase());
-    if (current) return 4;
-    if (rep.trusted) return 3;
+    if (current) return 5;
+    if (rep.trusted) return 4;
+    if (this.isMonitoredGoodRepresentative(rep.id)) return 3;
     if (this.hasRecentObservedVote(rep.id)) return 2;
     return 1;
   }
@@ -223,6 +230,12 @@ export class RepresentativesComponent implements OnInit {
 
   toggleOnlineOnly() {
     this.onlyOnlineReps = !this.onlyOnlineReps;
+    this.visibleRepresentativeLimit = 12;
+    this.searchRepresentatives();
+  }
+
+  toggleMonitoredGoodOnly() {
+    this.onlyMonitoredGoodReps = !this.onlyMonitoredGoodReps;
     this.visibleRepresentativeLimit = 12;
     this.searchRepresentatives();
   }
@@ -302,6 +315,7 @@ export class RepresentativesComponent implements OnInit {
     const matches = this.representativeList
       .filter(rep => !rep.warn)
       .filter(rep => !this.onlyOnlineReps || this.hasRecentObservedVote(rep.id))
+      .filter(rep => !this.onlyMonitoredGoodReps || this.isMonitoredGoodRepresentative(rep.id))
       .filter(rep => !search || rep.name.toLowerCase().includes(search) || rep.id.toLowerCase().includes(search))
       .sort((a, b) => this.representativePriority(b) - this.representativePriority(a) ||
         a.name.localeCompare(b.name));
