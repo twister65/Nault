@@ -585,6 +585,7 @@
     "not-observed": "No recent votes observed",
     "observation-unavailable": "Observation unavailable",
     "telemetry-in-sync": "Telemetry: in sync",
+    "telemetry-unavailable": "Telemetry unavailable",
     "telemetry-out-of-sync": "Telemetry: out of sync",
     "nanoticker-details": "NanoTicker health",
     "browse-representatives": "Browse representatives",

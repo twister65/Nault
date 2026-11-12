@@ -585,6 +585,7 @@
     "not-observed": "Aucun vote récent observé",
     "observation-unavailable": "Observation indisponible",
     "telemetry-in-sync": "Télémétrie : synchronisé",
+    "telemetry-unavailable": "Télémétrie indisponible",
     "telemetry-out-of-sync": "Télémétrie : désynchronisé",
     "nanoticker-details": "Santé NanoTicker",
     "browse-representatives": "Parcourir les représentants",

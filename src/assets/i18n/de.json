@@ -702,6 +702,7 @@
     "not-observed": "Keine aktuellen Stimmen beobachtet",
     "observation-unavailable": "Beobachtung nicht verfügbar",
     "telemetry-in-sync": "Telemetrie: synchron",
+    "telemetry-unavailable": "Telemetrie nicht verfügbar",
     "telemetry-out-of-sync": "Telemetrie: nicht synchron",
     "nanoticker-details": "NanoTicker-Zustand",
     "browse-representatives": "Repräsentanten durchsuchen",
