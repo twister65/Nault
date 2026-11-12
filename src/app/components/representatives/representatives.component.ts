@@ -16,21 +16,11 @@ import {
   NotificationService,
   RepresentativeService,
   UtilService,
-  WalletService,
-  NinjaService
+  WalletService
 } from '../../services';
 import { TranslocoService } from '@jsverse/transloco';
 import { getDirectoryRepresentativeName, getDirectoryRepresentatives } from '../../services/representative-directory';
 import { RepresentativeMonitorService, RepresentativeMonitorSnapshot, MonitoredRepresentative } from '../../services/representative-monitor.service';
-
-interface RecommendedRepresentative {
-  account: string;
-  alias: string;
-  votingweight: number | string;
-  weight?: BigNumber;
-  percent?: string;
-  [field: string]: unknown;
-}
 
 @Component({
     selector: 'app-representatives',
@@ -55,17 +45,7 @@ export class RepresentativesComponent implements OnInit {
   selectedAccounts: Array<{id: string}> = [];
   fullAccounts: Array<WalletApiAccount & {error?: string}> = [];
 
-  recommendedReps: RecommendedRepresentative[] = [];
-  recommendedRepsPaginated: RecommendedRepresentative[] = [];
-  recommendedRepsLoading = false;
-  selectedRecommendedRep: RecommendedRepresentative | null = null;
-  showRecommendedReps = false;
   loadingRepresentatives = false;
-
-  repsPerPage = 5;
-  currentRepPage = 0;
-
-  hideOverview = false;
 
   representativeList: StoredRepresentative[] = [];
   monitorSnapshot: RepresentativeMonitorSnapshot | null = null;
@@ -86,7 +66,6 @@ export class RepresentativesComponent implements OnInit {
     private util: UtilService,
     private representativeService: RepresentativeService,
     public settings: AppSettingsService,
-    private ninja: NinjaService,
     private qrModalService: QrModalService,
     private translocoService: TranslocoService,
     public representativeMonitor: RepresentativeMonitorService) { }
@@ -96,8 +75,9 @@ export class RepresentativesComponent implements OnInit {
 
     // Listen for query parameters that set defaults
     this.router.queryParams.subscribe(params => {
-      this.hideOverview = params && params.hideOverview;
-      this.showRecommendedReps = params && params.showRecommended;
+      // Historical hideOverview/showRecommended flags are intentionally ignored:
+      // the representative summary must remain visible after opening the
+      // change-required action and after an accepted representative change.
 
       if (params && params.accounts) {
         this.selectedAccounts = []; // Reset the preselected accounts
@@ -118,12 +98,10 @@ export class RepresentativesComponent implements OnInit {
       (a: FullRepresentativeOverview, b: FullRepresentativeOverview) => b.delegatedWeight.toNumber() - a.delegatedWeight.toNumber()
     );
     this.representativeOverview = repOverview;
-    repOverview.forEach(o => this.fullAccounts.push(...o.accounts));
+    this.fullAccounts = repOverview.flatMap(o => o.accounts);
     this.loadingRepresentatives = false;
 
-    this.populateRepresentativeList();
-
-    await this.loadRecommendedReps();
+    await this.populateRepresentativeList();
   }
 
   async populateRepresentativeList() {
@@ -134,13 +112,9 @@ export class RepresentativesComponent implements OnInit {
     const monitoredReps: StoredRepresentative[] = (this.monitorSnapshot?.representatives ?? [])
       .filter(rep => !!rep.name).map(rep => ({ id: rep.account, name: rep.name! }));
     const fallback = getDirectoryRepresentatives();
-    const verified = await this.ninja.recommendedRandomized().catch(() => []);
-    const ninjaReps: StoredRepresentative[] = Array.isArray(verified)
-      ? verified.filter(rep => !!rep?.account && !!rep?.alias)
-        .map(rep => ({ id: rep.account, name: rep.alias })) : [];
     // Keep the user's local names and avoid flags ahead of third-party aliases.
     this.representativeList = [
-      ...localReps, ...monitoredReps, ...fallback, ...ninjaReps
+      ...localReps, ...monitoredReps, ...fallback
     ].filter((rep, index, list) =>
       list.findIndex(item => item.id.toLowerCase() === rep.id.toLowerCase()) === index
     );
@@ -343,65 +317,9 @@ export class RepresentativesComponent implements OnInit {
     const localName = this.representativeService.getRepresentative(this.toRepresentativeID)?.name;
     const liveName = this.getMonitoredRepresentative(this.toRepresentativeID)?.name;
     const directoryName = getDirectoryRepresentativeName(this.toRepresentativeID);
-    const ninjaRep = localName || liveName || directoryName ? null : await this.ninja.getAccount(this.toRepresentativeID);
-    this.representativeListMatch = localName || liveName || directoryName || ninjaRep?.alias || '';
+    this.representativeListMatch = localName || liveName || directoryName || '';
   }
 
-  async loadRecommendedReps() {
-    this.recommendedRepsLoading = true;
-    try {
-      const scores = await this.ninja.recommended() as RecommendedRepresentative[];
-      const totalSupply = new BigNumber(133248289);
-
-      const reps = scores.map(rep => {
-        const nanoWeight = this.util.nano.rawToMnano(rep.votingweight.toString() || 0);
-        const percent = nanoWeight.div(totalSupply).times(100);
-
-        // rep.weight = nanoWeight.toString(10);
-        rep.weight = this.util.nano.mnanoToRaw(nanoWeight);
-        rep.percent = percent.toFixed(3);
-
-        return rep;
-      });
-
-      this.recommendedReps = reps;
-
-      this.calculatePage();
-      this.recommendedRepsLoading = false;
-    } catch (err) {
-      this.recommendedRepsLoading = false;
-    }
-
-  }
-
-  previousReps() {
-    if (this.currentRepPage > 0) {
-      this.currentRepPage--;
-      this.calculatePage();
-    }
-  }
-  nextReps() {
-    if (this.currentRepPage < (this.recommendedReps.length / this.repsPerPage) - 1) {
-      this.currentRepPage++;
-    } else {
-      this.currentRepPage = 0;
-    }
-    this.calculatePage();
-  }
-
-  calculatePage() {
-    this.recommendedRepsPaginated = this.recommendedReps.slice(
-      (this.currentRepPage * this.repsPerPage),
-      (this.currentRepPage * this.repsPerPage) + this.repsPerPage
-    );
-  }
-
-  selectRecommendedRep(rep: RecommendedRepresentative) {
-    this.selectedRecommendedRep = rep;
-    this.toRepresentativeID = rep.account;
-    this.showRecommendedReps = false;
-    this.representativeListMatch = rep.alias; // We will save if they use this, so this is a nice little helper
-  }
 
   async changeRepresentatives() {
     if (this.changingRepresentatives) return;
@@ -476,10 +394,6 @@ export class RepresentativesComponent implements OnInit {
         return;
       }
 
-      if (this.selectedRecommendedRep?.account === newRep) {
-        this.representativeService.saveRepresentative(newRep, this.selectedRecommendedRep.alias, false, false);
-      }
-
       if (failedAccounts.length) {
         this.selectedAccounts = failedAccounts;
         this.notifications.sendWarning(this.translocoService.translate('ui-notifications.rep-updated-partial', {
@@ -489,19 +403,16 @@ export class RepresentativesComponent implements OnInit {
         this.selectedAccounts = [];
         this.toRepresentativeID = '';
         this.representativeListMatch = '';
-        this.selectedRecommendedRep = null;
         this.notifications.sendSuccess(this.translocoService.translate('ui-notifications.rep-updated'));
       }
 
       // The block is already accepted: an overview refresh failure does not
       // undo that transaction or turn a partial result into a false success.
       try {
-        if (!this.hideOverview) {
-          this.loadingRepresentatives = true;
-          this.representativeOverview = await this.representativeService.getRepresentativesOverview();
-          this.fullAccounts = this.representativeOverview.flatMap(rep => rep.accounts);
-        }
-        await this.representativeService.detectChangeableReps(this.hideOverview ? undefined : this.representativeOverview);
+        this.loadingRepresentatives = true;
+        this.representativeOverview = await this.representativeService.getRepresentativesOverview();
+        this.fullAccounts = this.representativeOverview.flatMap(rep => rep.accounts);
+        await this.representativeService.detectChangeableReps(this.representativeOverview);
       } catch (_) {
         console.warn('Unable to refresh representative overview after the update.');
       } finally {
