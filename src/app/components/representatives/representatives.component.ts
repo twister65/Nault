@@ -1,6 +1,5 @@
 import {Component, OnInit, ViewChild, ElementRef, ChangeDetectionStrategy} from '@angular/core';
 import {ActivatedRoute} from '@angular/router';
-import BigNumber from 'bignumber.js';
 import {BehaviorSubject} from 'rxjs';
 import { QrModalService } from '../../services/qr-modal.service';
 import type {QRType} from '../qr-modal/qr-modal.component';
@@ -9,7 +8,6 @@ import { hasPositiveNanoNodeHealthEvidence } from '../../services/representative
 import type {StoredRepresentative} from '../../services/representative.service';
 
 import {
-  ApiService,
   AppSettingsService,
   FullRepresentativeOverview,
   NanoBlockService,
@@ -60,7 +58,6 @@ export class RepresentativesComponent implements OnInit {
   constructor(
     private router: ActivatedRoute,
     public walletService: WalletService,
-    private api: ApiService,
     private notifications: NotificationService,
     private nanoBlock: NanoBlockService,
     private util: UtilService,
