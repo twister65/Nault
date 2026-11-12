@@ -298,3 +298,34 @@
   .rep-picker-details { align-self: flex-end; }
   .rep-picker-results { max-height: 260px; }
 }
+
+/* Compact vote observation details alongside the existing health badge.
+   UIkit tooltips open by hover, keyboard focus and touch on the info button. */
+.rep-status-line { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; }
+.rep-vote-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 25px;
+  min-height: 28px;
+  padding: 2px;
+  border: 0;
+  color: #a8b3d3;
+  cursor: help;
+  background: transparent;
+}
+.rep-vote-info:hover, .rep-vote-info:focus-visible { color: #4a93db; }
+.rep-vote-info:focus-visible { outline: 2px solid #4a93db; outline-offset: 2px; border-radius: 4px; }
+.rep-picker-more {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-top: 1px solid rgba(139, 145, 174, 0.3);
+  padding: 11px 12px;
+  background: transparent;
+  color: #4a93db;
+  cursor: pointer;
+  text-align: center;
+}
+.rep-picker-more:hover, .rep-picker-more:focus-visible { text-decoration: underline; }
