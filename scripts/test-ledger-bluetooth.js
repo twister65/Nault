@@ -278,6 +278,14 @@ async function main() {
     assert.deepEqual(modes, [true, false], 'the original timeout must be restored afterward');
   });
 
+  await check('address verification uses the same exclusive desktop HID signing reservation', async () => {
+    const code = fs.readFileSync(path.join(root, 'src/app/services/ledger.service.ts'), 'utf8');
+    assert.match(code, /showOnScreen\)\s*\{[\s\S]*?withSigningSession\(\(\) => this\.getLedgerAccountDesktop\(accountIndex, true\)\)/,
+      'on-screen USB addresses must hold the signing reservation across the entire confirmation');
+    assert.match(code, /eventType === 'account-details' && showOnScreen/,
+      'on-screen address IPC must not inherit the normal background read timeout');
+  });
+
   await check('send confirmation cannot be dismissed while the Ledger signature is pending', async () => {
     const confirmTemplate = fs.readFileSync(path.join(root, 'src/app/components/send/send.component.html'), 'utf8');
     assert.match(confirmTemplate, /\(click\)="activePanel = 'send'"\s+\[disabled\]="confirmingTransaction"/,

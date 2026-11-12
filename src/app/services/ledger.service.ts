@@ -432,15 +432,18 @@ export class LedgerService {
    */
   // Correlate replies with commands, not just account indices: background HID
   // polls and late replies from a previous command must never resolve a new one.
-  // Unlike account/status probes, hardware signing waits for explicit device
-  // approval/refusal, transport failure or disconnection, without a deadline.
-  async getDesktopResponse(eventType: string, requestId: number): Promise<any> {
+  // Unlike account/status probes, hardware confirmations (including address
+  // display) wait for explicit device approval/refusal, transport failure or
+  // disconnection, without a deadline.
+  async getDesktopResponse(eventType: string, requestId: number, showOnScreen = false): Promise<any> {
     return new Promise((resolve, reject) => {
       let settled = false;
       let subscription: { unsubscribe(): void } | null = null;
-      // Neither cacheBlock nor signBlock may time out while the physical Ledger
-      // still displays a confirmation. USB worker failures report via IPC.
-      const awaitingHardwareDecision = eventType === 'sign-block' || eventType === 'cache-block';
+      // A human may spend minutes reviewing a block or displayed address.
+      // Only ordinary background account/status reads retain a 45-second limit.
+      // Genuine USB worker failures still report through IPC.
+      const awaitingHardwareDecision = eventType === 'sign-block' || eventType === 'cache-block' ||
+        (eventType === 'account-details' && showOnScreen);
       const timeout = awaitingHardwareDecision ? null : setTimeout(() => {
         if (settled) return;
         settled = true;
@@ -490,7 +493,7 @@ export class LedgerService {
       if (!this.desktop.send('ledger', { event: 'account-details', data: { accountIndex, showOnScreen, requestId } })) {
         throw new Error('Electron Ledger IPC is unavailable');
       }
-      const details = await this.getDesktopResponse('account-details', requestId);
+      const details = await this.getDesktopResponse('account-details', requestId, showOnScreen);
       this.queryingDesktopLedger = false;
 
       return details;
@@ -973,7 +976,14 @@ export class LedgerService {
 
   async getLedgerAccount(accountIndex: number, showOnScreen = false) {
     if (this.usesDesktopUsb) {
-      return await this.getLedgerAccountDesktop(accountIndex, showOnScreen);
+      if (showOnScreen) {
+        // Address confirmation needs the same exclusive USB/HID reservation as
+        // transaction signing: pause renderer + native health probes and keep
+        // the worker's HID read alive until the user approves or rejects.
+        // A second user action must not replace the pending device request.
+        return await this.withSigningSession(() => this.getLedgerAccountDesktop(accountIndex, true));
+      }
+      return await this.getLedgerAccountDesktop(accountIndex, false);
     } else {
       return await this.getLedgerAccountWeb(accountIndex, showOnScreen);
     }
