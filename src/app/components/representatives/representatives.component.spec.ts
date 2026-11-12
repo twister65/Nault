@@ -159,4 +159,20 @@ describe('Inline representative picker', () => {
     expect(component.representativeResults$.value[0].trusted).toBeTrue();
     expect(component.getMonitoredRepresentative(trustable).online).toBeFalse();
   });
+
+  it('shows a small share as 0,0015 % rather than 0,00 % in French', () => {
+    const component = setup();
+    component.translocoService = { getActiveLang: () => 'fr' };
+    expect(component.formatVotingWeightShare(0.00001548707245931864).replace(/\s/g, '')).toBe('0,0015%');
+    expect(component.formatVotingWeightShare(0.0002).replace(/\s/g, '')).toBe('0,02%');
+  });
+
+  it('uses the current language and does not report a tiny positive share as zero', () => {
+    const component = setup();
+    component.translocoService = { getActiveLang: () => 'en' };
+    expect(component.formatVotingWeightShare(0.00001548707245931864).replace(/\s/g, '')).toBe('0.0015%');
+    expect(component.formatVotingWeightShare(0.0000000001).replace(/\s/g, '')).toBe('<0.0001%');
+    expect(component.formatVotingWeightShare(null)).toBe('');
+    expect(component.formatVotingWeightShare(-1)).toBe('');
+  });
 });
