@@ -15,7 +15,8 @@ import BigNumber from 'bignumber.js';
 import {RepresentativeService, FullRepresentativeOverview, StoredRepresentative} from '../../services/representative.service';
 import {BehaviorSubject, Subscription} from 'rxjs';
 import * as nanocurrency from 'nanocurrency';
-import {NinjaService} from '../../services/ninja.service';
+import { RepresentativeMonitorService } from '../../services/representative-monitor.service';
+import { getDirectoryRepresentatives, getDirectoryRepresentativeName } from '../../services/representative-directory';
 import { QrModalService } from '../../services/qr-modal.service';
 import type {QRType} from '../qr-modal/qr-modal.component';
 import { TranslocoService } from '@jsverse/transloco';
@@ -145,7 +146,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     public settings: AppSettingsService,
     private nanoBlock: NanoBlockService,
     private qrModalService: QrModalService,
-    private ninja: NinjaService,
+    private representativeMonitor: RepresentativeMonitorService,
     private translocoService: TranslocoService) {
       // to detect when the account changes if the view is already active
       route.events.subscribe((val) => {
@@ -217,26 +218,14 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   }
 
   async populateRepresentativeList() {
-    // add trusted/regular local reps to the list
-    const localReps = this.repService.getSortedRepresentatives();
-    this.representativeList.push( ...localReps.filter(rep => (!rep.warn)) );
-
-    if (this.settings.settings.serverAPI) {
-      const verifiedReps = await this.ninja.recommendedRandomized();
-
-      // add random recommended reps to the list
-      for (const representative of verifiedReps) {
-        const temprep = {
-          id: representative.account,
-          name: representative.alias
-        };
-
-        this.representativeList.push(temprep);
-      }
-    }
-
-    // add untrusted local reps to the list
-    this.representativeList.push( ...localReps.filter(rep => (rep.warn)) );
+    const local = this.repService.getSortedRepresentatives();
+    const snapshot = await this.representativeMonitor.getSnapshot();
+    const remote: StoredRepresentative[] = (snapshot?.representatives ?? [])
+      .filter(rep => !!rep.name).map(rep => ({id: rep.account, name: rep.name!}));
+    const combined = [...local.filter(rep => !rep.warn), ...remote,
+      ...getDirectoryRepresentatives(), ...local.filter(rep => rep.warn)];
+    this.representativeList = combined.filter((rep, index) =>
+      combined.findIndex(item => item.id.toLowerCase() === rep.id.toLowerCase()) === index);
   }
 
   clearAccountVars() {
@@ -848,16 +837,11 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const rep = this.repService.getRepresentative(this.representativeModel);
-    const ninjaRep = await this.ninja.getAccount(this.representativeModel);
-
-    if (rep) {
-      this.representativeListMatch = rep.name;
-    } else if (ninjaRep) {
-      this.representativeListMatch = ninjaRep.alias;
-    } else {
-      this.representativeListMatch = '';
-    }
+    const local = this.repService.getRepresentative(this.representativeModel);
+    const cachedName = this.representativeList.find(item =>
+      item.id.toLowerCase() === this.representativeModel.toLowerCase())?.name;
+    this.representativeListMatch = local?.name || cachedName ||
+      getDirectoryRepresentativeName(this.representativeModel) || '';
   }
 
   copied() {

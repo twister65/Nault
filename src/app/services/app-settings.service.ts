@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Subject } from 'rxjs';
 import { secureEndpoint } from './endpoint-policy';
+import { DEFAULT_REPRESENTATIVE } from './default-representative';
 import officialNodeRegistry from '../../assets/nodes.json';
 import * as url from 'url';
 import { TranslocoService, getBrowserCultureLang, getBrowserLang } from '@jsverse/transloco';
@@ -51,6 +52,7 @@ export interface AppSettings {
 @Injectable()
 export class AppSettingsService {
   storeKey = `nanovault-appsettings`;
+  private readonly defaultRepresentativeMigrationKey = 'nanovault-default-representative-twister32-v1';
   readonly serverFailover$ = new Subject<{ previousName: string; nextName: string }>();
   // Explicit best-mode completion is not a failure and must not show a failover warning.
   readonly serverBestSelected$ = new Subject<void>();
@@ -61,7 +63,7 @@ export class AppSettingsService {
     // displayPrefix: 'xrb',
     walletStore: 'localStorage',
     displayCurrency: 'USD',
-    defaultRepresentative: null,
+    defaultRepresentative: DEFAULT_REPRESENTATIVE.id,
     lockOnClose: 1,
     lockInactivityMinutes: 30,
     ledgerReconnect: 'usb',
@@ -204,6 +206,15 @@ export class AppSettingsService {
       // so the old random+best legacy migration would now erase a real choice.
     }
     this.settings = Object.assign(this.settings, settings);
+    // One-time migration of the old null default. Later explicit blank/custom
+    // selections remain under user control.
+    if (localStorage.getItem(this.defaultRepresentativeMigrationKey) !== '1') {
+      if (settingsStore && this.settings.defaultRepresentative == null) {
+        this.settings.defaultRepresentative = DEFAULT_REPRESENTATIVE.id;
+        this.saveAppSettings();
+      }
+      localStorage.setItem(this.defaultRepresentativeMigrationKey, '1');
+    }
     this.loadLocalNodes();
     // Preserve pre-existing custom endpoints while making them persistent,
     // individually selectable local entries. No private node is published to GitHub.
@@ -361,7 +372,7 @@ export class AppSettingsService {
       // displayPrefix: 'xrb',
       walletStore: 'localStorage',
       displayCurrency: 'USD',
-      defaultRepresentative: null,
+      defaultRepresentative: DEFAULT_REPRESENTATIVE.id,
       lockOnClose: 1,
       lockInactivityMinutes: 30,
       ledgerReconnect: 'usb',

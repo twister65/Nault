@@ -281,8 +281,8 @@ export class NanoBlockService {
 
     const openEquiv = !toAcct || !toAcct.frontier;
 
-    const previousBlock = toAcct.frontier || this.zeroHash;
-    const representative = toAcct.representative || (this.settings.settings.defaultRepresentative || this.getRandomRepresentative());
+    const previousBlock = toAcct?.frontier || this.zeroHash;
+    const representative = toAcct?.representative || (this.settings.settings.defaultRepresentative || this.getRandomRepresentative());
 
     const srcBlockInfo = await this.api.blocksInfo([sourceBlock]);
     const srcAmount = new BigNumber(srcBlockInfo.blocks[sourceBlock].amount);
