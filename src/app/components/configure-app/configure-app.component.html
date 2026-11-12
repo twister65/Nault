@@ -415,29 +415,35 @@
                 <div class="uk-form-controls">
                   <div class="uk-inline uk-width-1-1">
                     <a class="uk-form-icon uk-form-icon-flip" uk-icon="icon: camera" (click)="openQR('rep1','account')" uk-tooltip [title]="t('general.scan-qr-code')"></a>
-                    <input (blur)="validateRepresentative()" (input)="searchRepresentatives()" (focus)="searchRepresentatives()" [(ngModel)]="defaultRepresentative" class="uk-input" [ngClass]="{ 'uk-form-success': repStatus === 2, 'uk-form-danger': repStatus === 0 }" id="form-horizontal-text3" type="text" [placeholder]="t('configure-app.leave-blank-to-use-a-recommended-one')" #repInput>
-
-                    @if ((representativeResults$ | async).length) {
-                      <div [hidden]="!showRepresentatives" class="nlt-dropdown uk-animation-slide-down-small uk-width-1-1 uk-card uk-card-default uk-card-body uk-position-absolute" style="z-index: 15000">
-                        <ul class="uk-nav uk-nav-default">
-                          <li class="uk-nav-header">{{ 'representative-search.representative-list-results' | transloco }}</li>
-                          <li class="uk-nav-divider"></li>
-                          @for (rep of representativeResults$ | async; track rep) {
-                            <li>
-                              <a (click)="selectRepresentative(rep.id)">
-                                {{ rep.name }}
-                                @if (rep.trusted) {
-                                  <span class="uk-text-success" style="margin-left: 4px;"><span uk-icon="icon: star;"></span></span>
-                                }
-                                @if (rep.warn) {
-                                  <span class="uk-text-warning" style="margin-left: 4px;"><span uk-icon="icon: warning;"></span> {{ 'general.avoid' | transloco }}</span>
-                                }
-                              </a>
-                            </li>
+                    <input (blur)="validateRepresentative()" (input)="searchRepresentatives()" (focus)="searchRepresentatives()"
+                      [(ngModel)]="defaultRepresentative" class="uk-input"
+                      [ngClass]="{ 'uk-form-success': repStatus === 2, 'uk-form-danger': repStatus === 0 }"
+                      id="nault-default-representative-account" name="nault-default-representative-search"
+                      type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+                      [placeholder]="t('configure-app.leave-blank-to-use-a-recommended-one')" #repInput>
+                  </div>
+                  <button class="uk-button uk-button-small uk-button-default uk-margin-small-top" type="button"
+                    (click)="toggleDefaultRepBrowser()">{{ 'ui-representatives.browse-representatives' | transloco }}</button>
+                  @if (showRepresentatives) {
+                    <div class="rep-config-picker" role="listbox" [attr.aria-label]="'representative-search.representative-list-results' | transloco">
+                      @for (rep of representativeResults$ | async; track rep.id) {
+                        <button type="button" class="rep-config-picker-item" (mousedown)="$event.preventDefault()"
+                          (click)="selectRepresentative(rep.id)">
+                          <span>{{ rep.name }}</span>
+                          @if (rep.trusted) {
+                            <small class="uk-text-success">{{ 'ui-representatives.local-trusted' | transloco }}</small>
                           }
-                        </ul>
-                      </div>
-                    }
+                          <small class="rep-config-picker-address">{{ rep.id }}</small>
+                        </button>
+                      }
+                      @if (!(representativeResults$ | async)?.length) {
+                        <div class="uk-padding-small">{{ 'ui-representatives.no-results' | transloco }}</div>
+                      }
+                    </div>
+                  }
+                  <p class="uk-text-small uk-text-muted uk-margin-small-top">
+                    {{ 'ui-representatives.observation-disclaimer' | transloco }}
+                  </p>
                   </div>
                 </div>
 
