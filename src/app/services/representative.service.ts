@@ -286,7 +286,7 @@ export class RepresentativeService {
           repStatus.lowUptime = true;
           repStatus.warn = true;
         }
-      } else if (knownRepNinja === false && !repStatus.trusted && !monitorRep) {
+      } else if (knownRepNinja === false && !repStatus.trusted && monitorRep?.online !== true) {
         // does not exist (404)
         status = 'alert';
         repStatus.uptime = 0;
