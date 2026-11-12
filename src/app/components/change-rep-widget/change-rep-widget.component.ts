@@ -215,14 +215,14 @@ export class ChangeRepWidgetComponent implements OnInit {
     );
 
     this.router.navigate(['/representatives'], {
-      queryParams: { hideOverview: true, accounts: accountsToChangeRepFor, showRecommended: true }
+      queryParams: { accounts: accountsToChangeRepFor }
     });
   }
 
   showRepSelectionForAllChangeableReps() {
     const allAccounts = this.changeableRepresentatives.map(rep => rep.accounts.map(a => a.id).join(',')).join(',');
 
-    this.router.navigate(['/representatives'], { queryParams: { hideOverview: true, accounts: allAccounts, showRecommended: true } });
+    this.router.navigate(['/representatives'], { queryParams: { accounts: allAccounts } });
   }
 
 }
