@@ -61,25 +61,18 @@
                         }
                       }
                     </ng-template>
+                    <ng-template #representativeVoteInfo>
+                      <button type="button" class="rep-vote-info" uk-tooltip="pos: bottom-left"
+                        [title]="getVoteObservationsTooltip(rep)"
+                        [attr.aria-label]="getVoteObservationsTooltip(rep)">
+                        <span uk-icon="icon: info; ratio: 0.8"></span>
+                      </button>
+                    </ng-template>
                     <tr class="representative-row">
                       <td class="representative-health-column uk-visible-toggle uk-text-truncate hide-on-small-viewports">
-                        <ng-template [ngTemplateOutlet]="representativeHealth"></ng-template>
-                        <div class="rep-observation">
-                          @if (rep.networkObservation?.rpcOnline !== null && rep.networkObservation?.rpcOnline !== undefined) {
-                            <div [class.rep-observation-online]="rep.networkObservation?.rpcOnline === true"
-                              [class.rep-observation-offline]="rep.networkObservation?.rpcOnline === false">
-                              RPC : {{ (rep.networkObservation?.rpcOnline ? 'ui-representatives.observed-online' : 'ui-representatives.not-observed') | transloco }}
-                            </div>
-                          }
-                          @if (rep.networkObservation?.nanonodeOnline !== null && rep.networkObservation?.nanonodeOnline !== undefined) {
-                            <div [class.rep-observation-online]="rep.networkObservation?.nanonodeOnline === true"
-                              [class.rep-observation-offline]="rep.networkObservation?.nanonodeOnline === false">
-                              NanoNode.de : {{ (rep.networkObservation?.nanonodeOnline ? 'ui-representatives.observed-online' : 'ui-representatives.not-observed') | transloco }}
-                            </div>
-                          }
-                          @if (rep.networkObservation?.rpcOnline == null && rep.networkObservation?.nanonodeOnline == null) {
-                            {{ 'ui-representatives.observation-unavailable' | transloco }}
-                          }
+                        <div class="rep-status-line">
+                          <ng-template [ngTemplateOutlet]="representativeHealth"></ng-template>
+                          <ng-template [ngTemplateOutlet]="representativeVoteInfo"></ng-template>
                         </div>
                       </td>
                       <td class="representative-name-column uk-text-truncate rep-container" (click)="addSelectedAccounts(rep.accounts)">
@@ -112,7 +105,10 @@
                              rel="noopener noreferrer" (click)="$event.stopPropagation()">{{ 'ui-representatives.nanoticker-details' | transloco }}</a>
                         </div>
                         <div class="representative-health-compact only-on-small-viewports uk-margin-small-top">
-                          <ng-template [ngTemplateOutlet]="representativeHealth"></ng-template>
+                          <div class="rep-status-line">
+                            <ng-template [ngTemplateOutlet]="representativeHealth"></ng-template>
+                            <ng-template [ngTemplateOutlet]="representativeVoteInfo"></ng-template>
+                          </div>
                         </div>
                       </td>
                       <td class="voting-weight-column uk-width-1-4">
@@ -275,6 +271,12 @@
                           }
                         } @else {
                           <p class="uk-text-muted uk-margin-small">{{ 'ui-representatives.no-results' | transloco }}</p>
+                        }
+                        @if (matchingRepresentativeCount > (representativeResults$ | async)?.length) {
+                          <button type="button" class="rep-picker-more" (click)="showMoreRepresentatives()">
+                            {{ 'ui-representatives.show-more' | transloco }}
+                            ({{ (representativeResults$ | async)?.length }} / {{ matchingRepresentativeCount }})
+                          </button>
                         }
                       </div>
                     }
