@@ -69,6 +69,7 @@ export class RepresentativesComponent implements OnInit {
   representativeList: StoredRepresentative[] = [];
   monitorSnapshot: RepresentativeMonitorSnapshot | null = null;
   browseRepresentativeList = false;
+  representativeSearch = '';
   onlyOnlineReps = false;
 
   constructor(
@@ -147,6 +148,7 @@ export class RepresentativesComponent implements OnInit {
 
   toggleRepresentativeBrowser() {
     this.browseRepresentativeList = !this.browseRepresentativeList;
+    this.representativeSearch = '';
     this.searchRepresentatives();
   }
 
@@ -216,23 +218,19 @@ export class RepresentativesComponent implements OnInit {
   }
 
   searchRepresentatives() {
-    const search = (this.toRepresentativeID || '').trim().toLowerCase();
-    this.showRepresentatives = (search.length >= 2 || this.browseRepresentativeList);
-    if (!this.showRepresentatives) {
-      this.representativeResults$.next([]);
-      return;
-    }
-
-    const matches = this.representativeList
+    const search = (this.representativeSearch || '').trim().toLowerCase();
+    this.showRepresentatives = this.browseRepresentativeList;
+    const matches = this.showRepresentatives ? this.representativeList
       .filter(rep => (!this.onlyOnlineReps || this.getMonitoredRepresentative(rep.id)?.online === true))
       .filter(rep => !search || rep.name.toLowerCase().includes(search) || rep.id.toLowerCase().includes(search))
       .filter(rep => !rep.warn)
-      .slice(0, 8);
+      .slice(0, 12) : [];
     this.representativeResults$.next(matches);
   }
 
   selectRepresentative(account: string) {
     this.browseRepresentativeList = false;
+    this.representativeSearch = '';
     this.showRepresentatives = false;
     this.toRepresentativeID = account;
     this.representativeResults$.next([]);
