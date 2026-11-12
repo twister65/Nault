@@ -590,6 +590,9 @@ describe('Ledger signing session and status polling isolation (#58)', () => {
     expect(getLedgerSigningIssue(new Error('Ledger device: UNKNOWN_ERROR (0x6985)'))).toBe('rejected');
     expect(getLedgerSigningIssue(new LedgerNotReadyError())).toBe('not-ready');
     expect(getLedgerSigningIssue({ name: 'NotAllowedError', message: 'Access denied' })).toBe('failed');
+    expect(getLedgerSigningIssue(new Error('Ledger HID read timed out'))).toBe('timed-out');
+    expect(getLedgerSigningIssue(new Error('Desktop Ledger sign-block response timed out'))).toBe('timed-out');
+    expect(getLedgerSigningIssue(new Error('Desktop Ledger cache-block response timed out'))).toBe('timed-out');
   });
 });
 

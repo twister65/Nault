@@ -109,7 +109,7 @@ export function getLedgerReadinessIssue(error: unknown): 'locked' | 'app-not-ope
 }
 
 // Report only a stable category to the UI. Never expose raw BLE/native errors.
-export function getLedgerSigningIssue(error: unknown): 'rejected' | 'busy' | 'not-ready' | 'failed' {
+export function getLedgerSigningIssue(error: unknown): 'rejected' | 'busy' | 'not-ready' | 'timed-out' | 'failed' {
   const detail = ledgerErrorFields(error);
   const message = String(detail.message || '');
   if (detail.statusCode === STATUS_CODES.CONDITIONS_OF_USE_NOT_SATISFIED ||
@@ -119,6 +119,7 @@ export function getLedgerSigningIssue(error: unknown): 'rejected' | 'busy' | 'no
       detail.name === 'TransportRaceCondition' || detail.id === 'TransportRaceCondition' ||
       detail.name === 'TransportLocked' || detail.id === 'TransportLocked' ||
       /\b(?:ledger|device|transport) (?:is )?busy\b/i.test(message)) return 'busy';
+  if (/^(?:Ledger HID read timed out|Desktop Ledger (?:sign-block|cache-block) response timed out)$/.test(message)) return 'timed-out';
   return 'failed';
 }
 
@@ -440,7 +441,7 @@ export class LedgerService {
         settled = true;
         subscription?.unsubscribe();
         reject(new Error('Desktop Ledger ' + eventType + ' response timed out'));
-      }, eventType === 'sign-block' ? 90000 : 45000);
+      }, (eventType === 'sign-block' || eventType === 'cache-block') ? 150000 : 45000);
 
       subscription = this.desktopMessage$.subscribe((response: any) => {
         if (settled || response?.event !== eventType ||

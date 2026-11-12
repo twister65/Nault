@@ -316,6 +316,8 @@ export class LedgerService {
       if (this.ledger.status !== LedgerStatus.READY || !this.ledger.nano) {
         throw new Error('Ledger is not ready for signing');
       }
+      // Extend the HID read deadline before the renderer starts cacheBlock/signBlock.
+      (this.ledger.transport as LedgerHidWorkerTransport | null)?.setSigningMode?.(true);
       return true;
     } catch (error) {
       this.signingReserved = false;
@@ -324,7 +326,11 @@ export class LedgerService {
   }
 
   endSigning(): boolean {
-    this.signingReserved = false;
+    try {
+      (this.ledger.transport as LedgerHidWorkerTransport | null)?.setSigningMode?.(false);
+    } finally {
+      this.signingReserved = false;
+    }
     return true;
   }
 

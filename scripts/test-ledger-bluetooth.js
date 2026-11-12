@@ -252,6 +252,28 @@ async function main() {
     assert.equal(count, 2, 'probes resume after a completed or rejected signature');
   });
 
+  await check('native USB signing extends only the HID confirmation timeout', async () => {
+    const workerSource = fs.readFileSync(path.join(root, 'desktop-app/src/lib/ledger-hid-worker.ts'), 'utf8');
+    assert.match(workerSource, /signingMode\s*\?\s*120000\s*:\s*30000/,
+      'signing must tolerate two minutes; normal USB health reads stay at 30 seconds');
+    const { LedgerService: NativeLedgerService } = load(
+      fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8'), {
+        './ledger-hid-worker-transport': {}, 'hw-app-nano': {},
+        rxjs: require('rxjs'), electron: {}
+      }
+    );
+    const native = new NativeLedgerService();
+    const modes = [];
+    native.ledger.status = 'ready';
+    native.ledger.nano = {};
+    native.ledger.transport = { setSigningMode(enabled) { modes.push(enabled); } };
+    await native.beginSigning();
+    assert.deepEqual(modes, [true], 'the worker must enter signing mode before signing');
+    await assert.rejects(native.beginSigning(), /already in progress/);
+    native.endSigning();
+    assert.deepEqual(modes, [true, false], 'the original timeout must be restored afterward');
+  });
+
   await check('USB rejection 0x6985 preserves session and a subsequent signature succeeds', async () => {
     const { LedgerService: NativeLedgerService, isLedgerUserRejection } = load(
       fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8'), {
