@@ -1,7 +1,7 @@
 import { ComponentTestModule, isolateConstructorIO } from '../../testing/component-test.module';
 import { TestBed, inject } from '@angular/core/testing';
 
-import { RepresentativeService } from './representative.service';
+import { RepresentativeService, hasPositiveNanoNodeHealthEvidence } from './representative.service';
 import { DEFAULT_REPRESENTATIVE } from './default-representative';
 import BigNumber from 'bignumber.js';
 import { getDirectoryRepresentativeName } from './representative-directory';
@@ -127,4 +127,87 @@ describe('RepresentativeService', () => {
     expect(rep.networkObservation?.inSync).toBeNull();
   });
 
+});
+
+
+describe('Positive NanoNode health evidence', () => {
+  const id = 'nano_34amtofxstsfyqcgphp8piij9u33widykg9wbz6ysjpxhbgmqu8btu1eexer';
+  const sample = () => ({
+    account: id, name: 'Nanolove', online: true, principal: true,
+    weight: 620000, share: 0.007, verdict: 'good' as const,
+    crowded: false, outdated: false, node: {
+      implementation: 'nano-node', version: '28.2', inSync: true
+    }
+  });
+
+  it('accepts an observed, synchronized principal representative with less than 2% voting weight', () => {
+    expect(hasPositiveNanoNodeHealthEvidence(sample())).toBeTrue();
+  });
+
+  it('rejects votes alone, outdated nodes, unsynced telemetry, and high voting weight', () => {
+    const valid = sample();
+    expect(hasPositiveNanoNodeHealthEvidence({...valid, online: false})).toBeFalse();
+    expect(hasPositiveNanoNodeHealthEvidence({...valid, principal: false})).toBeFalse();
+    expect(hasPositiveNanoNodeHealthEvidence({...valid, verdict: 'couldBeBetter'})).toBeFalse();
+    expect(hasPositiveNanoNodeHealthEvidence({...valid, share: 0.0201})).toBeFalse();
+    expect(hasPositiveNanoNodeHealthEvidence({...valid, crowded: true})).toBeFalse();
+    expect(hasPositiveNanoNodeHealthEvidence({...valid, outdated: true})).toBeFalse();
+    expect(hasPositiveNanoNodeHealthEvidence({...valid, node: {...valid.node, inSync: false}})).toBeFalse();
+    expect(hasPositiveNanoNodeHealthEvidence({...valid, node: null})).toBeFalse();
+    expect(hasPositiveNanoNodeHealthEvidence(null)).toBeFalse();
+  });
+
+  it('allows comparable RsNano sync observations without treating outdated:null as a version failure', () => {
+    const valid = sample();
+    expect(hasPositiveNanoNodeHealthEvidence({...valid, outdated: null, node: {
+      implementation: 'rsnano', version: '3.1', inSync: true
+    }})).toBeTrue();
+    expect(hasPositiveNanoNodeHealthEvidence({...valid, outdated: null})).toBeFalse();
+  });
+
+  it('does not turn a Ninja 404 into a bad representative when NanoNode has positive evidence', async () => {
+    const rep = sample();
+    const service = Object.create(RepresentativeService.prototype) as any;
+    service.wallet = {getAccountsDetails: async () => []};
+    service.getUniqueRepresentatives = () => [{id, weight: new BigNumber(1), accounts: []}];
+    service.getRepresentativesDetails = async () => [{account:id, weight:'0', delegatedWeight:new BigNumber(1), accounts:[]}];
+    service.getOnlineRepresentatives = async () => null;
+    service.representativeMonitor = {getSnapshot: async () => ({
+      takenAt: Math.floor(Date.now() / 1000), byAccount: {[id]: rep}
+    })};
+    service.api = {confirmationQuorum: async () => null};
+    service.util = {nano:{rawToMnano: (raw: string) => new BigNumber(raw)}};
+    service.ninja = {getAccount: async () => false};
+    service.getRepresentative = () => undefined;
+    service.nfReps = [];
+    service.walletReps$ = {next: jasmine.createSpy('next')};
+    const overview = (await service.getRepresentativesOverview())[0];
+    expect(overview.statusText).toBe('monitorGood');
+    expect(overview.status.trusted).toBeFalse();
+    expect(overview.status.warn).toBeFalse();
+    expect(overview.networkObservation?.nanonodeOnline).toBeTrue();
+    expect(overview.networkObservation?.inSync).toBeTrue();
+    expect(overview.networkObservation?.verdict).toBe('good');
+  });
+
+  it('preserves the high-voting-weight warning even when NanoNode gives a good verdict', async () => {
+    const rep = sample();
+    const service = Object.create(RepresentativeService.prototype) as any;
+    service.wallet = {getAccountsDetails: async () => []};
+    service.getUniqueRepresentatives = () => [{id, weight: new BigNumber(1), accounts: []}];
+    service.getRepresentativesDetails = async () => [{account:id, weight:'0', delegatedWeight:new BigNumber(1), accounts:[]}];
+    service.getOnlineRepresentatives = async () => null;
+    service.representativeMonitor = {getSnapshot: async () => ({
+      takenAt: Math.floor(Date.now() / 1000), byAccount: {[id]: rep}
+    })};
+    service.api = {confirmationQuorum: async () => ({online_stake_total:'100'})};
+    service.util = {nano:{rawToMnano: (raw: string) => new BigNumber(raw)}};
+    service.ninja = {getAccount: async () => null};
+    service.getRepresentative = () => undefined;
+    service.nfReps = [];
+    service.walletReps$ = {next: jasmine.createSpy('next')};
+    const overview = (await service.getRepresentativesOverview())[0];
+    expect(overview.statusText).toBe('unknown');
+    expect(overview.status.trusted).toBeFalse();
+  });
 });
