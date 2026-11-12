@@ -428,11 +428,11 @@
     },
     "any-node-always-available": {
       "1": {
-        "1": "Aunque el dominio oficial",
+        "1": "Aunque el sitio",
         "3": "dejara de estar disponible, podrías seguir utilizando",
         "5": "o",
         "7": ".",
-        "2-link-nault": "nault.cc",
+        "2-link-nault": "twister32.changeip.org",
         "4-link-github-releases": "la aplicación de escritorio",
         "6-link-github-web-app": "alojar tú mismo la aplicación web"
       },
