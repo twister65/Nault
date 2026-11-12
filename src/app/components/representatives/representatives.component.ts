@@ -319,7 +319,8 @@ export class RepresentativesComponent implements OnInit {
   }
 
   async validateRepresentative() {
-    setTimeout(() => this.showRepresentatives = false, 400);
+    // The inline browser is controlled only by its Browse button/selection.
+    // An address-input blur must never close a list opened by the same click.
     this.toRepresentativeID = this.toRepresentativeID.replace(/ /g, '');
     if (!this.toRepresentativeID) {
       this.representativeListMatch = '';
