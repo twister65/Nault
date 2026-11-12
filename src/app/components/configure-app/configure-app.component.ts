@@ -927,11 +927,24 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   }
 
 
-  // Show credential management only for the explicit Nano.to PoW source.
-  // This is presentation-only: saved credentials and vault unlock are still
-  // independent of the selected wallet RPC and automatic PoW fallback.
+  // Show the vault when Nano.to is the explicit PoW provider or is the
+  // selected RPC server used as the external PoW source. Other PoW modes,
+  // including automatic fallback, must not expose unrelated key controls.
   showNanoToPowApiKeys(): boolean {
-    return this.selectedPoWOption === 'nanoTo';
+    if (this.selectedPoWOption === 'nanoTo') return true;
+    if (this.selectedPoWOption !== 'server') return false;
+
+    // Prefer the server currently selected in the form (even before Apply);
+    // otherwise use the saved endpoint. Match the hostname exactly, not a
+    // substring such as rpc.nano.to.example.com.
+    const selected = this.appSettings.serverOptions.find(node =>
+      node.value === this.selectedServer && !!node.api);
+    const endpoint = selected?.api || this.appSettings.settings.serverAPI;
+    try {
+      return new URL(endpoint || '').hostname.toLowerCase() === 'rpc.nano.to';
+    } catch {
+      return false;
+    }
   }
 
   getRemotePoWOptionName(mode: 'server' | 'best' | 'custom' = 'server'): string {
