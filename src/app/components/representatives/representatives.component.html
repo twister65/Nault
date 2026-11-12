@@ -260,9 +260,11 @@
                                       {{ (monitorRep.online ? 'ui-representatives.observed-online' : 'ui-representatives.not-observed') | transloco }}
                                     </span>
                                     @if (monitorRep.share !== null) {
-                                      <span>{{ (monitorRep.share * 100).toFixed(2) }}%</span>
+                                      <span class="rep-voting-weight-share">
+                                        {{ 'ui-representatives.voting-weight' | transloco }} : {{ formatVotingWeightShare(monitorRep.share) }}
+                                      </span>
                                     }
-                                    <span>NanoNode.de</span>
+                                    <span class="rep-observation-source">NanoNode.de</span>
                                   }
                                 </span>
                               </button>
