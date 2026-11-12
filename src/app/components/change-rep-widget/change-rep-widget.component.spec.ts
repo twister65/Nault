@@ -54,6 +54,34 @@ describe('ChangeRepWidgetComponent', () => {
     }
   });
 
+  it('keeps the representatives overview visible when opening change-required for one account', () => {
+    const widget = Object.create(ChangeRepWidgetComponent.prototype) as any;
+    widget.showRepHelp = false;
+    widget.selectedAccount = null;
+    widget.representatives = [{
+      id: 'nano_rep_1',
+      accounts: [{id: 'nano_account_1'}]
+    }];
+    widget.router = {navigate: jasmine.createSpy('navigate')};
+    widget.showRepSelectionForSpecificRep(widget.representatives[0]);
+    expect(widget.router.navigate).toHaveBeenCalledWith(['/representatives'], {
+      queryParams: {accounts: 'nano_account_1'}
+    });
+  });
+
+  it('preserves the overview when opening change-required for all affected accounts', () => {
+    const widget = Object.create(ChangeRepWidgetComponent.prototype) as any;
+    widget.changeableRepresentatives = [
+      {accounts: [{id:'nano_account_1'}]},
+      {accounts: [{id:'nano_account_2'}]}
+    ];
+    widget.router = {navigate: jasmine.createSpy('navigate')};
+    widget.showRepSelectionForAllChangeableReps();
+    expect(widget.router.navigate).toHaveBeenCalledWith(['/representatives'], {
+      queryParams: {accounts: 'nano_account_1,nano_account_2'}
+    });
+  });
+
   it('does not report votes detected solely from a different RPC observer', () => {
     expect(component.hasVotesWithUnverifiedHealth({
       statusText: 'unknown',
