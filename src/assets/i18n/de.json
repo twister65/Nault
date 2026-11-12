@@ -585,6 +585,8 @@
     "incoming-balance": "Eingehendes Guthaben",
     "server-unavailable": "Verbindung zum Server nicht möglich",
     "refresh": "Aktualisieren",
+    "balance-refresh-failed": "Guthaben konnten nicht aktualisiert werden. Überprüfen Sie die Verbindung.",
+    "representative-refresh-failed": "Der Repräsentant konnte nicht aktualisiert werden. Überprüfen Sie die Verbindung.",
     "or": "oder",
     "select-other-server": "einen anderen Server auswählen",
     "offline-mode": "Wallet befindet sich im Offline-Modus",

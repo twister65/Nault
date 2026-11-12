@@ -119,6 +119,14 @@
                       )
                       : ('ui-shell.total-balance' | transloco)
                     }}</a>
+                    <button type="button" class="balance-refresh-button"
+                      (click)="overviewRefresh.refresh()"
+                      [disabled]="overviewRefresh.disabled"
+                      [attr.aria-label]="'ui-shell.refresh' | transloco"
+                      [title]="'ui-shell.refresh' | transloco">
+                      <span *ngIf="overviewRefresh.refreshing || wallet.updatingBalance" uk-spinner="ratio: 0.5;"></span>
+                      <span *ngIf="!overviewRefresh.refreshing && !wallet.updatingBalance" uk-icon="icon: refresh; ratio: 0.9;"></span>
+                    </button>
                     <div #selectButton [class]="[ 'select-button', showAccountsDropdown ? 'open' : 'closed' ]" (click)="toggleAccountsDropdown()">
                       <div class="circle"></div>
                       <div class="circle"></div>

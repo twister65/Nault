@@ -469,6 +469,8 @@
     "incoming-balance": "Incoming Balance",
     "server-unavailable": "Unable to connect to the server",
     "refresh": "Refresh",
+    "balance-refresh-failed": "Unable to refresh balances. Check your connection.",
+    "representative-refresh-failed": "Unable to refresh the representative. Check your connection.",
     "or": "or",
     "select-other-server": "select a different server",
     "offline-mode": "Wallet is in offline mode",
