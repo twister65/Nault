@@ -238,6 +238,10 @@
                         <input type="checkbox" class="uk-checkbox" [checked]="onlyOnlineReps" (change)="toggleOnlineOnly()">
                         {{ 'ui-representatives.online-filter' | transloco }}
                       </label>
+                      <label class="rep-online-filter" [title]="'ui-representatives.monitor-good-tip' | transloco">
+                        <input type="checkbox" class="uk-checkbox" [checked]="onlyMonitoredGoodReps" (change)="toggleMonitoredGoodOnly()">
+                        {{ 'ui-representatives.monitor-good-filter' | transloco }}
+                      </label>
                     </div>
                     @if (showRepresentatives) {
                       <div class="uk-margin-small-top">
@@ -257,6 +261,11 @@
                                 <span class="rep-picker-meta">
                                   @if (rep.trusted) {
                                     <span class="rep-trusted-tag">{{ 'ui-representatives.local-trusted' | transloco }}</span>
+                                  }
+                                  @if (isMonitoredGoodRepresentative(rep.id)) {
+                                    <span class="rep-observation-online" [title]="'ui-representatives.monitor-good-tip' | transloco">
+                                      {{ 'ui-representatives.monitor-good' | transloco }}
+                                    </span>
                                   }
                                   @if (getMonitoredRepresentative(rep.id); as monitorRep) {
                                     <span [class.rep-observation-online]="monitorRep.online" [class.rep-observation-offline]="!monitorRep.online">
