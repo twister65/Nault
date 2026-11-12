@@ -13,6 +13,8 @@
       "failed": "Geräte-Entsperrung nicht verfügbar oder abgebrochen. Verwenden Sie das Passwort."
     },
   "change-rep-widget": {
+    "monitor-good": "Gut (NanoNode.de)",
+    "monitor-good-tip": "Unverbindliche Einschätzung: aktuelle Stimmen, Principal-Repräsentant, unter 2 % Stimmgewicht, positives Urteil und Synchronisation laut NanoNode.de. Telemetrie kann gefälscht werden und garantiert keine langfristige Verfügbarkeit.",
     "acceptable-representative": "Akzeptabler Repräsentant",
     "bad-representative": "Schlechter Repräsentant",
     "checking-status": "Status wird geprüft ...",
@@ -686,6 +688,8 @@
     "new-payment": "Neue Zahlung"
   },
   "ui-representatives": {
+    "monitor-good": "Gut (NanoNode.de)",
+    "monitor-good-tip": "Unverbindliche Einschätzung: aktuelle Stimmen, Principal-Repräsentant, unter 2 % Stimmgewicht, positives Urteil und Synchronisation laut NanoNode.de. Telemetrie kann gefälscht werden und garantiert keine langfristige Verfügbarkeit.",
     "title": "Repräsentanten",
     "manage": "Bekannte Repräsentanten verwalten",
     "intro-before": "Repräsentanten nehmen am",
