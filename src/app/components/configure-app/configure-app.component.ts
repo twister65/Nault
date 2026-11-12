@@ -353,6 +353,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   representativeList: StoredRepresentative[] = [];
   defaultRepMonitor: RepresentativeMonitorSnapshot | null = null;
   browseDefaultReps = false;
+  defaultRepSearch = '';
 
   serverAPI: string | null = null;
   serverAPIUpdated: string | null = null;
@@ -449,6 +450,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
   toggleDefaultRepBrowser() {
     this.browseDefaultReps = !this.browseDefaultReps;
+    this.defaultRepSearch = '';
     this.searchRepresentatives();
   }
 
@@ -860,17 +862,18 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
   searchRepresentatives() {
     this.repStatus = this.defaultRepresentative && !this.util.account.isValidAccount(this.defaultRepresentative) ? 0 : null;
-    const search = (this.defaultRepresentative || '').trim().toLowerCase();
-    this.showRepresentatives = search.length >= 2 || this.browseDefaultReps;
+    const search = this.defaultRepSearch.trim().toLowerCase();
+    this.showRepresentatives = this.browseDefaultReps;
     const matches = this.showRepresentatives ? this.representativeList
       .filter(rep => !rep.warn)
       .filter(rep => !search || rep.name.toLowerCase().includes(search) || rep.id.toLowerCase().includes(search))
-      .slice(0, 8) : [];
+      .slice(0, 12) : [];
     this.representativeResults$.next(matches);
   }
 
   selectRepresentative(rep: string) {
     this.browseDefaultReps = false;
+    this.defaultRepSearch = '';
     this.showRepresentatives = false;
     this.defaultRepresentative = rep;
     this.representativeResults$.next([]);
