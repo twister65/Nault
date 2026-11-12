@@ -237,6 +237,12 @@
                       </label>
                     </div>
                     @if (showRepresentatives) {
+                      <div class="uk-margin-small-top">
+                        <input type="search" class="uk-input" name="nault-rep-directory-query" autocomplete="off"
+                          [(ngModel)]="representativeSearch" (input)="searchRepresentatives()"
+                          [placeholder]="'ui-representatives.search-names' | transloco"
+                          [attr.aria-label]="'ui-representatives.search-names' | transloco">
+                      </div>
                       <div class="rep-picker-results" role="listbox" [attr.aria-label]="'representative-search.representative-list-results' | transloco">
                         <div class="rep-picker-heading">{{ 'representative-search.representative-list-results' | transloco }}</div>
                         @if ((representativeResults$ | async)?.length) {
