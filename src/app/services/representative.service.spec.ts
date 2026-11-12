@@ -195,7 +195,7 @@ describe('Positive NanoNode health evidence', () => {
     const service = Object.create(RepresentativeService.prototype) as any;
     service.wallet = {getAccountsDetails: async () => []};
     service.getUniqueRepresentatives = () => [{id, weight: new BigNumber(1), accounts: []}];
-    service.getRepresentativesDetails = async () => [{account:id, weight:'0', delegatedWeight:new BigNumber(1), accounts:[]}];
+    service.getRepresentativesDetails = async () => [{account:id, weight:'1', delegatedWeight:new BigNumber(1), accounts:[]}];
     service.getOnlineRepresentatives = async () => null;
     service.representativeMonitor = {getSnapshot: async () => ({
       takenAt: Math.floor(Date.now() / 1000), byAccount: {[id]: rep}
