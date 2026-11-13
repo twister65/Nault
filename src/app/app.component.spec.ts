@@ -2,10 +2,44 @@ import { TestBed, fakeAsync, tick, waitForAsync } from '@angular/core/testing';
 import { Renderer2 } from '@angular/core';
 import { ApiService } from './services/api.service';
 import { WebsocketService } from './services/websocket.service';
+import { DesktopService } from './services/desktop.service';
 import { AppComponent } from './app.component';
+import { WalletService } from './services/wallet.service';
+import { WalletOverviewRefreshService } from './services/wallet-overview-refresh.service';
+import { NotificationService } from './services/notification.service';
+import { PoWApiKeyVaultService, PoWVaultUnlockError } from './services/pow-api-key-vault.service';
+import { PowService } from './services/pow.service';
 import { ComponentTestModule, isolateConstructorIO } from '../testing/component-test.module';
 
 describe('AppComponent', () => {
+  it('pulls down to refresh the menu while preserving left-swipe to close', () => {
+    const app = TestBed.inject(AppComponent);
+    const refresh = spyOn(TestBed.inject(WalletOverviewRefreshService), 'refresh')
+      .and.returnValue(Promise.resolve());
+    const nav = { scrollTop: 0 } as HTMLElement;
+    const touch = (x: number, y: number) => [{ clientX: x, clientY: y }] as unknown as TouchList;
+    app.navExpanded = true;
+    app.onNavTouchStart({ touches: touch(100, 90), currentTarget: nav } as unknown as TouchEvent);
+    app.onNavTouchEnd({ changedTouches: touch(105, 195), currentTarget: nav } as unknown as TouchEvent);
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    app.onNavTouchStart({ touches: touch(150, 100), currentTarget: nav } as unknown as TouchEvent);
+    app.onNavTouchEnd({ changedTouches: touch(40, 100), currentTarget: nav } as unknown as TouchEvent);
+    expect(app.navExpanded).toBeFalse();
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refresh the menu while scrolled down', () => {
+    const app = TestBed.inject(AppComponent);
+    const refresh = spyOn(TestBed.inject(WalletOverviewRefreshService), 'refresh')
+      .and.returnValue(Promise.resolve());
+    const nav = { scrollTop: 80 } as HTMLElement;
+    app.navExpanded = true;
+    app.onNavTouchStart({ touches: [{ clientX: 50, clientY: 50 }], currentTarget: nav } as any);
+    app.onNavTouchEnd({ changedTouches: [{ clientX: 50, clientY: 200 }], currentTarget: nav } as any);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   beforeEach(waitForAsync(() => {
     isolateConstructorIO();
     TestBed.configureTestingModule({
@@ -18,9 +52,444 @@ describe('AppComponent', () => {
       ]
     }).compileComponents();
   }));
+  it('offers saved PoW vault unlock independently of wallet RPC and PoW choice', () => {
+    const app = TestBed.inject(AppComponent);
+    const vault = TestBed.inject(PoWApiKeyVaultService);
+    const hasVault = spyOnProperty(vault, 'hasVault', 'get').and.returnValue(true);
+    const unlocked = spyOnProperty(vault, 'isUnlocked', 'get').and.returnValue(false);
+    const saved = app.settings.settings;
+    for (const source of ['best', 'nanoTo', 'server', 'custom', 'clientCPU', 'clientWebGL'] as const) {
+      saved.powSource = source;
+      for (const rpc of ['https://rainstorm.city/api', 'https://rpc.nano.to/']) {
+        saved.serverAPI = rpc;
+        app.offerPowVaultUnlock();
+        expect(app.showPowVaultUnlock).toBeTrue();
+      }
+    }
+    hasVault.and.returnValue(false);
+    app.offerPowVaultUnlock();
+    expect(app.showPowVaultUnlock).toBeFalse();
+    hasVault.and.returnValue(true);
+    unlocked.and.returnValue(true);
+    app.offerPowVaultUnlock();
+    expect(app.showPowVaultUnlock).toBeFalse();
+  });
+  it('requires explicit passphrase unlock after restart without retaining it', async () => {
+    const app = TestBed.inject(AppComponent);
+    const vault = TestBed.inject(PoWApiKeyVaultService);
+    const unlock = spyOn(vault, 'unlock').and.returnValue(Promise.resolve());
+    const refresh = spyOn(TestBed.inject(PowService), 'syncProviderFromSettings');
+    const resolveDecision = spyOn(vault, 'resolveStartupUnlockDecision');
+    app.showPowVaultUnlock = true;
+    app.powVaultUnlockPassphrase = 'a secret phrase for work';
+    await app.unlockPowVaultOnStartup();
+    expect(unlock).toHaveBeenCalledOnceWith('a secret phrase for work');
+    expect(app.showPowVaultUnlock).toBeFalse();
+    expect(app.powVaultUnlockPassphrase).toBe('');
+    expect(resolveDecision).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveBeenCalledOnceWith(true);
+    app.showPowVaultUnlock = true;
+    app.powVaultUnlockPassphrase = 'wrong';
+    unlock.and.returnValue(Promise.reject(new Error('failed')));
+    await app.unlockPowVaultOnStartup();
+    expect(app.showPowVaultUnlock).toBeTrue();
+    expect(app.powVaultUnlockError).toBeTrue();
+    expect(app.powVaultUnlockPassphrase).toBe('');
+    expect(resolveDecision).toHaveBeenCalledTimes(1);
+    app.dismissPowVaultPrompt();
+    expect(app.showPowVaultUnlock).toBeFalse();
+    expect(resolveDecision).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows remaining vault attempts and closes the startup prompt on erasure', async () => {
+    const app = TestBed.inject(AppComponent);
+    const vault = TestBed.inject(PoWApiKeyVaultService);
+    const unlock = spyOn(vault, 'unlock').and.rejectWith(new PoWVaultUnlockError(2, false));
+    const refresh = spyOn(TestBed.inject(PowService), 'syncProviderFromSettings');
+    const resolve = spyOn(vault, 'resolveStartupUnlockDecision');
+    const notify = spyOn(TestBed.inject(NotificationService), 'sendError');
+
+    app.showPowVaultUnlock = true;
+    app.powVaultUnlockPassphrase = 'bad password one';
+    await app.unlockPowVaultOnStartup();
+    expect(app.showPowVaultUnlock).toBeTrue();
+    expect(app.powVaultUnlockError).toBeTrue();
+    expect(app.powVaultUnlockErrorKey).toBe('configure-app.pow-api-vault.unlock-incorrect');
+    expect(app.powVaultUnlockRemainingAttempts).toBe(2);
+    expect(resolve).not.toHaveBeenCalled();
+
+    unlock.and.rejectWith(new PoWVaultUnlockError(0, true));
+    app.powVaultUnlockPassphrase = 'bad password three';
+    await app.unlockPowVaultOnStartup();
+    expect(app.showPowVaultUnlock).toBeFalse();
+    expect(app.powVaultUnlockPassphrase).toBe('');
+    expect(resolve).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveBeenCalledOnceWith(true);
+    expect(notify).toHaveBeenCalledTimes(1);
+  });
+
   it('constructs the application with its real dependency graph', () => {
     expect(TestBed.createComponent(AppComponent).componentInstance).toBeTruthy();
   });
+  it('retries a failed initial price fetch and keeps refreshing after later errors', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    const price = spyOn(app.price, 'getPrice').and.returnValues(
+      Promise.reject(new Error('offline')), Promise.resolve(1)
+    );
+    void app.updateFiatPrices().catch(() => {});
+    tick(0);
+    expect(price).toHaveBeenCalledTimes(1);
+    tick(app.fiatTimeout);
+    expect(price).toHaveBeenCalledTimes(2);
+    app.ngOnDestroy();
+    tick(app.fiatTimeout);
+    expect(price).toHaveBeenCalledTimes(2);
+  }));
+
+  it('keeps a failed FIAT price request silent on first launch without a wallet', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://example.test/proxy';
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(false);
+    const fetch = spyOn(app, 'updateFiatPrices').and.returnValue(Promise.reject(new Error('CoinGecko unavailable')));
+    const notifications = TestBed.inject(NotificationService);
+    const warn = spyOn(notifications, 'sendWarning');
+    const clear = spyOn(notifications, 'removeNotification');
+    const network = spyOn(TestBed.inject(DesktopService), 'isNetworkOnline');
+
+    void (app as any).loadInitialFiatPrice();
+    tick(0);
+
+    expect(fetch).toHaveBeenCalledTimes(1); // The price retry policy remains unchanged.
+    expect(warn).not.toHaveBeenCalled();
+    expect(clear).toHaveBeenCalledWith('price-adblock');
+    expect(network).not.toHaveBeenCalled(); // No connectivity probe is needed for onboarding.
+  }));
+
+  it('still warns about failed FIAT prices for a configured wallet while online', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://example.test/proxy';
+    app.nodeService.internetRecoveryPending = false;
+    spyOnProperty(navigator, 'onLine', 'get').and.returnValue(true);
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(true);
+    spyOn(app, 'updateFiatPrices').and.returnValue(Promise.reject(new Error('CoinGecko unavailable')));
+    const network = spyOn(TestBed.inject(DesktopService), 'isNetworkOnline').and.returnValue(Promise.resolve(true));
+    const warn = spyOn(TestBed.inject(NotificationService), 'sendWarning');
+
+    void (app as any).loadInitialFiatPrice();
+    tick(0);
+
+    expect(network).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      jasmine.stringMatching(/issue retrieving latest nano price/),
+      jasmine.objectContaining({ identifier: 'price-adblock' })
+    );
+  }));
+
+  it('does not report an ad blocker if the configured wallet is offline', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://example.test/proxy';
+    app.nodeService.internetRecoveryPending = true;
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(true);
+    spyOn(app, 'updateFiatPrices').and.returnValue(Promise.reject(new Error('offline')));
+    const warn = spyOn(TestBed.inject(NotificationService), 'sendWarning');
+
+    void (app as any).loadInitialFiatPrice();
+    tick(0);
+
+    expect(warn).not.toHaveBeenCalled();
+  }));
+
+  it('does not show a stale FIAT warning if the wallet is removed during the connectivity check', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://example.test/proxy';
+    app.nodeService.internetRecoveryPending = false;
+    spyOnProperty(navigator, 'onLine', 'get').and.returnValue(true);
+    const configured = spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(true);
+    spyOn(app, 'updateFiatPrices').and.returnValue(Promise.reject(new Error('CoinGecko unavailable')));
+    let resolveOnline: (online: boolean) => void = () => {};
+    spyOn(TestBed.inject(DesktopService), 'isNetworkOnline').and.returnValue(
+      new Promise<boolean>(resolve => { resolveOnline = resolve; })
+    );
+    const warn = spyOn(TestBed.inject(NotificationService), 'sendWarning');
+
+    void (app as any).loadInitialFiatPrice();
+    tick(0);
+    configured.and.returnValue(false);
+    resolveOnline(true);
+    tick(0);
+
+    expect(warn).not.toHaveBeenCalled();
+  }));
+
+  it('refreshes FIAT once after selected WS reconnects following offline startup', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    const refresh = spyOn(app, 'updateFiatPrices').and.returnValue(Promise.resolve());
+    app.settings.settings.serverWS = 'wss://rainstorm.city/websocket';
+    app.onNetworkOffline();
+    const ws = TestBed.inject(WebsocketService);
+    ws.socket.connected = true;
+    ws.connected$.next();
+    tick(0);
+    expect(app.nodeService.internetRecoveryPending).toBe(false);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  }));
+
+  it('checks RPC immediately on WebSocket failure for a known built-in node', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    const ws = TestBed.inject(WebsocketService);
+    app.settings.settings.serverName = 'nanoslo';
+    app.settings.settings.serverAPI = 'https://nanoslo.0x.no/proxy';
+    app.settings.settings.serverWS = 'wss://nanoslo.0x.no/websocket';
+    const check = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.returnValue(Promise.resolve());
+    ws.connectionFailure$.next('wss://nanoslo.0x.no/websocket');
+    ws.connectionFailure$.next('wss://nanoslo.0x.no/websocket');
+    expect(check).toHaveBeenCalledTimes(1);
+    tick(0);
+    ws.connectionFailure$.next('wss://nanoslo.0x.no/websocket');
+    expect(check).toHaveBeenCalledTimes(1); // Cooldown prevents repeated probes.
+  }));
+
+  it('ignores stale WS errors, explicit custom RPCs and offline mode', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    const ws = TestBed.inject(WebsocketService);
+    const check = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.returnValue(Promise.resolve());
+    app.settings.settings.serverName = 'nanoslo';
+    app.settings.settings.serverAPI = 'https://nanoslo.0x.no/proxy';
+    app.settings.settings.serverWS = 'wss://nanoslo.0x.no/websocket';
+    ws.connectionFailure$.next('wss://old.example/ws');
+    app.settings.settings.serverName = 'custom';
+    ws.connectionFailure$.next('wss://nanoslo.0x.no/websocket');
+    app.settings.settings.serverName = 'offline';
+    ws.connectionFailure$.next('wss://nanoslo.0x.no/websocket');
+    expect(check).not.toHaveBeenCalled();
+    tick(0);
+  }));
+
+  it('silently reconnects WebSocket after automatic failover without a wallet', () => {
+    const app = TestBed.inject(AppComponent);
+    const configured = spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(false);
+    const notice = spyOn(TestBed.inject(NotificationService), 'sendWarning');
+    const reconnect = spyOn(TestBed.inject(WebsocketService), 'forceReconnect').and.stub();
+    (app as any).handleServerFailover('SpyNano', 'SomeNano');
+    expect(notice).not.toHaveBeenCalled();
+    expect(reconnect).toHaveBeenCalledTimes(1);
+
+    configured.and.returnValue(true);
+    (app as any).handleServerFailover('SpyNano', 'SomeNano');
+    expect(notice).toHaveBeenCalledTimes(1);
+    expect(reconnect).toHaveBeenCalledTimes(2);
+  });
+
+  it('detects native Electron offline/online transitions when browser events are absent', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    const native = spyOn(TestBed.inject(DesktopService), 'isNetworkOnline').and.returnValues(
+      Promise.resolve(true), Promise.resolve(false), Promise.resolve(false), Promise.resolve(true)
+    );
+    const offline = spyOn(app, 'onNetworkOffline').and.callThrough();
+    const online = spyOn(app, 'onNetworkOnline').and.stub();
+    (app as any).pollNativeNetwork(); tick(0);
+    expect(offline).not.toHaveBeenCalled();
+    expect(online).not.toHaveBeenCalled();
+    (app as any).pollNativeNetwork(); tick(0);
+    expect(offline).toHaveBeenCalledTimes(1);
+    expect(app.nodeService.internetRecoveryPending).toBe(true);
+    (app as any).pollNativeNetwork(); tick(0);
+    expect(offline).toHaveBeenCalledTimes(1);
+    (app as any).pollNativeNetwork(); tick(0);
+    expect(online).toHaveBeenCalledTimes(1);
+    expect(native).toHaveBeenCalledTimes(4);
+  }));
+
+  it('ignores absent native network status in browser/PWA', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    spyOn(TestBed.inject(DesktopService), 'isNetworkOnline').and.returnValue(Promise.resolve(null));
+    const offline = spyOn(app, 'onNetworkOffline');
+    const online = spyOn(app, 'onNetworkOnline');
+    (app as any).pollNativeNetwork();
+    tick(0);
+    expect(offline).not.toHaveBeenCalled();
+    expect(online).not.toHaveBeenCalled();
+  }));
+
+  it('stops native network monitoring when the component is destroyed', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    const check = spyOn(TestBed.inject(DesktopService), 'isNetworkOnline').and.returnValue(Promise.resolve(true));
+    (app as any).startNativeNetworkMonitor();
+    tick(3000);
+    expect(check).toHaveBeenCalledTimes(2);
+    app.ngOnDestroy();
+    tick(6000);
+    expect(check).toHaveBeenCalledTimes(2);
+  }));
+
+  it('retains Rainstorm on cable loss and restores its WebSocket without a synthetic RPC probe', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverName = 'rainstorm';
+    app.settings.settings.serverAPI = 'https://rainstorm.city/api';
+    app.settings.settings.serverWS = 'wss://rainstorm.city/websocket';
+    const probe = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.returnValue(Promise.resolve());
+    const ws = TestBed.inject(WebsocketService);
+    const reconnect = spyOn(ws, 'forceReconnect').and.stub();
+    app.onNetworkOffline();
+    expect(app.nodeService.internetRecoveryPending).toBe(true);
+    ws.connectionFailure$.next('wss://rainstorm.city/websocket');
+    expect(probe).not.toHaveBeenCalled();
+    // The old socket can still appear connected after unplugging Ethernet.
+    // Recovery must force a fresh handshake rather than trusting that flag.
+    ws.socket.connected = true;
+    app.onNetworkOnline();
+    tick(0);
+    expect(reconnect).toHaveBeenCalledTimes(1);
+    expect(probe).not.toHaveBeenCalled();
+    ws.socket.connected = true;
+    ws.connected$.next();
+    tick(0);
+    expect(app.settings.settings.serverName).toBe('rainstorm');
+    expect(app.nodeService.internetRecoveryPending).toBe(false);
+    expect(probe).not.toHaveBeenCalled();
+  }));
+
+  it('keeps a configured wallet on its original RPC until balance recovery completes', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverName = 'twister32-rsnano';
+    app.settings.settings.serverAPI = 'https://twister32.changeip.net/proxy';
+    app.settings.settings.serverWS = 'wss://twister32.changeip.net/ws';
+    const wallet = TestBed.inject(WalletService);
+    spyOn(wallet, 'isConfigured').and.returnValue(true);
+    app.wallet.accounts = [{ id: 'nano_test' } as any];
+    let finishRefresh: () => void = () => {};
+    const refresh = spyOn(wallet, 'reloadBalances').and.returnValue(
+      new Promise<void>(resolve => { finishRefresh = resolve; })
+    );
+    const api = TestBed.inject(ApiService);
+    const fallback = spyOn(api, 'checkNodeAvailability');
+    const ws = TestBed.inject(WebsocketService);
+    const reconnect = spyOn(ws, 'forceReconnect').and.stub();
+
+    app.onNetworkOffline();
+    ws.socket.connected = true;
+    ws.connected$.next();
+    tick(0);
+    expect(app.nodeService.internetRecoveryPending).toBeTrue();
+    expect(app.settings.settings.serverName).toBe('twister32-rsnano');
+    expect(fallback).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalled();
+
+    // A WS handshake alone did not clear the guard. A real RPC refresh does.
+    app.nodeService.setOnline();
+    finishRefresh();
+    tick(0);
+    expect(app.nodeService.internetRecoveryPending).toBeFalse();
+    expect(app.settings.settings.serverName).toBe('twister32-rsnano');
+    // The WS already completed a fresh handshake: a second forced reconnect
+    // would generate a redundant wallet balance read and another failure cycle.
+    expect(reconnect).not.toHaveBeenCalled();
+    app.ngOnDestroy();
+  }));
+
+  it('reopens an exhausted WS after wallet RPC recovers without a fresh handshake', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverName = 'twister32-rsnano';
+    app.settings.settings.serverAPI = 'https://twister32.changeip.net/proxy';
+    app.settings.settings.serverWS = 'wss://twister32.changeip.net/ws';
+    const wallet = TestBed.inject(WalletService);
+    spyOn(wallet, 'isConfigured').and.returnValue(true);
+    app.wallet.accounts = [{ id: 'nano_test' } as any];
+    const refresh = spyOn(wallet, 'reloadBalances').and.returnValue(Promise.resolve());
+    const ws = TestBed.inject(WebsocketService);
+    const reconnect = spyOn(ws, 'forceReconnect').and.stub();
+
+    app.onNetworkOffline();
+    app.onNetworkOnline();
+    tick(0);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(reconnect).toHaveBeenCalledTimes(1);
+    expect(app.nodeService.internetRecoveryPending).toBeFalse();
+    expect(app.settings.settings.serverName).toBe('twister32-rsnano');
+    app.ngOnDestroy();
+  }));
+
+  it('does not rotate the selected wallet node on the first RPC failure after airplane mode', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverName = 'rainstorm';
+    app.settings.settings.serverAPI = 'https://rainstorm.city/api';
+    app.settings.settings.serverWS = 'wss://rainstorm.city/websocket';
+    const wallet = TestBed.inject(WalletService);
+    spyOn(wallet, 'isConfigured').and.returnValue(true);
+    app.wallet.accounts = [{ id: 'nano_test' } as any];
+    const refresh = spyOn(wallet, 'reloadBalances').and.callFake(() => Promise.reject(new Error('transient RPC timeout')));
+    const api = TestBed.inject(ApiService);
+    const fallback = spyOn(api, 'checkNodeAvailability');
+    const ws = TestBed.inject(WebsocketService);
+    spyOn(ws, 'forceReconnect').and.stub();
+
+    app.onNetworkOffline();
+    app.onNetworkOnline();
+    tick(0);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(app.nodeService.internetRecoveryPending).toBeTrue();
+    expect(app.settings.settings.serverName).toBe('rainstorm');
+    expect(fallback).not.toHaveBeenCalled();
+    app.ngOnDestroy();
+  }));
+
+  it('does not clear Internet outage state when native network is still offline', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverWS = 'wss://rainstorm.city/websocket';
+    spyOn(TestBed.inject(DesktopService), 'isNetworkOnline').and.returnValue(Promise.resolve(false));
+    app.onNetworkOffline();
+    const ws = TestBed.inject(WebsocketService);
+    ws.socket.connected = true;
+    ws.connected$.next();
+    tick(0);
+    expect(app.nodeService.internetRecoveryPending).toBe(true);
+  }));
+
+  it('does not show the persistent node error during first-run network loss', () => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://nanoslo.0x.no/proxy';
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(false);
+    const sendError = spyOn(TestBed.inject(NotificationService), 'sendError');
+    app.onNetworkOffline();
+    expect(app.nodeService.node.status).toBe(false);
+    expect(sendError).not.toHaveBeenCalled();
+  });
+
+  it('does not probe a default RsNano RPC on first start without a wallet and with WS configured', () => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverName = 'twister32-rsnano';
+    app.settings.settings.serverAPI = 'https://twister32.changeip.net/proxy';
+    app.settings.settings.serverWS = 'wss://twister32.changeip.net/ws';
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(false);
+    const probe = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.returnValue(Promise.resolve());
+    (app as any).probeInitialEmptyWalletRpc();
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it('retains silent startup discovery for an RPC-only node without a wallet', fakeAsync(() => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://example.org/proxy';
+    app.settings.settings.serverWS = null;
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(false);
+    const probe = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.returnValue(Promise.resolve());
+    (app as any).probeInitialEmptyWalletRpc();
+    expect(probe).toHaveBeenCalledOnceWith(true);
+    tick(0);
+  }));
+
+  it('does not restart RPC discovery on network recovery while an empty-wallet WS is connected', async () => {
+    const app = TestBed.inject(AppComponent);
+    app.settings.settings.serverAPI = 'https://twister32.changeip.net/proxy';
+    app.settings.settings.serverWS = 'wss://twister32.changeip.net/ws';
+    app.wallet.accounts = [];
+    spyOn(TestBed.inject(WalletService), 'isConfigured').and.returnValue(false);
+    const probe = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability');
+    const ws = TestBed.inject(WebsocketService);
+    ws.socket.connected = true;
+    await (app as any).recoverAfterNetworkReturn();
+    expect(probe).not.toHaveBeenCalled();
+  });
+
   it('resets the inactivity counter when the user interacts', () => {
     const app = TestBed.createComponent(AppComponent).componentInstance;
     app.inactiveSeconds = 30;
@@ -28,13 +497,13 @@ describe('AppComponent', () => {
     expect(app.inactiveSeconds).toBe(0);
   });
 
-  it('checks wallet RPC and clears the offline alert after Wi-Fi returns', fakeAsync(() => {
+  it('checks an RPC-only server and clears the offline alert after Wi-Fi returns', fakeAsync(() => {
     const app = TestBed.inject(AppComponent);
     app.settings.settings.serverAPI = 'https://example.test/proxy';
-    app.settings.settings.serverWS = 'wss://example.test/ws';
-    const rpc = spyOn(TestBed.inject(ApiService), 'accountsBalances').and.callFake(async () => {
+    app.settings.settings.serverWS = null;
+    const rpc = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.callFake(async () => {
       app.nodeService.setOnline(); // ApiService does this when a real RPC succeeds.
-      return { balances: {} };
+      return;
     });
     const ws = spyOn(TestBed.inject(WebsocketService), 'forceReconnect').and.stub();
 
@@ -45,18 +514,19 @@ describe('AppComponent', () => {
 
     expect(rpc).toHaveBeenCalledTimes(1);
     expect(app.nodeService.node.status).toBe(true);
-    expect(ws).toHaveBeenCalledTimes(1);
+    expect(ws).not.toHaveBeenCalled(); // No WebSocket is configured for RPC-only nodes.
   }));
 
-  it('keeps the offline alert on an RPC failure and retries after a delay', fakeAsync(() => {
+  it('keeps the offline alert on an RPC-only failure and retries after a delay', fakeAsync(() => {
     const app = TestBed.inject(AppComponent);
     app.settings.settings.serverAPI = 'https://example.test/proxy';
+    app.settings.settings.serverWS = null;
     let calls = 0;
-    const rpc = spyOn(TestBed.inject(ApiService), 'accountsBalances').and.callFake(async () => {
+    const rpc = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.callFake(async () => {
       calls++;
       if (calls === 1) throw new Error('No network');
       app.nodeService.setOnline();
-      return { balances: {} };
+      return;
     });
 
     app.onNetworkOffline();
@@ -72,7 +542,7 @@ describe('AppComponent', () => {
   it('does not probe wallet RPC in the explicit offline mode', fakeAsync(() => {
     const app = TestBed.inject(AppComponent);
     app.settings.settings.serverAPI = null;
-    const rpc = spyOn(TestBed.inject(ApiService), 'accountsBalances').and.stub();
+    const rpc = spyOn(TestBed.inject(ApiService), 'checkNodeAvailability').and.stub();
     app.onNetworkOnline();
     tick(0);
     expect(rpc).not.toHaveBeenCalled();

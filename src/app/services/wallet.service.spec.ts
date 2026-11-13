@@ -370,3 +370,48 @@ describe('WalletService staged Ledger replacement', () => {
     expect(service.saveWalletExport).toHaveBeenCalled();
   });
 });
+
+describe('WalletService invalid RPC response protection', () => {
+  function setup() {
+    const service = Object.create(WalletService.prototype) as any;
+    const balance = { toString: () => '1000000000000000000000000000000' };
+    service.wallet = {
+      accounts: [{ id: 'nano_test' }], balance, pending: '100',
+      updatingBalance: false, balanceInitialized: true
+    };
+    service.price = { price: { lastPrice: 0.30 } };
+    service.api = {
+      accountsBalances: jasmine.createSpy('accountsBalances'),
+      accountsFrontiers: jasmine.createSpy('accountsFrontiers')
+    };
+    return { service, balance };
+  }
+  it('keeps known balances when Nano.to returns an HTTP-200 JSON error', async () => {
+    const { service, balance } = setup();
+    service.api.accountsBalances.and.resolveTo({ error: 'Rate limit exceeded' });
+    service.api.accountsFrontiers.and.resolveTo({ frontiers: {} });
+    await expectAsync(service.reloadBalances())
+      .toBeRejectedWithError('Invalid accounts_balances RPC response');
+    expect(service.wallet.balance).toBe(balance);
+    expect(service.wallet.pending).toBe('100');
+    expect(service.wallet.balanceInitialized).toBeTrue();
+    expect(service.wallet.updatingBalance).toBeFalse();
+  });
+  it('keeps known balances when a gateway omits the accounts_balances map', async () => {
+    const { service, balance } = setup();
+    service.api.accountsBalances.and.resolveTo({ status: 'success' });
+    await expectAsync(service.reloadBalances())
+      .toBeRejectedWithError('Invalid accounts_balances RPC response');
+    expect(service.api.accountsFrontiers).not.toHaveBeenCalled();
+    expect(service.wallet.balance).toBe(balance);
+  });
+  it('rejects invalid accounts_frontiers before changing the wallet balance', async () => {
+    const { service, balance } = setup();
+    service.api.accountsBalances.and.resolveTo({ balances: {} });
+    service.api.accountsFrontiers.and.resolveTo({ error: 'Unsupported action' });
+    await expectAsync(service.reloadBalances())
+      .toBeRejectedWithError('Invalid accounts_frontiers RPC response');
+    expect(service.wallet.balance).toBe(balance);
+    expect(service.wallet.pending).toBe('100');
+  });
+});

@@ -80,26 +80,35 @@ async function main() {
 
   const c = Object.create(Settings.prototype);
   Object.assign(c, { statsRequest: 0, statsRefreshEnabled: true, appSettings: { settings: { serverAPI: 'A' } },
-    api: { blockCount: async () => ({ count: 10, unchecked: 0, cemented: 9 }), confirmationQuorum: async () => null, version: async () => ({ node_vendor: 'A' }) } });
+    api: { optionalBlockCount: async () => ({ count: 10, unchecked: 0, cemented: 9 }), confirmationQuorum: async () => null, version: async () => ({ node_vendor: 'A' }) } });
   await c.updateNodeStats(); assert.equal(c.nodeStatsServer, 'A'); assert.equal(c.nodeVendor, 'A');
   c.serverAPI = 'rejected-form-value'; assert.equal(c.nodeStatsServer, 'A');
   let resolve;
-  c.api.blockCount = () => new Promise(r => resolve = r);
+  c.api.optionalBlockCount = () => new Promise(r => resolve = r);
   const pending = c.updateNodeStats(); c.appSettings.settings.serverAPI = 'B';
   resolve({ count: 999 }); await pending;
   assert.equal(c.nodeStatsServer, null); assert.equal(c.nodeVendor, null); assert.equal(c.statsRefreshEnabled, true);
-  c.api.blockCount = async () => { throw new Error('offline'); };
-  c.api.confirmationQuorum = c.api.version = c.api.blockCount;
+  c.api.optionalBlockCount = async () => { throw new Error('offline'); };
+  c.api.confirmationQuorum = c.api.version = c.api.optionalBlockCount;
   await c.updateNodeStats(); assert.equal(c.nodeBlockCount, null); assert.equal(c.statsRefreshEnabled, true);
   console.log('PASS saved endpoint labels, stale result rejection, failed stats and loading cleanup');
 
   let reconnects = 0, notices = 0;
   Object.assign(c, {
     selectedServer: 'custom', serverAPI: 'https://example.org', serverWS: '', serverAuth: null,
-    appSettings: { settings: { serverAPI: 'https://example.org' }, setAppSettings() {}, loadAppSettings() {} },
+    serverOptions: [{ value: 'custom', name: 'New' }], serverNodeName: 'Example',
+    showServerConfigs: () => true, selectedLocalNode: () => null,
+    appSettings: {
+      settings: { serverAPI: 'https://example.org', serverWS: null, serverName: 'custom' },
+      serverOptions: [{ value: 'custom', name: 'New' }],
+      saveLocalNode() { return 'local-test'; },
+      setAppSettings(values) { Object.assign(this.settings, values); },
+      loadAppSettings() { this.settings.serverAPI = 'https://example.org'; }
+    },
+    pow: { syncProviderFromSettings() {} },
     notifications: { sendSuccess() {}, sendWarning() { notices++; } },
-    translocoService: { translate: x => x }, node: { node: {} },
-    walletService: { reloadBalances: async () => { throw new Error('offline'); } },
+    translocoService: { translate: x => x }, node: { node: {}, setLoading() {} },
+    walletService: { wallet: { accounts: [{ id: 'nano_test' }] }, isConfigured: () => true, reloadBalances: async () => { throw new Error('offline'); } },
     websocket: { forceReconnect() { reconnects++; } }
   });
   await c.updateServerSettings();

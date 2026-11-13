@@ -5,6 +5,8 @@ export type NotificationType = 'info'|'success'|'warning'|'error';
 export interface NotificationOptions {
   length?: number;
   identifier?: string;
+  // UI actions must be real Angular event handlers, never HTML in a toast.
+  action?: { labelKey: string; run: () => void };
 }
 export interface AppNotification {
   type: NotificationType;

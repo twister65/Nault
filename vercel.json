@@ -62,7 +62,16 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "upgrade/angular-22": false
+      "upgrade/angular-22": false,
+      "gh-pages": false,
+      "fix/dependabot-*": false,
+      "fix/minimatch-*": false,
+      "fix/security-*": false,
+      "fix/vulnerabilities*": false,
+      "maintenance/**": false,
+      "security/**": false,
+      "dependabot/**": false,
+      "chore/dependabot-*": false
     }
   }
 }

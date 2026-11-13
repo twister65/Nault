@@ -13,7 +13,6 @@
     <div uk-grid class="uk-animation-slide-left-small uk-margin-remove-top">
       <div class="uk-width-1-1">
 
-        @if (!hideOverview) {
           <div class="uk-card uk-overflow-auto">
             <p>{{ 'ui-representatives.intro-before' | transloco }} <a href="https://docs.nano.org/protocol-design/orv-consensus/" target="_blank" rel="noopener noreferrer">{{ 'ui-representatives.consensus' | transloco }}</a> {{ 'ui-representatives.intro-after' | transloco }}</p>
             <table class="uk-table uk-table-striped uk-table-small">
@@ -32,13 +31,20 @@
                         @case ((rep.statusText == 'trusted')) {
                           <div class="representative-health-status health-green">
                             <div class="health-icon"></div>
-                            <div class="label">{{ 'ui-representatives.good' | transloco }}</div>
+                            <div class="label">{{ 'ui-representatives.local-trusted' | transloco }}</div>
                           </div>
                         }
                         @case ((rep.statusText == 'ok')) {
                           <div class="representative-health-status health-green">
                             <div class="health-icon"></div>
                             <div class="label">{{ 'ui-representatives.good' | transloco }}</div>
+                          </div>
+                        }
+                        @case ((rep.statusText == 'monitorGood')) {
+                          <div class="representative-health-status health-green" uk-tooltip
+                               [title]="'ui-representatives.monitor-good-tip' | transloco">
+                            <div class="health-icon"></div>
+                            <div class="label">{{ 'ui-representatives.monitor-good' | transloco }}</div>
                           </div>
                         }
                         @case ((rep.statusText == 'warn')) {
@@ -56,14 +62,24 @@
                         @default {
                           <div class="representative-health-status health-unknown">
                             <div class="health-icon"></div>
-                            <div class="label">{{ 'ui-representatives.unknown' | transloco }}</div>
+                            <div class="label">{{ 'ui-representatives.health-unverified' | transloco }}</div>
                           </div>
                         }
                       }
                     </ng-template>
+                    <ng-template #representativeVoteInfo>
+                      <button type="button" class="rep-vote-info" uk-tooltip="pos: bottom-left"
+                        [title]="getVoteObservationsTooltip(rep)"
+                        [attr.aria-label]="getVoteObservationsTooltip(rep)">
+                        <span uk-icon="icon: info; ratio: 0.8"></span>
+                      </button>
+                    </ng-template>
                     <tr class="representative-row">
                       <td class="representative-health-column uk-visible-toggle uk-text-truncate hide-on-small-viewports">
-                        <ng-template [ngTemplateOutlet]="representativeHealth"></ng-template>
+                        <div class="rep-status-line">
+                          <ng-template [ngTemplateOutlet]="representativeHealth"></ng-template>
+                          <ng-template [ngTemplateOutlet]="representativeVoteInfo"></ng-template>
+                        </div>
                       </td>
                       <td class="representative-name-column uk-text-truncate rep-container" (click)="addSelectedAccounts(rep.accounts)">
                         <div class="representative-label-container">
@@ -77,8 +93,28 @@
                         <div class="representative-address uk-text-small uk-text-truncate">
                           <app-nano-account-id [accountID]="rep.id" middle="auto" class="nano-address-monospace"></app-nano-account-id>
                         </div>
+                        <div class="rep-external-details">
+                          @if (rep.status.trusted) {
+                            <span class="rep-trusted-tag">{{ 'ui-representatives.local-trusted' | transloco }}</span>
+                          }
+                          @if (rep.networkObservation?.version) {
+                            <span>{{ rep.networkObservation?.version }}</span>
+                          } @else if (rep.networkObservation?.nanonodeOnline !== null && rep.networkObservation?.nanonodeOnline !== undefined) {
+                            <span>{{ 'ui-representatives.telemetry-unavailable' | transloco }}</span>
+                          }
+                          @if (rep.networkObservation?.inSync === true) {
+                            <span>{{ 'ui-representatives.telemetry-in-sync' | transloco }}</span>
+                          } @else if (rep.networkObservation?.inSync === false) {
+                            <span class="uk-text-warning">{{ 'ui-representatives.telemetry-out-of-sync' | transloco }}</span>
+                          }
+                          <a [href]="'https://www.nanoticker.org/representatives/' + rep.id" target="_blank"
+                             rel="noopener noreferrer" (click)="$event.stopPropagation()">{{ 'ui-representatives.nanoticker-details' | transloco }}</a>
+                        </div>
                         <div class="representative-health-compact only-on-small-viewports uk-margin-small-top">
-                          <ng-template [ngTemplateOutlet]="representativeHealth"></ng-template>
+                          <div class="rep-status-line">
+                            <ng-template [ngTemplateOutlet]="representativeHealth"></ng-template>
+                            <ng-template [ngTemplateOutlet]="representativeVoteInfo"></ng-template>
+                          </div>
                         </div>
                       </td>
                       <td class="voting-weight-column uk-width-1-4">
@@ -139,7 +175,6 @@
               </tbody>
             </table>
           </div>
-        }
 
       </div>
 
@@ -183,32 +218,84 @@
                   </div>
                 </div>
                 <div class="uk-margin">
-                  <label class="uk-form-label" for="form-horizontal-text2">{{ 'ui-representatives.new' | transloco }}</label>
+                  <label class="uk-form-label" for="nault-representative-account">{{ 'ui-representatives.new' | transloco }}</label>
                   <div class="uk-form-controls">
                     <div class="uk-inline uk-width-1-1">
                       <a class="uk-form-icon uk-form-icon-flip" uk-icon="icon: camera" (click)="openQR('rep1','account')" uk-tooltip [title]="'ui-send.scan-qr' | transloco"></a>
-                      <input (blur)="validateRepresentative()" (input)="searchRepresentatives()" (focus)="searchRepresentatives()" [(ngModel)]="toRepresentativeID" class="uk-input" id="form-horizontal-text2" type="text" [placeholder]="'ui-representatives.representative-account' | transloco" #repInput>
-                      @if ((representativeResults$ | async).length) {
-                        <div [hidden]="!showRepresentatives" class="nlt-dropdown uk-animation-slide-down-small uk-width-1-1 uk-card uk-card-default uk-card-body uk-position-absolute" style="z-index: 15000">
-                          <ul class="uk-nav uk-nav-default">
-                            <li class="uk-nav-header">{{ 'representative-search.representative-list-results' | transloco }}</li>
-                            <li class="uk-nav-divider"></li>
-                            @for (rep of representativeResults$ | async; track rep) {
-                              <li>
-                                <a (click)="selectRepresentative(rep.id)">
-                                  {{ rep.name }}
+                      <input (blur)="validateRepresentative()" (input)="searchRepresentatives()" (focus)="searchRepresentatives()"
+                        [(ngModel)]="toRepresentativeID" class="uk-input" id="nault-representative-account"
+                        name="nault-representative-account-search" autocomplete="off" autocapitalize="off"
+                        spellcheck="false" type="text" [placeholder]="'ui-representatives.representative-account' | transloco" #repInput>
+                    </div>
+                    <div class="rep-picker-tools">
+                      <button type="button" class="uk-button uk-button-small uk-button-default" (click)="toggleRepresentativeBrowser()"
+                        [attr.aria-expanded]="showRepresentatives">
+                        {{ 'ui-representatives.browse-representatives' | transloco }}
+                      </button>
+                      <label class="rep-online-filter">
+                        <input type="checkbox" class="uk-checkbox" [checked]="onlyOnlineReps" (change)="toggleOnlineOnly()">
+                        {{ 'ui-representatives.online-filter' | transloco }}
+                      </label>
+                      <label class="rep-online-filter" [title]="'ui-representatives.monitor-good-tip' | transloco">
+                        <input type="checkbox" class="uk-checkbox" [checked]="onlyMonitoredGoodReps" (change)="toggleMonitoredGoodOnly()">
+                        {{ 'ui-representatives.monitor-good-filter' | transloco }}
+                      </label>
+                    </div>
+                    @if (showRepresentatives) {
+                      <div class="uk-margin-small-top">
+                        <input type="search" class="uk-input" name="nault-rep-directory-query" autocomplete="off"
+                          [(ngModel)]="representativeSearch" (input)="searchRepresentatives()"
+                          [placeholder]="'ui-representatives.search-names' | transloco"
+                          [attr.aria-label]="'ui-representatives.search-names' | transloco">
+                      </div>
+                      <div class="rep-picker-results" role="listbox" [attr.aria-label]="'representative-search.representative-list-results' | transloco">
+                        <div class="rep-picker-heading">{{ 'representative-search.representative-list-results' | transloco }}</div>
+                        @if ((representativeResults$ | async)?.length) {
+                          @for (rep of representativeResults$ | async; track rep.id) {
+                            <div class="rep-picker-result" role="option" [attr.aria-label]="rep.name" [attr.aria-selected]="toRepresentativeID === rep.id">
+                              <button type="button" class="rep-picker-select" (mousedown)="$event.preventDefault()" (click)="selectRepresentative(rep.id)">
+                                <span class="rep-picker-name">{{ rep.name }}</span>
+                                <span class="rep-picker-address">{{ rep.id }}</span>
+                                <span class="rep-picker-meta">
                                   @if (rep.trusted) {
-                                    <span class="uk-text-success" style="margin-left: 4px;"><span uk-icon="icon: star;"></span></span>
+                                    <span class="rep-trusted-tag">{{ 'ui-representatives.local-trusted' | transloco }}</span>
                                   }
-                                  @if (rep.warn) {
-                                    <span class="uk-text-warning" style="margin-left: 4px;"><span uk-icon="icon: warning;"></span> {{ 'general.avoid' | transloco }}</span>
+                                  @if (isMonitoredGoodRepresentative(rep.id)) {
+                                    <span class="rep-observation-online" [title]="'ui-representatives.monitor-good-tip' | transloco">
+                                      {{ 'ui-representatives.monitor-good' | transloco }}
+                                    </span>
                                   }
-                                </a>
-                              </li>
-                            }
-                          </ul>
-                        </div>
-                      }
+                                  @if (getMonitoredRepresentative(rep.id); as monitorRep) {
+                                    <span [class.rep-observation-online]="monitorRep.online" [class.rep-observation-offline]="!monitorRep.online">
+                                      {{ (monitorRep.online ? 'ui-representatives.observed-online' : 'ui-representatives.not-observed') | transloco }}
+                                    </span>
+                                    @if (monitorRep.share !== null) {
+                                      <span class="rep-voting-weight-share">
+                                        {{ 'ui-representatives.voting-weight' | transloco }} : {{ formatVotingWeightShare(monitorRep.share) }}
+                                      </span>
+                                    }
+                                    <span class="rep-observation-source">NanoNode.de</span>
+                                  }
+                                </span>
+                              </button>
+                              <a class="rep-picker-details" [href]="'https://www.nanoticker.org/representatives/' + rep.id"
+                                target="_blank" rel="noopener noreferrer" [attr.aria-label]="'ui-representatives.nanoticker-details' | transloco"
+                                (mousedown)="$event.preventDefault()">{{ 'ui-representatives.nanoticker-details' | transloco }}</a>
+                            </div>
+                          }
+                        } @else {
+                          <p class="uk-text-muted uk-margin-small">{{ 'ui-representatives.no-results' | transloco }}</p>
+                        }
+                        @if (matchingRepresentativeCount > ((representativeResults$ | async)?.length ?? 0)) {
+                          <button type="button" class="rep-picker-more" (click)="showMoreRepresentatives()">
+                            {{ 'ui-representatives.show-more' | transloco }}
+                            ({{ (representativeResults$ | async)?.length ?? 0 }} / {{ matchingRepresentativeCount }})
+                          </button>
+                        }
+                      </div>
+                    }
+                    <div class="uk-text-small text-half-muted uk-margin-small-top">
+                      {{ 'ui-representatives.observation-disclaimer' | transloco }}
                     </div>
                   </div>
                   @if (representativeListMatch) {
@@ -218,53 +305,9 @@
                       </div>
                     </div>
                   }
-                  <!-- <div class="uk-form-controls">
-                  <div class="uk-inline uk-width-1-1 uk-margin-top">
-                    <button class="uk-button uk-button-default uk-button-small" *ngIf="showRecommendedReps" (click)="showRecommendedReps = !showRecommendedReps"><span uk-icon="icon: minus; ratio: 0.8" style="margin-right: 5px;"></span> Hide Recommended Representatives</button>
-                    <button class="uk-button uk-button-primary uk-button-small" *ngIf="!showRecommendedReps" (click)="showRecommendedReps = !showRecommendedReps"><span uk-icon="icon: plus; ratio: 0.8" style="margin-right: 5px;"></span> View Recommended Representatives</button>
-                  </div>
-                </div> -->
+
               </div>
-              <!-- <div *ngIf="showRecommendedReps">
-              <hr>
-                <div class="uk-margin">
-                  <p class="uk-text-lead uk-text-center">Select a representative recommended by <a href="https://mynano.ninja" target="_blank" rel="noopener noreferrer" class="uk-link-text">MyNanoNinja</a></p>
-                  <ul class="uk-list uk-list-striped" style="margin-bottom: 0;">
-                    <li class="uk-list-header">
-                      <div uk-grid>
-                        <div class="uk-width-expand">{{ 'ui-representatives.title' | transloco }}</div>
-                        <div class="uk-width-1-2">Weight / Uptime / Accounts</div>
-                      </div>
-                    </li>
-                  </ul>
-                  <ul class="uk-list uk-list-striped" style="margin-top: 0;">
-                    <li *ngIf="recommendedRepsLoading" class="uk-text-center">
-                      <span uk-icon="load"></span> Loading reps...
-                    </li>
-                    <li *ngIf="recommendedRepsLoading === null" class="uk-text-center">
-                      <span uk-icon="load"></span> Unable to load representatives from My Nano Ninja
-                    </li>
-                    <li *ngFor="let rep of recommendedRepsPaginated">
-                      <div uk-grid >
-                        <div class="uk-width-expand" (click)="selectRecommendedRep(rep)" style="cursor: pointer;">
-                          <span class="uk-badge" uk-tooltip title="My Nano Ninja Score" style="margin-right: 4px;">{{ rep.score }}</span> <span uk-tooltip title="Select this representative">{{ rep.alias }}</span>
-                        </div>
-                        <div class="uk-width-1-2">
-                          <a [href]="'https://mynano.ninja/account/' + rep.account" target="_blank" rel="noopener noreferrer" style="float: right;" uk-tooltip title="View more details on My Nano Ninja" class="uk-link-muted"><span uk-icon="search"></span></a>
-                          <span style="display: inline-block; margin-right: 15px;" uk-tooltip title="Percentage of network voting weight delegated" class="uk-text-primary"><span uk-icon="users"></span> {{ rep.percent }}%</span>
-                          <span style="display: inline-block; margin-right: 15px; color: #13ab60;" uk-tooltip title="Uptime since creation" class=""><span uk-icon="bolt"></span> {{ rep.uptime.toFixed(2) }}%</span>
-                        </div>
-                      </div>
-                    </li>
-                  </ul>
-                  <a href="https://mynano.ninja" target="_blank" rel="noopener noreferrer" class="view-all-reps-link uk-link-muted" uk-tooltip title="View all verified representatives on MyNanoNinja">View All <span uk-icon="icon: push; ratio: 0.9;"></span></a>
-                  <ul class="uk-pagination uk-flex-center uk-flex-middle">
-                    <li><a (click)="previousReps()" uk-tooltip title="Previous Page"><span uk-pagination-previous class="uk-icon-button"></span></a></li>
-                    <li>Showing {{ (currentRepPage * repsPerPage)+ 1 }} - {{ (currentRepPage * repsPerPage)+ repsPerPage }} of {{ recommendedReps.length }} reps</li>
-                    <li><a (click)="nextReps()" uk-tooltip title="Next Page"><span uk-pagination-next class="uk-icon-button"></span></a></li>
-                  </ul>
-                </div>
-              </div> -->
+
             </div>
           </div>
           <div class="uk-card-footer">

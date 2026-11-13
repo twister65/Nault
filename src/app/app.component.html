@@ -119,6 +119,14 @@
                       )
                       : ('ui-shell.total-balance' | transloco)
                     }}</a>
+                    <button type="button" class="balance-refresh-button"
+                      (click)="overviewRefresh.refresh()"
+                      [disabled]="overviewRefresh.disabled"
+                      [attr.aria-label]="'ui-shell.refresh' | transloco"
+                      [title]="'ui-shell.refresh' | transloco">
+                      <span *ngIf="overviewRefresh.refreshing || wallet.updatingBalance" uk-spinner="ratio: 0.5;"></span>
+                      <span *ngIf="!overviewRefresh.refreshing && !wallet.updatingBalance" uk-icon="icon: refresh; ratio: 0.9;"></span>
+                    </button>
                     <div #selectButton [class]="[ 'select-button', showAccountsDropdown ? 'open' : 'closed' ]" (click)="toggleAccountsDropdown()">
                       <div class="circle"></div>
                       <div class="circle"></div>
@@ -223,9 +231,13 @@
 
         <ul role="navigation" aria-label="Main" class="uk-nav uk-nav-default uk-nav-parent-icon left-nav" uk-nav>
           <li><a routerLink="/accounts" routerLinkActive="active"><div class="label">{{ 'general.accounts' | transloco }}</div></a></li>
-          <li><a routerLink="/send" routerLinkActive="active"><div class="label">{{ 'general.send' | transloco }}</div></a></li>
+          <li><a [routerLink]="isConfigured() ? '/send' : null" routerLinkActive="active"
+            [class.wallet-action-disabled]="!isConfigured()" [attr.aria-disabled]="!isConfigured()"
+            [attr.tabindex]="isConfigured() ? null : -1"><div class="label">{{ 'general.send' | transloco }}</div></a></li>
           <li>
-            <a routerLink="/receive" routerLinkActive="active">
+            <a [routerLink]="isConfigured() ? '/receive' : null" routerLinkActive="active"
+              [class.wallet-action-disabled]="!isConfigured()" [attr.aria-disabled]="!isConfigured()"
+              [attr.tabindex]="isConfigured() ? null : -1">
               <div uk-grid>
                 <div class="uk-width-3-4">
                   <div class="label">{{ 'general.receive' | transloco }}</div>
@@ -297,3 +309,38 @@
 </div>
 
 <app-notifications></app-notifications>
+
+@if (showPowVaultUnlock) {
+  <div class="pow-vault-overlay" role="presentation">
+    <form class="pow-vault-dialog" (ngSubmit)="unlockPowVaultOnStartup()"
+      role="dialog" aria-modal="true" aria-labelledby="pow-vault-title">
+      <h3 id="pow-vault-title">{{ 'configure-app.pow-api-vault.startup-title' | transloco }}</h3>
+      <p>{{ 'configure-app.pow-api-vault.startup-description' | transloco }}</p>
+      <p class="uk-text-danger uk-text-small" role="note">
+        {{ 'configure-app.pow-api-vault.unlock-security-warning' | transloco }}
+      </p>
+      <label for="pow-vault-startup-passphrase">{{ 'configure-app.pow-api-vault.passphrase' | transloco }}</label>
+      <input id="pow-vault-startup-passphrase" class="uk-input uk-margin-small-bottom"
+        type="password" name="powVaultStartupPassphrase" autocomplete="off"
+        [(ngModel)]="powVaultUnlockPassphrase" />
+      @if (powVaultUnlockError) {
+        <p class="uk-text-danger" role="alert">
+          {{ powVaultUnlockErrorKey | transloco: { remaining: powVaultUnlockRemainingAttempts } }}
+        </p>
+      }
+      @if (deviceUnlockSupported && deviceUnlock.has('pow')) {
+        <button type="button" class="uk-button uk-button-default uk-width-1-1 uk-margin-small-bottom"
+          [disabled]="powVaultUnlockBusy"
+          (click)="unlockPowVaultWithDeviceOnStartup()">{{ 'device-unlock.use' | transloco }}</button>
+      }
+      <div class="pow-vault-dialog-actions">
+        <button class="uk-button uk-button-default" type="button" [disabled]="powVaultUnlockBusy"
+          (click)="dismissPowVaultPrompt()">{{ 'configure-app.pow-api-vault.startup-later' | transloco }}</button>
+        <button class="uk-button uk-button-primary" type="submit"
+          [disabled]="powVaultUnlockBusy || !powVaultUnlockPassphrase">
+          {{ 'configure-app.pow-api-vault.unlock' | transloco }}
+        </button>
+      </div>
+    </form>
+  </div>
+}

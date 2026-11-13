@@ -13,6 +13,7 @@ import {AppSettingsService} from './app-settings.service';
 import {PriceService} from './price.service';
 import {LedgerService, LedgerStatus, LedgerUsbModel} from './ledger.service';
 import { NoPaddingZerosPipe } from 'app/pipes/no-padding-zeros.pipe';
+import { DeviceUnlockService } from './device-unlock.service';
 
 export type WalletType = 'seed' | 'ledger' | 'privateKey' | 'expandedKey';
 
@@ -99,6 +100,9 @@ export class WalletService {
   storeKey = `nanovault-wallet`;
   // Contains only ciphertext. Never serialize the unlocked software seed.
   private walletCiphertext: string | null = null;
+
+  // Route guards wait until the app has restored any persisted wallet.
+  readonly walletLoaded$ = new BehaviorSubject<boolean>(false);
 
   wallet: FullWallet = {
     type: 'seed',
@@ -472,6 +476,14 @@ export class WalletService {
       this.wallet.password = previousPassword;
       throw err;
     }
+    // Password rotation or explicit migration invalidates the old device wrapper.
+    DeviceUnlockService.removeStored('wallet');
+  }
+
+  /** Binds device unlock to the actual encrypted wallet, never to a seed or a Ledger. */
+  getDeviceUnlockBinding(): string | null {
+    return this.wallet.type !== 'ledger' && this.walletCiphertext
+      ? this.wallet.type + ':' + this.walletCiphertext : null;
   }
 
   isLegacySoftwareWallet(): boolean {
@@ -944,7 +956,18 @@ export class WalletService {
 
     const fiatPrice = this.price.price.lastPrice;
     const accounts = await this.api.accountsBalances(accountIDs);
+    // A public gateway can answer HTTP 200 with { error: "..." }. Treat
+    // invalid account snapshots as failed reads, never as zero-balance
+    // wallets; retain the last known balance and pending state unchanged.
+    if (!accounts || 'error' in accounts || !accounts.balances ||
+        typeof accounts.balances !== 'object' || Array.isArray(accounts.balances)) {
+      throw new Error('Invalid accounts_balances RPC response');
+    }
     const frontiers = await this.api.accountsFrontiers(accountIDs);
+    if (!frontiers || 'error' in frontiers || !frontiers.frontiers ||
+        typeof frontiers.frontiers !== 'object' || Array.isArray(frontiers.frontiers)) {
+      throw new Error('Invalid accounts_frontiers RPC response');
+    }
     // const allFrontiers = [];
     // for (const account in frontiers.frontiers) {
     //   allFrontiers.push({ account, frontier: frontiers.frontiers[account] });
@@ -954,12 +977,6 @@ export class WalletService {
     let walletBalance = new BigNumber(0);
     let walletPendingInclUnconfirmed = new BigNumber(0);
     let walletPendingAboveThresholdConfirmed = new BigNumber(0);
-
-    if (!accounts) {
-      this.resetBalances();
-      this.wallet.balanceInitialized = true;
-      return;
-    }
 
     this.clearPendingBlocks();
 
@@ -1310,6 +1327,7 @@ export class WalletService {
 
   removeWalletData() {
     localStorage.removeItem(this.storeKey);
+    DeviceUnlockService.removeStored('wallet');
   }
 
   generateWalletExport() {

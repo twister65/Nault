@@ -6,6 +6,7 @@ import {NotificationService} from '../../services/notification.service';
 import {LedgerService, LedgerStatus} from '../../services/ledger.service';
 import {AppSettingsService} from '../../services/app-settings.service';
 import {PowService} from '../../services/pow.service';
+import {DeviceUnlockService} from '../../services/device-unlock.service';
 
 @Component({
     selector: 'app-wallet-widget',
@@ -16,6 +17,9 @@ import {PowService} from '../../services/pow.service';
 })
 export class WalletWidgetComponent implements OnInit {
   private readonly translocoService = inject(TranslocoService);
+  readonly deviceUnlock = inject(DeviceUnlockService);
+  deviceUnlockSupported = false;
+  deviceUnlockBusy = false;
 
   wallet = this.walletService.wallet;
 
@@ -63,6 +67,7 @@ export class WalletWidgetComponent implements OnInit {
   @ViewChild('passwordInput') passwordInput!: ElementRef<HTMLInputElement>;
 
   ngOnInit() {
+    void this.deviceUnlock.isSupported().then(supported => this.deviceUnlockSupported = supported);
     const UIkit = (window as any).UIkit;
     const modal = UIkit.modal(document.getElementById('unlock-wallet-modal'));
     UIkit.util.on('#unlock-wallet-modal', 'hidden', () => {
@@ -227,6 +232,27 @@ export class WalletWidgetComponent implements OnInit {
       this.allowUnlock({ focusInputElement: false });
     } else {
       this.notificationService.sendError(this.translocoService.translate('ui-notifications.wallet-password-incorrect'));
+    }
+  }
+
+  async unlockWalletWithDevice(): Promise<void> {
+    if (this.deviceUnlockBusy || !this.mayAttemptUnlock || !this.wallet.locked) return;
+    const binding = this.walletService.getDeviceUnlockBinding();
+    if (!binding) return;
+    this.deviceUnlockBusy = true;
+    try {
+      const password = await this.deviceUnlock.unlock('wallet', binding);
+      if (!this.wallet.locked || binding !== this.walletService.getDeviceUnlockBinding() ||
+          !await this.walletService.unlockWallet(password)) {
+        throw new Error('Device unlock did not match the current wallet');
+      }
+      this.modal.hide();
+      this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.wallet-unlocked'));
+    } catch {
+      // Cancellation or unsupported PRF must never bypass the password dialog.
+      this.notificationService.sendWarning(this.translocoService.translate('device-unlock.failed'));
+    } finally {
+      this.deviceUnlockBusy = false;
     }
   }
 

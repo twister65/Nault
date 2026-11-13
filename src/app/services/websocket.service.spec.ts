@@ -15,6 +15,66 @@ describe('WebSocket bounded connections', () => {
     settings = { settings: { serverWS: 'wss://example.org' } };
     service = new WebsocketService(settings);
   });
+  it('emits the first WebSocket handshake error immediately and once per socket', fakeAsync(() => {
+    const failures: string[] = [];
+    service.connectionFailure$.subscribe(url => failures.push(url));
+    service.connect();
+    sockets[0].onerror({});
+    sockets[0].onclose({});
+    expect(failures).toEqual(['wss://example.org/']);
+    tick(5000);
+    expect(sockets.length).toBe(2);
+    settings.settings.serverWS = null;
+    service.forceReconnect();
+    tick(250);
+  }));
+
+  it('reports an early close and a handshake timeout without duplicate signals', fakeAsync(() => {
+    const failures: string[] = [];
+    service.connectionFailure$.subscribe(url => failures.push(url));
+    service.connect();
+    sockets[0].onclose({});
+    expect(failures).toEqual(['wss://example.org/']);
+    tick(5000);
+    tick(15000); // Second socket never opens.
+    expect(failures).toEqual(['wss://example.org/', 'wss://example.org/']);
+    settings.settings.serverWS = null;
+    service.forceReconnect();
+    tick(250);
+  }));
+
+  it('does not emit a failure for a deliberate manual reconnect', fakeAsync(() => {
+    const failure = jasmine.createSpy('failure');
+    service.connectionFailure$.subscribe(failure);
+    service.connect();
+    service.forceReconnect();
+    expect(failure).not.toHaveBeenCalled();
+    settings.settings.serverWS = null;
+    tick(250);
+  }));
+
+  it('decodes binary Nano.to pong and confirmation frames without losing WS keepalive', fakeAsync(() => {
+    service.connect();
+    const socket = sockets[0];
+    expect(socket.binaryType).toBe('arraybuffer');
+    socket.onopen({});
+    const pong = new TextEncoder().encode(JSON.stringify({ ack: 'pong' }));
+    socket.onmessage({ data: pong.buffer });
+    const confirmation = {
+      account: 'nano_test', amount: '1', hash: 'test-hash',
+      block: { type: 'state', subtype: 'receive', account: 'nano_test',
+        link_as_account: 'nano_source', representative: 'nano_rep' }
+    };
+    const bytes = new TextEncoder().encode(JSON.stringify({ topic: 'confirmation', message: confirmation }));
+    socket.onmessage({ data: bytes.buffer });
+    expect(service.newTransactions$.value).toEqual(confirmation);
+    tick(15000);
+    expect(service.socket.connected).toBe(true);
+    settings.settings.serverWS = null;
+    service.forceReconnect();
+    tick(250);
+  }));
+
   it('blocks insecure saved endpoints', () => {
     settings.settings.serverWS = 'ws://192.0.2.10:7078';
     service.connect();

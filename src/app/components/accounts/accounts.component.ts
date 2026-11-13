@@ -1,4 +1,5 @@
-import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
+import { WalletOverviewRefreshService } from '../../services/wallet-overview-refresh.service';
 import {Subject, timer} from 'rxjs';
 import {debounce} from 'rxjs/operators';
 import {Router} from '@angular/router';
@@ -22,6 +23,34 @@ import type {WalletAccount} from '../../services/wallet.service';
     standalone: false
 })
 export class AccountsComponent implements OnInit {
+  readonly overviewRefresh = inject(WalletOverviewRefreshService);
+  private pullStart: { x: number; y: number; atTop: boolean } | null = null;
+
+  onAccountsTouchStart(event: TouchEvent): void {
+    this.pullStart = null;
+    if (event.touches.length !== 1) return;
+    const scroll = (event.currentTarget as HTMLElement).closest('.content-container');
+    this.pullStart = {
+      x: event.touches[0].clientX,
+      y: event.touches[0].clientY,
+      atTop: !!scroll && scroll.scrollTop <= 3
+    };
+  }
+
+  onAccountsTouchEnd(event: TouchEvent): void {
+    const start = this.pullStart;
+    this.pullStart = null;
+    if (!start || !start.atTop || event.changedTouches.length !== 1) return;
+    const scroll = (event.currentTarget as HTMLElement).closest('.content-container');
+    if (!scroll || scroll.scrollTop > 3) return;
+    const dx = event.changedTouches[0].clientX - start.x;
+    const dy = event.changedTouches[0].clientY - start.y;
+    if (dy > 75 && dy > Math.abs(dx) * 1.5) void this.overviewRefresh.refresh();
+  }
+
+  onAccountsTouchCancel(): void {
+    this.pullStart = null;
+  }
   accounts = this.walletService.wallet.accounts;
   isLedgerWallet = this.walletService.isLedgerWallet();
   isSingleKeyWallet = this.walletService.isSingleKeyWallet();

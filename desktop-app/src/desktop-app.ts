@@ -1,6 +1,6 @@
 import 'core-js/stable';
 
-import { app, BrowserWindow, shell, Menu, screen, dialog, ipcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
+import { app, net, BrowserWindow, shell, Menu, screen, dialog, ipcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as url from 'url';
 import * as path from 'path';
@@ -159,7 +159,11 @@ class AppUpdater {
     autoUpdater.on('update-downloaded', () => {
       isDownloading = false;
       showUpdateErrors = false;
-      autoUpdater.quitAndInstall(true, true);
+      // Native Linux package installations require explicit OS authentication.
+      // Do not request a silent installation for deb, rpm or pacman.
+      // AppImage updates keep their existing user-space install behavior.
+      const isNativeLinuxPackage = process.platform === 'linux' && !process.env.APPIMAGE;
+      autoUpdater.quitAndInstall(!isNativeLinuxPackage, true);
     });
 
     autoUpdater.on('download-progress', progressObj => {
@@ -227,6 +231,18 @@ function isTrustedLedgerSender(event: IpcMainEvent | IpcMainInvokeEvent): boolea
 // and signing requests. This does not replace transaction confirmation on
 // the physical Ledger display.
 initialize(isTrustedLedgerSender);
+
+// Read-only desktop locale bridge. Enforce the same main-frame/file origin
+// restrictions as Ledger IPC; never expose Electron or general IPC to Angular.
+ipcMain.handle('app-system-locale', event => {
+  if (!isTrustedLedgerSender(event)) throw new Error('Untrusted locale request');
+  return app.getLocale();
+});
+// Read-only native connectivity hint. Never expose generic IPC.
+ipcMain.handle('app-network-online', event => {
+  if (!isTrustedLedgerSender(event)) throw new Error('Untrusted network status request');
+  return net.isOnline();
+});
 
 function createWindow () {
   // Get window state
@@ -438,37 +454,37 @@ function getApplicationMenu() {
     {
       label: t.edit,
       submenu: [
-        {role: 'undo'},
-        {role: 'redo'},
+        {role: 'undo', label: t.undo},
+        {role: 'redo', label: t.redo},
         {type: 'separator'},
-        {role: 'cut'},
-        {role: 'copy'},
-        {role: 'paste'},
-        {role: 'pasteandmatchstyle'},
-        {role: 'delete'},
-        {role: 'selectall'}
+        {role: 'cut', label: t.cut},
+        {role: 'copy', label: t.copy},
+        {role: 'paste', label: t.paste},
+        {role: 'pasteandmatchstyle', label: t.pasteAndMatchStyle},
+        {role: 'delete', label: t.delete},
+        {role: 'selectall', label: t.selectAll}
       ]
     },
     {
       label: t.view,
       submenu: [
-        {role: 'reload'},
-        {role: 'forcereload'},
-        {role: 'toggledevtools'},
+        {role: 'reload', label: t.reload},
+        {role: 'forcereload', label: t.forceReload},
+        {role: 'toggledevtools', label: t.toggleDevTools},
         {type: 'separator'},
-        {role: 'resetzoom'},
-        {role: 'zoomin'},
-        {role: 'zoomout'},
+        {role: 'resetzoom', label: t.resetZoom},
+        {role: 'zoomin', label: t.zoomIn},
+        {role: 'zoomout', label: t.zoomOut},
         {type: 'separator'},
-        {role: 'togglefullscreen'}
+        {role: 'togglefullscreen', label: t.toggleFullScreen}
       ]
     },
     {
       role: 'window',
       label: t.window,
       submenu: [
-        {role: 'minimize'},
-        {role: 'close'}
+        {role: 'minimize', label: t.minimize},
+        {role: 'close', label: t.close}
       ]
     },
     {
@@ -512,7 +528,7 @@ function getApplicationMenu() {
     template.unshift({
       label: 'Nault',
       submenu: [
-        {role: 'about'},
+        {role: 'about', label: t.about},
         {type: 'separator'},
         {
           label: t.checkUpdates,
@@ -524,11 +540,11 @@ function getApplicationMenu() {
         {type: 'separator'},
         // {role: 'services', submenu: []},
         // {type: 'separator'},
-        {role: 'hide'},
-        {role: 'hideothers'},
-        {role: 'unhide'},
+        {role: 'hide', label: t.hide},
+        {role: 'hideothers', label: t.hideOthers},
+        {role: 'unhide', label: t.unhide},
         {type: 'separator'},
-        {role: 'quit'}
+        {role: 'quit', label: t.quit}
       ]
     });
 
@@ -538,19 +554,19 @@ function getApplicationMenu() {
       {
         label: t.speech,
         submenu: [
-          {role: 'startspeaking'},
-          {role: 'stopspeaking'}
+          {role: 'startspeaking', label: t.startSpeaking},
+          {role: 'stopspeaking', label: t.stopSpeaking}
         ]
       }
     );
 
     // Window menu
     template[3].submenu = [
-      {role: 'close'},
-      {role: 'minimize'},
-      {role: 'zoom'},
+      {role: 'close', label: t.close},
+      {role: 'minimize', label: t.minimize},
+      {role: 'zoom', label: t.zoom},
       {type: 'separator'},
-      {role: 'front'}
+      {role: 'front', label: t.front}
     ];
   }
 

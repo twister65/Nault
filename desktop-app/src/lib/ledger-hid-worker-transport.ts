@@ -11,7 +11,7 @@ interface ExchangePending {
 type WorkerResponse =
   | { type: 'ready'; usbModel?: LedgerUsbModel | null }
   | { type: 'result'; id: number; data: number[] }
-  | { type: 'error'; id: number; message: string }
+  | { type: 'error'; id: number; message: string; statusCode?: number }
   | { type: 'fatal'; message: string };
 
 /**
@@ -58,7 +58,10 @@ export default class LedgerHidWorkerTransport extends Transport {
         if (message.type === 'result') {
           request.resolve(Buffer.from(message.data));
         } else {
-          request.reject(new Error(message.message));
+          const error = new Error(message.message) as Error & {statusCode?: number};
+          if (Number.isInteger(message.statusCode) && message.statusCode! >= 0 &&
+              message.statusCode! <= 0xffff) error.statusCode = message.statusCode;
+          request.reject(error);
         }
       }
     });
@@ -97,6 +100,15 @@ export default class LedgerHidWorkerTransport extends Transport {
     this.pending.forEach(request => request.reject(error));
     this.pending.clear();
     if (this.ready && !this.closed) this.emit('disconnect');
+  }
+
+  // The native renderer reservation changes only the worker's read timeout.
+  // It does not alter WebUSB, BLE, device polling or transport ownership.
+  setSigningMode(enabled: boolean): void {
+    if (!this.ready || this.failed || this.closed) {
+      throw new Error('Ledger HID worker is not connected');
+    }
+    this.worker.postMessage({ type: 'signing-mode', enabled });
   }
 
   exchange(apdu: Buffer): Promise<Buffer> {

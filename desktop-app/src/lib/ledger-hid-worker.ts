@@ -20,17 +20,32 @@ const port = (() => {
 
 type WorkerRequest =
   | { type: 'exchange'; id: number; apdu: number[] }
+  | { type: 'signing-mode'; enabled: boolean }
   | { type: 'close' };
 
 let transport: TransportNodeHidNoEvents | null = null;
 let closing = false;
+let signingMode = false;
 let queue: Promise<void> = Promise.resolve();
 
 function errorMessage(error: any): string {
   return error && error.message ? String(error.message) : String(error);
 }
 
+function apduStatus(error: unknown): number | undefined {
+  const code = error && typeof error === 'object' && 'statusCode' in error
+    ? (error as {statusCode?: unknown}).statusCode : undefined;
+  return typeof code === 'number' && Number.isInteger(code) && code >= 0 && code <= 0xffff
+    ? code : undefined;
+}
+
 port.on('message', (message: WorkerRequest) => {
+  // A signed confirmation can legitimately take longer than an ordinary health probe.
+  // ParentPort messages from the same main process are delivered in order.
+  if (message.type === 'signing-mode') {
+    if (!closing) signingMode = message.enabled;
+    return;
+  }
   if (message.type === 'close') {
     closing = true;
     queue = queue.then(async () => {
@@ -52,7 +67,7 @@ port.on('message', (message: WorkerRequest) => {
       const reply = await transport.exchange(Buffer.from(message.apdu));
       port.postMessage({ type: 'result', id: message.id, data: Array.from(reply) });
     } catch (error) {
-      port.postMessage({ type: 'error', id: message.id, message: errorMessage(error) });
+      port.postMessage({ type: 'error', id: message.id, message: errorMessage(error), statusCode: apduStatus(error) });
     }
   });
 });
@@ -68,9 +83,14 @@ async function initialize() {
     (opened as any).readHID = (): Promise<Buffer> =>
       new Promise<Buffer>((resolve, reject) => {
         const started = Date.now();
+        // A confirmation is controlled by the Ledger user, not an application
+        // deadline. Capture the mode once per HID read; a later mode switch
+        // must not interrupt an already pending APDU. Actual HID errors,
+        // explicit transport closes, and APDU refusal still end the request.
+        const boundedRead = !signingMode;
         const poll = () => {
           if (closing) return reject(new Error('Ledger HID worker closing'));
-          if (Date.now() - started >= 30000) {
+          if (boundedRead && Date.now() - started >= 30000) {
             return reject(new Error('Ledger HID read timed out'));
           }
           try {

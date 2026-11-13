@@ -296,7 +296,7 @@
             </div>
           }
           <div class="uk-text-right@s nlt-button-group">
-            <button (click)="activePanel = 'send'" class="uk-button uk-button-danger uk-width-1-1@s uk-width-auto@m">{{ 'general.cancel' | transloco }}</button>
+            <button (click)="activePanel = 'send'" [disabled]="confirmingTransaction" class="uk-button uk-button-danger uk-width-1-1@s uk-width-auto@m">{{ 'general.cancel' | transloco }}</button>
             @if (!confirmingTransaction) {
               <button class="uk-button uk-button-primary uk-width-1-1@s uk-width-auto@m" (click)="confirmTransaction()">{{ 'ui-send.confirm-send' | transloco }}</button>
             }

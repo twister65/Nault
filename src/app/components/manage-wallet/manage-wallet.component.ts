@@ -3,6 +3,7 @@ import { inject } from '@angular/core';
 import { TranslocoService } from '@jsverse/transloco';
 import { MIN_WALLET_PASSWORD_LENGTH, isStrongWalletPassword } from '../../services/wallet-encryption';
 import {WalletService} from '../../services/wallet.service';
+import {DeviceUnlockService} from '../../services/device-unlock.service';
 import {NotificationService} from '../../services/notification.service';
 import {ApiService} from '../../services/api.service';
 import {UtilService} from '../../services/util.service';
@@ -32,6 +33,9 @@ interface HistoryExportEntry {
 })
 export class ManageWalletComponent implements OnInit, OnDestroy {
   private readonly translocoService = inject(TranslocoService);
+  readonly deviceUnlock = inject(DeviceUnlockService);
+  deviceUnlockSupported = false;
+  deviceUnlockBusy = false;
 
 
   wallet = this.walletService.wallet;
@@ -73,6 +77,7 @@ export class ManageWalletComponent implements OnInit, OnDestroy {
     public settings: AppSettingsService) { }
 
   async ngOnInit() {
+    this.deviceUnlockSupported = await this.deviceUnlock.isSupported();
     this.wallet = this.walletService.wallet;
     // Recompute only when unlocking, never as a synchronous template expression.
     this.mnemonicSubscription = this.wallet.locked$.subscribe(locked => {
@@ -91,6 +96,31 @@ export class ManageWalletComponent implements OnInit, OnDestroy {
     if (this.walletService.wallet.selectedAccount !== null) {
       this.csvAccount = this.walletService.wallet.selectedAccount.id;
     }
+  }
+
+  async enableWalletDeviceUnlock(): Promise<void> {
+    const binding = this.walletService.getDeviceUnlockBinding();
+    if (this.deviceUnlockBusy || !this.deviceUnlockSupported || !binding ||
+        this.walletService.isLocked() || !this.wallet.password) return;
+    this.deviceUnlockBusy = true;
+    try {
+      await this.deviceUnlock.enroll('wallet', this.wallet.password, binding);
+      if (binding !== this.walletService.getDeviceUnlockBinding() || this.walletService.isLocked()) {
+        this.deviceUnlock.remove('wallet');
+        throw new Error('Wallet changed during device enrollment');
+      }
+      this.notifications.sendSuccess(this.translocoService.translate('device-unlock.enabled'));
+    } catch {
+      this.notifications.sendError(this.translocoService.translate('device-unlock.failed'));
+    } finally {
+      this.deviceUnlockBusy = false;
+    }
+  }
+
+  disableWalletDeviceUnlock(): void {
+    if (this.deviceUnlockBusy) return;
+    this.deviceUnlock.remove('wallet');
+    this.notifications.sendSuccess(this.translocoService.translate('device-unlock.disabled'));
   }
 
   async changePassword() {

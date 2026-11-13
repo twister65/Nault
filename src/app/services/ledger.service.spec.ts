@@ -590,5 +590,89 @@ describe('Ledger signing session and status polling isolation (#58)', () => {
     expect(getLedgerSigningIssue(new Error('Ledger device: UNKNOWN_ERROR (0x6985)'))).toBe('rejected');
     expect(getLedgerSigningIssue(new LedgerNotReadyError())).toBe('not-ready');
     expect(getLedgerSigningIssue({ name: 'NotAllowedError', message: 'Access denied' })).toBe('failed');
+    expect(getLedgerSigningIssue(new Error('Ledger HID read timed out'))).toBe('timed-out');
+    expect(getLedgerSigningIssue(new Error('Desktop Ledger sign-block response timed out'))).toBe('timed-out');
+    expect(getLedgerSigningIssue(new Error('Desktop Ledger cache-block response timed out'))).toBe('timed-out');
+  });
+});
+
+describe('Desktop Ledger IPC command correlation', () => {
+  it('ignores stale, mismatched and untagged poll responses', async () => {
+    const service = Object.create(LedgerService.prototype) as LedgerService;
+    const messages = new Subject<any>();
+    (service as any).desktopMessage$ = messages;
+    const pending = service.getDesktopResponse('sign-block', 41);
+    messages.next({ event: 'sign-block', data: { requestId: 40, signature: 'stale' } });
+    messages.next({ event: 'account-details', data: { accountIndex: 0 } });
+    messages.next({ event: 'sign-block', data: { requestId: 41, signature: 'expected' } });
+    const result = await pending;
+    expect(result.signature).toBe('expected');
+    expect(messages.observers.length).toBe(0);
+  });
+
+  it('reserves desktop USB for address verification but not ordinary address reads', async () => {
+    const service = Object.create(LedgerService.prototype) as LedgerService;
+    service.isDesktop = true;
+    service.transportMode = 'USB';
+    const nativeRead = jasmine.createSpy('nativeRead').and.resolveTo({ address: 'nano_example' });
+    const reservation = jasmine.createSpy('withSigningSession').and.callFake(
+      async (op: () => Promise<any>) => op()
+    );
+    service.getLedgerAccountDesktop = nativeRead;
+    service.withSigningSession = reservation;
+
+    expect((await service.getLedgerAccount(0, true)).address).toBe('nano_example');
+    expect(reservation).toHaveBeenCalledTimes(1);
+    expect(nativeRead).toHaveBeenCalledOnceWith(0, true);
+
+    reservation.calls.reset();
+    nativeRead.calls.reset();
+    await service.getLedgerAccount(0, false);
+    expect(reservation).not.toHaveBeenCalled();
+    expect(nativeRead).toHaveBeenCalledOnceWith(0, false);
+  });
+
+  it('keeps hardware signing IPC pending until a physical decision rather than a timer', async () => {
+    const service = Object.create(LedgerService.prototype) as LedgerService;
+    const messages = new Subject<any>();
+    (service as any).desktopMessage$ = messages;
+    const timeoutSpy = spyOn(globalThis, 'setTimeout').and.callThrough();
+
+    const signing = service.getDesktopResponse('sign-block', 57);
+    const caching = service.getDesktopResponse('cache-block', 58);
+    const addressConfirmation = service.getDesktopResponse('account-details', 59, true);
+    expect(timeoutSpy).not.toHaveBeenCalled();
+
+    const backgroundRead = service.getDesktopResponse('account-details', 60, false);
+    expect(timeoutSpy).toHaveBeenCalledTimes(1);
+    expect(timeoutSpy.calls.mostRecent().args[1]).toBe(45000);
+
+    // Stale account replies cannot finish an active address confirmation.
+    messages.next({ event: 'account-details', data: { requestId: 60, address: 'background' } });
+    messages.next({ event: 'sign-block', data: { requestId: 57, signature: 'signed' } });
+    messages.next({ event: 'cache-block', data: { requestId: 58, signature: 'cached' } });
+    messages.next({ event: 'account-details', data: { requestId: 59, address: 'confirmed' } });
+    expect((await signing).signature).toBe('signed');
+    expect((await caching).signature).toBe('cached');
+    expect((await addressConfirmation).address).toBe('confirmed');
+    expect((await backgroundRead).address).toBe('background');
+    expect(messages.observers.length).toBe(0);
+  });
+
+  it('preserves user-denied APDU status instead of losing it at the IPC boundary', async () => {
+    const service = Object.create(LedgerService.prototype) as LedgerService;
+    const messages = new Subject<any>();
+    (service as any).desktopMessage$ = messages;
+    const pending = service.getDesktopResponse('sign-block', 42);
+    messages.next({ event: 'sign-block', data: {
+      requestId: 42, error: true, errorMessage: 'Denied by user', statusCode: 0x6985
+    } });
+    try {
+      await pending;
+      fail('Expected rejected signature');
+    } catch (error) {
+      expect(getLedgerSigningIssue(error)).toBe('rejected');
+    }
+    expect(messages.observers.length).toBe(0);
   });
 });

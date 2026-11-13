@@ -10,14 +10,14 @@ jobs:
   release:
     name: Package (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    timeout-minutes: 55
     env:
       NODE_OPTIONS: --openssl-legacy-provider
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15-intel, windows-2022]
+        os: [ubuntu-24.04, macos-15-intel, macos-15, windows-2022]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -35,7 +35,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev
+          sudo apt-get install -y build-essential python3 pkg-config libudev-dev libusb-1.0-0-dev rpm zstd libarchive-tools
       - name: Verify release tag matches package and lockfile versions
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
@@ -44,6 +44,9 @@ jobs:
         run: |
           node -e "const p=require('./package.json'),l=require('./package-lock.json'),v=process.env.RELEASE_TAG.replace(/^v/,''); if(p.version!==v||l.version!==v||l.packages[''].version!==v) throw Error('Release tag/version mismatch')"
       - name: Install locked dependencies
+        env:
+          # node-usb 2.0.3 native bindings use Node 22 C++17/20 APIs on Apple Silicon.
+          CXXFLAGS: ${{ runner.os == 'macOS' && '-std=c++20' || '' }}
         run: npm ci --legacy-peer-deps --no-audit --no-fund
       - name: Verify tar APIs used by native build tooling
         run: node scripts/test-build-dependencies.cjs
@@ -51,20 +54,146 @@ jobs:
         run: |
           npm run desktop:build
           npm run desktop:local
-      - name: Upload packages
+      - name: Verify Linux packages and application-menu integration
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash scripts/verify-linux-packages.sh
+      - name: Verify Linux update feed and SHA-512 for every package
+        if: runner.os == 'Linux'
+        run: node scripts/verify-linux-update-feed.cjs
+      - name: Verify asset filename order and updater manifest
+        run: node scripts/verify-release-asset-order.cjs
+      - name: Upload Windows and macOS packages
+        if: runner.os != 'Linux'
         uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.os }}
           if-no-files-found: error
           path: |
-            desktop-app/build/*.AppImage
             desktop-app/build/*.dmg
+            desktop-app/build/*.zip
             desktop-app/build/*.exe
             desktop-app/build/*.yml
             desktop-app/build/*.blockmap
+      - name: Upload Linux AppImage and updater metadata
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-linux-appimage
+          if-no-files-found: error
+          path: |
+            desktop-app/build/*.AppImage
+            desktop-app/build/latest-linux.yml
+            desktop-app/build/*.blockmap
+      - name: Upload Linux DEB (Debian, Ubuntu, Mint)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-linux-deb
+          if-no-files-found: error
+          path: desktop-app/build/*.deb
+      - name: Upload Linux RPM (Fedora, openSUSE)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-linux-rpm
+          if-no-files-found: error
+          path: desktop-app/build/*.rpm
+      - name: Upload Linux Pacman (Arch, Manjaro)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-linux-pacman
+          if-no-files-found: error
+          path: desktop-app/build/*.pkg.tar.zst
+  linux-install-smoke:
+    name: Install / remove native package (${{ matrix.distro }})
+    needs: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: ubuntu
+            image: ubuntu:26.04
+            artifact: desktop-linux-deb
+          - distro: debian
+            image: debian:13
+            artifact: desktop-linux-deb
+          - distro: fedora
+            image: fedora:44
+            artifact: desktop-linux-rpm
+          - distro: opensuse
+            image: opensuse/leap:16.0
+            artifact: desktop-linux-rpm
+          - distro: arch
+            image: archlinux/archlinux:base
+            artifact: desktop-linux-pacman
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ matrix.artifact }}
+          path: packages
+      - name: Install / inspect / remove package in isolated container
+        shell: bash
+        env:
+          DISTRO: ${{ matrix.distro }}
+          DISTRO_IMAGE: ${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          docker run --rm --pull=always \
+            --security-opt no-new-privileges \
+            --mount "type=bind,source=$PWD/packages,target=/packages,readonly" \
+            --mount "type=bind,source=$PWD/scripts/test-linux-install-container.sh,target=/test-linux-install.sh,readonly" \
+            --env DISTRO="$DISTRO" --env EXPECTED_VERSION="$version" \
+            "$DISTRO_IMAGE" /bin/bash /test-linux-install.sh
+
+  release-preview:
+    name: Verify and preview OS-grouped downloads
+    needs: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install metadata parser from lockfile
+        run: npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: desktop-*
+          path: desktop-platforms
+      - name: Assemble assets and the OS-grouped release preview
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          node scripts/assemble-release-assets.cjs desktop-platforms release-ready release-downloads.md "$RELEASE_TAG"
+          cat release-downloads.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-ready-assets
+          if-no-files-found: error
+          path: release-ready/*
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-preview-notes
+          if-no-files-found: error
+          path: release-downloads.md
+          retention-days: 7
   draft-release:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: release
+    needs: [release-preview, linux-install-smoke]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -74,9 +203,12 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v8
         with:
-          pattern: desktop-*
+          name: release-ready-assets
           path: packages
-          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-preview-notes
+          path: .
       - name: Create or update a draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -85,20 +217,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          notes_file="docs/releases/${RELEASE_TAG}.md"
+          if test -s "$notes_file"; then
+            cp "$notes_file" prepared-notes.md
+          else
+            printf '%s\n' 'Desktop build artifacts; validation required before publication.' > prepared-notes.md
+          fi
+          printf '\n' >> prepared-notes.md
+          cat release-downloads.md >> prepared-notes.md
           if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > draft-state; then
             test "$(cat draft-state)" = true
+            gh release edit "$RELEASE_TAG" --notes-file prepared-notes.md
           else
-            notes_file="docs/releases/${RELEASE_TAG}.md"
-            if test -s "$notes_file"; then
-              gh release create "$RELEASE_TAG" --verify-tag --draft --title "${RELEASE_TAG#v} (twister65 fork)" --notes-file "$notes_file"
-            else
-              gh release create "$RELEASE_TAG" --verify-tag --draft --title "${RELEASE_TAG#v} (twister65 fork)" --notes 'Desktop build artifacts; validation required before publication.'
-            fi
+            gh release create "$RELEASE_TAG" --verify-tag --draft --title "${RELEASE_TAG#v} (twister65 fork)" --notes-file prepared-notes.md
           fi
           # Only publish after every platform artifact exists and local digests verify.
           test "$(find packages -maxdepth 1 -type f -name '*.AppImage' | wc -l)" -ge 1
+          test "$(find packages -maxdepth 1 -type f -name '*.deb' | wc -l)" -ge 1
+          test "$(find packages -maxdepth 1 -type f -name '*.rpm' | wc -l)" -ge 1
+          test "$(find packages -maxdepth 1 -type f -name '*.pkg.tar.zst' | wc -l)" -ge 1
+          # Every Linux updater needs the same manifest to choose its own package type.
+          test -s packages/latest-linux.yml
           test "$(find packages -maxdepth 1 -type f -name '*.exe' | wc -l)" -ge 1
-          test "$(find packages -maxdepth 1 -type f -name '*.dmg' | wc -l)" -ge 1
-          (cd packages && sha256sum * > SHA256SUMS && sha256sum --check SHA256SUMS)
+          test "$(find packages -maxdepth 1 -type f -name '*.dmg' | wc -l)" -eq 2
+          test "$(find packages -maxdepth 1 -type f -name '*.zip' | wc -l)" -eq 2
+          test -s packages/latest-mac.yml
+          test -s packages/latest.yml
+          (cd packages && sha256sum --check SHA256SUMS)
           gh release upload "$RELEASE_TAG" packages/* --clobber
           gh release edit "$RELEASE_TAG" --draft=false

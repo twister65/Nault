@@ -27,7 +27,7 @@ function mainHarness() {
   const dialogs = [];
   const timers = new Map(); let next = 0;
   const code = fs.readFileSync(path.join(root, 'desktop-app/dist/lib/web-bluetooth.js'), 'utf8');
-  const { configureWebBluetooth } = load(code, { electron: { dialog: {
+  const { configureWebBluetooth } = load(code, { './desktop-locale': require(path.join(root, 'desktop-app/dist/lib/desktop-locale.js')), electron: { app: { getLocale: () => 'en-US' }, dialog: {
     showMessageBox(_window, options) { return new Promise(resolve => dialogs.push({ options, resolve })); }
   } }, 'electron-log': { info() {}, warn() {} } }, {
     setTimeout(fn, delay) { timers.set(++next, { fn, delay }); return next; },
@@ -215,6 +215,81 @@ async function main() {
     assert.deepEqual(events.map(event => event.status), ['locked', 'not-connected'],
       'a real USB disconnection must still notify the renderer');
     assert.equal(native.pollingLedger, false);
+  });
+
+  await check('renderer reservation pauses native polling across cache and signing', async () => {
+    const { LedgerService: NativeLedgerService } = load(
+      fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8'), {
+        './ledger-hid-worker-transport': {}, 'hw-app-nano': {},
+        rxjs: require('rxjs'), electron: {}
+      }
+    );
+    const native = new NativeLedgerService();
+    native.ledger.status = 'ready';
+    native.ledger.nano = {};
+    native.pollingLedger = true;
+    let releasePoll;
+    let count = 0;
+    native.getLedgerAccount = async () => {
+      count++;
+      await new Promise(resolve => { releasePoll = resolve; });
+    };
+    const polling = native.checkLedgerStatus();
+    let reservationCompleted = false;
+    const reserving = native.beginSigning().then(() => { reservationCompleted = true; });
+    assert.equal(reservationCompleted, false, 'must wait for an in-flight native probe');
+    assert.equal(count, 1);
+    releasePoll();
+    await polling;
+    await reserving;
+    assert.equal(reservationCompleted, true);
+    await native.checkLedgerStatus();
+    assert.equal(count, 1, 'new native probes must be suppressed during signing');
+    await assert.rejects(native.beginSigning(), /already in progress/);
+    native.endSigning();
+    native.getLedgerAccount = async () => { count++; };
+    await native.checkLedgerStatus();
+    assert.equal(count, 2, 'probes resume after a completed or rejected signature');
+  });
+
+  await check('native USB signing extends only the HID confirmation timeout', async () => {
+    const workerSource = fs.readFileSync(path.join(root, 'desktop-app/src/lib/ledger-hid-worker.ts'), 'utf8');
+    assert.match(workerSource, /const boundedRead\s*=\s*!signingMode/,
+      'human confirmation must have no arbitrary wall-clock deadline');
+    assert.match(workerSource, /boundedRead && Date\.now\(\) - started >= 30000/,
+      'ordinary HID health reads must still time out after 30 seconds');
+    assert.doesNotMatch(workerSource, /signingMode\s*\?\s*\d{4,}/,
+      'do not restore a finite signing deadline');
+    const { LedgerService: NativeLedgerService } = load(
+      fs.readFileSync(path.join(root, 'desktop-app/dist/lib/ledger.js'), 'utf8'), {
+        './ledger-hid-worker-transport': {}, 'hw-app-nano': {},
+        rxjs: require('rxjs'), electron: {}
+      }
+    );
+    const native = new NativeLedgerService();
+    const modes = [];
+    native.ledger.status = 'ready';
+    native.ledger.nano = {};
+    native.ledger.transport = { setSigningMode(enabled) { modes.push(enabled); } };
+    await native.beginSigning();
+    assert.deepEqual(modes, [true], 'the worker must enter signing mode before signing');
+    await assert.rejects(native.beginSigning(), /already in progress/);
+    native.endSigning();
+    assert.deepEqual(modes, [true, false], 'the original timeout must be restored afterward');
+  });
+
+  await check('address verification uses the same exclusive desktop HID signing reservation', async () => {
+    const code = fs.readFileSync(path.join(root, 'src/app/services/ledger.service.ts'), 'utf8');
+    assert.match(code, /showOnScreen\)\s*\{[\s\S]*?withSigningSession\(\(\) => this\.getLedgerAccountDesktop\(accountIndex, true\)\)/,
+      'on-screen USB addresses must hold the signing reservation across the entire confirmation');
+    assert.match(code, /eventType === 'account-details' && showOnScreen/,
+      'on-screen address IPC must not inherit the normal background read timeout');
+  });
+
+  await check('send confirmation cannot be dismissed while the Ledger signature is pending', async () => {
+    const confirmTemplate = fs.readFileSync(path.join(root, 'src/app/components/send/send.component.html'), 'utf8');
+    assert.match(confirmTemplate, /\(click\)="activePanel = 'send'"\s+\[disabled\]="confirmingTransaction"/,
+      'UI cancel must not hide a live Ledger signing operation');
   });
 
   await check('USB rejection 0x6985 preserves session and a subsequent signature succeeds', async () => {
@@ -858,6 +933,7 @@ async function main() {
       '../../services/ledger.service': { LedgerStatus: { READY: 'ready', NOT_CONNECTED: 'not-connected' } },
       '../../services/app-settings.service': {},
       '../../services/pow.service': {},
+       '../../services/device-unlock.service': {},
        '@jsverse/transloco': { TranslocoService: class {} }
     });
     const operations = [];
@@ -898,6 +974,7 @@ async function main() {
       '../../services/ledger.service': { LedgerStatus: { READY: 'ready', NOT_CONNECTED: 'not-connected' } },
       '../../services/app-settings.service': {},
       '../../services/pow.service': {},
+       '../../services/device-unlock.service': {},
        '@jsverse/transloco': { TranslocoService: class {} }
     }, { window: { location: { reload() { reloads++; } } } });
     const ledger = { ledger: {status: 'ready'}, isDesktop: true, transportMode: 'Bluetooth' };

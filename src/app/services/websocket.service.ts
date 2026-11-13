@@ -50,6 +50,9 @@ export class WebsocketService {
   newTransactions$ = new BehaviorSubject<NanoConfirmation | null>(null);
   // A new connection does not replay confirmations missed while offline.
   readonly connected$ = new Subject<void>();
+  // An early warning signal, NOT proof that the RPC endpoint is down.
+  // Consumers should check RPC before switching a server.
+  readonly connectionFailure$ = new Subject<string>();
 
   constructor(private appSettings: AppSettingsService) { }
 
@@ -87,9 +90,25 @@ export class WebsocketService {
     }
     console.info('WebSocket connecting.');
     const ws = new WebSocket(wsUrl);
+    // Some compatible Nano gateways send JSON text in binary WS frames.
+    // Decode the frame instead of JSON.parsing "[object Blob]"; otherwise
+    // legitimate pong replies are lost and a healthy WS is disconnected.
+    ws.binaryType = 'arraybuffer';
     this.socket.ws = ws;
+    // DNS/TLS/WebSocket errors can precede the ordinary RPC polling cycle.
+    // One signal per socket keeps onerror + onclose from issuing duplicate
+    // health checks, while the existing reconnect budget remains unchanged.
+    let failureReported = false;
+    const reportFailure = () => {
+      if (failureReported || this.socket.ws !== ws) return;
+      failureReported = true;
+      this.connectionFailure$.next(wsUrl);
+    };
     this.connectionTimer = setTimeout(() => {
-      if (this.socket.ws === ws && !this.socket.connected) this.disconnect(ws);
+      if (this.socket.ws === ws && !this.socket.connected) {
+        reportFailure();
+        this.disconnect(ws);
+      }
     }, 15000);
 
     ws.onopen = event => {
@@ -111,21 +130,33 @@ export class WebsocketService {
     };
     ws.onerror = event => {
       console.warn('WebSocket connection error.');
+      reportFailure();
     };
-    ws.onclose = () => this.disconnect(ws);
-    ws.onmessage = event => {
+    ws.onclose = () => {
+      reportFailure();
+      this.disconnect(ws);
+    };
+    const processMessage = (text: string): void => {
       if (this.socket.ws !== ws) return;
       try {
-        const newEvent: { ack?: string; topic?: string; message?: NanoConfirmation } = JSON.parse(event.data);
-        console.log('WS', newEvent);
-
-        if (newEvent.ack === 'pong') clearTimeout(this.pongTimer);
-
-        if (newEvent.topic === 'confirmation') {
-          this.newTransactions$.next(newEvent.message ?? null);
+        const incoming: { ack?: string; topic?: string; message?: NanoConfirmation } = JSON.parse(text);
+        if (incoming.ack === 'pong') clearTimeout(this.pongTimer);
+        if (incoming.topic === 'confirmation') {
+          this.newTransactions$.next(incoming.message ?? null);
         }
-      } catch (err) {
-        console.log(`Error parsing message`, err);
+      } catch (_) {
+        // Do not leak untrusted message contents or interrupt confirmations.
+        console.warn('WebSocket message rejected: invalid JSON.');
+      }
+    };
+    ws.onmessage = event => {
+      if (this.socket.ws !== ws) return;
+      if (typeof event.data === 'string') processMessage(event.data);
+      else if (event.data instanceof ArrayBuffer) {
+        processMessage(new TextDecoder().decode(event.data));
+      } else if (event.data instanceof Blob) {
+        void event.data.text().then(processMessage)
+          .catch(() => { console.warn('WebSocket binary message could not be decoded.'); });
       }
     };
   }

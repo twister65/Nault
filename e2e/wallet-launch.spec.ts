@@ -20,3 +20,20 @@ test('New software wallet advances from password to 24 BIP39 recovery words unde
   await expect(setup.locator('.mne-word')).toHaveCount(24);
   // Deliberately do not copy, log, export, or complete creation of the random seed.
 });
+
+test('Send and Receive are disabled and direct routes redirect without a wallet', async ({ page }) => {
+  // A new Playwright context starts without a saved wallet on both PWA and desktop shells.
+  await page.goto('/');
+  const disabledActions = page.locator('.left-nav > li > a.wallet-action-disabled');
+  await expect(disabledActions).toHaveCount(2);
+  for (const action of await disabledActions.all()) {
+    await expect(action).toHaveAttribute('aria-disabled', 'true');
+    await expect(action).not.toHaveAttribute('href', /.+/);
+    await expect(action).toHaveAttribute('tabindex', '-1');
+  }
+
+  await page.goto('/send');
+  await expect(page).toHaveURL(/\/configure-wallet(?:[?#]|$)/);
+  await page.goto('/receive');
+  await expect(page).toHaveURL(/\/configure-wallet(?:[?#]|$)/);
+});

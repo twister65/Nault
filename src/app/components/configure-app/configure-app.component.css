@@ -6,6 +6,250 @@
 .node-stats-disabled {
     color: #bbb;
 }
+#node-stats-table {
+    max-width: 100%;
+    table-layout: auto;
+}
+
 #node-stats-table td {
-    padding-right: 20px;
+    padding-right: 12px;
+}
+
+#node-stats-table td:first-child {
+    white-space: nowrap;
+}
+
+#node-stats-table td:last-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* Separate the destructive local-node action from the save action on touch devices. */
+.server-action-buttons,
+.local-node-delete-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+}
+
+.local-node-delete-controls {
+    min-width: 0;
+    gap: 12px;
+}
+
+.local-node-delete-controls .uk-form-label {
+    text-align: left;
+}
+
+@media (min-width: 960px) {
+    .server-action-buttons {
+        flex-direction: row;
+        align-items: flex-end;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+    }
+
+    .local-node-delete-controls {
+        display: grid;
+        grid-template-columns: minmax(180px, 260px) auto;
+        column-gap: 16px;
+        align-items: end;
+    }
+
+    .local-node-delete-controls .uk-form-label {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 959px) {
+    .server-action-buttons > .uk-button,
+    .local-node-delete-controls > .uk-button {
+        width: 100%;
+    }
+}
+
+/* Server modes are actions, not entries in the RPC-node list. */
+.server-selection-modes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.server-selection-modes .uk-button {
+    min-width: 0;
+    line-height: 1.35;
+    white-space: normal;
+    padding: 11px 8px;
+}
+
+@media (max-width: 520px) {
+    .server-selection-modes {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Live PoW diagnostics: long node names must stay within mobile layouts. */
+.pow-provider-status {
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+}
+
+/* One coherent panel, aligned form rows, and only relevant vault actions. */
+.pow-vault-panel {
+    min-width: 0;
+    padding: clamp(14px, 2vw, 22px);
+    border: 1px solid rgba(127, 127, 127, .28);
+    border-radius: 10px;
+    background: rgba(127, 127, 127, .055);
+}
+.pow-vault-overview {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 18px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+.pow-vault-overview a { font-size: .9rem; }
+.pow-vault-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    font-weight: 500;
+    min-width: 0;
+}
+.pow-vault-status-indicator {
+    flex: 0 0 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #c28547;
+}
+.pow-vault-status-indicator.is-unlocked { background: #399b66; }
+.pow-vault-group {
+    border-top: 1px solid rgba(127, 127, 127, .22);
+    padding-top: 18px;
+    margin-top: 18px;
+    min-width: 0;
+}
+.pow-vault-heading {
+    margin: 0 0 13px;
+    font-size: 1rem;
+    font-weight: 600;
+}
+.pow-vault-field {
+    display: grid;
+    grid-template-columns: minmax(140px, 190px) minmax(0, 1fr);
+    gap: 6px 16px;
+    align-items: center;
+    margin: 12px 0;
+    min-width: 0;
+}
+.pow-vault-field label { font-size: .9rem; line-height: 1.4; }
+.pow-vault-field > .uk-input,
+.pow-vault-field > .uk-select {
+    min-width: 0;
+    width: 100%;
+    margin: 0;
+}
+.pow-vault-device-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    font-size: .88rem;
+    line-height: 1.5;
+    margin: 14px 0;
+}
+.pow-vault-device-option .uk-checkbox { margin-top: 3px; flex-shrink: 0; }
+.pow-vault-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 10px; margin-top: 14px; }
+.pow-vault-actions .uk-button {
+    min-width: 135px;
+    min-height: 38px;
+    padding: 8px 14px;
+    border-radius: 5px;
+    line-height: 1.35;
+    white-space: normal;
+}
+.pow-vault-warning { margin: 18px 0 0; line-height: 1.5; }
+/* Explicitly override UIKit/button display and grid styles for state-based actions. */
+.pow-vault-field[hidden],
+.pow-vault-group[hidden],
+.pow-vault-actions .uk-button[hidden] { display: none !important; }
+@media (max-width: 700px) {
+    .pow-vault-field { grid-template-columns: 1fr; gap: 5px; }
+    .pow-vault-actions .uk-button { flex: 1 1 180px; }
+}
+@media (max-width: 520px) {
+    .pow-vault-actions .uk-button { flex-basis: 100%; }
+    .pow-vault-overview { align-items: flex-start; }
+}
+
+/* Non-secret PoW API-key labels remain visible with the vault locked. */
+.pow-vault-key-list { list-style: none; margin: 6px 0 12px; padding: 0; }
+.pow-vault-key-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; overflow-wrap: anywhere; padding: 5px 0; }
+.pow-vault-key-list .uk-label { font-size: 10px; }
+
+/* Use a native disclosure for the vault info, not hover-only UIKit tooltip.
+   The whole row (including the i icon) is a touch/keyboard target. */
+.pow-vault-help > summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    max-width: 100%;
+    width: fit-content;
+    cursor: pointer;
+    list-style: none;
+}
+.pow-vault-help > summary::-webkit-details-marker { display: none; }
+.pow-vault-help > summary::marker { content: ''; }
+.pow-vault-help > summary [uk-icon] { flex-shrink: 0; }
+.pow-vault-help > summary:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+.pow-vault-help-content {
+    margin: 4px 0 12px;
+    padding: 10px 12px;
+    border-radius: 5px;
+    background: rgba(127, 127, 127, 0.12);
+    overflow-wrap: anywhere;
+}
+
+/* Representative search is an in-flow, keyboard/touch-friendly list.
+   It does not share input IDs or browser history with WebSocket fields. */
+.rep-config-picker {
+  position: relative;
+  margin-top: 8px;
+  max-height: 290px;
+  overflow-y: auto;
+  border: 1px solid rgba(139, 145, 174, 0.35);
+  border-radius: 6px;
+}
+.rep-config-picker-item {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 3px;
+  min-width: 0;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid rgba(139, 145, 174, 0.2);
+  padding: 9px 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.rep-config-picker-item:hover, .rep-config-picker-item:focus-visible {
+  outline: 2px solid #4a93db;
+  outline-offset: -2px;
+}
+.rep-config-picker-address {
+  overflow-wrap: anywhere;
+  color: #979cb1;
+  font-size: 0.72rem;
 }
