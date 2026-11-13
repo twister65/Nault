@@ -2,6 +2,8 @@ import { localizeNotificationMessage } from './notification-message';
 
 describe('localizeNotificationMessage', () => {
   const messages: Record<string, string> = {
+    'ui-notifications.pending-unlock-single': 'Nouvelle transaction entrante — déverrouillez le portefeuille pour la recevoir.',
+    'ui-notifications.pending-unlock-multiple': 'Des transactions entrantes sont en attente — déverrouillez le portefeuille pour les recevoir.',
     'ui-notifications.pwa-update-ready': 'Une mise à jour a été installée en arrière-plan et sera appliquée au prochain démarrage.',
     'ui-notifications.node-offline': 'Impossible de se connecter au nœud Nano. Les soldes affichés peuvent être inexacts !',
     'ui-notifications.refresh-balance-failed': 'Impossible d’actualiser les soldes. Vérifiez votre connexion.',
@@ -27,6 +29,15 @@ describe('localizeNotificationMessage', () => {
   };
   const translate = (key: string, params?: Record<string, string>) =>
     (messages[key] || key).replace(/{{(\w+)}}/g, (_, name: string) => params?.[name] || '');
+
+  it('localizes the unlock prompts emitted by live receives and startup', () => {
+    expect(localizeNotificationMessage(
+      'New incoming transaction - Unlock the wallet to receive', translate
+    )).toBe('Nouvelle transaction entrante — déverrouillez le portefeuille pour la recevoir.');
+    expect(localizeNotificationMessage(
+      'New incoming transaction(s) - Unlock the wallet to receive', translate
+    )).toBe('Des transactions entrantes sont en attente — déverrouillez le portefeuille pour les recevoir.');
+  });
 
   it('localizes the PWA update-ready notice independently from its translated Apply now button', () => {
     expect(localizeNotificationMessage(

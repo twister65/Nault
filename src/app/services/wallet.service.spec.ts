@@ -1,4 +1,4 @@
-import { of, Subject } from 'rxjs';
+import { of, Subject, BehaviorSubject } from 'rxjs';
 import { LedgerStatus } from './ledger.service';
 import { WalletService } from './wallet.service';
 
@@ -488,5 +488,59 @@ describe('WalletService invalid RPC response protection', () => {
       .toBeRejectedWithError('Invalid accounts_frontiers RPC response');
     expect(service.wallet.balance).toBe(balance);
     expect(service.wallet.pending).toBe('100');
+  });
+});
+
+describe('WalletService pending receive unlock action', () => {
+  function setup(type: 'seed' | 'ledger' = 'seed', locked = true) {
+    const service = Object.create(WalletService.prototype) as WalletService;
+    const request$ = new BehaviorSubject<boolean>(false);
+    const notifications = {
+      sendWarning: jasmine.createSpy('sendWarning'),
+      removeNotification: jasmine.createSpy('removeNotification')
+    };
+    (service as any).wallet = { type, locked, accounts: [{id: 'nano_account'}], unlockModalRequested$: request$ };
+    (service as any).notifications = notifications;
+    spyOn(service, 'isConfigured').and.returnValue(true);
+    return {service, request$, notifications};
+  }
+
+  it('offers an actionable warning and requests the existing modal without unlocking funds', () => {
+    const {service, request$, notifications} = setup();
+    service.showLockedReceiveNotice('New incoming transaction - Unlock the wallet to receive');
+    expect(notifications.sendWarning).toHaveBeenCalledTimes(1);
+    const [message, options] = notifications.sendWarning.calls.mostRecent().args;
+    expect(message).toBe('New incoming transaction - Unlock the wallet to receive');
+    expect(options.identifier).toBe('pending-locked');
+    expect(options.action.labelKey).toBe('ui-notifications.unlock-wallet-action');
+    expect(request$.value).toBeFalse();
+    options.action.run();
+    expect(notifications.removeNotification).toHaveBeenCalledOnceWith('pending-locked');
+    expect(request$.value).toBeTrue();
+    expect((service as any).wallet.locked).toBeTrue();
+  });
+
+  it('ignores a previously rendered action if the software wallet has been unlocked', () => {
+    const {service, request$, notifications} = setup();
+    service.showLockedReceiveNotice('New incoming transaction - Unlock the wallet to receive');
+    const options = notifications.sendWarning.calls.mostRecent().args[1];
+    (service as any).wallet.locked = false;
+    options.action.run();
+    expect(notifications.removeNotification).not.toHaveBeenCalled();
+    expect(request$.value).toBeFalse();
+  });
+
+  it('never prompts for a software wallet password when the wallet is Ledger-backed', () => {
+    const {service, request$, notifications} = setup('ledger');
+    service.showLockedReceiveNotice('New incoming transaction - Unlock the wallet to receive');
+    service.requestPendingWalletUnlock();
+    expect(notifications.sendWarning).not.toHaveBeenCalled();
+    expect(request$.value).toBeFalse();
+  });
+
+  it('does not offer a redundant shortcut when the wallet is already unlocked', () => {
+    const {service, notifications} = setup('seed', false);
+    service.showLockedReceiveNotice('New incoming transaction - Unlock the wallet to receive');
+    expect(notifications.sendWarning).not.toHaveBeenCalled();
   });
 });

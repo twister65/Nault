@@ -822,6 +822,9 @@
     "fetching": "Fetching history..."
   },
   "ui-notifications": {
+    "pending-unlock-single": "New incoming transaction — unlock your wallet to receive it.",
+    "pending-unlock-multiple": "Incoming transactions are waiting — unlock your wallet to receive them.",
+    "unlock-wallet-action": "Unlock wallet",
     "wallet-scanning": "Scanning the first 20 accounts and importing those already used...",
     "wallet-imported": "Wallet imported successfully!",
     "wallet-key-imported": "Wallet imported successfully from a private key!",

@@ -822,6 +822,9 @@
     "fetching": "Chargement de l'historique..."
   },
   "ui-notifications": {
+    "pending-unlock-single": "Nouvelle transaction entrante — déverrouillez le portefeuille pour la recevoir.",
+    "pending-unlock-multiple": "Des transactions entrantes sont en attente — déverrouillez le portefeuille pour les recevoir.",
+    "unlock-wallet-action": "Déverrouiller",
     "wallet-scanning": "Recherche des 20 premiers comptes et importation de ceux déjà utilisés…",
     "wallet-imported": "Portefeuille importé avec succès !",
     "wallet-key-imported": "Portefeuille importé avec succès depuis une clé privée !",

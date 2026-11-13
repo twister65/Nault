@@ -822,6 +822,9 @@
     "fetching": "Cargando historial..."
   },
   "ui-notifications": {
+    "pending-unlock-single": "Nueva transacción entrante: desbloquea la cartera para recibirla.",
+    "pending-unlock-multiple": "Hay transacciones entrantes pendientes: desbloquea la cartera para recibirlas.",
+    "unlock-wallet-action": "Desbloquear cartera",
     "wallet-scanning": "Buscando las primeras 20 cuentas e importando las que ya se han usado…",
     "wallet-imported": "¡Cartera importada correctamente!",
     "wallet-key-imported": "¡Cartera importada correctamente desde una clave privada!",

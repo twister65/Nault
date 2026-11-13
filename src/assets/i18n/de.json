@@ -199,6 +199,9 @@
     "you-are-about-to-disable-storage-of-all-wallet-data-which": "Sie sind dabei, die Speicherung sämtlicher Wallet-Daten zu deaktivieren. Beim nächsten Start von Nault wird daher kein Wallet eingerichtet sein."
   },
   "ui-notifications": {
+    "pending-unlock-single": "Neue eingehende Transaktion – entsperren Sie die Wallet, um sie zu empfangen.",
+    "pending-unlock-multiple": "Eingehende Transaktionen warten – entsperren Sie die Wallet, um sie zu empfangen.",
+    "unlock-wallet-action": "Wallet entsperren",
     "wallet-scanning": "Die ersten 20 Konten werden überprüft und bereits verwendete Konten importiert ...",
     "wallet-imported": "Wallet erfolgreich importiert!",
     "wallet-key-imported": "Wallet erfolgreich aus einem privaten Schlüssel importiert!",

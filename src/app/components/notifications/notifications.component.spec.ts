@@ -127,3 +127,29 @@ describe('NotificationsComponent offline language loading', () => {
     }
   });
 });
+
+describe('NotificationsComponent pending-receive action', () => {
+  it('passes through a real action callback instead of injecting a link in HTML', () => {
+    const service = new NotificationService();
+    const translations$ = new Subject<Record<string, unknown>>();
+    const translator = {
+      selectTranslation: () => translations$.asObservable(),
+      translate: (key: string) => key
+    } as unknown as TranslocoService;
+    const notices = new NotificationsComponent(service, translator);
+    const unlock = jasmine.createSpy('unlock');
+    notices.ngOnInit();
+    try {
+      service.sendWarning('New incoming transaction - Unlock the wallet to receive', {
+        identifier: 'pending-locked',
+        action: {labelKey: 'ui-notifications.unlock-wallet-action', run: unlock}
+      });
+      expect(notices.notifications[0].action?.labelKey).toBe('ui-notifications.unlock-wallet-action');
+      expect(notices.notifications[0].message).not.toContain('<a');
+      notices.notifications[0].action?.run();
+      expect(unlock).toHaveBeenCalledTimes(1);
+    } finally {
+      notices.ngOnDestroy();
+    }
+  });
+});

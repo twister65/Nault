@@ -132,6 +132,25 @@ export class WalletService {
     refresh$: new BehaviorSubject(false),
   };
 
+  // The existing wallet widget owns the password and device-unlock UI.
+  // Offer its modal on an explicit user click; never unlock or receive automatically.
+  showLockedReceiveNotice(message: string): void {
+    if (!this.isConfigured() || !this.wallet.locked || this.isLedgerWallet()) return;
+    this.notifications.sendWarning(message, {
+      length: 10000,
+      identifier: 'pending-locked',
+      action: {labelKey: 'ui-notifications.unlock-wallet-action',
+        run: () => this.requestPendingWalletUnlock()}
+    });
+  }
+
+  requestPendingWalletUnlock(): void {
+    // Avoid a stale toast opening a modal after unlock or a wallet switch.
+    if (!this.isConfigured() || !this.wallet.locked || this.isLedgerWallet()) return;
+    this.notifications.removeNotification('pending-locked');
+    this.wallet.unlockModalRequested$.next(true);
+  }
+
   processingPending = false;
   // Session-local, non-persistent safety guard. An explicit Ledger refusal must
   // not be overridden by periodic balance reloads, WS events or reconnection.
@@ -212,7 +231,7 @@ export class WalletService {
       if (isConfirmedIncomingTransactionForOwnWalletAccount === true) {
         if (shouldNotify === true) {
           if (this.wallet.locked && this.appSettings.settings.pendingOption !== 'manual') {
-            this.notifications.sendWarning(`New incoming transaction - Unlock the wallet to receive`, { length: 10000, identifier: 'pending-locked' });
+            this.showLockedReceiveNotice('New incoming transaction - Unlock the wallet to receive');
           } else if (this.appSettings.settings.pendingOption === 'manual') {
             this.notifications.sendWarning(`New incoming transaction - Set to be received manually`, { length: 10000, identifier: 'pending-locked' });
           }
