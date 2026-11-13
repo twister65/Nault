@@ -1,5 +1,7 @@
 import { ComponentTestModule, isolateConstructorIO } from '../../testing/component-test.module';
 import { TestBed, inject } from '@angular/core/testing';
+import { Subject } from 'rxjs';
+import { LedgerStatus } from './ledger.service';
 
 import { NanoBlockService } from './nano-block.service';
 import { DEFAULT_REPRESENTATIVE } from './default-representative';
@@ -23,6 +25,7 @@ describe('NanoBlockService Ledger signing boundary (#58)', () => {
   function setup() {
     // Isolate the transaction path: the unit test must not open real Bluetooth.
     const service = Object.create(NanoBlockService.prototype) as any;
+    service.ledgerReceiveRejected$ = new Subject<{ account: string; sourceBlock: string }>();
     const account = {id: 'nano_test', index: 0};
     service.api = {
       accountInfo: jasmine.createSpy('accountInfo').and.resolveTo({
@@ -80,6 +83,28 @@ describe('NanoBlockService Ledger signing boundary (#58)', () => {
     expect(service.ledgerService.signBlock).toHaveBeenCalledTimes(1);
     expect(service.api.process).not.toHaveBeenCalled();
     expect(service.notifications.sendWarning).toHaveBeenCalledWith('Transaction denied on Ledger device');
+  });
+
+  it('reports only an explicit rejected Ledger receive, without republishing or retrying', async () => {
+    const {service, account} = setup();
+    const rejected: {account: string; sourceBlock: string}[] = [];
+    service.ledgerReceiveRejected$.subscribe((event: any) => rejected.push(event));
+    service.ledgerService.ledger = { status: LedgerStatus.READY };
+    service.ledgerService.isUnavailableError = jasmine.createSpy('isUnavailableError').and.returnValue(false);
+    service.api.blocksInfo = jasmine.createSpy('blocksInfo').and.resolveTo({
+      blocks: { source: {amount: '1'} }
+    });
+    service.ledgerService.signBlock.and.rejectWith({statusCode: 0x6985});
+    expect(await service.generateReceive(account, 'source', true)).toBeNull();
+    expect(rejected).toEqual([{account: 'nano_test', sourceBlock: 'source'}]);
+    expect(service.ledgerService.signBlock).toHaveBeenCalledTimes(1);
+    expect(service.api.process).not.toHaveBeenCalled();
+
+    rejected.length = 0;
+    service.ledgerService.signBlock.and.rejectWith({id: 'TransportLocked'});
+    expect(await service.generateReceive(account, 'source', true)).toBeNull();
+    expect(rejected).toEqual([]);
+    expect(service.api.process).not.toHaveBeenCalled();
   });
 
   it('uses the Twister32 default on account opening but keeps the existing representative', async () => {

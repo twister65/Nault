@@ -133,6 +133,10 @@ export class WalletService {
   };
 
   processingPending = false;
+  // Session-local, non-persistent safety guard. An explicit Ledger refusal must
+  // not be overridden by periodic balance reloads, WS events or reconnection.
+  // Manual receive remains available via Account Details.
+  private readonly rejectedAutoReceiveHashes = new Set<string>();
   successfulBlocks: string[] = [];
   trackedHashes: string[] = [];
   // Coalesce confirmations arriving while a previous balance RPC is still running.
@@ -167,6 +171,11 @@ export class WalletService {
       this.saveWalletExport();
       console.info('[Ledger USB] verified model saved', { model });
     };
+    this.nanoBlock?.ledgerReceiveRejected$?.subscribe(({ account, sourceBlock }) => {
+      if (this.isLedgerWallet() && this.wallet.accounts.some(a => a.id === account)) {
+        this.rejectedAutoReceiveHashes.add(sourceBlock);
+      }
+    });
     this.websocket.newTransactions$.subscribe(async (transaction) => {
       if (!transaction) return; // Not really a new transaction
       console.log('New Transaction', transaction);
@@ -851,6 +860,7 @@ export class WalletService {
     this.wallet.selectedAccount = null;
     this.wallet.selectedAccount$.next(null);
     this.wallet.pendingBlocks = [];
+    this.rejectedAutoReceiveHashes.clear();
   }
 
   isConfigured() {
@@ -1108,6 +1118,13 @@ export class WalletService {
     // eslint-disable-next-line
     this.wallet.hasPending = walletPendingAboveThresholdConfirmed.gt(0);
 
+    // A confirmed/received block eventually disappears from a successful RPC
+    // receivable snapshot. Drop obsolete refusals, retaining active ones.
+    const stillPending = new Set(this.wallet.pendingBlocks.map(block => block.hash));
+    for (const hash of this.rejectedAutoReceiveHashes) {
+      if (!stillPending.has(hash)) this.rejectedAutoReceiveHashes.delete(hash);
+    }
+
     this.wallet.balanceInitialized = true;
 
     if (this.wallet.pendingBlocks.length) {
@@ -1262,9 +1279,15 @@ export class WalletService {
       this.wallet.pendingBlocks.sort(this.sortByAmount);
     }
 
-    this.processingPending = true;
+    // A rejected source remains receivable and visible but cannot be presented
+    // on the Ledger again by any automatic trigger. Other pending sources may
+    // still be processed; explicit manual receive bypasses this queue.
+    const nextBlock = this.wallet.pendingBlocks.find(
+      block => !this.rejectedAutoReceiveHashes.has(block.hash)
+    );
+    if (!nextBlock) return;
 
-    const nextBlock = this.wallet.pendingBlocks[0];
+    this.processingPending = true;
     if (this.successfulBlocks.includes(nextBlock.hash)) {
       return setTimeout(() => this.processPendingBlocks(), 1500); // Block has already been processed
     }
