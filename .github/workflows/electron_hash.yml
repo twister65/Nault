@@ -72,19 +72,19 @@ jobs:
       # PR previews do not mint or publish attestations.
       - name: Attest Windows installer provenance (SLSA)
         if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/v')
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: desktop-app/build/*.exe
       - name: Attest native macOS packages provenance (SLSA)
         if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/v')
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: |
             desktop-app/build/*.dmg
             desktop-app/build/*.zip
       - name: Attest Linux packages provenance (SLSA)
         if: runner.os == 'Linux' && startsWith(github.ref, 'refs/tags/v')
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: |
             desktop-app/build/*.AppImage
