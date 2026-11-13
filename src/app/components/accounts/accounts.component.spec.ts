@@ -145,7 +145,7 @@ describe('AccountsComponent add-account action availability', () => {
     fixture.detectChanges();
     const modeButton = fixture.nativeElement.querySelector('.accounts-mode-toggle') as HTMLButtonElement;
     expect(modeButton).toBeTruthy();
-    expect(modeButton.classList.contains('uk-button-secondary')).toBeTrue();
+    expect(modeButton.classList.contains('uk-button-primary')).toBeTrue();
     expect(fixture.nativeElement.querySelector('.accounts-management-actions')).toBeNull();
 
     const managingFixture = TestBed.createComponent(AccountsComponent);
