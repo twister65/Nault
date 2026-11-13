@@ -16,7 +16,7 @@
             <span *ngIf="overviewRefresh.refreshing || walletService.wallet.updatingBalance" uk-spinner="ratio: 0.55;"></span>
             <span *ngIf="!overviewRefresh.refreshing && !walletService.wallet.updatingBalance" uk-icon="icon: refresh; ratio: 0.9;"></span>
           </button>
-          <button type="button" class="uk-button uk-button-secondary accounts-mode-toggle"
+          <button type="button" class="uk-button uk-button-primary accounts-mode-toggle"
             (click)="toggleAccountManagementMode()"
             [disabled]="confirmingAccountManagement"
             [attr.aria-pressed]="viewAdvanced"
