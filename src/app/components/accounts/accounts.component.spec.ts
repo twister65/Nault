@@ -123,3 +123,43 @@ describe('AccountsComponent account-management mode', () => {
     expect(component.confirmingAccountManagement).toBeFalse();
   });
 });
+
+describe('AccountsComponent add-account action availability', () => {
+  let component: AccountsComponent;
+  let fixture: ComponentFixture<AccountsComponent>;
+
+  beforeEach(waitForAsync(() => {
+    isolateConstructorIO();
+    TestBed.configureTestingModule({ imports: [ComponentTestModule] }).compileComponents();
+  }));
+
+  beforeEach(() => {
+    fixture = TestBed.createComponent(AccountsComponent);
+    component = fixture.componentInstance;
+  });
+
+  it('only presents the header Add Account action in Add / Hide mode', async () => {
+    const walletService = (component as any).walletService;
+    spyOn(walletService, 'setAccountManagementMode');
+    spyOn(walletService, 'isConfigured').and.returnValue(false);
+    fixture.detectChanges();
+
+    const modeButton = fixture.nativeElement.querySelector('.accounts-mode-toggle') as HTMLButtonElement;
+    expect(modeButton).toBeTruthy();
+    expect(modeButton.classList.contains('uk-button-secondary')).toBeTrue();
+    expect(fixture.nativeElement.querySelector('.accounts-management-actions')).toBeNull();
+
+    await component.toggleAccountManagementMode();
+    fixture.detectChanges();
+    const actions = fixture.nativeElement.querySelector('.accounts-management-actions') as HTMLElement;
+    expect(actions).toBeTruthy();
+    const addButton = actions.querySelector('button') as HTMLButtonElement;
+    expect(addButton.classList.contains('uk-button-secondary')).toBeTrue();
+    expect(actions.querySelector('input[type="number"]')).toBeTruthy();
+
+    await component.toggleAccountManagementMode();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.accounts-management-actions')).toBeNull();
+    expect(component.viewAdvanced).toBeFalse();
+  });
+});

@@ -69,24 +69,15 @@ th.hidden-column, td.hidden-column {
 .accounts-refresh-button:disabled { opacity: .45; cursor: default; }
 .accounts-refresh-button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 
-/* Expose both account-management and simple-mode actions as proper mobile buttons. */
+/* Use the same UIkit secondary button as the existing Add Account action.
+ * Keep the horizontal gap after Refresh and a touch-friendly hit target. */
 .accounts-heading { white-space: normal; }
 .accounts-mode-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   min-height: 44px;
-  padding: 6px 12px;
   margin-left: 24px;
   vertical-align: middle;
-  border: 1px solid currentColor;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  font-size: 0.8rem;
-  line-height: 1.25;
-  cursor: pointer;
   white-space: normal;
+  line-height: 1.3;
 }
 .accounts-mode-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .accounts-mode-toggle:disabled { opacity: .55; cursor: progress; }
