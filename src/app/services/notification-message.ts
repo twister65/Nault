@@ -9,6 +9,8 @@ export function localizeNotificationMessage(message: string, translate: Notifica
       return translate('ui-notifications.pending-unlock-single');
     case 'New incoming transaction(s) - Unlock the wallet to receive':
       return translate('ui-notifications.pending-unlock-multiple');
+    case 'Incoming transaction(s) found - Set to be received manually':
+      return translate('ui-notifications.pending-manual');
     case 'An update was installed in the background and will be applied on next launch.':
       return translate('ui-notifications.pwa-update-ready');
     case 'Unable to connect to the nano node, your balances may be inaccurate!':

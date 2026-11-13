@@ -132,10 +132,31 @@ export class WalletService {
     refresh$: new BehaviorSubject(false),
   };
 
+  // Account management intentionally defers incoming notices until validation.
+  // RPC reconciliation on validation restores the pending balance and menu badge.
+  private accountManagementActive = false;
+
+  setAccountManagementMode(active: boolean): void {
+    this.accountManagementActive = active;
+    if (active) this.notifications.removeNotification('pending-locked');
+  }
+
+  notifyPendingAfterAccountManagement(): void {
+    if (this.accountManagementActive || !this.isConfigured() || !this.hasPendingTransactions()) return;
+    if (this.appSettings.settings.pendingOption === 'manual') {
+      this.notifications.sendWarning('Incoming transaction(s) found - Set to be received manually', {
+        identifier: 'pending-locked', length: 10000
+      });
+    } else {
+      this.showLockedReceiveNotice('New incoming transaction(s) - Unlock the wallet to receive');
+    }
+  }
+
   // The existing wallet widget owns the password and device-unlock UI.
   // Offer its modal on an explicit user click; never unlock or receive automatically.
   showLockedReceiveNotice(message: string): void {
-    if (!this.isConfigured() || !this.wallet.locked || this.isLedgerWallet()) return;
+    if (this.accountManagementActive || !this.isConfigured() ||
+        !this.wallet.locked || this.isLedgerWallet()) return;
     this.notifications.sendWarning(message, {
       length: 10000,
       identifier: 'pending-locked',
@@ -230,7 +251,11 @@ export class WalletService {
 
       if (isConfirmedIncomingTransactionForOwnWalletAccount === true) {
         if (shouldNotify === true) {
-          if (this.wallet.locked && this.appSettings.settings.pendingOption !== 'manual') {
+          // Account Add / Hide is a temporary management view. Keep the
+          // receive state updated but defer the notice until explicit Validate.
+          if (this.accountManagementActive) {
+            // A fresh RPC snapshot below still records the incoming block.
+          } else if (this.wallet.locked && this.appSettings.settings.pendingOption !== 'manual') {
             this.showLockedReceiveNotice('New incoming transaction - Unlock the wallet to receive');
           } else if (this.appSettings.settings.pendingOption === 'manual') {
             this.notifications.sendWarning(`New incoming transaction - Set to be received manually`, { length: 10000, identifier: 'pending-locked' });

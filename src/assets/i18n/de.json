@@ -199,6 +199,7 @@
     "you-are-about-to-disable-storage-of-all-wallet-data-which": "Sie sind dabei, die Speicherung sämtlicher Wallet-Daten zu deaktivieren. Beim nächsten Start von Nault wird daher kein Wallet eingerichtet sein."
   },
   "ui-notifications": {
+    "pending-manual": "Eingehende XNO warten auf manuellen Empfang.",
     "pending-unlock-single": "Neue eingehende Transaktion – entsperren Sie die Wallet, um sie zu empfangen.",
     "pending-unlock-multiple": "Eingehende Transaktionen warten – entsperren Sie die Wallet, um sie zu empfangen.",
     "unlock-wallet-action": "Wallet entsperren",
@@ -408,6 +409,7 @@
     "account-address-confirmed-on-ledger": "Konto-Adresse auf Ledger bestätigt",
     "account-address-denied-if-it-is-wrong-do-not-use-the-wallet": "Konto-Adresse abgelehnt – wenn sie falsch ist, verwenden Sie das Wallet nicht!",
     "add-new-account": "Neues Konto hinzufügen",
+    "validate-management": "Bestätigen",
     "manage-accounts-mode": "Hinzufügen / Ausblenden",
     "confirm-address-on-ledger": "Adresse auf Ledger bestätigen",
     "confirming-account-address-on-ledger-device": "Konto-Adresse auf dem Ledger-Gerät wird bestätigt ...",

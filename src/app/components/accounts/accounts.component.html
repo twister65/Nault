@@ -18,10 +18,11 @@
           </button>
           <button type="button" class="accounts-mode-toggle"
             (click)="toggleAccountManagementMode()"
+            [disabled]="confirmingAccountManagement"
             [attr.aria-pressed]="viewAdvanced"
-            [attr.aria-label]="(viewAdvanced ? 'accounts.simple-mode' : 'accounts.manage-accounts-mode') | transloco"
-            [title]="(viewAdvanced ? 'accounts.simple-mode' : 'accounts.manage-accounts-mode') | transloco">
-            {{ (viewAdvanced ? 'accounts.simple-mode' : 'accounts.manage-accounts-mode') | transloco }}
+            [attr.aria-label]="(viewAdvanced ? 'accounts.validate-management' : 'accounts.manage-accounts-mode') | transloco"
+            [title]="(viewAdvanced ? 'accounts.validate-management' : 'accounts.manage-accounts-mode') | transloco">
+            {{ (viewAdvanced ? 'accounts.validate-management' : 'accounts.manage-accounts-mode') | transloco }}
           </button>
         </h2>
       </div>

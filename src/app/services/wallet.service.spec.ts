@@ -544,3 +544,53 @@ describe('WalletService pending receive unlock action', () => {
     expect(notifications.sendWarning).not.toHaveBeenCalled();
   });
 });
+
+// Account Add / Hide mode must not lose confirmed receivables or prematurely
+// prompt for a password while users are managing account visibility.
+describe('WalletService account-management pending reconciliation', () => {
+  function setup() {
+    const service = Object.create(WalletService.prototype) as WalletService;
+    const notifications = {
+      sendWarning: jasmine.createSpy('sendWarning'),
+      removeNotification: jasmine.createSpy('removeNotification')
+    };
+    (service as any).notifications = notifications;
+    (service as any).appSettings = {settings: {pendingOption: 'amount'}};
+    (service as any).wallet = {
+      type: 'seed', locked: true, hasPending: true, accounts: [{id: 'nano_account'}],
+      unlockModalRequested$: new BehaviorSubject<boolean>(false)
+    };
+    spyOn(service, 'isConfigured').and.returnValue(true);
+    return {service, notifications};
+  }
+
+  it('defers the unlock action while managing accounts and restores it after validation', () => {
+    const {service, notifications} = setup();
+    service.setAccountManagementMode(true);
+    service.showLockedReceiveNotice('New incoming transaction - Unlock the wallet to receive');
+    expect(notifications.sendWarning).not.toHaveBeenCalled();
+    expect(notifications.removeNotification).toHaveBeenCalledWith('pending-locked');
+    service.setAccountManagementMode(false);
+    service.notifyPendingAfterAccountManagement();
+    expect(service.hasPendingTransactions()).toBeTrue();
+    expect(notifications.sendWarning).toHaveBeenCalledTimes(1);
+    expect(notifications.sendWarning.calls.mostRecent().args[1].action.labelKey)
+      .toBe('ui-notifications.unlock-wallet-action');
+  });
+
+  it('does not invent a notice for a zero confirmed receivable balance', () => {
+    const {service, notifications} = setup();
+    (service as any).wallet.hasPending = false;
+    service.notifyPendingAfterAccountManagement();
+    expect(notifications.sendWarning).not.toHaveBeenCalled();
+  });
+
+  it('respects manual mode and never offers automatic receiving on Validate', () => {
+    const {service, notifications} = setup();
+    (service as any).appSettings.settings.pendingOption = 'manual';
+    service.notifyPendingAfterAccountManagement();
+    const [message, options] = notifications.sendWarning.calls.mostRecent().args;
+    expect(message).toBe('Incoming transaction(s) found - Set to be received manually');
+    expect(options.action).toBeUndefined();
+  });
+});

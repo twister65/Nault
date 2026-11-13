@@ -52,6 +52,7 @@
     "account-address-confirmed-on-ledger": "Adresse du compte confirmée sur la Ledger",
     "account-address-denied-if-it-is-wrong-do-not-use-the-wallet": "Adresse du compte refusée : si elle est incorrecte, n'utilisez pas le portefeuille !",
     "add-new-account": "Ajouter un compte",
+    "validate-management": "Valider",
     "manage-accounts-mode": "Ajouter / Masquer",
     "confirm-address-on-ledger": "Confirmer l'adresse sur la Ledger",
     "confirming-account-address-on-ledger-device": "Confirmation de l'adresse sur la Ledger...",
@@ -822,6 +823,7 @@
     "fetching": "Chargement de l'historique..."
   },
   "ui-notifications": {
+    "pending-manual": "Des XNO sont en attente. Recevez-les manuellement.",
     "pending-unlock-single": "Nouvelle transaction entrante — déverrouillez le portefeuille pour la recevoir.",
     "pending-unlock-multiple": "Des transactions entrantes sont en attente — déverrouillez le portefeuille pour les recevoir.",
     "unlock-wallet-action": "Déverrouiller",

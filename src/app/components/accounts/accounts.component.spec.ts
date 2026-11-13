@@ -64,26 +64,62 @@ describe('AccountsComponent account-management mode', () => {
     component = TestBed.createComponent(AccountsComponent).componentInstance;
   });
 
-  it('shows simple account view by default and allows explicit return from Add / Hide', () => {
+  it('enters Add / Hide and validates back to normal display after an RPC reconciliation', async () => {
+    const walletService = (component as any).walletService;
+    const active = spyOn(walletService, 'setAccountManagementMode');
+    spyOn(walletService, 'isConfigured').and.returnValue(true);
+    const reload = spyOn(walletService, 'reloadBalances').and.resolveTo();
+    const notify = spyOn(walletService, 'notifyPendingAfterAccountManagement');
     expect(component.viewAdvanced).toBeFalse();
-    component.toggleAccountManagementMode();
+    await component.toggleAccountManagementMode();
     expect(component.viewAdvanced).toBeTrue();
+    expect(active).toHaveBeenCalledWith(true);
+    expect(reload).not.toHaveBeenCalled();
     component.newAccountIndex = '9' as any;
-    component.toggleAccountManagementMode();
+    await component.toggleAccountManagementMode();
     expect(component.viewAdvanced).toBeFalse();
     expect(component.newAccountIndex).toBeNull();
-    component.toggleAccountManagementMode();
-    expect(component.viewAdvanced).toBeTrue();
-    expect(component.newAccountIndex).toBeNull();
+    expect(active).toHaveBeenCalledWith(false);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(component.confirmingAccountManagement).toBeFalse();
   });
 
-  it('does not change pending receivables when switching the account display mode', () => {
-    const wallet = (component as any).walletService.wallet;
+  it('keeps the displayed pending balance untouched and suppresses a false notice when RPC fails', async () => {
+    const walletService = (component as any).walletService;
+    const wallet = walletService.wallet;
     const pendingRef = wallet.pendingBlocks;
     const wasLocked = wallet.locked;
-    component.toggleAccountManagementMode();
-    component.toggleAccountManagementMode();
+    spyOn(walletService, 'setAccountManagementMode');
+    spyOn(walletService, 'isConfigured').and.returnValue(true);
+    spyOn(walletService, 'reloadBalances').and.rejectWith(new Error('RPC offline'));
+    const notify = spyOn(walletService, 'notifyPendingAfterAccountManagement');
+    const warn = spyOn((component as any).notificationService, 'sendWarning');
+    await component.toggleAccountManagementMode();
+    await component.toggleAccountManagementMode();
+    expect(component.viewAdvanced).toBeFalse();
     expect(wallet.pendingBlocks).toBe(pendingRef);
     expect(wallet.locked).toBe(wasLocked);
+    expect(notify).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not trigger a second RPC check while Validate is still refreshing', async () => {
+    const walletService = (component as any).walletService;
+    spyOn(walletService, 'setAccountManagementMode');
+    spyOn(walletService, 'isConfigured').and.returnValue(true);
+    let done: () => void = () => {};
+    const reload = spyOn(walletService, 'reloadBalances').and.returnValue(
+      new Promise<void>(resolve => { done = resolve; })
+    );
+    spyOn(walletService, 'notifyPendingAfterAccountManagement');
+    await component.toggleAccountManagementMode();
+    const finishing = component.toggleAccountManagementMode();
+    expect(component.confirmingAccountManagement).toBeTrue();
+    await component.toggleAccountManagementMode();
+    expect(reload).toHaveBeenCalledTimes(1);
+    done();
+    await finishing;
+    expect(component.confirmingAccountManagement).toBeFalse();
   });
 });

@@ -52,6 +52,7 @@
     "account-address-confirmed-on-ledger": "Account address confirmed on Ledger",
     "account-address-denied-if-it-is-wrong-do-not-use-the-wallet": "Account address denied - if it is wrong do not use the wallet!",
     "add-new-account": "Add New Account",
+    "validate-management": "Validate",
     "manage-accounts-mode": "Add / Hide",
     "confirm-address-on-ledger": "Confirm Address On Ledger",
     "confirming-account-address-on-ledger-device": "Confirming account address on Ledger device...",
@@ -822,6 +823,7 @@
     "fetching": "Fetching history..."
   },
   "ui-notifications": {
+    "pending-manual": "Incoming XNO is waiting. Receive it manually.",
     "pending-unlock-single": "New incoming transaction — unlock your wallet to receive it.",
     "pending-unlock-multiple": "Incoming transactions are waiting — unlock your wallet to receive them.",
     "unlock-wallet-action": "Unlock wallet",
