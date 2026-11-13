@@ -138,28 +138,24 @@ describe('AccountsComponent add-account action availability', () => {
     component = fixture.componentInstance;
   });
 
-  it('only presents the header Add Account action in Add / Hide mode', async () => {
-    const walletService = (component as any).walletService;
-    spyOn(walletService, 'setAccountManagementMode');
-    spyOn(walletService, 'isConfigured').and.returnValue(false);
+  it('only renders the header Add Account action in Add / Hide mode', () => {
+    // Render both view states from fresh fixtures. Avoid toggling component
+    // state between Angular's automatic change-detection verification passes:
+    // the live toggle and RPC reconciliation are covered by focused tests above.
     fixture.detectChanges();
-
     const modeButton = fixture.nativeElement.querySelector('.accounts-mode-toggle') as HTMLButtonElement;
     expect(modeButton).toBeTruthy();
     expect(modeButton.classList.contains('uk-button-secondary')).toBeTrue();
     expect(fixture.nativeElement.querySelector('.accounts-management-actions')).toBeNull();
 
-    await component.toggleAccountManagementMode();
-    fixture.detectChanges();
-    const actions = fixture.nativeElement.querySelector('.accounts-management-actions') as HTMLElement;
+    const managingFixture = TestBed.createComponent(AccountsComponent);
+    managingFixture.componentInstance.viewAdvanced = true;
+    managingFixture.detectChanges();
+    const actions = managingFixture.nativeElement.querySelector('.accounts-management-actions') as HTMLElement;
     expect(actions).toBeTruthy();
     const addButton = actions.querySelector('button') as HTMLButtonElement;
     expect(addButton.classList.contains('uk-button-secondary')).toBeTrue();
     expect(actions.querySelector('input[type="number"]')).toBeTruthy();
-
-    await component.toggleAccountManagementMode();
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.accounts-management-actions')).toBeNull();
-    expect(component.viewAdvanced).toBeFalse();
+    managingFixture.destroy();
   });
 });
