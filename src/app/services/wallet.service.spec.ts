@@ -337,6 +337,8 @@ describe('WalletService successful incoming-block coalescing', () => {
     service.nanoBlock = { generateReceive };
     service.successfulBlocks = ['already-received'];
     service.processingPending = false;
+    // Object.create bypasses class field initializers (the real service initializes this Set).
+    service.rejectedAutoReceiveHashes = new Set<string>();
 
     jasmine.clock().install();
     try {
