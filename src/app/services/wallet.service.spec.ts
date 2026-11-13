@@ -1,4 +1,4 @@
-import { of, Subject } from 'rxjs';
+import { of, Subject, BehaviorSubject } from 'rxjs';
 import { LedgerStatus } from './ledger.service';
 import { WalletService } from './wallet.service';
 
@@ -488,5 +488,109 @@ describe('WalletService invalid RPC response protection', () => {
       .toBeRejectedWithError('Invalid accounts_frontiers RPC response');
     expect(service.wallet.balance).toBe(balance);
     expect(service.wallet.pending).toBe('100');
+  });
+});
+
+describe('WalletService pending receive unlock action', () => {
+  function setup(type: 'seed' | 'ledger' = 'seed', locked = true) {
+    const service = Object.create(WalletService.prototype) as WalletService;
+    const request$ = new BehaviorSubject<boolean>(false);
+    const notifications = {
+      sendWarning: jasmine.createSpy('sendWarning'),
+      removeNotification: jasmine.createSpy('removeNotification')
+    };
+    (service as any).wallet = { type, locked, accounts: [{id: 'nano_account'}], unlockModalRequested$: request$ };
+    (service as any).notifications = notifications;
+    spyOn(service, 'isConfigured').and.returnValue(true);
+    return {service, request$, notifications};
+  }
+
+  it('offers an actionable warning and requests the existing modal without unlocking funds', () => {
+    const {service, request$, notifications} = setup();
+    service.showLockedReceiveNotice('New incoming transaction - Unlock the wallet to receive');
+    expect(notifications.sendWarning).toHaveBeenCalledTimes(1);
+    const [message, options] = notifications.sendWarning.calls.mostRecent().args;
+    expect(message).toBe('New incoming transaction - Unlock the wallet to receive');
+    expect(options.identifier).toBe('pending-locked');
+    expect(options.action.labelKey).toBe('ui-notifications.unlock-wallet-action');
+    expect(request$.value).toBeFalse();
+    options.action.run();
+    expect(notifications.removeNotification).toHaveBeenCalledOnceWith('pending-locked');
+    expect(request$.value).toBeTrue();
+    expect((service as any).wallet.locked).toBeTrue();
+  });
+
+  it('ignores a previously rendered action if the software wallet has been unlocked', () => {
+    const {service, request$, notifications} = setup();
+    service.showLockedReceiveNotice('New incoming transaction - Unlock the wallet to receive');
+    const options = notifications.sendWarning.calls.mostRecent().args[1];
+    (service as any).wallet.locked = false;
+    options.action.run();
+    expect(notifications.removeNotification).not.toHaveBeenCalled();
+    expect(request$.value).toBeFalse();
+  });
+
+  it('never prompts for a software wallet password when the wallet is Ledger-backed', () => {
+    const {service, request$, notifications} = setup('ledger');
+    service.showLockedReceiveNotice('New incoming transaction - Unlock the wallet to receive');
+    service.requestPendingWalletUnlock();
+    expect(notifications.sendWarning).not.toHaveBeenCalled();
+    expect(request$.value).toBeFalse();
+  });
+
+  it('does not offer a redundant shortcut when the wallet is already unlocked', () => {
+    const {service, notifications} = setup('seed', false);
+    service.showLockedReceiveNotice('New incoming transaction - Unlock the wallet to receive');
+    expect(notifications.sendWarning).not.toHaveBeenCalled();
+  });
+});
+
+// Account Add / Hide mode must not lose confirmed receivables or prematurely
+// prompt for a password while users are managing account visibility.
+describe('WalletService account-management pending reconciliation', () => {
+  function setup() {
+    const service = Object.create(WalletService.prototype) as WalletService;
+    const notifications = {
+      sendWarning: jasmine.createSpy('sendWarning'),
+      removeNotification: jasmine.createSpy('removeNotification')
+    };
+    (service as any).notifications = notifications;
+    (service as any).appSettings = {settings: {pendingOption: 'amount'}};
+    (service as any).wallet = {
+      type: 'seed', locked: true, hasPending: true, accounts: [{id: 'nano_account'}],
+      unlockModalRequested$: new BehaviorSubject<boolean>(false)
+    };
+    spyOn(service, 'isConfigured').and.returnValue(true);
+    return {service, notifications};
+  }
+
+  it('defers the unlock action while managing accounts and restores it after validation', () => {
+    const {service, notifications} = setup();
+    service.setAccountManagementMode(true);
+    service.showLockedReceiveNotice('New incoming transaction - Unlock the wallet to receive');
+    expect(notifications.sendWarning).not.toHaveBeenCalled();
+    expect(notifications.removeNotification).toHaveBeenCalledWith('pending-locked');
+    service.setAccountManagementMode(false);
+    service.notifyPendingAfterAccountManagement();
+    expect(service.hasPendingTransactions()).toBeTrue();
+    expect(notifications.sendWarning).toHaveBeenCalledTimes(1);
+    expect(notifications.sendWarning.calls.mostRecent().args[1].action.labelKey)
+      .toBe('ui-notifications.unlock-wallet-action');
+  });
+
+  it('does not invent a notice for a zero confirmed receivable balance', () => {
+    const {service, notifications} = setup();
+    (service as any).wallet.hasPending = false;
+    service.notifyPendingAfterAccountManagement();
+    expect(notifications.sendWarning).not.toHaveBeenCalled();
+  });
+
+  it('respects manual mode and never offers automatic receiving on Validate', () => {
+    const {service, notifications} = setup();
+    (service as any).appSettings.settings.pendingOption = 'manual';
+    service.notifyPendingAfterAccountManagement();
+    const [message, options] = notifications.sendWarning.calls.mostRecent().args;
+    expect(message).toBe('Incoming transaction(s) found - Set to be received manually');
+    expect(options.action).toBeUndefined();
   });
 });

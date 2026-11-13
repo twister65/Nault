@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
 import { WalletOverviewRefreshService } from '../../services/wallet-overview-refresh.service';
 import {Subject, timer} from 'rxjs';
 import {debounce} from 'rxjs/operators';
@@ -22,7 +22,7 @@ import type {WalletAccount} from '../../services/wallet.service';
     changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
-export class AccountsComponent implements OnInit {
+export class AccountsComponent implements OnInit, OnDestroy {
   readonly overviewRefresh = inject(WalletOverviewRefreshService);
   private pullStart: { x: number; y: number; atTop: boolean } | null = null;
 
@@ -56,6 +56,42 @@ export class AccountsComponent implements OnInit {
   isSingleKeyWallet = this.walletService.isSingleKeyWallet();
   viewAdvanced = false;
   newAccountIndex = null;
+  confirmingAccountManagement = false;
+
+  /**
+   * Live WebSocket events may have been missed while managing accounts.
+   * Explicit validation restores the simple view and reconciles confirmed
+   * receivables through RPC before showing any pending-funds notice.
+   */
+  async toggleAccountManagementMode(): Promise<void> {
+    if (this.confirmingAccountManagement) return;
+
+    this.viewAdvanced = !this.viewAdvanced;
+    this.walletService.setAccountManagementMode(this.viewAdvanced);
+    if (this.viewAdvanced) return;
+
+    this.newAccountIndex = null; // discard any unsubmitted manual index
+    if (!this.walletService.isConfigured()) return;
+
+    this.confirmingAccountManagement = true;
+    try {
+      await this.walletService.reloadBalances();
+      // The same refreshed state drives the Receive menu's NEW badge.
+      this.walletService.notifyPendingAfterAccountManagement();
+    } catch {
+      // An RPC failure is not evidence that the incoming balance is zero.
+      this.notificationService.sendWarning(
+        this.translocoService.translate('ui-shell.balance-refresh-failed')
+      );
+    } finally {
+      this.confirmingAccountManagement = false;
+    }
+  }
+
+  ngOnDestroy(): void {
+    // Do not leave incoming notices suppressed after navigating away.
+    this.walletService.setAccountManagementMode(false);
+  }
 
   // When we change the accounts, redetect changable reps (Debounce by 5 seconds)
   accountsChanged$ = new Subject();
