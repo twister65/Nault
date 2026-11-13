@@ -52,7 +52,9 @@
     "account-address-confirmed-on-ledger": "Dirección de la cuenta confirmada en Ledger",
     "account-address-denied-if-it-is-wrong-do-not-use-the-wallet": "Dirección de la cuenta rechazada: si no es correcta, ¡no uses la cartera!",
     "add-new-account": "Añadir nueva cuenta",
-    "advanced-mode": "Modo avanzado",
+    "validate-management": "Validar",
+    "account-index-placeholder": "N.º de cuenta",
+    "manage-accounts-mode": "Añadir / Ocultar",
     "confirm-address-on-ledger": "Confirmar dirección en Ledger",
     "confirming-account-address-on-ledger-device": "Confirmando la dirección en el dispositivo Ledger...",
     "hide-account": "Ocultar cuenta",
@@ -822,6 +824,10 @@
     "fetching": "Cargando historial..."
   },
   "ui-notifications": {
+    "pending-manual": "Hay XNO pendientes. Recíbelos manualmente.",
+    "pending-unlock-single": "Nueva transacción entrante: desbloquea la cartera para recibirla.",
+    "pending-unlock-multiple": "Hay transacciones entrantes pendientes: desbloquea la cartera para recibirlas.",
+    "unlock-wallet-action": "Desbloquear cartera",
     "wallet-scanning": "Buscando las primeras 20 cuentas e importando las que ya se han usado…",
     "wallet-imported": "¡Cartera importada correctamente!",
     "wallet-key-imported": "¡Cartera importada correctamente desde una clave privada!",
