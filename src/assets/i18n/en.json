@@ -53,6 +53,7 @@
     "account-address-denied-if-it-is-wrong-do-not-use-the-wallet": "Account address denied - if it is wrong do not use the wallet!",
     "add-new-account": "Add New Account",
     "validate-management": "Validate",
+    "account-index-placeholder": "Account #",
     "manage-accounts-mode": "Add / Hide",
     "confirm-address-on-ledger": "Confirm Address On Ledger",
     "confirming-account-address-on-ledger-device": "Confirming account address on Ledger device...",

@@ -53,6 +53,7 @@
     "account-address-denied-if-it-is-wrong-do-not-use-the-wallet": "Dirección de la cuenta rechazada: si no es correcta, ¡no uses la cartera!",
     "add-new-account": "Añadir nueva cuenta",
     "validate-management": "Validar",
+    "account-index-placeholder": "N.º de cuenta",
     "manage-accounts-mode": "Añadir / Ocultar",
     "confirm-address-on-ledger": "Confirmar dirección en Ledger",
     "confirming-account-address-on-ledger-device": "Confirmando la dirección en el dispositivo Ledger...",

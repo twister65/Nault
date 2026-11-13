@@ -410,6 +410,7 @@
     "account-address-denied-if-it-is-wrong-do-not-use-the-wallet": "Konto-Adresse abgelehnt – wenn sie falsch ist, verwenden Sie das Wallet nicht!",
     "add-new-account": "Neues Konto hinzufügen",
     "validate-management": "Bestätigen",
+    "account-index-placeholder": "Kontonummer",
     "manage-accounts-mode": "Hinzufügen / Ausblenden",
     "confirm-address-on-ledger": "Adresse auf Ledger bestätigen",
     "confirming-account-address-on-ledger-device": "Konto-Adresse auf dem Ledger-Gerät wird bestätigt ...",
