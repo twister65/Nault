@@ -68,3 +68,27 @@ th.hidden-column, td.hidden-column {
 }
 .accounts-refresh-button:disabled { opacity: .45; cursor: default; }
 .accounts-refresh-button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+/* Expose both account-management and simple-mode actions as proper mobile buttons. */
+.accounts-heading { white-space: normal; }
+.accounts-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 6px 12px;
+  margin-left: 12px;
+  vertical-align: middle;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.8rem;
+  line-height: 1.25;
+  cursor: pointer;
+  white-space: normal;
+}
+.accounts-mode-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+@media (max-width: 640px) {
+  .accounts-mode-toggle { margin: 8px 0 0; }
+}

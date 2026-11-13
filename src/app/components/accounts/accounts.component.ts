@@ -57,6 +57,13 @@ export class AccountsComponent implements OnInit {
   viewAdvanced = false;
   newAccountIndex = null;
 
+  // Account management mode only changes visible controls, not receive state.
+  toggleAccountManagementMode(): void {
+    this.viewAdvanced = !this.viewAdvanced;
+    // Never reuse an unsaved manual derivation index after leaving management.
+    if (!this.viewAdvanced) this.newAccountIndex = null;
+  }
+
   // When we change the accounts, redetect changable reps (Debounce by 5 seconds)
   accountsChanged$ = new Subject();
   reloadRepWarning$ = this.accountsChanged$.pipe(debounce(() => timer(5000)));

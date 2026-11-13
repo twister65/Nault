@@ -49,3 +49,41 @@ describe('AccountsComponent', () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 });
+
+describe('AccountsComponent account-management mode', () => {
+  let component: AccountsComponent;
+
+  beforeEach(waitForAsync(() => {
+    isolateConstructorIO();
+    TestBed.configureTestingModule({
+      imports: [ComponentTestModule]
+    }).compileComponents();
+  }));
+
+  beforeEach(() => {
+    component = TestBed.createComponent(AccountsComponent).componentInstance;
+  });
+
+  it('shows simple account view by default and allows explicit return from Add / Hide', () => {
+    expect(component.viewAdvanced).toBeFalse();
+    component.toggleAccountManagementMode();
+    expect(component.viewAdvanced).toBeTrue();
+    component.newAccountIndex = '9' as any;
+    component.toggleAccountManagementMode();
+    expect(component.viewAdvanced).toBeFalse();
+    expect(component.newAccountIndex).toBeNull();
+    component.toggleAccountManagementMode();
+    expect(component.viewAdvanced).toBeTrue();
+    expect(component.newAccountIndex).toBeNull();
+  });
+
+  it('does not change pending receivables when switching the account display mode', () => {
+    const wallet = (component as any).walletService.wallet;
+    const pendingRef = wallet.pendingBlocks;
+    const wasLocked = wallet.locked;
+    component.toggleAccountManagementMode();
+    component.toggleAccountManagementMode();
+    expect(wallet.pendingBlocks).toBe(pendingRef);
+    expect(wallet.locked).toBe(wasLocked);
+  });
+});

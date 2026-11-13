@@ -408,7 +408,7 @@
     "account-address-confirmed-on-ledger": "Konto-Adresse auf Ledger bestätigt",
     "account-address-denied-if-it-is-wrong-do-not-use-the-wallet": "Konto-Adresse abgelehnt – wenn sie falsch ist, verwenden Sie das Wallet nicht!",
     "add-new-account": "Neues Konto hinzufügen",
-    "advanced-mode": "Erweiterter Modus",
+    "manage-accounts-mode": "Hinzufügen / Ausblenden",
     "confirm-address-on-ledger": "Adresse auf Ledger bestätigen",
     "confirming-account-address-on-ledger-device": "Konto-Adresse auf dem Ledger-Gerät wird bestätigt ...",
     "hide-account": "Konto ausblenden",

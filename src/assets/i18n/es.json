@@ -52,7 +52,7 @@
     "account-address-confirmed-on-ledger": "Dirección de la cuenta confirmada en Ledger",
     "account-address-denied-if-it-is-wrong-do-not-use-the-wallet": "Dirección de la cuenta rechazada: si no es correcta, ¡no uses la cartera!",
     "add-new-account": "Añadir nueva cuenta",
-    "advanced-mode": "Modo avanzado",
+    "manage-accounts-mode": "Añadir / Ocultar",
     "confirm-address-on-ledger": "Confirmar dirección en Ledger",
     "confirming-account-address-on-ledger-device": "Confirmando la dirección en el dispositivo Ledger...",
     "hide-account": "Ocultar cuenta",
