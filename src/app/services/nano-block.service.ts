@@ -7,7 +7,7 @@ import {NotificationService} from './notification.service';
 import {AppSettingsService} from './app-settings.service';
 import {LedgerService, LedgerStatus, getLedgerSigningIssue} from './ledger.service';
 import { WalletAccount } from './wallet.service';
-import {BehaviorSubject} from 'rxjs';
+import {BehaviorSubject, Subject} from 'rxjs';
 import { tools as nanocurrencyWebTools } from 'nanocurrency-web';
 // The bundled Nano nacl shim exposes the existing detached-signature API.
 const nacl = (window as unknown as {
@@ -49,6 +49,11 @@ export class NanoBlockService {
   epochV2SignerAccount = 'nano_3qb6o6i1tkzr6jwr5s7eehfxwg9x6eemitdinbpi7u8bjjwsgqfj4wzser3x';
 
   newOpenBlock$: BehaviorSubject<boolean|false> = new BehaviorSubject(false);
+
+  // A 0x6985 refusal is the user's decision, not a transport failure.
+  // WalletService must keep the source block receivable but stop asking for
+  // this same signature automatically until the user initiates another receive.
+  readonly ledgerReceiveRejected$ = new Subject<{ account: string; sourceBlock: string }>();
 
   constructor(
     private api: ApiService,
@@ -328,6 +333,11 @@ export class NanoBlockService {
         blockData.signature = sig.signature.toUpperCase();
       } catch (err) {
         this.notifications.removeNotification('ledger-sign');
+        if (getLedgerSigningIssue(err) === 'rejected') {
+          // Do not automatically re-request an explicitly declined receive
+          // after a balance refresh, WebSocket event or BLE reconnect.
+          this.ledgerReceiveRejected$.next({ account: walletAccount.id, sourceBlock });
+        }
         if (this.ledgerService.isUnavailableError(err)) {
           this.ledgerService.handleUnavailableReceive();
         } else {

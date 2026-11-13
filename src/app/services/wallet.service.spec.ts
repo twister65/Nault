@@ -2,6 +2,79 @@ import { of, Subject } from 'rxjs';
 import { LedgerStatus } from './ledger.service';
 import { WalletService } from './wallet.service';
 
+describe('WalletService rejected Ledger auto-receive (0x6985)', () => {
+  function setup() {
+    const rejected$ = new Subject<{account: string; sourceBlock: string}>();
+    const nanoBlock: any = {
+      ledgerReceiveRejected$: rejected$,
+      generateReceive: jasmine.createSpy('generateReceive').and.resolveTo(null)
+    };
+    const ledger: any = {
+      ledgerStatus$: new Subject(),
+      ledger: { status: LedgerStatus.READY },
+      clearPendingReconnect: jasmine.createSpy('clearPendingReconnect')
+    };
+    const settings: any = { settings: { pendingOption: 'amount' } };
+    const service = new WalletService(
+      null as any, null as any, settings,
+      { addressBook$: of(null) } as any,
+      null as any, null as any,
+      { newTransactions$: of(null), connected$: new Subject<void>() } as any,
+      nanoBlock, ledger, null as any, null as any
+    );
+    service.wallet.type = 'ledger';
+    service.wallet.locked = false;
+    service.wallet.accounts = [{id: 'nano_account', index: 0}] as any;
+    service.wallet.pendingBlocks = [
+      {account: 'nano_account', hash: 'receive-one', amount: '1', source: 'sender'}
+    ];
+    return {service, rejected$, nanoBlock};
+  }
+
+  it('does not automatically re-prompt the same pending receive after explicit rejection', async () => {
+    const {service, rejected$, nanoBlock} = setup();
+    nanoBlock.generateReceive.and.callFake(async () => {
+      rejected$.next({account: 'nano_account', sourceBlock: 'receive-one'});
+      return null;
+    });
+    await service.processPendingBlocks();
+    await service.processPendingBlocks(); // e.g. another balance refresh or reconnect
+    expect(nanoBlock.generateReceive).toHaveBeenCalledTimes(1);
+    expect(service.wallet.pendingBlocks.map(block => block.hash)).toEqual(['receive-one']);
+    // The user's later explicit Account Details receive does not use this queue.
+    await nanoBlock.generateReceive(service.wallet.accounts[0], 'receive-one', true);
+    expect(nanoBlock.generateReceive).toHaveBeenCalledTimes(2);
+  });
+
+  it('suppresses only refused hashes, permits other pending receives and clears on wallet reset', async () => {
+    const {service, rejected$, nanoBlock} = setup();
+    rejected$.next({account: 'nano_account', sourceBlock: 'receive-one'});
+    service.wallet.pendingBlocks.push({
+      account: 'nano_account', hash: 'receive-two', amount: '2', source: 'sender'
+    });
+    await service.processPendingBlocks();
+    expect(nanoBlock.generateReceive).toHaveBeenCalledOnceWith(
+      service.wallet.accounts[0], 'receive-two', true
+    );
+    service.resetWallet = service.resetWallet.bind(service);
+    (service as any).websocket = {unsubscribeAccounts: jasmine.createSpy('unsubscribeAccounts')};
+    service.resetWallet();
+    service.wallet.type = 'ledger';
+    service.wallet.accounts = [{id: 'nano_account', index: 0}] as any;
+    service.wallet.pendingBlocks = [{account: 'nano_account', hash: 'receive-one', amount: '1', source: 'sender'}];
+    await service.processPendingBlocks();
+    expect(nanoBlock.generateReceive).toHaveBeenCalledTimes(2);
+    expect(nanoBlock.generateReceive.calls.mostRecent().args[1]).toBe('receive-one');
+  });
+
+  it('ignores refusal notifications for addresses outside the active wallet', async () => {
+    const {service, rejected$, nanoBlock} = setup();
+    rejected$.next({account: 'nano_other', sourceBlock: 'receive-one'});
+    await service.processPendingBlocks();
+    expect(nanoBlock.generateReceive).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('WalletService', () => {
   it('initializes with isolated websocket and address-book event streams', () => {
     // Constructor smoke test: no real RPC connection, Ledger or wallet secrets.
@@ -264,6 +337,8 @@ describe('WalletService successful incoming-block coalescing', () => {
     service.nanoBlock = { generateReceive };
     service.successfulBlocks = ['already-received'];
     service.processingPending = false;
+    // Object.create bypasses class field initializers (the real service initializes this Set).
+    service.rejectedAutoReceiveHashes = new Set<string>();
 
     jasmine.clock().install();
     try {

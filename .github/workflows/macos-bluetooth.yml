@@ -3,7 +3,7 @@ name: macOS Web Bluetooth test build
 on:
   workflow_dispatch:
   push:
-    branches: [fix/ledger-bluetooth]
+    branches: [fix/ledger-bluetooth, maintenance/electron-45]
     paths:
       - '.github/workflows/macos-bluetooth.yml'
       - 'desktop-app/macos-bluetooth.json'

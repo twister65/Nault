@@ -64,7 +64,7 @@ test('Ledger devices and legacy native build chain remain on compatible patched 
   }
   // Keep the security smoke test aligned with the pinned Electron 44 patch.
   // Version-specific integrity is checked in the lockfile and npm ci.
-  assert.match(manifest.devDependencies.electron, /^44\.[0-9]+\.[0-9]+$/);
+  assert.match(manifest.devDependencies.electron, /^45\.[0-9]+\.[0-9]+$/);
   assert.equal(manifest.devDependencies.electron, lock.packages['node_modules/electron'].version);
   assert.equal(manifest.dependencies['@ledgerhq/devices'], '7.0.2');
 });

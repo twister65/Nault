@@ -57,7 +57,7 @@ test('Karma and Socket.IO dependencies still resolve with unchanged major APIs',
     assert.ok(dep, parent + ' does not resolve ' + name);
     assert.equal(dep.version, expected, parent + ' needs patched ' + name);
   }
-  assert.match(manifest.devDependencies.electron, /^44\.[0-9]+\.[0-9]+$/);
+  assert.match(manifest.devDependencies.electron, /^45\.[0-9]+\.[0-9]+$/);
   assert.equal(manifest.devDependencies.electron, pk['node_modules/electron'].version);
   assert.equal(pk['node_modules/@ledgerhq/hw-transport-node-hid']?.version, '6.27.5');
   assert.equal(pk['node_modules/tar-fs']?.version, '2.1.4');
