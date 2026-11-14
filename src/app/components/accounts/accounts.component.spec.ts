@@ -138,7 +138,7 @@ describe('AccountsComponent add-account action availability', () => {
     component = fixture.componentInstance;
   });
 
-  it('only renders the header Add Account action in Add / Hide mode', () => {
+  it('only renders the header Add Account action in Show / Hide mode', () => {
     // Render both view states from fresh fixtures. Avoid toggling component
     // state between Angular's automatic change-detection verification passes:
     // the live toggle and RPC reconciliation are covered by focused tests above.
