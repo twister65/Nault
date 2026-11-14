@@ -2,7 +2,7 @@
 
 GitHub's raw Assets list cannot be grouped manually. Instead, release notes group the downloads under **Windows**, **macOS (Intel / Apple Silicon)** and **Linux**, without numeric prefixes. Linux installer names identify Debian/Ubuntu/Mint, Fedora/openSUSE, Arch/Manjaro or portable AppImage. Two native macOS runners generate x64 and arm64 DMG/ZIP packages; a release-assembly job merges their verified update entries into one `latest-mac.yml`. The updater metadata filenames `latest.yml`, `latest-mac.yml` and `latest-linux.yml` remain unchanged.
 
-The tag-triggered **Electron App Release** workflow builds four Linux x64 formats from the same immutable release tag, alongside Windows NSIS and native macOS Intel and Apple Silicon DMG/ZIP archives. A release is not published until artifacts for all platforms exist and SHA256 verification succeeds. This does not deploy the PWA.
+The tag-triggered **Electron App Release** workflow builds four Linux x64 formats from the same immutable release tag, alongside Windows NSIS and native macOS Intel and Apple Silicon DMG/ZIP archives. A release is not published until artifacts for all platforms exist, SHA256 verification succeeds, and the nine release installers/update ZIPs pass signed **SLSA build provenance** verification against the exact tag commit and trusted workflow. See [Build provenance and user verification](security/release-build-provenance.md). This does not deploy the PWA.
 
 | Linux distribution | Artifact | Application menu |
 | --- | --- | --- |
