@@ -1,4 +1,4 @@
-import { DeviceUnlockService } from './device-unlock.service';
+import { DeviceUnlockService, isWindowsWebDeviceUnlockDisabled } from './device-unlock.service';
 
 // The browser performs the platform authenticator ceremony; these tests
 // exercise only our local PRF-derived authenticated envelope and bindings.
@@ -22,6 +22,21 @@ class MockAuthenticatorUnlock extends DeviceUnlockService {
 }
 
 describe('WebAuthn PRF local device unlock', () => {
+  it('blocks Windows browsers/PWAs but preserves Android, ChromeOS, Linux and macOS', () => {
+    expect(isWindowsWebDeviceUnlockDisabled('Win32', 'Mozilla/5.0')).toBeTrue();
+    expect(isWindowsWebDeviceUnlockDisabled('Win64', 'Mozilla/5.0')).toBeTrue();
+    expect(isWindowsWebDeviceUnlockDisabled(
+      'Linux x86_64', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )).toBeTrue();
+    expect(isWindowsWebDeviceUnlockDisabled(
+      'Linux armv8l', 'Mozilla/5.0 (Linux; Android 14; Pixel)'
+    )).toBeFalse();
+    expect(isWindowsWebDeviceUnlockDisabled(
+      'Linux x86_64', 'Mozilla/5.0 (X11; CrOS x86_64 16000.0.0)'
+    )).toBeFalse();
+    expect(isWindowsWebDeviceUnlockDisabled('MacIntel', 'Mozilla/5.0 (Macintosh)')).toBeFalse();
+  });
+
   let service: MockAuthenticatorUnlock;
   beforeEach(() => {
     service = new MockAuthenticatorUnlock();
@@ -72,6 +87,21 @@ describe('WebAuthn PRF local device unlock', () => {
     expect(service.has('wallet')).toBeFalse();
     await expectAsync(service.unlock('wallet', 'anything')).toBeRejected();
     expect(service.has('pow')).toBeFalse();
+  });
+
+  it('disables Windows device operations without removing an existing enrollment', async () => {
+    await service.enroll('pow', 'vault passphrase', 'vault-v2');
+    const existingRecord = localStorage.getItem('nault-device-unlock-prf-v1-pow');
+    expect(existingRecord).toBeTruthy();
+
+    spyOnProperty(navigator, 'platform', 'get').and.returnValue('Win32');
+    const windowsService = new DeviceUnlockService();
+    expect(await windowsService.isSupported()).toBeFalse();
+    await expectAsync(windowsService.enroll('pow', 'other password', 'vault-v2'))
+      .toBeRejectedWithError('Secure device unlock is not available');
+    await expectAsync(windowsService.unlock('pow', 'vault-v2'))
+      .toBeRejectedWithError('Secure device unlock is not available');
+    expect(localStorage.getItem('nault-device-unlock-prf-v1-pow')).toBe(existingRecord);
   });
 
   it('removes only the requested per-purpose local enrollment', async () => {
