@@ -91,6 +91,28 @@ removing the system passkey, or updating the wallet/vault password may remove
 quick unlock. **Keep the normal wallet password, vault password and an offline
 seed backup**. There is no remote recovery path.
 
+### Temporary Windows browser/PWA restriction (November 2026)
+
+Until the Windows WebAuthn PRF interoperability issue is addressed upstream,
+**device unlock is disabled in Nault's Windows web runtime** (installed PWA
+and regular HTTPS browser tab). A centralized guard in
+`DeviceUnlockService.isSupported()` suppresses wallet and PoW vault device
+unlock controls and prevents enrollment or assertion even when a local
+credential was previously registered. Windows is detected from the browser's
+platform and Windows NT user agent; no Windows Hello capability probing or
+WebAuthn prompt is attempted.
+
+Normal software-wallet and PoW vault password unlock remain functional.
+Existing encrypted device-unlock records are **not deleted**; they remain
+unusable on Windows until the workaround is removed. Android, ChromeOS, Linux
+and macOS web runtimes retain their existing capability-based behavior.
+Electron Desktop remains outside the current WebAuthn PRF scope.
+
+Regression checks: a Windows Chrome/Edge PWA must not offer the option in
+wallet settings, the unlock modal, PoW settings, or the startup vault prompt.
+Check a pre-enrolled profile, and verify password fallback; repeat supported
+device-unlock workflows on Android and ChromeOS.
+
 ## Validation evidence (PR #89)
 
 The staging build at `https://nault-tablet-css-test.vercel.app/` was
