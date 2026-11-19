@@ -294,6 +294,31 @@
     flex-shrink: 0;
 }
 
+/* The Nano blue circle is a bundled vector so merchant payments render offline. */
+.merchant-mode-payment-heading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    flex-wrap: wrap;
+}
+
+.merchant-mode-nano-circle-badge {
+    display: block;
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.merchant-mode-pay-to {
+    margin: -16px 0 10px;
+}
+
+.merchant-mode-pay-to-no-amount {
+    margin-top: 12px;
+}
+
 .merchant-mode-currency-symbol {
     font-family: 'Open Sans', 'DejaVu Sans', Arial, Helvetica, sans-serif;
     font-size: 34px;
