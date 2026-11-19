@@ -267,10 +267,19 @@
 }
 
 .merchant-mode-amount-integer,
-.merchant-mode-amount-fractional,
-.merchant-mode-currency-name {
+.merchant-mode-amount-fractional {
     font-family: 'Montserrat', Arial, Helvetica, sans-serif;
     font-size: 34px;
+}
+
+/* U+04FE is the officially recommended text symbol for nano.
+   Use a font with Cyrillic glyph support; the double-stroke SVG remains
+   reserved for graphic icons such as the amount input. */
+.merchant-mode-currency-symbol {
+    font-family: 'Open Sans', 'DejaVu Sans', Arial, Helvetica, sans-serif;
+    font-size: 34px;
+    font-weight: 600;
+    margin-right: 0.2em;
 }
 
 .merchant-mode-amount-integer {
@@ -283,7 +292,4 @@
 
 .merchant-mode-currency-name {
     font-weight: 400;
-}
-.merchant-mode-currency-margin {
-    margin-left: 10px;
 }
