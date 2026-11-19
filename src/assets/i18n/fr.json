@@ -570,6 +570,7 @@
     "merchant-summary-paid": "Montant payé",
     "merchant-summary-transactions": "Identifiants des transactions",
     "merchant-copy-info": "Copier les informations du paiement",
+    "merchant-qr-alt": "QR code de paiement",
     "receive-nano": "Recevoir des Nano",
     "all-accounts": "Tous les comptes",
     "requested-amount": "Montant demandé",
