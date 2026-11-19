@@ -55,9 +55,22 @@ assert.doesNotMatch(
   merchantMarkup, /ui-receive\.merchant-send-xno|class="merchant-mode-nano-circle-badge"/,
   'Legacy merchant heading and old tiny circle badge must be removed'
 );
+const badgeUrlMatches = [...receiveSource.matchAll(/https:\/\/[^\s"'`]+\.svg/g)].map(match => match[0]);
+const hasOfficialBadgeUrl = badgeUrlMatches.some(urlText => {
+  try {
+    const parsed = new URL(urlText);
+    return (
+      parsed.protocol === 'https:' &&
+      parsed.host === 'assets.nano.org' &&
+      parsed.pathname.startsWith('/img/badges/blue-') &&
+      parsed.pathname.endsWith('-var1.svg')
+    );
+  } catch {
+    return false;
+  }
+});
 assert.ok(
-  receiveSource.includes('https://assets.nano.org/img/badges/blue-') &&
-  receiveSource.includes('-var1.svg') &&
+  hasOfficialBadgeUrl &&
   receiveSource.includes("language === 'fr' || language === 'de' || language === 'es'"),
   'The official badge variants must be selected for French, German, Spanish and English'
 );
