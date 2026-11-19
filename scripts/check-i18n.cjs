@@ -36,7 +36,6 @@ for (const language of ['fr', 'es', 'de']) {
   console.log('Translation validated: ' + language + ', ' + Object.keys(translation).length + ' entries');
 }
 
-
 // Validate official nano currency character usage in merchant-only UI.
 // Text uses U+04FE (single stroke); the existing xno-symbol.svg displays
 // the double-stroke graphic in the amount input.
@@ -50,7 +49,7 @@ assert.equal(
   'Expected official nano text symbol for unspecified, requested, partial and received amounts'
 );
 assert.equal(
-  (merchantMarkup.match(/role="img" aria-label="nano \\(XNO\\)">\\u04FE<\\/span>/g) || []).length,
+  (merchantMarkup.match(/role="img" aria-label="nano \(XNO\)">Ӿ<\/span>/g) || []).length,
   4,
   'Each nano amount symbol must have the accessible nano (XNO) label'
 );
@@ -60,12 +59,12 @@ assert.ok(
 );
 for (const key of ['merchant-summary-requested', 'merchant-summary-paid']) {
   assert.ok(
-    merchantMarkup.includes("('ui-receive." + key + "' | transloco) + ': \\u04FE '"),
+    merchantMarkup.includes("('ui-receive." + key + "' | transloco) + ': Ӿ '"),
     'Clipboard payment summary must prefix amounts with U+04FE: ' + key
   );
 }
 assert.equal(
-  (merchantMarkup.match(/\\+ ' \\(XNO\\)'/g) || []).length, 2,
+  (merchantMarkup.match(/\+ ' \(XNO\)'/g) || []).length, 2,
   'Keep ISO 4217 ticker XNO in copied text for interoperability'
 );
 console.log('Merchant-mode Nano currency symbol validated: U+04FE');
