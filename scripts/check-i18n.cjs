@@ -36,28 +36,39 @@ for (const language of ['fr', 'es', 'de']) {
   console.log('Translation validated: ' + language + ', ' + Object.keys(translation).length + ' entries');
 }
 
-// Merchant checkout uses the Nano symbol instead of visible XNO text.
-// The QR/payment header uses the bundled blue circle badge; numeric amounts
-// use U+04FE, and the amount input uses the double-stroke SVG artwork.
+// Official, language-dependent Nano "accepted here" badge is displayed
+// above the QR code. Keep currency glyphs only beside numeric amounts.
 const merchantMarkup = fs.readFileSync(
   path.join(__dirname, '..', 'src', 'app', 'components', 'receive', 'receive.component.html'), 'utf8'
 ).split('<div class="merchant-mode-overlay"')[1];
-assert.ok(merchantMarkup, 'Merchant mode template must exist');
-
-const blueBadge = fs.readFileSync(
-  path.join(__dirname, '..', 'src', 'assets', 'img', 'nano-circle-badge-blue.svg'), 'utf8'
+const receiveSource = fs.readFileSync(
+  path.join(__dirname, '..', 'src', 'app', 'components', 'receive', 'receive.component.ts'), 'utf8'
 );
-assert.match(blueBadge, /<circle[^>]+fill="#209CE9"/, 'Blue badge must use official Nano Blue');
-assert.match(blueBadge, /fill="#fff"/, 'Blue badge should have a white Nano mark');
+assert.ok(merchantMarkup, 'Merchant mode template must exist');
 assert.ok(
-  merchantMarkup.includes('src="assets/img/nano-circle-badge-blue.svg"') &&
-  merchantMarkup.includes("'ui-receive.merchant-badge-alt' | transloco"),
-  'Merchant QR/payment title must display the accessible bundled blue circle badge'
+  merchantMarkup.includes('class="merchant-mode-accepted-badge"') &&
+  merchantMarkup.includes('[src]="merchantModeAcceptedBadgeUrl"') &&
+  merchantMarkup.includes("'ui-receive.merchant-accepted-badge-alt' | transloco"),
+  'Merchant checkout must use an official Nano accepted-here badge'
 );
 assert.doesNotMatch(
-  merchantMarkup,
-  />XNO<| \(XNO\)|\/ XNO/,
-  'Merchant payment content should show Nano symbols, not the XNO ticker'
+  merchantMarkup, /ui-receive\.merchant-send-xno|class="merchant-mode-nano-circle-badge"/,
+  'Legacy merchant heading and old tiny circle badge must be removed'
+);
+assert.ok(
+  receiveSource.includes('https://assets.nano.org/img/badges/blue-') &&
+  receiveSource.includes('-var1.svg') &&
+  receiveSource.includes("language === 'fr' || language === 'de' || language === 'es'"),
+  'The official badge variants must be selected for French, German, Spanish and English'
+);
+assert.ok(
+  merchantMarkup.includes('src="assets/img/nano-circle-badge-blue.svg"') &&
+  merchantMarkup.includes('merchantModeAcceptedBadgeLoadFailed'),
+  'Provide a local offline image fallback'
+);
+assert.doesNotMatch(
+  merchantMarkup, />XNO<| \(XNO\)|\/ XNO/,
+  'Merchant payment content should display Nano symbols, not the XNO ticker'
 );
 assert.ok(
   merchantMarkup.includes('class="uk-form-icon uk-link-reset uk-link-muted merchant-mode-symbol-icon"') &&
@@ -80,16 +91,17 @@ for (const language of ['en', 'fr', 'de', 'es']) {
     labels['merchant-amount-placeholder'].includes('Ӿ'),
     language + ': merchant amount placeholder should display the Nano symbol'
   );
-  assert.doesNotMatch(
-    labels['merchant-send-xno'],
-    /XNO/,
-    language + ': QR payment header should not contain the currency ticker'
+  assert.ok(
+    labels['merchant-accepted-badge-alt']?.trim(),
+    language + ': the official badge needs accessible translated alternative text'
   );
 }
+assert.equal(read('fr')['ui-receive']['merchant-accepted-badge-alt'], 'Nano accepté ici');
+assert.equal(read('en')['ui-receive']['merchant-accepted-badge-alt'], 'Nano accepted here');
 for (const key of ['merchant-summary-requested', 'merchant-summary-paid']) {
   assert.ok(
     merchantMarkup.includes("('ui-receive." + key + "' | transloco) + ': Ӿ '"),
     'Copied payment summary should prefix amounts with U+04FE: ' + key
   );
 }
-console.log('Merchant currency and blue circle badge validated');
+console.log('Official localized Nano accepted-here badge and currency symbol validated');
