@@ -494,7 +494,7 @@
             style="margin-bottom: 40px;"
             >
             @if (qrCodeImage) {
-              <img class="merchant-mode-qr-code" [src]="qrCodeImage" alt="QR code">
+              <img class="merchant-mode-qr-code" [src]="qrCodeImage" [alt]="'ui-receive.merchant-qr-alt' | transloco">
             }
             @if (!qrCodeImage) {
               <div class="merchant-mode-qr-code"><div uk-spinner="ratio: 2;"></div></div>
