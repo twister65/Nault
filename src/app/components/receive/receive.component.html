@@ -441,7 +441,14 @@
               <p class="uk-text-large">{{ 'ui-receive.merchant-enter-the' | transloco }} <span class="uk-text-primary">{{ 'ui-receive.merchant-amount-to-receive' | transloco }}</span></p>
               <div class="form-amount">
                 <div class="uk-width-1-1 uk-inline">
-                  <label class="uk-form-icon uk-link-reset uk-link-muted xno-symbol" for="form-horizontal-amount"></label>
+                  <label class="uk-form-icon uk-link-reset uk-link-muted merchant-mode-symbol-icon" for="form-horizontal-amount" aria-label="nano (XNO)">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 820" width="18" height="24" fill="currentColor" aria-hidden="true" focusable="false">
+                      <g transform="translate(-229.8 -130.61)">
+                        <path d="m839.59 940.22h-62.2l-236.05-367.69-239.65 367.69h-61.686l268.59-416.56-244.67-382.66h63.411l215.01 336.58 219.56-336.58h59.497l-247.3 381.57z"/>
+                        <path d="m298.99 499.31h483.62v45.456h-483.62zm0 136.37h483.64v45.457h-483.66z"/>
+                      </g>
+                    </svg>
+                  </label>
                   <input [(ngModel)]="amountNano" [ngClass]="{ 'uk-form-danger': !validNano }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" class="uk-input" id="form-horizontal-amount" (input)="nanoAmountChange()" style="padding-left: 52px !important;" type="number" step="any" [placeholder]="'ui-receive.merchant-amount-placeholder' | transloco" maxlength="40">
                 </div>
                 @if (settings.settings.displayCurrency) {
