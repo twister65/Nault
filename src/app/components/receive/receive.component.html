@@ -473,11 +473,23 @@
           </div>
         }
         @if ((inMerchantModeQR === true)) {
-          <p class="uk-text-large uk-margin-remove-bottom merchant-mode-payment-heading">
-            <span>{{ 'ui-receive.merchant-send-xno' | transloco }}</span>
-            <img class="merchant-mode-nano-circle-badge" src="assets/img/nano-circle-badge-blue.svg"
-                 [alt]="'ui-receive.merchant-badge-alt' | transloco" width="30" height="30">
-          </p>
+          <div class="merchant-mode-payment-heading">
+            <a href="https://nano.org" target="_blank" rel="noopener noreferrer"
+               [attr.aria-label]="'ui-receive.merchant-accepted-badge-alt' | transloco">
+              @if (!merchantModeAcceptedBadgeLoadFailed) {
+                <img class="merchant-mode-accepted-badge"
+                     [src]="merchantModeAcceptedBadgeUrl"
+                     [alt]="'ui-receive.merchant-accepted-badge-alt' | transloco"
+                     width="320" height="90"
+                     (error)="merchantModeAcceptedBadgeLoadFailed = true">
+              } @else {
+                <span class="merchant-mode-accepted-badge-fallback">
+                  <img src="assets/img/nano-circle-badge-blue.svg" width="42" height="42" alt="" aria-hidden="true">
+                  <span>{{ 'ui-receive.merchant-accepted-badge-alt' | transloco }}</span>
+                </span>
+              }
+            </a>
+          </div>
           @if ((amountNano !== '')) {
             <p class="uk-text-large uk-text-primary uk-margin-remove-top">
               <span class="merchant-mode-currency-symbol" role="img" aria-label="nano">Ӿ</span>
