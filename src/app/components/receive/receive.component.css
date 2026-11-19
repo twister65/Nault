@@ -275,6 +275,25 @@
 /* U+04FE is the officially recommended text symbol for nano.
    Use a font with Cyrillic glyph support; the double-stroke SVG remains
    reserved for graphic icons such as the amount input. */
+
+/* Use the existing double-stroke Nano artwork as real SVG content, not an
+   empty element whose visibility depends on a CSS mask. */
+.merchant-mode-symbol-icon.uk-form-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 48px;
+    color: #81809f;
+}
+
+.merchant-mode-symbol-icon svg {
+    display: block;
+    width: 18px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
 .merchant-mode-currency-symbol {
     font-family: 'Open Sans', 'DejaVu Sans', Arial, Helvetica, sans-serif;
     font-size: 34px;
