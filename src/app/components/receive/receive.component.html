@@ -441,7 +441,7 @@
               <p class="uk-text-large">{{ 'ui-receive.merchant-enter-the' | transloco }} <span class="uk-text-primary">{{ 'ui-receive.merchant-amount-to-receive' | transloco }}</span></p>
               <div class="form-amount">
                 <div class="uk-width-1-1 uk-inline">
-                  <label class="uk-form-icon uk-link-reset uk-link-muted merchant-mode-symbol-icon" for="form-horizontal-amount" aria-label="nano (XNO)">
+                  <label class="uk-form-icon uk-link-reset uk-link-muted merchant-mode-symbol-icon" for="form-horizontal-amount" aria-label="nano">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 820" width="18" height="24" fill="currentColor" aria-hidden="true" focusable="false">
                       <g transform="translate(-229.8 -130.61)">
                         <path d="m839.59 940.22h-62.2l-236.05-367.69-239.65 367.69h-61.686l268.59-416.56-244.67-382.66h63.411l215.01 336.58 219.56-336.58h59.497l-247.3 381.57z"/>
@@ -455,7 +455,7 @@
                   <div style="margin-top: 10px;">
                     <p class="text-half-muted" style="margin: 0 0 14px 0;">{{ 'ui-receive.merchant-or' | transloco }}</p>
                     <div class="uk-width-1-1 uk-inline">
-                      <a class="uk-form-icon uk-link-reset uk-link-muted fiat-currency-ticker" uk-tooltip title="{{ 'ui-receive-extra.last-price' | transloco }}: {{ price.price.lastPrice | fiat: settings.settings.displayCurrency }} / XNO">{{ settings.settings.displayCurrency | currencySymbol }}</a>
+                      <a class="uk-form-icon uk-link-reset uk-link-muted fiat-currency-ticker" uk-tooltip title="{{ 'ui-receive-extra.last-price' | transloco }}: {{ price.price.lastPrice | fiat: settings.settings.displayCurrency }} / Ӿ">{{ settings.settings.displayCurrency | currencySymbol }}</a>
                       <input [(ngModel)]="amountFiat" [ngClass]="{ 'uk-form-danger': !validFiat }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" (input)="fiatAmountChange()" style="padding-left: 52px !important;" class="uk-input" id="form-horizontal-text-fiat" type="number" step="any" [placeholder]="'ui-receive-extra.amount-of-currency' | transloco:{ currency: settings.settings.displayCurrency }">
                     </div>
                   </div>
@@ -473,25 +473,23 @@
           </div>
         }
         @if ((inMerchantModeQR === true)) {
-          <p class="uk-text-large uk-margin-remove-bottom">{{ 'ui-receive.merchant-send-xno' | transloco }}</p>
-          @if ((amountNano === '')) {
-            <p class="uk-text-large uk-text-primary uk-margin-remove-top">
-              <span class="merchant-mode-currency-symbol" role="img" aria-label="nano (XNO)">Ӿ</span>
-            </p>
-          }
+          <p class="uk-text-large uk-margin-remove-bottom merchant-mode-payment-heading">
+            <span>{{ 'ui-receive.merchant-send-xno' | transloco }}</span>
+            <img class="merchant-mode-nano-circle-badge" src="assets/img/nano-circle-badge-blue.svg"
+                 [alt]="'ui-receive.merchant-badge-alt' | transloco" width="30" height="30">
+          </p>
           @if ((amountNano !== '')) {
             <p class="uk-text-large uk-text-primary uk-margin-remove-top">
-              <span class="merchant-mode-currency-symbol" role="img" aria-label="nano (XNO)">Ӿ</span>
+              <span class="merchant-mode-currency-symbol" role="img" aria-label="nano">Ӿ</span>
               <span
                 class="merchant-mode-amount-integer"
               >{{ merchantModeRawRequestedQR | rai: 'mnano,true' | amountsplit: 0 }}</span>
               <span
                 class="merchant-mode-amount-fractional"
               >{{ merchantModeRawRequestedQR | rai: 'mnano,true' | amountsplit: 1 }}</span>
-              
             </p>
           }
-          <p class="text-half-muted" style="margin: -16px 0 10px 0;">{{ 'ui-receive.merchant-to' | transloco }}</p>
+          <p class="text-half-muted merchant-mode-pay-to" [class.merchant-mode-pay-to-no-amount]="amountNano === ''">{{ 'ui-receive.merchant-to' | transloco }}</p>
           <app-nano-account-id
             [accountID]="pendingAccountModel" middle="break"
             class="nano-address-monospace uk-width-auto"
@@ -539,14 +537,13 @@
                   [class.uk-text-success]="prompt.moreThanRequested"
                   [class.uk-text-warning]="prompt.lessThanRequested"
                   >
-                  <span class="merchant-mode-currency-symbol" role="img" aria-label="nano (XNO)">Ӿ</span>
+                  <span class="merchant-mode-currency-symbol" role="img" aria-label="nano">Ӿ</span>
                   <span
                     class="merchant-mode-amount-integer"
                   >{{ prompt.amountRaw | rai: 'mnano,true' | amountsplit: 0 }}</span>
                   <span
                     class="merchant-mode-amount-fractional"
                   >{{ prompt.amountRaw | rai: 'mnano,true' | amountsplit: 1 }}</span>
-                  
                 </p>
                 @if (prompt.amountHiddenRaw.gt(0)) {
                   <div
@@ -618,14 +615,13 @@
         @if ((inMerchantModePaymentComplete === true)) {
           <p class="uk-text-large uk-margin-remove-bottom uk-text-success">{{ 'general.blockactions.received' | transloco }}</p>
           <p class="uk-text-large uk-text-success uk-margin-remove-top">
-            <span class="merchant-mode-currency-symbol" role="img" aria-label="nano (XNO)">Ӿ</span>
+            <span class="merchant-mode-currency-symbol" role="img" aria-label="nano">Ӿ</span>
             <span
               class="merchant-mode-amount-integer"
             >{{ merchantModeRawReceivedTotal | rai: 'mnano,true' | amountsplit: 0 }}</span>
             <span
               class="merchant-mode-amount-fractional"
             >{{ merchantModeRawReceivedTotal | rai: 'mnano,true' | amountsplit: 1 }}</span>
-            
           </p>
           @if (merchantModeRawReceivedTotalHiddenRaw.gt(0)) {
             <div
@@ -645,12 +641,12 @@
                   ('ui-receive.merchant-summary-requested' | transloco) + ': Ӿ '
                 + ( merchantModeRawRequestedTotal | rai: 'mnano,true' | amountsplit: 0 )
                 + ( merchantModeRawRequestedTotal | rai: 'mnano,true' | amountsplit: 1 )
-                + ' (XNO)'
+                + ''
                 + '\n\n'
                 + ('ui-receive.merchant-summary-paid' | transloco) + ': Ӿ '
                 + ( merchantModeRawReceivedTotal | rai: 'mnano,true' | amountsplit: 0 )
                 + ( merchantModeRawReceivedTotal | rai: 'mnano,true' | amountsplit: 1 )
-                + ' (XNO)'
+                + ''
                 + '\n\n'
                 + ('ui-receive.merchant-summary-transactions' | transloco) + ':'
                 + '\n- '
