@@ -86,6 +86,19 @@ export class ReceiveComponent implements OnInit, OnDestroy {
   merchantModeSeenBlockHashes: Record<string, boolean> = {};
   merchantModePrompts: MerchantPrompt[] = [];
   merchantModeTransactionHashes: string[] = [];
+  merchantModeAcceptedBadgeLoadFailed = false;
+
+  // Use the exact Nano brand assets generated for each supported UI locale.
+  // The blue badge is served by Nano; a bundled local badge is a visual
+  // fallback when the remote asset cannot be loaded (e.g. offline PWA).
+  get merchantModeAcceptedBadgeUrl(): string {
+    const language = this.settings.settings.language;
+    const badgeLanguage = (language === 'fr' || language === 'de' || language === 'es')
+      ? language
+      : 'en';
+    return `https://assets.nano.org/img/badges/blue-${badgeLanguage}-var1.svg`;
+  }
+
 
   routerSub: Subscription | null = null;
 
@@ -463,6 +476,7 @@ export class ReceiveComponent implements OnInit, OnDestroy {
   }
 
   merchantModeResetState() {
+    this.merchantModeAcceptedBadgeLoadFailed = false;
     this.unsetSelectedAccount();
     this.resetAmount();
 

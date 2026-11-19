@@ -35,3 +35,86 @@ for (const language of ['fr', 'es', 'de']) {
   }
   console.log('Translation validated: ' + language + ', ' + Object.keys(translation).length + ' entries');
 }
+
+// Official, language-dependent Nano "accepted here" badge is displayed
+// above the QR code. Keep currency glyphs only beside numeric amounts.
+const merchantMarkup = fs.readFileSync(
+  path.join(__dirname, '..', 'src', 'app', 'components', 'receive', 'receive.component.html'), 'utf8'
+).split('<div class="merchant-mode-overlay"')[1];
+const receiveSource = fs.readFileSync(
+  path.join(__dirname, '..', 'src', 'app', 'components', 'receive', 'receive.component.ts'), 'utf8'
+);
+assert.ok(merchantMarkup, 'Merchant mode template must exist');
+assert.ok(
+  merchantMarkup.includes('class="merchant-mode-accepted-badge"') &&
+  merchantMarkup.includes('[src]="merchantModeAcceptedBadgeUrl"') &&
+  merchantMarkup.includes("'ui-receive.merchant-accepted-badge-alt' | transloco"),
+  'Merchant checkout must use an official Nano accepted-here badge'
+);
+assert.doesNotMatch(
+  merchantMarkup, /ui-receive\.merchant-send-xno|class="merchant-mode-nano-circle-badge"/,
+  'Legacy merchant heading and old tiny circle badge must be removed'
+);
+const badgeUrlMatches = [...receiveSource.matchAll(/https:\/\/[^\s"'`]+\.svg/g)].map(match => match[0]);
+const hasOfficialBadgeUrl = badgeUrlMatches.some(urlText => {
+  try {
+    const parsed = new URL(urlText);
+    return (
+      parsed.protocol === 'https:' &&
+      parsed.host === 'assets.nano.org' &&
+      parsed.pathname.startsWith('/img/badges/blue-') &&
+      parsed.pathname.endsWith('-var1.svg')
+    );
+  } catch {
+    return false;
+  }
+});
+assert.ok(
+  hasOfficialBadgeUrl &&
+  receiveSource.includes("language === 'fr' || language === 'de' || language === 'es'"),
+  'The official badge variants must be selected for French, German, Spanish and English'
+);
+assert.ok(
+  merchantMarkup.includes('src="assets/img/nano-circle-badge-blue.svg"') &&
+  merchantMarkup.includes('merchantModeAcceptedBadgeLoadFailed'),
+  'Provide a local offline image fallback'
+);
+assert.doesNotMatch(
+  merchantMarkup, />XNO<| \(XNO\)|\/ XNO/,
+  'Merchant payment content should display Nano symbols, not the XNO ticker'
+);
+assert.ok(
+  merchantMarkup.includes('class="uk-form-icon uk-link-reset uk-link-muted merchant-mode-symbol-icon"') &&
+  merchantMarkup.includes('viewBox="0 0 620 820"'),
+  'Merchant amount input must contain a visible double-stroke SVG'
+);
+assert.equal(
+  (merchantMarkup.match(/class="merchant-mode-currency-symbol"/g) || []).length,
+  3,
+  'Only numeric amount displays should show the Unicode currency sign (no orphan sign)'
+);
+assert.equal(
+  (merchantMarkup.match(/role="img" aria-label="nano">Ӿ<\/span>/g) || []).length,
+  3,
+  'All numeric amount prefixes must use accessible Nano U+04FE glyphs'
+);
+for (const language of ['en', 'fr', 'de', 'es']) {
+  const labels = read(language)['ui-receive'];
+  assert.ok(
+    labels['merchant-amount-placeholder'].includes('Ӿ'),
+    language + ': merchant amount placeholder should display the Nano symbol'
+  );
+  assert.ok(
+    labels['merchant-accepted-badge-alt']?.trim(),
+    language + ': the official badge needs accessible translated alternative text'
+  );
+}
+assert.equal(read('fr')['ui-receive']['merchant-accepted-badge-alt'], 'Nano accepté ici');
+assert.equal(read('en')['ui-receive']['merchant-accepted-badge-alt'], 'Nano accepted here');
+for (const key of ['merchant-summary-requested', 'merchant-summary-paid']) {
+  assert.ok(
+    merchantMarkup.includes("('ui-receive." + key + "' | transloco) + ': Ӿ '"),
+    'Copied payment summary should prefix amounts with U+04FE: ' + key
+  );
+}
+console.log('Official localized Nano accepted-here badge and currency symbol validated');

@@ -45,6 +45,9 @@ jobs:
       - name: Install dependencies from lockfile
         run: npm ci --legacy-peer-deps --no-audit --no-fund
 
+      - name: Validate merchant translations and Nano currency symbol
+        run: npm run test:i18n
+
       - name: Verify patched electron-updater dependency chain
         run: npm run test:electron-updater-security
 

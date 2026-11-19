@@ -400,7 +400,7 @@
           (click)="inMerchantModeQR ? merchantModeHideQR() : merchantModeDisable()"
           >
           <span uk-icon="icon: close; ratio: 1.4;" class="uk-margin-small-right" style="margin-top: 2px;"></span>
-          <span class="label">{{ inMerchantModeQR ? 'Cancel Payment' : 'Exit Merchant Mode' }}</span>
+          <span class="label">{{ (inMerchantModeQR ? 'ui-receive.cancel-payment' : 'ui-receive.merchant-exit') | transloco }}</span>
         </div>
       </div>
       <div class="merchant-centered-container uk-flex-1 uk-width-1-1 uk-flex uk-flex-column uk-flex-center uk-flex-middle uk-text-center">
@@ -431,24 +431,31 @@
             (click)="unsetSelectedAccount()"
             >
             <span class="nlt-icon" uk-icon="icon: pencil;"></span>
-            Change account
+            {{ 'ui-receive.merchant-change-account' | transloco }}
           </button>
           <div
             class="uk-width-1-1 uk-card uk-card-default uk-margin-bottom"
             style="margin-top: 60px;"
             >
             <div class="uk-card-body">
-              <p class="uk-text-large">{{ 'ui-receive-extra.enter-the' | transloco }} <span class="uk-text-primary">{{ 'ui-receive-extra.requested-amount-lower' | transloco }}</span></p>
+              <p class="uk-text-large">{{ 'ui-receive.merchant-enter-the' | transloco }} <span class="uk-text-primary">{{ 'ui-receive.merchant-amount-to-receive' | transloco }}</span></p>
               <div class="form-amount">
                 <div class="uk-width-1-1 uk-inline">
-                  <label class="uk-form-icon uk-link-reset uk-link-muted xno-symbol" for="form-horizontal-amount"></label>
-                  <input [(ngModel)]="amountNano" [ngClass]="{ 'uk-form-danger': !validNano }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" class="uk-input" id="form-horizontal-amount" (input)="nanoAmountChange()" style="padding-left: 52px !important;" type="number" step="any" [placeholder]="'ui-receive.amount-xno' | transloco" maxlength="40">
+                  <label class="uk-form-icon uk-link-reset uk-link-muted merchant-mode-symbol-icon" for="form-horizontal-amount" aria-label="nano">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 820" width="18" height="24" fill="currentColor" aria-hidden="true" focusable="false">
+                      <g transform="translate(-229.8 -130.61)">
+                        <path d="m839.59 940.22h-62.2l-236.05-367.69-239.65 367.69h-61.686l268.59-416.56-244.67-382.66h63.411l215.01 336.58 219.56-336.58h59.497l-247.3 381.57z"/>
+                        <path d="m298.99 499.31h483.62v45.456h-483.62zm0 136.37h483.64v45.457h-483.66z"/>
+                      </g>
+                    </svg>
+                  </label>
+                  <input [(ngModel)]="amountNano" [ngClass]="{ 'uk-form-danger': !validNano }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" class="uk-input" id="form-horizontal-amount" (input)="nanoAmountChange()" style="padding-left: 52px !important;" type="number" step="any" [placeholder]="'ui-receive.merchant-amount-placeholder' | transloco" maxlength="40">
                 </div>
                 @if (settings.settings.displayCurrency) {
                   <div style="margin-top: 10px;">
-                    <p class="text-half-muted" style="margin: 0 0 14px 0;">or</p>
+                    <p class="text-half-muted" style="margin: 0 0 14px 0;">{{ 'ui-receive.merchant-or' | transloco }}</p>
                     <div class="uk-width-1-1 uk-inline">
-                      <a class="uk-form-icon uk-link-reset uk-link-muted fiat-currency-ticker" uk-tooltip title="{{ 'ui-receive-extra.last-price' | transloco }}: {{ price.price.lastPrice | fiat: settings.settings.displayCurrency }} / XNO">{{ settings.settings.displayCurrency | currencySymbol }}</a>
+                      <a class="uk-form-icon uk-link-reset uk-link-muted fiat-currency-ticker" uk-tooltip title="{{ 'ui-receive-extra.last-price' | transloco }}: {{ price.price.lastPrice | fiat: settings.settings.displayCurrency }} / Ӿ">{{ settings.settings.displayCurrency | currencySymbol }}</a>
                       <input [(ngModel)]="amountFiat" [ngClass]="{ 'uk-form-danger': !validFiat }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" (input)="fiatAmountChange()" style="padding-left: 52px !important;" class="uk-input" id="form-horizontal-text-fiat" type="number" step="any" [placeholder]="'ui-receive-extra.amount-of-currency' | transloco:{ currency: settings.settings.displayCurrency }">
                     </div>
                   </div>
@@ -460,30 +467,41 @@
                 (click)="merchantModeShowQR()"
                 >
                 <span class="merchant-mode-icon-qr-code"></span>
-                Create QR code
+                {{ 'ui-receive.merchant-create-qr' | transloco }}
               </button>
             </div>
           </div>
         }
         @if ((inMerchantModeQR === true)) {
-          <p class="uk-text-large uk-margin-remove-bottom">{{ 'general.send' | transloco }}</p>
-          @if ((amountNano === '')) {
-            <p class="uk-text-large uk-text-primary uk-margin-remove-top">
-              <span class="merchant-mode-currency-name">XNO</span>
-            </p>
-          }
+          <div class="merchant-mode-payment-heading">
+            <a href="https://nano.org" target="_blank" rel="noopener noreferrer"
+               [attr.aria-label]="'ui-receive.merchant-accepted-badge-alt' | transloco">
+              @if (!merchantModeAcceptedBadgeLoadFailed) {
+                <img class="merchant-mode-accepted-badge"
+                     [src]="merchantModeAcceptedBadgeUrl"
+                     [alt]="'ui-receive.merchant-accepted-badge-alt' | transloco"
+                     width="320" height="90"
+                     (error)="merchantModeAcceptedBadgeLoadFailed = true">
+              } @else {
+                <span class="merchant-mode-accepted-badge-fallback">
+                  <img src="assets/img/nano-circle-badge-blue.svg" width="42" height="42" alt="" aria-hidden="true">
+                  <span>{{ 'ui-receive.merchant-accepted-badge-alt' | transloco }}</span>
+                </span>
+              }
+            </a>
+          </div>
           @if ((amountNano !== '')) {
             <p class="uk-text-large uk-text-primary uk-margin-remove-top">
+              <span class="merchant-mode-currency-symbol" role="img" aria-label="nano">Ӿ</span>
               <span
                 class="merchant-mode-amount-integer"
               >{{ merchantModeRawRequestedQR | rai: 'mnano,true' | amountsplit: 0 }}</span>
               <span
                 class="merchant-mode-amount-fractional"
               >{{ merchantModeRawRequestedQR | rai: 'mnano,true' | amountsplit: 1 }}</span>
-              <span class="merchant-mode-currency-name merchant-mode-currency-margin">XNO</span>
             </p>
           }
-          <p class="text-half-muted" style="margin: -16px 0 10px 0;">to</p>
+          <p class="text-half-muted merchant-mode-pay-to" [class.merchant-mode-pay-to-no-amount]="amountNano === ''">{{ 'ui-receive.merchant-to' | transloco }}</p>
           <app-nano-account-id
             [accountID]="pendingAccountModel" middle="break"
             class="nano-address-monospace uk-width-auto"
@@ -494,7 +512,7 @@
             style="margin-bottom: 40px;"
             >
             @if (qrCodeImage) {
-              <img class="merchant-mode-qr-code" [src]="qrCodeImage" alt="QR code">
+              <img class="merchant-mode-qr-code" [src]="qrCodeImage" [alt]="'ui-receive.merchant-qr-alt' | transloco">
             }
             @if (!qrCodeImage) {
               <div class="merchant-mode-qr-code"><div uk-spinner="ratio: 2;"></div></div>
@@ -509,7 +527,7 @@
                   <p
                     class="uk-text-large text-half-muted uk-margin-remove-bottom"
                     >
-                    Received
+                    {{ 'ui-receive.merchant-received' | transloco }}
                   </p>
                 }
                 @if ((amountNano !== '') && prompt.moreThanRequested) {
@@ -531,13 +549,13 @@
                   [class.uk-text-success]="prompt.moreThanRequested"
                   [class.uk-text-warning]="prompt.lessThanRequested"
                   >
+                  <span class="merchant-mode-currency-symbol" role="img" aria-label="nano">Ӿ</span>
                   <span
                     class="merchant-mode-amount-integer"
                   >{{ prompt.amountRaw | rai: 'mnano,true' | amountsplit: 0 }}</span>
                   <span
                     class="merchant-mode-amount-fractional"
                   >{{ prompt.amountRaw | rai: 'mnano,true' | amountsplit: 1 }}</span>
-                  <span class="merchant-mode-currency-name merchant-mode-currency-margin">XNO</span>
                 </p>
                 @if (prompt.amountHiddenRaw.gt(0)) {
                   <div
@@ -554,7 +572,7 @@
                     (click)="merchantModeMarkCompleteFromPrompt(prompt)"
                     >
                     <span class="nlt-icon" uk-icon="icon: check;" style="margin-top: -2px;"></span>
-                    Mark Payment Complete
+                    {{ 'ui-receive.merchant-mark-complete' | transloco }}
                   </button>
                 }
                 @if (prompt.lessThanRequested) {
@@ -564,7 +582,7 @@
                     (click)="merchantModeSubtractAmountFromPrompt(prompt, promptIdx)"
                     >
                     <span class="nlt-icon" uk-icon="icon: pencil;" style="margin-top: -2px;"></span>
-                    Subtract From Amount
+                    {{ 'ui-receive.merchant-subtract-amount' | transloco }}
                   </button>
                 }
                 <button
@@ -573,7 +591,7 @@
                   (click)="merchantModeDiscardPrompt(promptIdx)"
                   >
                   <span class="nlt-icon" uk-icon="icon: close;" style="margin-top: -2px;"></span>
-                  Discard As Unrelated
+                  {{ 'ui-receive.merchant-discard-unrelated' | transloco }}
                 </button>
               </div>
             </div>
@@ -594,7 +612,7 @@
               @if (loadingIncomingTxList) {
                 <span class="spinner" uk-spinner="ratio: 0.5;"></span>
               }
-              {{ loadingIncomingTxList ? 'Checking Payment...' : 'Check Payment' }}
+              {{ (loadingIncomingTxList ? 'ui-receive.merchant-checking-payment' : 'ui-receive.merchant-check-payment') | transloco }}
             </button>
           }
           <div
@@ -609,13 +627,13 @@
         @if ((inMerchantModePaymentComplete === true)) {
           <p class="uk-text-large uk-margin-remove-bottom uk-text-success">{{ 'general.blockactions.received' | transloco }}</p>
           <p class="uk-text-large uk-text-success uk-margin-remove-top">
+            <span class="merchant-mode-currency-symbol" role="img" aria-label="nano">Ӿ</span>
             <span
               class="merchant-mode-amount-integer"
             >{{ merchantModeRawReceivedTotal | rai: 'mnano,true' | amountsplit: 0 }}</span>
             <span
               class="merchant-mode-amount-fractional"
             >{{ merchantModeRawReceivedTotal | rai: 'mnano,true' | amountsplit: 1 }}</span>
-            <span class="merchant-mode-currency-name merchant-mode-currency-margin">XNO</span>
           </p>
           @if (merchantModeRawReceivedTotalHiddenRaw.gt(0)) {
             <div
@@ -632,23 +650,21 @@
               type="button"
               ngxClipboard
             [cbContent]="(
-                  'Amount Requested: '
+                  ('ui-receive.merchant-summary-requested' | transloco) + ': Ӿ '
                 + ( merchantModeRawRequestedTotal | rai: 'mnano,true' | amountsplit: 0 )
                 + ( merchantModeRawRequestedTotal | rai: 'mnano,true' | amountsplit: 1 )
-                + ' XNO'
                 + '\n\n'
-                + 'Amount Paid: '
+                + ('ui-receive.merchant-summary-paid' | transloco) + ': Ӿ '
                 + ( merchantModeRawReceivedTotal | rai: 'mnano,true' | amountsplit: 0 )
                 + ( merchantModeRawReceivedTotal | rai: 'mnano,true' | amountsplit: 1 )
-                + ' XNO'
                 + '\n\n'
-                + 'Transaction ID\'s:'
+                + ('ui-receive.merchant-summary-transactions' | transloco) + ':'
                 + '\n- '
                 + merchantModeTransactionHashes.join('\n- ')
             )"
               >
               <span class="nlt-icon" uk-icon="icon: copy;"></span>
-              Copy Payment Information
+              {{ 'ui-receive.merchant-copy-info' | transloco }}
             </button>
           </p>
           <ul class="uk-width-1-1">

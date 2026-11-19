@@ -267,10 +267,89 @@
 }
 
 .merchant-mode-amount-integer,
-.merchant-mode-amount-fractional,
-.merchant-mode-currency-name {
+.merchant-mode-amount-fractional {
     font-family: 'Montserrat', Arial, Helvetica, sans-serif;
     font-size: 34px;
+}
+
+/* U+04FE is the officially recommended text symbol for nano.
+   Use a font with Cyrillic glyph support; the double-stroke SVG remains
+   reserved for graphic icons such as the amount input. */
+
+/* Use the existing double-stroke Nano artwork as real SVG content, not an
+   empty element whose visibility depends on a CSS mask. */
+.merchant-mode-symbol-icon.uk-form-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 48px;
+    color: #81809f;
+}
+
+.merchant-mode-symbol-icon svg {
+    display: block;
+    width: 18px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+/* Official localized Nano accepted-here badge in the merchant QR checkout. */
+.merchant-mode-payment-heading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    margin: 0 auto 12px;
+}
+
+.merchant-mode-payment-heading a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 100%;
+}
+
+.merchant-mode-accepted-badge {
+    display: block;
+    width: min(320px, 80vw);
+    height: auto;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+.merchant-mode-accepted-badge-fallback {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-height: 78px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: #209ce9;
+    color: white;
+    font-family: 'Montserrat', Arial, Helvetica, sans-serif;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.merchant-mode-accepted-badge-fallback img {
+    flex-shrink: 0;
+}
+
+.merchant-mode-pay-to {
+    margin: -12px 0 10px;
+}
+
+.merchant-mode-pay-to-no-amount {
+    margin-top: 12px;
+}
+
+.merchant-mode-currency-symbol {
+    font-family: 'Open Sans', 'DejaVu Sans', Arial, Helvetica, sans-serif;
+    font-size: 34px;
+    font-weight: 600;
+    margin-right: 0.2em;
 }
 
 .merchant-mode-amount-integer {
@@ -281,9 +360,3 @@
     font-weight: 500;
 }
 
-.merchant-mode-currency-name {
-    font-weight: 400;
-}
-.merchant-mode-currency-margin {
-    margin-left: 10px;
-}
