@@ -37,12 +37,17 @@ for (const language of ['fr', 'es', 'de']) {
 }
 
 // Validate official nano currency character usage in merchant-only UI.
-// Text uses U+04FE (single stroke); the existing xno-symbol.svg displays
-// the double-stroke graphic in the amount input.
+// Text uses U+04FE (single stroke); the inline SVG uses the two-stroke
+// geometry from xno-symbol.svg for the merchant amount input.
 const merchantMarkup = fs.readFileSync(
   path.join(__dirname, '..', 'src', 'app', 'components', 'receive', 'receive.component.html'), 'utf8'
 ).split('<div class="merchant-mode-overlay"')[1];
 assert.ok(merchantMarkup, 'Merchant mode template must exist');
+assert.ok(
+  merchantMarkup.includes('class="uk-form-icon uk-link-reset uk-link-muted merchant-mode-symbol-icon"') &&
+  merchantMarkup.includes('viewBox="0 0 620 820"'),
+  'Merchant amount input must contain a real, visible double-stroke SVG'
+);
 assert.equal(
   (merchantMarkup.match(/class="merchant-mode-currency-symbol"/g) || []).length,
   4,
