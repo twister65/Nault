@@ -442,7 +442,7 @@
               <div class="form-amount">
                 <div class="uk-width-1-1 uk-inline">
                   <label class="uk-form-icon uk-link-reset uk-link-muted xno-symbol" for="form-horizontal-amount"></label>
-                  <input [(ngModel)]="amountNano" [ngClass]="{ 'uk-form-danger': !validNano }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" class="uk-input" id="form-horizontal-amount" (input)="nanoAmountChange()" style="padding-left: 52px !important;" type="number" step="any" [placeholder]="'ui-receive.amount-xno' | transloco" maxlength="40">
+                  <input [(ngModel)]="amountNano" [ngClass]="{ 'uk-form-danger': !validNano }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" class="uk-input" id="form-horizontal-amount" (input)="nanoAmountChange()" style="padding-left: 52px !important;" type="number" step="any" [placeholder]="'ui-receive.merchant-amount-placeholder' | transloco" maxlength="40">
                 </div>
                 @if (settings.settings.displayCurrency) {
                   <div style="margin-top: 10px;">
@@ -469,18 +469,19 @@
           <p class="uk-text-large uk-margin-remove-bottom">{{ 'ui-receive.merchant-send-xno' | transloco }}</p>
           @if ((amountNano === '')) {
             <p class="uk-text-large uk-text-primary uk-margin-remove-top">
-              <span class="merchant-mode-currency-name">XNO</span>
+              <span class="merchant-mode-currency-symbol" role="img" aria-label="nano (XNO)">Ӿ</span>
             </p>
           }
           @if ((amountNano !== '')) {
             <p class="uk-text-large uk-text-primary uk-margin-remove-top">
+              <span class="merchant-mode-currency-symbol" role="img" aria-label="nano (XNO)">Ӿ</span>
               <span
                 class="merchant-mode-amount-integer"
               >{{ merchantModeRawRequestedQR | rai: 'mnano,true' | amountsplit: 0 }}</span>
               <span
                 class="merchant-mode-amount-fractional"
               >{{ merchantModeRawRequestedQR | rai: 'mnano,true' | amountsplit: 1 }}</span>
-              <span class="merchant-mode-currency-name merchant-mode-currency-margin">XNO</span>
+              
             </p>
           }
           <p class="text-half-muted" style="margin: -16px 0 10px 0;">{{ 'ui-receive.merchant-to' | transloco }}</p>
@@ -531,13 +532,14 @@
                   [class.uk-text-success]="prompt.moreThanRequested"
                   [class.uk-text-warning]="prompt.lessThanRequested"
                   >
+                  <span class="merchant-mode-currency-symbol" role="img" aria-label="nano (XNO)">Ӿ</span>
                   <span
                     class="merchant-mode-amount-integer"
                   >{{ prompt.amountRaw | rai: 'mnano,true' | amountsplit: 0 }}</span>
                   <span
                     class="merchant-mode-amount-fractional"
                   >{{ prompt.amountRaw | rai: 'mnano,true' | amountsplit: 1 }}</span>
-                  <span class="merchant-mode-currency-name merchant-mode-currency-margin">XNO</span>
+                  
                 </p>
                 @if (prompt.amountHiddenRaw.gt(0)) {
                   <div
@@ -609,13 +611,14 @@
         @if ((inMerchantModePaymentComplete === true)) {
           <p class="uk-text-large uk-margin-remove-bottom uk-text-success">{{ 'general.blockactions.received' | transloco }}</p>
           <p class="uk-text-large uk-text-success uk-margin-remove-top">
+            <span class="merchant-mode-currency-symbol" role="img" aria-label="nano (XNO)">Ӿ</span>
             <span
               class="merchant-mode-amount-integer"
             >{{ merchantModeRawReceivedTotal | rai: 'mnano,true' | amountsplit: 0 }}</span>
             <span
               class="merchant-mode-amount-fractional"
             >{{ merchantModeRawReceivedTotal | rai: 'mnano,true' | amountsplit: 1 }}</span>
-            <span class="merchant-mode-currency-name merchant-mode-currency-margin">XNO</span>
+            
           </p>
           @if (merchantModeRawReceivedTotalHiddenRaw.gt(0)) {
             <div
@@ -632,15 +635,15 @@
               type="button"
               ngxClipboard
             [cbContent]="(
-                  ('ui-receive.merchant-summary-requested' | transloco) + ': '
+                  ('ui-receive.merchant-summary-requested' | transloco) + ': Ӿ '
                 + ( merchantModeRawRequestedTotal | rai: 'mnano,true' | amountsplit: 0 )
                 + ( merchantModeRawRequestedTotal | rai: 'mnano,true' | amountsplit: 1 )
-                + ' XNO'
+                + ' (XNO)'
                 + '\n\n'
-                + ('ui-receive.merchant-summary-paid' | transloco) + ': '
+                + ('ui-receive.merchant-summary-paid' | transloco) + ': Ӿ '
                 + ( merchantModeRawReceivedTotal | rai: 'mnano,true' | amountsplit: 0 )
                 + ( merchantModeRawReceivedTotal | rai: 'mnano,true' | amountsplit: 1 )
-                + ' XNO'
+                + ' (XNO)'
                 + '\n\n'
                 + ('ui-receive.merchant-summary-transactions' | transloco) + ':'
                 + '\n- '
