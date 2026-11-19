@@ -294,25 +294,51 @@
     flex-shrink: 0;
 }
 
-/* The Nano blue circle is a bundled vector so merchant payments render offline. */
+/* Official localized Nano accepted-here badge in the merchant QR checkout. */
 .merchant-mode-payment-heading {
     display: flex;
-    align-items: center;
     justify-content: center;
-    gap: 9px;
-    flex-wrap: wrap;
+    align-items: center;
+    width: 100%;
+    margin: 0 auto 12px;
 }
 
-.merchant-mode-nano-circle-badge {
+.merchant-mode-payment-heading a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 100%;
+}
+
+.merchant-mode-accepted-badge {
     display: block;
-    width: 30px;
-    height: 30px;
+    width: min(320px, 80vw);
+    height: auto;
+    max-width: 100%;
     object-fit: contain;
+}
+
+.merchant-mode-accepted-badge-fallback {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-height: 78px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: #209ce9;
+    color: white;
+    font-family: 'Montserrat', Arial, Helvetica, sans-serif;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.merchant-mode-accepted-badge-fallback img {
     flex-shrink: 0;
 }
 
 .merchant-mode-pay-to {
-    margin: -16px 0 10px;
+    margin: -12px 0 10px;
 }
 
 .merchant-mode-pay-to-no-amount {
