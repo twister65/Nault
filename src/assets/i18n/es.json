@@ -570,6 +570,7 @@
     "merchant-summary-paid": "Importe pagado",
     "merchant-summary-transactions": "Identificadores de transacción",
     "merchant-copy-info": "Copiar información del pago",
+    "merchant-qr-alt": "Código QR de pago",
     "receive-nano": "Recibir Nano",
     "all-accounts": "Todas las cuentas",
     "requested-amount": "Importe solicitado",
