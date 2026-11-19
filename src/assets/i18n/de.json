@@ -691,6 +691,7 @@
     "merchant-summary-paid": "Gezahlter Betrag",
     "merchant-summary-transactions": "Transaktions-IDs",
     "merchant-copy-info": "Zahlungsinformationen kopieren",
+    "merchant-qr-alt": "Zahlungs-QR-Code",
     "receive-nano": "Nano empfangen",
     "all-accounts": "Alle Konten",
     "requested-amount": "Angeforderter Betrag",
