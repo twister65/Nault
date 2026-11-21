@@ -22,7 +22,7 @@ const placeholders = text => [...text.matchAll(/{{\s*([^}]+?)\s*}}/g)]
   .map(match => match[1].trim()).sort();
 
 const en = flatten(read('en'));
-for (const language of ['fr', 'es', 'de']) {
+for (const language of ['fr', 'es', 'de', 'zh-HK']) {
   const translation = flatten(read(language));
   assert.deepEqual(Object.keys(translation).sort(), Object.keys(en).sort(), language + ': missing or extra translation keys');
   for (const [key, reference] of Object.entries(en)) {
@@ -71,8 +71,10 @@ const hasOfficialBadgeUrl = badgeUrlMatches.some(urlText => {
 });
 assert.ok(
   hasOfficialBadgeUrl &&
-  receiveSource.includes("language === 'fr' || language === 'de' || language === 'es'"),
-  'The official badge variants must be selected for French, German, Spanish and English'
+  receiveSource.includes("language === 'fr' || language === 'de' || language === 'es'") &&
+  receiveSource.includes("language === 'zh-HK'") &&
+  receiveSource.includes("? 'zh-hk'"),
+  'Use the official Nano badges for English, French, German, Spanish and Hong Kong Chinese'
 );
 assert.ok(
   merchantMarkup.includes('src="assets/img/nano-circle-badge-blue.svg"') &&
@@ -98,7 +100,7 @@ assert.equal(
   3,
   'All numeric amount prefixes must use accessible Nano U+04FE glyphs'
 );
-for (const language of ['en', 'fr', 'de', 'es']) {
+for (const language of ['en', 'fr', 'de', 'es', 'zh-HK']) {
   const labels = read(language)['ui-receive'];
   assert.ok(
     labels['merchant-amount-placeholder'].includes('Ӿ'),
@@ -111,10 +113,19 @@ for (const language of ['en', 'fr', 'de', 'es']) {
 }
 assert.equal(read('fr')['ui-receive']['merchant-accepted-badge-alt'], 'Nano accepté ici');
 assert.equal(read('en')['ui-receive']['merchant-accepted-badge-alt'], 'Nano accepted here');
+assert.equal(read('zh-HK')['ui-receive']['merchant-accepted-badge-alt'], '這裏接受 Nano');
 for (const key of ['merchant-summary-requested', 'merchant-summary-paid']) {
   assert.ok(
     merchantMarkup.includes("('ui-receive." + key + "' | transloco) + ': Ӿ '"),
     'Copied payment summary should prefix amounts with U+04FE: ' + key
   );
 }
+// Distinct translations prevent an accidental English-only dictionary masquerading
+// as Hong Kong Chinese while allowing untranslatable product names and URLs.
+const zhHK = flatten(read('zh-HK'));
+const untranslated = Object.keys(en).filter(key => zhHK[key] === en[key]);
+assert.deepEqual(untranslated, [
+  'configure-app.this-has-to-be-a-valid-work.2-link-work',
+  'welcome.any-node-always-available.1.2-link-nault'
+], 'Unexpected untranslated Hong Kong Chinese labels');
 console.log('Official localized Nano accepted-here badge and currency symbol validated');
