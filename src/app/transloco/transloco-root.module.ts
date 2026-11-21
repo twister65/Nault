@@ -13,6 +13,7 @@ export class TranslocoHttpLoader implements TranslocoLoader {
       case 'fr': return import('../../assets/i18n/fr.json').then(res => res.default);
       case 'es': return import('../../assets/i18n/es.json').then(res => res.default);
       case 'de': return import('../../assets/i18n/de.json').then(res => res.default);
+      case 'zh-HK': return import('../../assets/i18n/zh-HK.json').then(res => res.default);
       default: return import('../../assets/i18n/en.json').then(res => res.default);
     }
   }
@@ -29,7 +30,8 @@ export class TranslocoHttpLoader implements TranslocoLoader {
           { id: 'en', label: 'English' },
           { id: 'fr', label: 'Français' },
           { id: 'es', label: 'Español' },
-          { id: 'de', label: 'Deutsch' }
+          { id: 'de', label: 'Deutsch' },
+          { id: 'zh-HK', label: '繁體中文（香港）' }
         ],
         defaultLang: 'en',
         fallbackLang: 'en',
