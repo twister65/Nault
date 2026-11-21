@@ -1,7 +1,11 @@
 // Electron's native menu lives outside Angular/Transloco. Select labels using
 // Electron's OS locale without crossing the trusted renderer IPC boundary.
 export function desktopLabels(locale: string) {
-  const language = (locale || 'en').split(/[-_]/)[0].toLowerCase();
+  const normalized = (locale || 'en').toLowerCase().replace(/_/g, '-');
+  const language = normalized.split('-')[0];
+  const traditionalChinese = normalized === 'zh' || normalized === 'zh-hant' ||
+    normalized.startsWith('zh-hant-') ||
+    ['zh-hk', 'zh-mo', 'zh-tw'].includes(normalized);
   const en = {
     edit: 'Edit', view: 'View', window: 'Window', help: 'Help',
     // Explicit role labels are needed: Electron defaults submenu roles to English.
@@ -159,5 +163,32 @@ export function desktopLabels(locale: string) {
     pairAdvice: 'Bestätigen Sie die Kopplung nur mit Ihrer eigenen Ledger. Bestätigen Sie bei Bedarf auch auf dem Gerät.',
     confirm: 'Bestätigen',
   };
-  return language === 'fr' ? fr : language === 'es' ? es : language === 'de' ? de : en;
+  const zhHK: typeof en = {
+    edit: '編輯', view: '檢視', window: '視窗', help: '說明',
+    undo: '復原', redo: '重做', cut: '剪下', copy: '複製', paste: '貼上',
+    pasteAndMatchStyle: '貼上並符合樣式', delete: '刪除', selectAll: '全選',
+    reload: '重新載入', forceReload: '強制重新載入',
+    toggleDevTools: '切換開發人員工具', resetZoom: '實際大小',
+    zoomIn: '放大', zoomOut: '縮小', toggleFullScreen: '切換全螢幕',
+    minimize: '最小化', close: '關閉', zoom: '縮放',
+    front: '將所有視窗移至最前', about: '關於 Nault',
+    hide: '隱藏 Nault', hideOthers: '隱藏其他程式', unhide: '全部顯示',
+    quit: '結束 Nault', startSpeaking: '開始朗讀', stopSpeaking: '停止朗讀',
+    docs: 'Nault 說明文件', github: '查看 GitHub', bug: '回報問題',
+    releaseNotes: '版本資訊', checkUpdates: '檢查更新', speech: '朗讀',
+    newVersion: '新版本', updateAvailable: 'Nault 有新版本可供更新！',
+    downloadPrompt: '下載並安裝版本', update: '更新', askLater: '稍後',
+    upToDate: '已是最新版本', noUpdate: 'Nault 已是最新版本。',
+    updateError: '更新錯誤', updateFailed: '無法更新 Nault。',
+    errorLog: '詳情請參閱日誌：', ok: '確定',
+    ledgerBluetoothTitle: '透過藍牙連接 Ledger', selectLedger: '選擇你的 Ledger',
+    searchLedger: '正在搜尋 Ledger…',
+    ledgerBluetoothAdvice: '請解鎖 Ledger、開啟藍牙及 Nano 應用程式。如果找不到裝置，請按「重新整理」。請核對 Ledger 上顯示的配對碼。',
+    cancel: '取消', refresh: '重新整理', unnamedDevice: '未命名裝置',
+    pairLedger: '配對 Ledger', confirmPinPrompt: '你的 Ledger 是否顯示',
+    pairPrompt: '要與所選 Ledger 配對嗎？',
+    pairAdvice: '請只與自己的 Ledger 配對，並在裝置要求時確認。',
+    confirm: '確認',
+  };
+  return traditionalChinese ? zhHK : language === 'fr' ? fr : language === 'es' ? es : language === 'de' ? de : en;
 }
