@@ -1,0 +1,33 @@
+name: Temporary dependency lock refresh
+on:
+  push:
+    branches:
+      - maintenance/electron-45.4.1
+      - maintenance/angular-22.3.0
+    paths:
+      - .github/workflows/temporary-lock-refresh.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b163ceea73d27597364c9af683
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.15.0'
+      - name: Regenerate npm lockfile without running installation scripts
+        run: npm install --package-lock-only --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: Commit updated lockfile to this isolated branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(deps): refresh npm lockfile for updated versions"
+            git push origin HEAD:"${GITHUB_REF_NAME}"
+          fi
