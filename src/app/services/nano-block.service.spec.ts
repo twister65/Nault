@@ -26,6 +26,7 @@ describe('NanoBlockService Ledger signing boundary (#58)', () => {
     // Isolate the transaction path: the unit test must not open real Bluetooth.
     const service = Object.create(NanoBlockService.prototype) as any;
     service.ledgerReceiveRejected$ = new Subject<{ account: string; sourceBlock: string }>();
+    service.inFlightReceives = new Map<string, Promise<string | null>>();
     const account = {id: 'nano_test', index: 0};
     service.api = {
       accountInfo: jasmine.createSpy('accountInfo').and.resolveTo({
@@ -105,6 +106,61 @@ describe('NanoBlockService Ledger signing boundary (#58)', () => {
     expect(await service.generateReceive(account, 'source', true)).toBeNull();
     expect(rejected).toEqual([]);
     expect(service.api.process).not.toHaveBeenCalled();
+  });
+
+  it('publishes a pending source only once when manual and auto-receive overlap', async () => {
+    const {service, account} = setup();
+    service.api.blocksInfo = jasmine.createSpy('blocksInfo').and.resolveTo({
+      blocks: { source: {amount: '1'} }
+    });
+    service.signStateBlock = jasmine.createSpy('signStateBlock');
+
+    const automatic = service.generateReceive(account, 'source', false);
+    const manual = service.generateReceive(account, 'source', false);
+
+    expect(await Promise.all([automatic, manual])).toEqual(['processed', 'processed']);
+    expect(service.api.accountInfo).toHaveBeenCalledTimes(1);
+    expect(service.api.blocksInfo).toHaveBeenCalledTimes(1);
+    expect(service.signStateBlock).toHaveBeenCalledTimes(1);
+    expect(service.api.process).toHaveBeenCalledTimes(1);
+    expect(service.inFlightReceives.size).toBe(0);
+  });
+
+  it('does not cache failed receives and permits a subsequent explicit retry', async () => {
+    const {service, account} = setup();
+    service.api.accountInfo.and.rejectWith(new Error('RPC temporarily unavailable'));
+
+    const first = service.generateReceive(account, 'source');
+    const second = service.generateReceive(account, 'source');
+    await expectAsync(Promise.all([first, second])).toBeRejectedWithError('RPC temporarily unavailable');
+    expect(service.api.accountInfo).toHaveBeenCalledTimes(1);
+    expect(service.inFlightReceives.size).toBe(0);
+
+    service.api.accountInfo.and.resolveTo({
+      frontier: 'previous', representative: 'nano_representative', balance: '1000'
+    });
+    service.api.blocksInfo = jasmine.createSpy('blocksInfo').and.resolveTo({
+      blocks: { source: { amount: '1' } }
+    });
+    service.signStateBlock = jasmine.createSpy('signStateBlock');
+    expect(await service.generateReceive(account, 'source')).toBe('processed');
+    expect(service.api.accountInfo).toHaveBeenCalledTimes(2);
+    expect(service.api.process).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not coalesce different sources or recipient accounts', async () => {
+    const {service, account} = setup();
+    const secondAccount = {id: 'nano_other', index: 1};
+    service.api.blocksInfo = jasmine.createSpy('blocksInfo').and.callFake(async (hashes: string[]) => ({
+      blocks: {[hashes[0]]: {amount: '1'}}
+    }));
+    service.signStateBlock = jasmine.createSpy('signStateBlock');
+
+    expect(await Promise.all([
+      service.generateReceive(account, 'source-a'),
+      service.generateReceive(secondAccount, 'source-b')
+    ])).toEqual(['processed', 'processed']);
+    expect(service.api.process).toHaveBeenCalledTimes(2);
   });
 
   it('uses the Twister32 default on account opening but keeps the existing representative', async () => {
