@@ -24,6 +24,19 @@ describe('ReceiveComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+  it('uses the official Hong Kong Chinese merchant badge when zh-HK is selected', () => {
+    const original = component.settings.settings.language;
+    try {
+      component.settings.settings.language = 'zh-HK';
+      expect(component.merchantModeAcceptedBadgeUrl).toBe('https://assets.nano.org/img/badges/blue-zh-hk-var1.svg');
+      component.settings.settings.language = 'fr';
+      expect(component.merchantModeAcceptedBadgeUrl).toBe('https://assets.nano.org/img/badges/blue-fr-var1.svg');
+      component.settings.settings.language = 'en';
+      expect(component.merchantModeAcceptedBadgeUrl).toBe('https://assets.nano.org/img/badges/blue-en-var1.svg');
+    } finally {
+      component.settings.settings.language = original;
+    }
+  });
 });
 
 describe('ReceiveComponent manual receive while locked', () => {
