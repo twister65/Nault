@@ -93,9 +93,11 @@ export class ReceiveComponent implements OnInit, OnDestroy {
   // fallback when the remote asset cannot be loaded (e.g. offline PWA).
   get merchantModeAcceptedBadgeUrl(): string {
     const language = this.settings.settings.language;
-    const badgeLanguage = (language === 'fr' || language === 'de' || language === 'es')
-      ? language
-      : 'en';
+    const badgeLanguage = language === 'zh-HK'
+      ? 'zh-hk'
+      : (language === 'fr' || language === 'de' || language === 'es')
+        ? language
+        : 'en';
     return `https://assets.nano.org/img/badges/blue-${badgeLanguage}-var1.svg`;
   }
 

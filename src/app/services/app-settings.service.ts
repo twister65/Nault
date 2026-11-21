@@ -233,8 +233,17 @@ export class AppSettingsService {
     const supportedLocale = (value: string | null | undefined): string | null => {
       if (!value || typeof value !== 'string') return null;
       const normalized = value.trim().toLowerCase().replace(/_/g, '-');
-      const base = normalized.split('-')[0];
-      return [normalized, base].find(lang => supported.includes(lang)) ?? null;
+      // Transloco IDs retain their BCP 47 case (zh-HK). Compare case-insensitively
+      // and always return the registered ID, never a lower-case approximation.
+      // This first Chinese dictionary uses Traditional Chinese (Hong Kong).
+      // Do not silently treat zh-Hans / zh-CN as Traditional Chinese.
+      const traditionalChinese = normalized === 'zh' || normalized === 'zh-hant' ||
+        normalized.startsWith('zh-hant-') ||
+        ['zh-hk', 'zh-mo', 'zh-tw'].includes(normalized);
+      const candidate = traditionalChinese ? 'zh-hk' : normalized;
+      const base = candidate.split('-')[0];
+      return supported.find(lang => lang.toLowerCase() === candidate) ??
+        supported.find(lang => lang.toLowerCase() === base) ?? null;
     };
 
     // A saved user choice takes precedence over the OS locale. Obsolete or
