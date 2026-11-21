@@ -67,6 +67,22 @@ describe('WalletService rejected Ledger auto-receive (0x6985)', () => {
     expect(nanoBlock.generateReceive.calls.mostRecent().args[1]).toBe('receive-one');
   });
 
+  it('reserves a manual receive before unlocking and excludes its account from automatic reception', async () => {
+    const {service, nanoBlock} = setup();
+    service.wallet.type = 'seed'; // Hot wallet, not a Ledger.
+    expect(service.beginManualReceive('nano_account')).toBe(true);
+    expect(service.beginManualReceive('nano_account')).toBe(false);
+
+    // unlockWallet() invokes this automatically when the locked$ stream opens.
+    await service.processPendingBlocks();
+    expect(nanoBlock.generateReceive).not.toHaveBeenCalled();
+    expect(service.wallet.pendingBlocks.map(block => block.hash)).toEqual(['receive-one']);
+
+    service.endManualReceive('nano_account');
+    expect(service.beginManualReceive('nano_account')).toBe(true);
+    service.endManualReceive('nano_account');
+  });
+
   it('ignores refusal notifications for addresses outside the active wallet', async () => {
     const {service, rejected$, nanoBlock} = setup();
     rejected$.next({account: 'nano_other', sourceBlock: 'receive-one'});
