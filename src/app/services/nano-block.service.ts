@@ -55,6 +55,11 @@ export class NanoBlockService {
   // this same signature automatically until the user initiates another receive.
   readonly ledgerReceiveRejected$ = new Subject<{ account: string; sourceBlock: string }>();
 
+  // All receive paths (automatic, manual, and merchant mode) share the same
+  // in-flight publication for a given account/source. A Nano source can only
+  // be received once; publishing two copies races into an "Old block" error.
+  private readonly inFlightReceives = new Map<string, Promise<string | null>>();
+
   constructor(
     private api: ApiService,
     private util: UtilService,
@@ -278,7 +283,23 @@ export class NanoBlockService {
     return processResponse.hash;
   }
 
-  async generateReceive(walletAccount: WalletAccount, sourceBlock: string, ledger = false) {
+  async generateReceive(walletAccount: WalletAccount, sourceBlock: string, ledger = false): Promise<string | null> {
+    const receiveKey = `${walletAccount.id}:${sourceBlock}`;
+    const pending = this.inFlightReceives.get(receiveKey);
+    if (pending) return pending;
+
+    const operation = this.generateReceiveOnce(walletAccount, sourceBlock, ledger);
+    this.inFlightReceives.set(receiveKey, operation);
+    try {
+      return await operation;
+    } finally {
+      if (this.inFlightReceives.get(receiveKey) === operation) {
+        this.inFlightReceives.delete(receiveKey);
+      }
+    }
+  }
+
+  private async generateReceiveOnce(walletAccount: WalletAccount, sourceBlock: string, ledger = false): Promise<string | null> {
     const toAcct = await this.api.accountInfo(walletAccount.id);
     const walletAccountPublicKey = this.util.account.getAccountPublicKey(walletAccount.id);
 
