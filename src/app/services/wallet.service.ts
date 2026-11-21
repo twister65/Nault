@@ -173,6 +173,21 @@ export class WalletService {
   }
 
   processingPending = false;
+  // A manual receive may be waiting for wallet unlock. Reserve its account
+  // before showing the unlock dialog so unlockWallet() cannot concurrently
+  // auto-receive from that account. Other accounts may still auto-receive.
+  private readonly manualReceiveAccounts = new Set<string>();
+
+  beginManualReceive(accountId: string): boolean {
+    if (this.manualReceiveAccounts.has(accountId)) return false;
+    this.manualReceiveAccounts.add(accountId);
+    return true;
+  }
+
+  endManualReceive(accountId: string): void {
+    this.manualReceiveAccounts.delete(accountId);
+  }
+
   // Session-local, non-persistent safety guard. An explicit Ledger refusal must
   // not be overridden by periodic balance reloads, WS events or reconnection.
   // Manual receive remains available via Account Details.
@@ -905,6 +920,7 @@ export class WalletService {
     this.wallet.selectedAccount$.next(null);
     this.wallet.pendingBlocks = [];
     this.rejectedAutoReceiveHashes.clear();
+    this.manualReceiveAccounts.clear();
   }
 
   isConfigured() {
@@ -1327,7 +1343,8 @@ export class WalletService {
     // on the Ledger again by any automatic trigger. Other pending sources may
     // still be processed; explicit manual receive bypasses this queue.
     const nextBlock = this.wallet.pendingBlocks.find(
-      block => !this.rejectedAutoReceiveHashes.has(block.hash)
+      block => !this.rejectedAutoReceiveHashes.has(block.hash) &&
+        !this.manualReceiveAccounts.has(block.account)
     );
     if (!nextBlock) return;
 
