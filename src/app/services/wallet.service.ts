@@ -1344,7 +1344,7 @@ export class WalletService {
     // still be processed; explicit manual receive bypasses this queue.
     const nextBlock = this.wallet.pendingBlocks.find(
       block => !this.rejectedAutoReceiveHashes.has(block.hash) &&
-        !this.manualReceiveAccounts.has(block.account)
+        !this.manualReceiveAccounts?.has(block.account)
     );
     if (!nextBlock) return;
 
