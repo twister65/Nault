@@ -116,6 +116,40 @@ describe('AppSettingsService', () => {
     }
   }));
 
+  it('selects the Hong Kong Chinese dictionary for Traditional Chinese system locales', inject([AppSettingsService], (service: AppSettingsService) => {
+    const saved = localStorage.getItem(service.storeKey);
+    try {
+      localStorage.removeItem(service.storeKey);
+      for (const locale of ['zh-HK', 'zh_HK', 'zh-Hant-HK', 'zh-Hant', 'zh-TW', 'zh-MO', 'zh']) {
+        service.settings.language = '';
+        service.loadAppSettings(locale);
+        expect(service.settings.language).toBe('zh-HK');
+      }
+      // Do not label simplified Chinese as a Traditional Chinese translation.
+      for (const locale of ['zh-CN', 'zh-Hans-CN']) {
+        service.settings.language = '';
+        service.loadAppSettings(locale);
+        expect(service.settings.language).toBe('en');
+      }
+    } finally {
+      if (saved === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, saved);
+    }
+  }));
+
+  it('preserves a saved lowercase Hong Kong locale and normalizes the registered ID', inject([AppSettingsService], (service: AppSettingsService) => {
+    const saved = localStorage.getItem(service.storeKey);
+    try {
+      localStorage.setItem(service.storeKey, JSON.stringify({ ...service.settings, language: 'zh-hk' }));
+      service.loadAppSettings('en-US');
+      expect(service.settings.language).toBe('zh-HK');
+      expect(JSON.parse(localStorage.getItem(service.storeKey) || '{}').language).toBe('zh-HK');
+    } finally {
+      if (saved === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, saved);
+    }
+  }));
+
   it('defaults to English for an unsupported OS locale instead of choosing the browser language', inject([AppSettingsService], (service: AppSettingsService) => {
     const saved = localStorage.getItem(service.storeKey);
     try {
