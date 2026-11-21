@@ -66,6 +66,19 @@ test('German OS locale localizes the native menu, updater and Bluetooth prompts'
   assert.equal(de.pairLedger, 'Ledger koppeln');
 });
 
+test('Traditional Chinese (Hong Kong) has complete native menus, update and Bluetooth dialogs', () => {
+  const zh = desktopLabels('zh-HK');
+  assert.equal(zh.edit, '編輯');
+  assert.equal(zh.help, '說明');
+  assert.equal(zh.checkUpdates, '檢查更新');
+  assert.equal(zh.pairLedger, '配對 Ledger');
+  assert.equal(zh.cancel, '取消');
+  assert.deepEqual(zh, desktopLabels('zh-Hant-HK'));
+  assert.deepEqual(zh, desktopLabels('zh-TW'));
+  // Simplified Chinese is not yet shipped; retain the English fallback.
+  assert.equal(desktopLabels('zh-CN').help, desktopLabels('en-US').help);
+});
+
 test('English and unsupported system locales keep a complete English fallback', () => {
   const en = desktopLabels('en-US');
   assert.equal(en.checkUpdates, 'Check for Updates');
@@ -76,10 +89,11 @@ test('English and unsupported system locales keep a complete English fallback', 
   assert.deepEqual(Object.keys(desktopLabels('fr')).sort(), fields);
   assert.deepEqual(Object.keys(desktopLabels('es')).sort(), fields);
   assert.deepEqual(Object.keys(desktopLabels('de')).sort(), fields);
+  assert.deepEqual(Object.keys(desktopLabels('zh-HK')).sort(), fields);
 });
 
 
-test('all Electron role commands have explicit EN/FR/ES/DE labels while keeping their native roles', () => {
+test('all Electron role commands have explicit EN/FR/ES/DE/zh-HK labels while keeping their native roles', () => {
   const electronSource = fs.readFileSync(
     path.join(__dirname, '../desktop-app/src/desktop-app.ts'), 'utf8'
   );
@@ -87,7 +101,7 @@ test('all Electron role commands have explicit EN/FR/ES/DE labels while keeping 
     .split('function loadExternal(')[0];
   const roleEntries = [...menuSource.matchAll(/\{role: '([a-z]+)'(?:, label: t\.([a-zA-Z]+))?\}/g)];
   assert.ok(roleEntries.length >= 28, 'all native menu commands should be covered');
-  const locales = ['en-US', 'fr-FR', 'es-ES', 'de-DE'].map(locale => desktopLabels(locale));
+  const locales = ['en-US', 'fr-FR', 'es-ES', 'de-DE', 'zh-HK'].map(locale => desktopLabels(locale));
   for (const [, role, key] of roleEntries) {
     assert.ok(key, 'Electron role ' + role + ' is missing its explicit translated label');
     for (const labels of locales) {
