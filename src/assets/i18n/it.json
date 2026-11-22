@@ -18,7 +18,7 @@
     "platform-desktop": "Desktop (Electron)",
     "domain": "Dominio PWA",
     "version": "Versione",
-    "commit": "GitHub commit",
+    "commit": "Commit GitHub",
     "unknown": "Non disponibile",
     "description": "Revisione incorporata in fase di creazione in questa applicazione. Fare clic sul commit per visualizzare l'origine esatta su GitHub."
   },
@@ -1005,7 +1005,7 @@
     "ledger-user-rejected": "Transazione rifiutata su Ledger (0x6985).",
     "ledger-signing-busy": "Ledger è occupato. Aspetta un attimo e prova a firmare di nuovo.",
     "ledger-signing-failed": "Firma Ledger non riuscita. Controlla la connessione e riprova.",
-    "node-failover": "Nano Il nodo RPC {{previous}} non è disponibile. Passato automaticamente a {{next}}.",
+    "node-failover": "Il nodo RPC Nano {{previous}} non è disponibile. Passaggio automatico a {{next}}.",
     "node-offline": "Impossibile connettersi al nano nodo, i tuoi saldi potrebbero essere imprecisi!",
     "ledger-pending-reconnect": "Ӿ in arrivo è in attesa. Sblocca il tuo Ledger, apri l'app Nano, quindi fai clic su Riconnetti per riceverlo.",
     "tracked-receivable": "L'indirizzo tracciato {{account}} ora può ricevere {{amount}} Ӿ",
