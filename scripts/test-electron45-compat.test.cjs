@@ -41,7 +41,8 @@ test('desktop retains sandbox, a narrow IPC bridge, and blocked WebHID', () => {
   assert.match(main, /isTrustedLedgerSender\(event/);
   assert.match(main, /setDevicePermissionHandler\(\(\) => false\)/);
   assert.match(main, /select-hid-device/);
-  assert.match(main, /configureWebBluetooth\(currentWindow, isTrustedWalletURL\)/);
+  // Keep trusted URL validation and require the explicit active-locale resolver.
+  assert.match(main, /configureWebBluetooth\(currentWindow, isTrustedWalletURL,\s*\(\) => applicationMenuLocale \?\? app\.getLocale\(\)\)/);
   assert.match(preload, /const allowedIncoming = new Set\(\['ledger', 'deeplink'\]\)/);
   assert.match(preload, /const allowedOutgoing = new Set\(\['ledger', 'deeplink-ready'\]\)/);
 });
