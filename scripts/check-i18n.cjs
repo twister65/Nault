@@ -22,13 +22,23 @@ const placeholders = text => [...text.matchAll(/{{\s*([^}]+?)\s*}}/g)]
   .map(match => match[1].trim()).sort();
 
 const en = flatten(read('en'));
-for (const language of ['fr', 'es', 'de', 'zh-HK']) {
+const languages = ['fr', 'es', 'de', 'zh-HK', 'nb', 'da', 'nl', 'fi', 'pt-BR', 'it', 'ja', 'ko', 'zh-CN'];
+for (const language of languages) {
   const translation = flatten(read(language));
   assert.deepEqual(Object.keys(translation).sort(), Object.keys(en).sort(), language + ': missing or extra translation keys');
   for (const [key, reference] of Object.entries(en)) {
     const localized = translation[key];
     assert(localized.trim().length > 0, language + ': empty label: ' + key);
     assert.deepEqual(placeholders(localized), placeholders(reference), language + ': interpolation mismatch: ' + key);
+    // The Nano single-stroke currency glyph is a Cyrillic letter by Unicode
+    // classification: never let translators turn it into a Han/Kana/Hangul character.
+    if (['ja', 'ko', 'zh-CN', 'zh-HK'].includes(language)) {
+      assert.equal(
+        (localized.match(/Ӿ/g) || []).length,
+        (reference.match(/Ӿ/g) || []).length,
+        language + ': modified the Nano U+04FE sign: ' + key
+      );
+    }
     // Sentence fragments surrounding HTML links must retain their whitespace.
     if (reference.endsWith(' ')) assert(localized.endsWith(' '), language + ': missing trailing space: ' + key);
     if (reference.startsWith(' ')) assert(localized.startsWith(' '), language + ': missing leading space: ' + key);
@@ -110,7 +120,7 @@ assert.equal(
   3,
   'All numeric amount prefixes must use accessible Nano U+04FE glyphs'
 );
-for (const language of ['en', 'fr', 'de', 'es', 'zh-HK']) {
+for (const language of ['en', ...languages]) {
   const labels = read(language)['ui-receive'];
   assert.ok(
     labels['merchant-amount-placeholder'].includes('Ӿ'),
