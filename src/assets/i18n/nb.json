@@ -18,7 +18,7 @@
     "platform-desktop": "Desktop (Electron)",
     "domain": "PWA-domene",
     "version": "Versjon",
-    "commit": "GitHub forplikte",
+    "commit": "GitHub-commit",
     "unknown": "Utilgjengelig",
     "description": "Revisjon innebygd på byggetidspunktet i denne applikasjonen. Klikk på commit for å se den nøyaktige kilden på GitHub."
   },
@@ -624,7 +624,7 @@
     "merchant-summary-transactions": "Transaksjons-IDer",
     "merchant-copy-info": "Kopier betalingsinformasjon",
     "merchant-qr-alt": "Betaling QR-kode",
-    "merchant-accepted-badge-alt": "Nano akseptert her",
+    "merchant-accepted-badge-alt": "Nano aksepteres her",
     "merchant-amount-placeholder": "Beløp i Ӿ",
     "receive-nano": "Motta Nano",
     "all-accounts": "Alle kontoer",
