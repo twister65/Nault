@@ -36,6 +36,7 @@ test('native signing IPC remains narrow and guarded by the trusted main frame', 
 test('native Bluetooth dialogues have the same locale inventory as Desktop menus', () => {
   const locale = read('desktop-app/src/lib/desktop-locale.ts');
   const bluetooth = read('desktop-app/src/lib/web-bluetooth.ts');
+  const main = read('desktop-app/src/desktop-app.ts');
   // Bluetooth dialogues must use the same selected language as Electron's
   // menus, while retaining the OS locale before the renderer initializes.
   assert.match(bluetooth, /desktopLabels\(getLocale\(\)\)/);
