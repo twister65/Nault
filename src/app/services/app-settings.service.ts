@@ -233,14 +233,21 @@ export class AppSettingsService {
     const supportedLocale = (value: string | null | undefined): string | null => {
       if (!value || typeof value !== 'string') return null;
       const normalized = value.trim().toLowerCase().replace(/_/g, '-');
-      // Transloco IDs retain their BCP 47 case (zh-HK). Compare case-insensitively
-      // and always return the registered ID, never a lower-case approximation.
-      // This first Chinese dictionary uses Traditional Chinese (Hong Kong).
-      // Do not silently treat zh-Hans / zh-CN as Traditional Chinese.
+      // Keep the canonical BCP 47 casing from Transloco's supported locales.
+      // Preserve the legacy generic "zh" choice as Hong Kong Traditional Chinese.
+      // Explicit Simplified Chinese locales must never select that dictionary.
       const traditionalChinese = normalized === 'zh' || normalized === 'zh-hant' ||
         normalized.startsWith('zh-hant-') ||
         ['zh-hk', 'zh-mo', 'zh-tw'].includes(normalized);
-      const candidate = traditionalChinese ? 'zh-hk' : normalized;
+      const simplifiedChinese = normalized === 'zh-hans' ||
+        normalized.startsWith('zh-hans-') ||
+        ['zh-cn', 'zh-sg', 'zh-my'].includes(normalized);
+      const norwegianBokmal = normalized === 'no' || normalized.startsWith('no-');
+      const brazilianPortuguese = normalized === 'pt' || normalized.startsWith('pt-');
+      const candidate = traditionalChinese ? 'zh-hk' :
+        simplifiedChinese ? 'zh-cn' :
+        norwegianBokmal ? 'nb' :
+        brazilianPortuguese ? 'pt-br' : normalized;
       const base = candidate.split('-')[0];
       return supported.find(lang => lang.toLowerCase() === candidate) ??
         supported.find(lang => lang.toLowerCase() === base) ?? null;
