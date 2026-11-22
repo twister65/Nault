@@ -121,7 +121,7 @@ class AppUpdater {
       if (isDownloading || updatePromptOpen) return;
       showUpdateErrors = false;
       updatePromptOpen = true;
-      const t = desktopLabels(app.getLocale());
+      const t = desktopLabels(applicationMenuLocale ?? app.getLocale());
       void dialog.showMessageBox({
         type: 'info',
         buttons: [t.update, t.askLater],
@@ -150,7 +150,7 @@ class AppUpdater {
       manualUpdateCheck = false;
       showUpdateErrors = false;
       if (!requestedManually) return;
-      const t = desktopLabels(app.getLocale());
+      const t = desktopLabels(applicationMenuLocale ?? app.getLocale());
       void dialog.showMessageBox({
         type: 'info', buttons: [t.ok], title: t.upToDate, message: t.noUpdate
       });
@@ -179,7 +179,7 @@ class AppUpdater {
       updatePromptOpen = false;
       mainWindow?.setTitle(`Nault - ${autoUpdater.currentVersion}`);
       if (!shouldNotify) return; // Keep automatic checks silent on network errors.
-      const t = desktopLabels(app.getLocale());
+      const t = desktopLabels(applicationMenuLocale ?? app.getLocale());
       void dialog.showMessageBox({
         type: 'error',
         buttons: [t.ok],
@@ -325,7 +325,8 @@ function createWindow () {
     callback();
   });
 
-  configureWebBluetooth(currentWindow, isTrustedWalletURL);
+  configureWebBluetooth(currentWindow, isTrustedWalletURL,
+    () => applicationMenuLocale ?? app.getLocale());
 
   // Track window state
   mainWindowStateKeeper.track(currentWindow);
