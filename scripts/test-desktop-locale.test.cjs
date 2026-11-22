@@ -161,6 +161,31 @@ test('Italian Ledger notifications, reconnect actions and native menu agree on t
   assert.equal(desktopLabels('it').help, 'Aiuto');
 });
 
+test('Bluetooth trademark uses approved native word marks without third-party logos', () => {
+  const latin = ['en', 'fr', 'es', 'de', 'nb', 'da', 'nl', 'fi', 'pt-BR', 'it'];
+  for (const locale of latin) {
+    assert.ok(desktopLabels(locale).ledgerBluetoothTitle.includes('Bluetooth®'),
+      locale + ': the native Ledger dialog should identify the registered word mark');
+  }
+  const asian = [
+    ['zh-HK', '藍牙'], ['zh-CN', '蓝牙'],
+    ['ja', 'ブルートゥース'], ['ko', '블루투스']
+  ];
+  for (const [locale, approved] of asian) {
+    const labels = desktopLabels(locale);
+    assert.ok(labels.ledgerBluetoothTitle.includes(approved),
+      locale + ': use the Bluetooth SIG-approved translation in native dialogs');
+    assert.ok(labels.ledgerBluetoothAdvice.includes(approved),
+      locale + ': the Bluetooth advice should use the same word mark');
+  }
+  assert.doesNotMatch(desktopLabels('zh-CN').ledgerBluetoothTitle, /®/,
+    'Do not append the registration symbol to the Simplified Chinese translation');
+  const walletMarkup = fs.readFileSync(
+    path.join(__dirname, '../src/app/components/configure-wallet/configure-wallet.component.html'), 'utf8'
+  );
+  assert.match(walletMarkup, /ui-wallet-setup\.bluetooth-trademark-attribution/);
+});
+
 test('English and unsupported system locales keep a complete English fallback', () => {
   const en = desktopLabels('en-US');
   assert.equal(en.checkUpdates, 'Check for Updates');
