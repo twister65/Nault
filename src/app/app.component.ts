@@ -410,8 +410,9 @@ export class AppComponent implements OnInit, OnDestroy {
     // New for v19: Patch saved xrb_ prefixes to nano_
     await this.patchXrbToNanoPrefixData();
 
-    // set translation language
+    // Set both Angular's language and Electron's native menu language.
     this.translate.setActiveLang(this.settings.settings.language);
+    void this.desktop.setMenuLanguage(this.settings.settings.language);
 
     // Align WebSocket subscriptions and the visible notice after an RPC switch.
     this.settings.serverFailover$.subscribe(({ previousName, nextName }) => {
