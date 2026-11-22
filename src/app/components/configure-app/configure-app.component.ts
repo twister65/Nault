@@ -4,6 +4,7 @@ import { DeviceUnlockService } from '../../services/device-unlock.service';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {AppSettingsService, AppSettings, PoWSource} from '../../services/app-settings.service';
+import {DesktopService} from '../../services/desktop.service';
 import {PriceService} from '../../services/price.service';
 import {PowService} from '../../services/pow.service';
 import {PoWApiKeyVaultService, PoWVaultUnlockError} from '../../services/pow-api-key-vault.service';
@@ -51,6 +52,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
     private renderer: Renderer2,
     private qrModalService: QrModalService,
     private translocoService: TranslocoService,
+    private desktop: DesktopService,
     private representativeMonitor: RepresentativeMonitorService) { }
   wallet = this.walletService.wallet;
 
@@ -584,6 +586,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
 
     this.appSettings.setAppSetting('language', this.selectedLanguage);
     this.translocoService.setActiveLang(this.selectedLanguage);
+    void this.desktop.setMenuLanguage(this.selectedLanguage);
 
     // if (updatePrefixes) {
     //   this.appSettings.setAppSetting('displayPrefix', this.selectedPrefix);
