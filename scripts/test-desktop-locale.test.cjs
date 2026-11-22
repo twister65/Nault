@@ -33,6 +33,34 @@ test('native OS locale bridge is restricted to the trusted wallet renderer', () 
   assert.match(settingsSource, /loadAppSettings\(systemLocale\?: string \| null\)/);
 });
 
+test('Electron menu tracks the saved wallet language at startup and on changes', () => {
+  const main = fs.readFileSync(path.join(__dirname, '../desktop-app/src/desktop-app.ts'), 'utf8');
+  const preload = fs.readFileSync(path.join(__dirname, '../desktop-app/src/preload.ts'), 'utf8');
+  const typings = fs.readFileSync(path.join(__dirname, '../src/typings.d.ts'), 'utf8');
+  const desktop = fs.readFileSync(path.join(__dirname, '../src/app/services/desktop.service.ts'), 'utf8');
+  const startup = fs.readFileSync(path.join(__dirname, '../src/app/app.component.ts'), 'utf8');
+  const configure = fs.readFileSync(path.join(__dirname, '../src/app/components/configure-app/configure-app.component.ts'), 'utf8');
+
+  assert.match(main, /ipcMain\.handle\('app-menu-language', \(event, language: unknown\) => \{/);
+  assert.match(main, /if \(!isTrustedLedgerSender\(event\)\) throw new Error\('Untrusted menu language request'\)/);
+  assert.match(main, /typeof language !== 'string' \|\| !supportedMenuLanguages\.has\(language\)/);
+  assert.match(main, /new Set\(\['en', 'fr', 'es', 'de', 'zh-HK'\]\)/);
+  assert.match(main, /desktopLabels\(applicationMenuLocale \?\? app\.getLocale\(\)\)/);
+  assert.match(main, /Menu\.setApplicationMenu\(Menu\.buildFromTemplate\(getApplicationMenu\(\)\)\)/);
+  assert.match(preload, /setMenuLanguage\(language: string\): Promise<boolean>/);
+  assert.match(preload, /ipcRenderer\.invoke\('app-menu-language', language\)/);
+  assert.match(typings, /setMenuLanguage\(language: string\): Promise<boolean>/);
+  assert.match(desktop, /if \(!this\._ipc\) return Promise\.resolve\(false\)/);
+  assert.match(startup, /void this\.desktop\.setMenuLanguage\(this\.settings\.settings\.language\)/);
+  assert.match(configure, /void this\.desktop\.setMenuLanguage\(this\.selectedLanguage\)/);
+  // The existing language dictionaries are reused without changing their labels.
+  assert.equal(desktopLabels('en').edit, 'Edit');
+  assert.equal(desktopLabels('fr').edit, 'Édition');
+  assert.equal(desktopLabels('es').edit, 'Editar');
+  assert.equal(desktopLabels('de').edit, 'Bearbeiten');
+  assert.equal(desktopLabels('zh-HK').edit, '編輯');
+});
+
 test('native Electron menu and updater dialogs use French on fr-FR systems', () => {
   const fr = desktopLabels('fr-FR');
   assert.equal(fr.edit, 'Édition');
