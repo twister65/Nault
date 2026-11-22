@@ -24,18 +24,51 @@ describe('ReceiveComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
-  it('uses the official Hong Kong Chinese merchant badge when zh-HK is selected', () => {
+  it('selects the official merchant badge for every supported UI language', () => {
     const original = component.settings.settings.language;
+    const primaryCodes: Array<[string, string]> = [
+      ['en', 'en'], ['fr', 'fr'], ['es', 'es'], ['de', 'de'],
+      ['zh-HK', 'zh-hk'], ['nb', 'no'], ['da', 'dk'], ['nl', 'nl'],
+      ['fi', 'fi'], ['pt-BR', 'pt-br'], ['it', 'it'],
+      ['ja', 'jp'], ['ko', 'kr'], ['zh-CN', 'zh-cn'],
+    ];
     try {
-      component.settings.settings.language = 'zh-HK';
-      expect(component.merchantModeAcceptedBadgeUrl).toBe('https://assets.nano.org/img/badges/blue-zh-hk-var1.svg');
-      component.settings.settings.language = 'fr';
-      expect(component.merchantModeAcceptedBadgeUrl).toBe('https://assets.nano.org/img/badges/blue-fr-var1.svg');
-      component.settings.settings.language = 'en';
-      expect(component.merchantModeAcceptedBadgeUrl).toBe('https://assets.nano.org/img/badges/blue-en-var1.svg');
+      for (const [locale, assetCode] of primaryCodes) {
+        component.settings.settings.language = locale;
+        component.merchantModeBadgeCandidateIndex = 0;
+        component.merchantModeAcceptedBadgeLoadFailed = false;
+        expect(component.merchantModeAcceptedBadgeUrl)
+          .withContext(locale)
+          .toBe(`https://assets.nano.org/img/badges/blue-${assetCode}-var1.svg`);
+      }
     } finally {
       component.settings.settings.language = original;
     }
+  });
+
+  it('tries alternative official filenames before using translated local fallback', () => {
+    const original = component.settings.settings.language;
+    try {
+      component.settings.settings.language = 'ja';
+      component.merchantModeBadgeCandidateIndex = 0;
+      expect(component.merchantModeAcceptedBadgeUrl)
+        .toBe('https://assets.nano.org/img/badges/blue-jp-var1.svg');
+      component.merchantModeHandleBadgeLoadError();
+      expect(component.merchantModeAcceptedBadgeLoadFailed).toBeFalse();
+      expect(component.merchantModeAcceptedBadgeUrl)
+        .toBe('https://assets.nano.org/img/badges/blue-ja-var1.svg');
+      component.merchantModeHandleBadgeLoadError();
+      expect(component.merchantModeAcceptedBadgeLoadFailed).toBeTrue();
+    } finally {
+      component.settings.settings.language = original;
+    }
+  });
+
+  it('uses the observed Korean asset filename instead of the Transloco locale ID', () => {
+    component.settings.settings.language = 'ko';
+    component.merchantModeBadgeCandidateIndex = 0;
+    expect(component.merchantModeAcceptedBadgeUrl)
+      .toBe('https://assets.nano.org/img/badges/blue-kr-var1.svg');
   });
 });
 
