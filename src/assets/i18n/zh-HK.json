@@ -719,6 +719,7 @@
     "ledger-connected": "Ledger 裝置已連線",
     "connect-usb": "透過 USB 連線",
     "connect-bluetooth": "透過藍牙連線",
+    "bluetooth-trademark-attribution": "Bluetooth® 文字商標是 Bluetooth SIG, Inc. 的註冊商標。",
     "refresh-ledger": "重新整理 Ledger 狀態",
     "ledger-app-guide": "請確保已在裝置上安裝並開啟 Nano 應用程式，然後按「連線」。",
     "ledger-unlock-guide": "請解鎖 Ledger 裝置，然後按下方按鈕重試",
