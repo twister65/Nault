@@ -200,6 +200,10 @@ if (process.platform === 'darwin') {
   nano_schemes.forEach((scheme) => app.setAsDefaultProtocolClient(scheme, process.execPath, args));
 }
 
+// The user's wallet language overrides the OS locale for native menus.
+// Accept only registered wallet languages from the trusted renderer.
+const supportedMenuLanguages = new Set(['en', 'fr', 'es', 'de', 'zh-HK']);
+let applicationMenuLocale: string | null = null;
 let mainWindow: BrowserWindow | null = null;
 
 // The desktop UI is bundled locally. Reject navigation and privileged IPC
@@ -237,6 +241,17 @@ initialize(isTrustedLedgerSender);
 ipcMain.handle('app-system-locale', event => {
   if (!isTrustedLedgerSender(event)) throw new Error('Untrusted locale request');
   return app.getLocale();
+});
+// Keep the native menu in sync with the wallet's selected (and saved) language.
+// This privileged action is confined to the trusted wallet main frame.
+ipcMain.handle('app-menu-language', (event, language: unknown) => {
+  if (!isTrustedLedgerSender(event)) throw new Error('Untrusted menu language request');
+  if (typeof language !== 'string' || !supportedMenuLanguages.has(language)) {
+    throw new Error('Unsupported menu language');
+  }
+  applicationMenuLocale = language;
+  Menu.setApplicationMenu(Menu.buildFromTemplate(getApplicationMenu()));
+  return true;
 });
 // Read-only native connectivity hint. Never expose generic IPC.
 ipcMain.handle('app-network-online', event => {
@@ -449,7 +464,7 @@ async function checkForUpdates(manual = false) {
 
 // Build up the menu bar options based on platform
 function getApplicationMenu() {
-  const t = desktopLabels(app.getLocale());
+  const t = desktopLabels(applicationMenuLocale ?? app.getLocale());
   const template: any = [
     {
       label: t.edit,
