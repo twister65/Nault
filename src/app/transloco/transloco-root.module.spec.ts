@@ -23,6 +23,29 @@ describe('TranslocoHttpLoader', () => {
       .toContain('Automático');
   });
 
+  it('loads all new dictionaries with the same wallet translation keys', async () => {
+    const languages = ['nb', 'da', 'nl', 'fi', 'pt-BR', 'it', 'ja', 'ko', 'zh-CN'];
+    const english = await loader.getTranslation('en');
+    const englishKeys = Object.keys(english);
+    for (const language of languages) {
+      const dictionary = await loader.getTranslation(language);
+      expect(Object.keys(dictionary)).toEqual(englishKeys);
+      expect(dictionary['general']['settings']).toBeTruthy();
+      expect(dictionary['ui-receive']['merchant-amount-placeholder']).toContain('Ӿ');
+      expect(dictionary['ui-receive']['merchant-accepted-badge-alt']).toBeTruthy();
+    }
+    const [simplified, traditional, japanese, korean] = await Promise.all([
+      loader.getTranslation('zh-CN'),
+      loader.getTranslation('zh-HK'),
+      loader.getTranslation('ja'),
+      loader.getTranslation('ko')
+    ]);
+    expect(simplified['general']['settings']).toBe('设置');
+    expect(traditional['general']['settings']).toBe('設定');
+    expect(japanese['general']['settings']).toBe('設定');
+    expect(korean['general']['settings']).toBe('설정');
+  });
+
   it('falls back to English for an unsupported language', async () => {
     const result = await loader.getTranslation('unsupported');
     expect(result['general']['settings']).toBe('Settings');

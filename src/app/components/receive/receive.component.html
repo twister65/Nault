@@ -481,7 +481,7 @@
                      [src]="merchantModeAcceptedBadgeUrl"
                      [alt]="'ui-receive.merchant-accepted-badge-alt' | transloco"
                      width="320" height="90"
-                     (error)="merchantModeAcceptedBadgeLoadFailed = true">
+                     (error)="merchantModeHandleBadgeLoadError()">
               } @else {
                 <span class="merchant-mode-accepted-badge-fallback">
                   <img src="assets/img/nano-circle-badge-blue.svg" width="42" height="42" alt="" aria-hidden="true">

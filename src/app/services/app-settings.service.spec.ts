@@ -125,11 +125,29 @@ describe('AppSettingsService', () => {
         service.loadAppSettings(locale);
         expect(service.settings.language).toBe('zh-HK');
       }
-      // Do not label simplified Chinese as a Traditional Chinese translation.
-      for (const locale of ['zh-CN', 'zh-Hans-CN']) {
+
+    } finally {
+      if (saved === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, saved);
+    }
+  }));
+
+  it('resolves the new locales and OS regional variants', inject([AppSettingsService], (service: AppSettingsService) => {
+    const saved = localStorage.getItem(service.storeKey);
+    try {
+      localStorage.removeItem(service.storeKey);
+      const expectedLocales = [
+        ['nb-NO', 'nb'], ['no-NO', 'nb'],
+        ['da-DK', 'da'], ['nl-NL', 'nl'], ['fi-FI', 'fi'],
+        ['pt-BR', 'pt-BR'], ['pt-PT', 'pt-BR'], ['pt', 'pt-BR'],
+        ['it-IT', 'it'], ['ja-JP', 'ja'], ['ko-KR', 'ko'],
+        ['zh-CN', 'zh-CN'], ['zh_Hans_CN', 'zh-CN'],
+        ['zh-Hans', 'zh-CN'], ['zh-SG', 'zh-CN']
+      ];
+      for (const [locale, expected] of expectedLocales) {
         service.settings.language = '';
         service.loadAppSettings(locale);
-        expect(service.settings.language).toBe('en');
+        expect(service.settings.language).toBe(expected);
       }
     } finally {
       if (saved === null) localStorage.removeItem(service.storeKey);
@@ -155,10 +173,10 @@ describe('AppSettingsService', () => {
     try {
       localStorage.removeItem(service.storeKey);
       service.settings.language = '';
-      service.loadAppSettings('it-IT');
+      service.loadAppSettings('ru-RU');
       expect(service.settings.language).toBe('en');
       service.settings.language = '';
-      service.loadAppSettings('ja-JP');
+      service.loadAppSettings('ar-SA');
       expect(service.settings.language).toBe('en');
     } finally {
       if (saved === null) localStorage.removeItem(service.storeKey);
@@ -178,11 +196,11 @@ describe('AppSettingsService', () => {
     }
   }));
 
-  it('normalizes an obsolete saved language to English without losing other settings', inject([AppSettingsService], (service: AppSettingsService) => {
+  it('normalizes an unsupported saved language to English without losing other settings', inject([AppSettingsService], (service: AppSettingsService) => {
     const saved = localStorage.getItem(service.storeKey);
     try {
       localStorage.setItem(service.storeKey, JSON.stringify({
-        ...service.settings, language: 'it-IT', displayCurrency: 'EUR'
+        ...service.settings, language: 'ru-RU', displayCurrency: 'EUR'
       }));
       service.loadAppSettings('de-DE');
       expect(service.settings.language).toBe('en');

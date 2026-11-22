@@ -16,6 +16,27 @@ import * as QRCode from 'qrcode';
 import BigNumber from 'bignumber.js';
 import { TranslocoService } from '@jsverse/transloco';
 
+// Nano's badge generator uses asset filename codes that sometimes differ
+// from the BCP 47 locale IDs used by Transloco (notably ko → kr).
+// Try documented/observed codes first, then alternate legacy spellings if a
+// particular image is missing. Keep every variant on the official Nano host.
+const NANO_MERCHANT_BADGE_CODES: Record<string, readonly string[]> = {
+  en: ['en'],
+  fr: ['fr'],
+  es: ['es'],
+  de: ['de'],
+  'zh-HK': ['zh-hk'],
+  nb: ['no', 'nb'],
+  da: ['dk', 'da'],
+  nl: ['nl'],
+  fi: ['fi'],
+  'pt-BR': ['pt-br', 'br'],
+  it: ['it'],
+  ja: ['jp', 'ja'],
+  ko: ['kr', 'ko'],
+  'zh-CN': ['zh-cn', 'cn'],
+};
+
 interface ReceivePendingItem {
   hash: string;
   amount: string | BigNumber;
@@ -87,18 +108,24 @@ export class ReceiveComponent implements OnInit, OnDestroy {
   merchantModePrompts: MerchantPrompt[] = [];
   merchantModeTransactionHashes: string[] = [];
   merchantModeAcceptedBadgeLoadFailed = false;
+  merchantModeBadgeCandidateIndex = 0;
 
-  // Use the exact Nano brand assets generated for each supported UI locale.
-  // The blue badge is served by Nano; a bundled local badge is a visual
-  // fallback when the remote asset cannot be loaded (e.g. offline PWA).
+  // Preserve the existing blue "Accepted here" badge style in merchant mode.
+  // A missing remote SVG falls through to another official filename, then to
+  // the local Nano symbol and the translated accessible text.
   get merchantModeAcceptedBadgeUrl(): string {
-    const language = this.settings.settings.language;
-    const badgeLanguage = language === 'zh-HK'
-      ? 'zh-hk'
-      : (language === 'fr' || language === 'de' || language === 'es')
-        ? language
-        : 'en';
-    return `https://assets.nano.org/img/badges/blue-${badgeLanguage}-var1.svg`;
+    const badgeCodes = NANO_MERCHANT_BADGE_CODES[this.settings.settings.language] ?? ['en'];
+    const badgeCode = badgeCodes[Math.min(this.merchantModeBadgeCandidateIndex, badgeCodes.length - 1)];
+    return `https://assets.nano.org/img/badges/blue-${badgeCode}-var1.svg`;
+  }
+
+  merchantModeHandleBadgeLoadError(): void {
+    const badgeCodes = NANO_MERCHANT_BADGE_CODES[this.settings.settings.language] ?? ['en'];
+    if (this.merchantModeBadgeCandidateIndex + 1 < badgeCodes.length) {
+      this.merchantModeBadgeCandidateIndex++;
+    } else {
+      this.merchantModeAcceptedBadgeLoadFailed = true;
+    }
   }
 
 
@@ -497,6 +524,7 @@ export class ReceiveComponent implements OnInit, OnDestroy {
 
   merchantModeResetState() {
     this.merchantModeAcceptedBadgeLoadFailed = false;
+    this.merchantModeBadgeCandidateIndex = 0;
     this.unsetSelectedAccount();
     this.resetAmount();
 
