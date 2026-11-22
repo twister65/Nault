@@ -18,7 +18,7 @@
     "platform-desktop": "Desktop (Electron)",
     "domain": "PWA-domæne",
     "version": "Version",
-    "commit": "GitHub commit",
+    "commit": "GitHub-commit",
     "unknown": "Ikke tilgængelig",
     "description": "Revision indlejret på byggetidspunktet i denne applikation. Klik på commit for at se den nøjagtige kilde på GitHub."
   },
@@ -624,7 +624,7 @@
     "merchant-summary-transactions": "Transaktions-id'er",
     "merchant-copy-info": "Kopiér betalingsoplysninger",
     "merchant-qr-alt": "Betaling QR-kode",
-    "merchant-accepted-badge-alt": "Nano accepteret her",
+    "merchant-accepted-badge-alt": "Nano accepteres her",
     "merchant-amount-placeholder": "Beløb i Ӿ",
     "receive-nano": "Modtag Nano",
     "all-accounts": "Alle konti",
