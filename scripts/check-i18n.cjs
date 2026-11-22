@@ -91,10 +91,15 @@ const hasOfficialBadgeUrl = badgeUrlMatches.some(urlText => {
 });
 assert.ok(
   hasOfficialBadgeUrl &&
-  receiveSource.includes("language === 'fr' || language === 'de' || language === 'es'") &&
-  receiveSource.includes("language === 'zh-HK'") &&
-  receiveSource.includes("? 'zh-hk'"),
-  'Use the official Nano badges for English, French, German, Spanish and Hong Kong Chinese'
+  receiveSource.includes('const NANO_MERCHANT_BADGE_CODES') &&
+  receiveSource.includes("ko: ['kr', 'ko']") &&
+  receiveSource.includes("ja: ['jp', 'ja']") &&
+  receiveSource.includes("'pt-BR': ['pt-br', 'br']") &&
+  receiveSource.includes("'zh-HK': ['zh-hk']") &&
+  receiveSource.includes("'zh-CN': ['zh-cn', 'cn']") &&
+  receiveSource.includes("merchantModeBadgeCandidateIndex++") &&
+  merchantMarkup.includes('(error)="merchantModeHandleBadgeLoadError()"'),
+  'Use locale-specific official Nano badges with resilient translated fallback'
 );
 assert.ok(
   merchantMarkup.includes('src="assets/img/nano-circle-badge-blue.svg"') &&
