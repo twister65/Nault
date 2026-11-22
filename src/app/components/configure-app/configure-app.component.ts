@@ -58,7 +58,7 @@ export class ConfigureAppComponent implements OnInit, OnDestroy {
   selectedLanguage = this.languages[0].id;
 
   denominations = [
-    { name: 'XNO', value: 'mnano' },
+    { name: 'Ӿ', value: 'mnano' },
     { name: 'knano', value: 'knano' },
     { name: 'nano', value: 'nano' },
   ];

@@ -218,7 +218,7 @@ export class LedgerService {
     if (this.pendingReconnectNotified) return;
     this.pendingReconnectNotified = true;
     this.notifications.sendWarning(
-      'Incoming XNO is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.',
+      'Incoming Ӿ is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.',
       { identifier: 'ledger-pending-reconnect', length: 0 }
     );
   }

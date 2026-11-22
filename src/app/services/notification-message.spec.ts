@@ -8,10 +8,10 @@ describe('localizeNotificationMessage', () => {
     'ui-notifications.node-offline': 'Impossible de se connecter au nœud Nano. Les soldes affichés peuvent être inexacts !',
     'ui-notifications.refresh-balance-failed': 'Impossible d’actualiser les soldes. Vérifiez votre connexion.',
     'ui-notifications.nano-price-unavailable': 'Impossible de récupérer le dernier cours du Nano. Vérifiez votre connexion Internet ou les paramètres de votre bloqueur de publicités, puis actualisez la page pour afficher des montants en monnaie fiduciaire à jour.',
-    'ui-notifications.ledger-pending-reconnect': 'Des XNO sont en attente de réception. Déverrouillez votre Ledger, ouvrez l’application Nano, puis cliquez sur « Reconnecter » pour les recevoir.',
-    'ui-notifications.tracked-receivable': 'L’adresse suivie {{account}} peut maintenant recevoir {{amount}} XNO.',
-    'ui-notifications.tracked-sent': 'L’adresse suivie {{account}} a envoyé {{amount}} XNO.',
-    'ui-notifications.tracked-received': 'L’adresse suivie {{account}} a reçu {{amount}} XNO.',
+    'ui-notifications.ledger-pending-reconnect': 'Des Ӿ sont en attente de réception. Déverrouillez votre Ledger, ouvrez l’application Nano, puis cliquez sur « Reconnecter » pour les recevoir.',
+    'ui-notifications.tracked-receivable': 'L’adresse suivie {{account}} peut maintenant recevoir {{amount}} Ӿ.',
+    'ui-notifications.tracked-sent': 'L’adresse suivie {{account}} a envoyé {{amount}} Ӿ.',
+    'ui-notifications.tracked-received': 'L’adresse suivie {{account}} a reçu {{amount}} Ӿ.',
     'ui-notifications.tracked-representative': 'L’adresse suivie {{account}} a changé de représentant : {{representative}}.',
     'ui-notifications.bluetooth-unavailable': 'Bluetooth indisponible. Vérifiez le Bluetooth de votre ordinateur et de votre Ledger, ou reconnectez-vous en USB.',
     'ui-notifications.ledger-confirmation-waiting': 'En attente de confirmation sur la Ledger…',
@@ -24,8 +24,8 @@ describe('localizeNotificationMessage', () => {
     'ui-notifications.ledger-user-rejected': 'Transaction refusée sur la Ledger (0x6985).',
     'ui-notifications.ledger-signing-busy': 'La Ledger est occupée. Patientez un instant puis relancez manuellement la signature.',
     'ui-notifications.ledger-signing-failed': 'Échec de la signature sur la Ledger. Vérifiez la connexion, puis réessayez.',
-    'ui-notifications.received-amount': 'Réception de {{amount}} XNO réussie !',
-    'ui-notifications.received': 'Réception de XNO réussie !',
+    'ui-notifications.received-amount': 'Réception de {{amount}} Ӿ réussie !',
+    'ui-notifications.received': 'Réception de Ӿ réussie !',
   };
   const translate = (key: string, params?: Record<string, string>) =>
     (messages[key] || key).replace(/{{(\w+)}}/g, (_, name: string) => params?.[name] || '');
@@ -91,21 +91,21 @@ describe('localizeNotificationMessage', () => {
       .toContain('ne correspond pas au portefeuille configuré');
   });
 
-  it('localizes the Ledger incoming-XNO reconnection guidance', () => {
+  it('localizes the Ledger incoming-Ӿ reconnection guidance', () => {
     expect(localizeNotificationMessage(
-      'Incoming XNO is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.', translate
-    )).toContain('Des XNO sont en attente de réception');
+      'Incoming Ӿ is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.', translate
+    )).toContain('Des Ӿ sont en attente de réception');
   });
 
   it('translates tracked-address WebSocket messages and keeps the account link and amount', () => {
     const addressLink = '<a href="/account/nano_123456">Natrium</a>';
     const cases: Array<[string, string]> = [
-      [`Tracked address ${addressLink} can now receive 1 XNO`,
-        `L’adresse suivie ${addressLink} peut maintenant recevoir 1 XNO.`],
-      [`Tracked address ${addressLink} sent 0.25 XNO`,
-        `L’adresse suivie ${addressLink} a envoyé 0.25 XNO.`],
-      [`Tracked address ${addressLink} received incoming 1e-7 XNO`,
-        `L’adresse suivie ${addressLink} a reçu 1e-7 XNO.`],
+      [`Tracked address ${addressLink} can now receive 1 Ӿ`,
+        `L’adresse suivie ${addressLink} peut maintenant recevoir 1 Ӿ.`],
+      [`Tracked address ${addressLink} sent 0.25 Ӿ`,
+        `L’adresse suivie ${addressLink} a envoyé 0.25 Ӿ.`],
+      [`Tracked address ${addressLink} received incoming 1e-7 Ӿ`,
+        `L’adresse suivie ${addressLink} a reçu 1e-7 Ӿ.`],
       [`Tracked address ${addressLink} changed its representative to nano_rep123`,
         `L’adresse suivie ${addressLink} a changé de représentant : nano_rep123.`],
     ];
@@ -115,7 +115,7 @@ describe('localizeNotificationMessage', () => {
   });
 
   it('does not alter unrelated or unsafe-looking tracked-account messages', () => {
-    const input = 'Tracked address <a href="javascript:alert(1)">Natrium</a> can now receive 1 XNO';
+    const input = 'Tracked address <a href="javascript:alert(1)">Natrium</a> can now receive 1 Ӿ';
     expect(localizeNotificationMessage(input, translate)).toBe(input);
   });
 
@@ -160,16 +160,24 @@ describe('localizeNotificationMessage', () => {
   });
 
   it('interpolates the exact received amount without changing its numeric representation', () => {
-    expect(localizeNotificationMessage('Successfully received 1 XNO!', translate))
-      .toBe('Réception de 1 XNO réussie !');
-    expect(localizeNotificationMessage('Successfully received 0.123456 XNO!', translate))
-      .toBe('Réception de 0.123456 XNO réussie !');
-    expect(localizeNotificationMessage('Successfully received  XNO!', translate))
-      .toBe('Réception de XNO réussie !');
+    expect(localizeNotificationMessage('Successfully received 1 Ӿ!', translate))
+      .toBe('Réception de 1 Ӿ réussie !');
+    expect(localizeNotificationMessage('Successfully received 0.123456 Ӿ!', translate))
+      .toBe('Réception de 0.123456 Ӿ réussie !');
+    expect(localizeNotificationMessage('Successfully received  Ӿ!', translate))
+      .toBe('Réception de Ӿ réussie !');
   });
 
   it('leaves other notifications including HTML links untouched', () => {
     const message = '<a href="/account">Tracked address</a> received funds';
     expect(localizeNotificationMessage(message, translate)).toBe(message);
   });
+  it('keeps localizing notifications produced with the legacy ticker', () => {
+    expect(localizeNotificationMessage('Successfully received 1 \u0058NO!', translate))
+      .toBe('Réception de 1 Ӿ réussie !');
+    expect(localizeNotificationMessage(
+      'Incoming \u0058NO is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.', translate
+    )).toContain('Des Ӿ sont en attente de réception');
+  });
+
 });

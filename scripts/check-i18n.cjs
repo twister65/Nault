@@ -36,6 +36,16 @@ for (const language of ['fr', 'es', 'de', 'zh-HK']) {
   console.log('Translation validated: ' + language + ', ' + Object.keys(translation).length + ' entries');
 }
 
+// Preserve the selected fiat currency code beside each converted sidebar balance.
+const sidebarMarkup = fs.readFileSync(
+  path.join(__dirname, '..', 'src', 'app', 'app.component.html'), 'utf8'
+);
+assert.equal(
+  (sidebarMarkup.match(/<span class="estimate-symbol">~<\/span>\{\{ settings\.settings\.displayCurrency \}\}/g) || []).length,
+  2,
+  'Keep the selected fiat currency code visible in both sidebar balance cards'
+);
+
 // Official, language-dependent Nano "accepted here" badge is displayed
 // above the QR code. Keep currency glyphs only beside numeric amounts.
 const merchantMarkup = fs.readFileSync(
@@ -82,8 +92,8 @@ assert.ok(
   'Provide a local offline image fallback'
 );
 assert.doesNotMatch(
-  merchantMarkup, />XNO<| \(XNO\)|\/ XNO/,
-  'Merchant payment content should display Nano symbols, not the XNO ticker'
+  merchantMarkup, />\x58NO<| \(\x58NO\)|\/ \x58NO/,
+  'Merchant payment content should display Nano symbols, not the obsolete ticker'
 );
 assert.ok(
   merchantMarkup.includes('class="uk-form-icon uk-link-reset uk-link-muted merchant-mode-symbol-icon"') &&

@@ -122,7 +122,7 @@
                         <div class="amounts">
                           <span class="amount-integer">{{ rep.delegatedWeight | rai: 'mnano,true' | amountsplit: 0 }}</span>
                           <span class="amount-fractional">{{ rep.delegatedWeight | rai: 'mnano,true' | amountsplit: 1 }}</span>
-                          <span class="currency-name">XNO</span>
+                          <span class="currency-name">Ӿ</span>
                         </div>
                       </td>
                     </tr>
@@ -146,7 +146,7 @@
                           <div class="amounts">
                             <span class="amount-integer">{{ delegatingAccount.balance | rai: 'mnano,true' | amountsplit: 0 }}</span>
                             <span class="amount-fractional">{{ delegatingAccount.balance | rai: 'mnano,true' | amountsplit: 1 }}</span>
-                            <span class="currency-name">XNO</span>
+                            <span class="currency-name">Ӿ</span>
                           </div>
                         </td>
                       </tr>
@@ -192,7 +192,7 @@
                       <option [value]="null">{{ 'ui-representatives.select-accounts' | transloco }}</option>
                       <option [value]="'all'">{{ 'ui-representatives.all-accounts' | transloco }}</option>
                       @for (account of walletService.wallet.accounts; track account) {
-                        <option [value]="account.id">{{account.addressBookName ? account.addressBookName + ' - ' : '#' + account.index + ' - ' }} {{ account.id | squeeze }} ({{ account.balance | rai: 'mnano,true' | amountsplit: 0 }}{{ account.balance | rai: 'mnano,true' | amountsplit: 1 }} XNO)</option>
+                        <option [value]="account.id">{{account.addressBookName ? account.addressBookName + ' - ' : '#' + account.index + ' - ' }} {{ account.id | squeeze }} ({{ account.balance | rai: 'mnano,true' | amountsplit: 0 }}{{ account.balance | rai: 'mnano,true' | amountsplit: 1 }} Ӿ)</option>
                       }
                     </select>
                     <ul class="uk-list uk-list-striped">
