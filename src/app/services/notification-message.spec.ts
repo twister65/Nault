@@ -19,6 +19,10 @@ describe('localizeNotificationMessage', () => {
     'ui-notifications.ledger-not-ready': 'La Ledger n’est pas prête. Déverrouillez-la, ouvrez l’application Nano, puis cliquez sur « Reconnecter ».',
     'ui-notifications.ledger-nano-app-not-open': 'L’application Nano n’est pas ouverte sur votre Ledger. Ouvrez-la, puis cliquez sur « Reconnecter ».',
     'ui-notifications.ledger-locked-reconnect': 'Ledger verrouillée. Déverrouillez-la, ouvrez l’application Nano, puis cliquez sur « Reconnecter ».',
+    'ui-notifications.ledger-ble-mtu-timeout': "La négociation MTU de la connexion Bluetooth® avec la Ledger a expiré. Reconnectez l’appareil.",
+    'ui-notifications.ledger-ble-connection-timeout': "La connexion Bluetooth® avec la Ledger a expiré. Réessayez de vous connecter.",
+    'ui-notifications.ledger-ble-disconnected': "La connexion Bluetooth® avec la Ledger a été interrompue. Cliquez sur « Reconnecter ».",
+    'ui-notifications.ledger-ble-pairing-help': "L’appairage ou l’authentification Bluetooth® de la Ledger peut être invalide. Vérifiez l’appairage dans les paramètres Bluetooth® de l’ordinateur, puis reconnectez la Ledger.",
     'ui-notifications.ledger-hid-read-timeout': 'délai de lecture HID de la Ledger dépassé',
     'ui-notifications.ledger-signing-error': 'Erreur lors de la signature du bloc : {{error}}',
     'ui-notifications.ledger-user-rejected': 'Transaction refusée sur la Ledger (0x6985).',
@@ -123,6 +127,36 @@ describe('localizeNotificationMessage', () => {
     expect(localizeNotificationMessage(
       'Bluetooth unavailable. Check Bluetooth on your computer and Ledger, or choose Reconnect via USB.', translate
     )).toContain('Bluetooth indisponible');
+  });
+
+  it('localizes the exact MTU negotiation timeout from the Electron screenshot', () => {
+    const detail = 'Ledger Bluetooth MTU negotiation timed out; reconnect the device';
+    const localized = "La négociation MTU de la connexion Bluetooth® avec la Ledger a expiré. Reconnectez l’appareil.";
+    expect(localizeNotificationMessage('Bluetooth connection failed: ' + detail, translate))
+      .toBe(localized);
+    expect(localizeNotificationMessage(detail, translate)).toBe(localized);
+  });
+
+  it('localizes known BLE disconnect and pairing failures but keeps unknown errors intact', () => {
+    const failures: Array<[string, string]> = [
+      ['Bluetooth connection failed: Bluetooth connection timed out',
+        "La connexion Bluetooth® avec la Ledger a expiré. Réessayez de vous connecter."],
+      ['Bluetooth connection failed: Ledger Bluetooth disconnected. Click Reconnect.',
+        "La connexion Bluetooth® avec la Ledger a été interrompue. Cliquez sur « Reconnecter »."],
+      ['Bluetooth connection failed: Ledger Bluetooth connection closed',
+        "La connexion Bluetooth® avec la Ledger a été interrompue. Cliquez sur « Reconnecter »."],
+      ['Ledger Nano X Bluetooth pairing may be missing or invalid (authentication may have failed). Re-pair your Ledger in your computer Bluetooth settings (Linux: bluetoothctl), then click Reconnect.',
+        "L’appairage ou l’authentification Bluetooth® de la Ledger peut être invalide. Vérifiez l’appairage dans les paramètres Bluetooth® de l’ordinateur, puis reconnectez la Ledger."],
+      ['Bluetooth connection failed: Bluetooth authentication failed while enabling notifications. Remove the Ledger from the computer Bluetooth settings, pair it again, and retry the connection in Nault.',
+        "L’appairage ou l’authentification Bluetooth® de la Ledger peut être invalide. Vérifiez l’appairage dans les paramètres Bluetooth® de l’ordinateur, puis reconnectez la Ledger."],
+      ['Bluetooth connection failed: Ledger Nano X Bluetooth authentication failed. Your device may not be paired correctly. Re-pair it in your computer Bluetooth settings (Linux: bluetoothctl), then click Reconnect.',
+        "L’appairage ou l’authentification Bluetooth® de la Ledger peut être invalide. Vérifiez l’appairage dans les paramètres Bluetooth® de l’ordinateur, puis reconnectez la Ledger."]
+    ];
+    for (const [raw, translated] of failures) {
+      expect(localizeNotificationMessage(raw, translate)).toBe(translated);
+    }
+    const unexpected = 'Bluetooth connection failed: Unknown BLE diagnostic 42';
+    expect(localizeNotificationMessage(unexpected, translate)).toBe(unexpected);
   });
 
   it('localizes the Ledger confirmation prompt without changing its identifier', () => {
