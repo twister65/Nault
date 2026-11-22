@@ -202,7 +202,10 @@ if (process.platform === 'darwin') {
 
 // The user's wallet language overrides the OS locale for native menus.
 // Accept only registered wallet languages from the trusted renderer.
-const supportedMenuLanguages = new Set(['en', 'fr', 'es', 'de', 'zh-HK']);
+const supportedMenuLanguages = new Set([
+  'en', 'fr', 'es', 'de', 'zh-HK',
+  'nb', 'da', 'nl', 'fi', 'pt-BR', 'it', 'ja', 'ko', 'zh-CN'
+]);
 let applicationMenuLocale: string | null = null;
 let mainWindow: BrowserWindow | null = null;
 
