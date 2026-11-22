@@ -149,6 +149,18 @@ test('all nine new languages localize native menus, updater and Ledger Bluetooth
   assert.deepEqual(desktopLabels('zh-TW'), desktopLabels('zh-HK'));
 });
 
+test('Italian Ledger notifications, reconnect actions and native menu agree on the selected locale', () => {
+  const italian = require('../src/assets/i18n/it.json');
+  const reconnect = italian['ui-ledger']['reconnect-via-usb'];
+  const notification = italian['ui-notifications']['bluetooth-unavailable'];
+  assert.equal(reconnect, 'Riconnetti tramite USB');
+  assert.ok(notification.includes(reconnect), 'Bluetooth toast must name the actual Italian reconnect action');
+  assert.equal(desktopLabels('it').edit, 'Modifica');
+  assert.equal(desktopLabels('it').view, 'Visualizza');
+  assert.equal(desktopLabels('it').window, 'Finestra');
+  assert.equal(desktopLabels('it').help, 'Aiuto');
+});
+
 test('English and unsupported system locales keep a complete English fallback', () => {
   const en = desktopLabels('en-US');
   assert.equal(en.checkUpdates, 'Check for Updates');
