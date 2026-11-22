@@ -67,7 +67,7 @@
                 <select id="form-horizontal-select" class="uk-select" [(ngModel)]="pendingAccountModel" (change)="onSelectedAccountChange(pendingAccountModel)">
                   <option [value]="0">{{ 'ui-receive.all-accounts' | transloco }}</option>
                   @for (account of accounts; track account) {
-                    <option [value]="account.id">{{account.addressBookName ? account.addressBookName + ' - ' : '#' + account.index + ' - ' }} {{ account.id | squeeze }} ({{ account.balance | rai: 'mnano,true' | amountsplit: 0 }}{{ account.balance | rai: 'mnano,true' | amountsplit: 1 }} XNO)</option>
+                    <option [value]="account.id">{{account.addressBookName ? account.addressBookName + ' - ' : '#' + account.index + ' - ' }} {{ account.id | squeeze }} ({{ account.balance | rai: 'mnano,true' | amountsplit: 0 }}{{ account.balance | rai: 'mnano,true' | amountsplit: 1 }} Ӿ)</option>
                   }
                 </select>
               </div>
@@ -83,7 +83,7 @@
                 @if (settings.settings.displayCurrency) {
                   <div style="margin-top: 10px;">
                     <div class="uk-width-1-1 uk-inline">
-                      <a class="uk-form-icon uk-link-reset uk-link-muted fiat-currency-ticker" uk-tooltip title="{{ 'ui-receive-extra.last-price' | transloco }}: {{ price.price.lastPrice | fiat: settings.settings.displayCurrency }} / XNO">{{ settings.settings.displayCurrency | currencySymbol }}</a>
+                      <a class="uk-form-icon uk-link-reset uk-link-muted fiat-currency-ticker" uk-tooltip title="{{ 'ui-receive-extra.last-price' | transloco }}: {{ price.price.lastPrice | fiat: settings.settings.displayCurrency }} / Ӿ">{{ settings.settings.displayCurrency | currencySymbol }}</a>
                       <input [(ngModel)]="amountFiat" [ngClass]="{ 'uk-form-danger': !validFiat }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" (input)="fiatAmountChange()" style="padding-left: 52px !important;" class="uk-input" id="form-horizontal-text-fiat" type="number" step="any" [placeholder]="'ui-receive-extra.amount-of-currency' | transloco:{ currency: settings.settings.displayCurrency }">
                     </div>
                   </div>
@@ -285,7 +285,7 @@
                   <span class="uk-text-small">{{ 'ui-receive.ready-to-receive' | transloco }}</span><br>
                   <span class="amount-integer">{{ pending.amount | rai: 'mnano,true' | amountsplit: 0 }}</span>
                   <span class="amount-fractional">{{ pending.amount | rai: 'mnano,true' | amountsplit: 1 }}</span>
-                  <span class="currency-name">XNO</span>
+                  <span class="currency-name">Ӿ</span>
                   <div class="compact-actions-date">
                     <ng-template [ngTemplateOutlet]="transactionActions"></ng-template>
                   </div>
@@ -316,7 +316,7 @@
               <thead>
                 <tr class="uk-alert uk-alert-primary missing-accounts-hint">
                   <td colspan="4" style="text-align: center;"><span uk-icon="icon: info"></span> {{ 'ui-receive-extra.min-prefix' | transloco }} @if (( util.nano.mnanoToRaw(this.settings.settings.minimumReceive).toFixed().length > 24 )) {
-                  <a class="hint-action" routerLink="/configure-app" routerLinkActive="active">{{ util.nano.mnanoToRaw(this.settings.settings.minimumReceive).toFixed() | rai: 'mnano,true' | amountsplit: 0 }}{{ util.nano.mnanoToRaw(this.settings.settings.minimumReceive).toFixed() | rai: 'mnano,true' | amountsplit: 1 }} XNO</a>
+                  <a class="hint-action" routerLink="/configure-app" routerLinkActive="active">{{ util.nano.mnanoToRaw(this.settings.settings.minimumReceive).toFixed() | rai: 'mnano,true' | amountsplit: 0 }}{{ util.nano.mnanoToRaw(this.settings.settings.minimumReceive).toFixed() | rai: 'mnano,true' | amountsplit: 1 }} Ӿ</a>
                 } @else {
                   <a class="hint-action" routerLink="/configure-app" routerLinkActive="active">{{ util.nano.mnanoToRaw(this.settings.settings.minimumReceive).toFixed() }} raw</a>
                 }{{ 'ui-receive-extra.min-suffix' | transloco }}</td>

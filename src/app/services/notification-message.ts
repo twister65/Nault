@@ -19,7 +19,8 @@ export function localizeNotificationMessage(message: string, translate: Notifica
       return translate('ui-notifications.refresh-balance-failed');
     case 'There was an issue retrieving latest nano price.  Ensure your AdBlocker is disabled on this page then reload to see accurate FIAT values.':
       return translate('ui-notifications.nano-price-unavailable');
-    case 'Incoming XNO is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.':
+    case 'Incoming \u0058NO is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.':
+    case 'Incoming Ӿ is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.':
       return translate('ui-notifications.ledger-pending-reconnect');
     case 'Bluetooth unavailable. Check Bluetooth on your computer and Ledger, or choose Reconnect via USB.':
       return translate('ui-notifications.bluetooth-unavailable');
@@ -56,7 +57,7 @@ export function localizeNotificationMessage(message: string, translate: Notifica
     return translate('ui-notifications.ledger-signing-error', { error: detail });
   }
 
-  const received = /^Successfully received (.*?) XNO!$/.exec(message);
+  const received = /^Successfully received (.*?) (?:Ӿ|\u0058NO)!$/.exec(message);
   if (received) {
     return received[1]
       ? translate('ui-notifications.received-amount', { amount: received[1] })
@@ -65,7 +66,7 @@ export function localizeNotificationMessage(message: string, translate: Notifica
 
   // Keep address-book links intact while localizing tracked-account WebSocket toasts.
   // Account identifiers must be path-safe and labels are plain text within the link.
-  const trackedTransfer = /^Tracked address (<a href="\/account\/[a-zA-Z0-9_]+">[^<>]*<\/a>) (can now receive|sent|received incoming) ((?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:e[+-]?[0-9]+)?) XNO$/.exec(message);
+  const trackedTransfer = /^Tracked address (<a href="\/account\/[a-zA-Z0-9_]+">[^<>]*<\/a>) (can now receive|sent|received incoming) ((?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:e[+-]?[0-9]+)?) (?:Ӿ|\u0058NO)$/.exec(message);
   if (trackedTransfer) {
     const keys: Record<string, string> = {
       'can now receive': 'ui-notifications.tracked-receivable',

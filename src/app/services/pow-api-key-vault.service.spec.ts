@@ -137,7 +137,7 @@ describe('PoWApiKeyVaultService encrypted local credentials', () => {
     expect(vault.getAuthorizedHeaders('https://rpc.nano.to/'))
       .toEqual({ Authorization: 'Bearer nano-TEST-KEY-987654321' });
     expect(vault.getAuthorizedHeaders('https://rainstorm.city/api')).toBeNull();
-    expect(vault.getAuthorizedHeaders('https://rpc.nano.to/XNO')).toBeNull();
+    expect(vault.getAuthorizedHeaders('https://rpc.nano.to/untrusted-endpoint')).toBeNull();
     expect(vault.getAuthorizedHeaders('http://rpc.nano.to/')).toBeNull();
     expect(vault.getAuthorizedHeaders('https://rpc.nano.to/?key=secret')).toBeNull();
     await expectAsync(vault.saveKey('unknown-provider' as any, 'FORBIDDEN-KEY-12345678', pass))
