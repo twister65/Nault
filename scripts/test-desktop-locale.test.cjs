@@ -45,13 +45,13 @@ test('Electron menu tracks the saved wallet language at startup and on changes',
   assert.match(main, /ipcMain\.handle\('app-menu-language', \(event, language: unknown\) => \{/);
   assert.match(main, /if \(!isTrustedLedgerSender\(event\)\) throw new Error\('Untrusted menu language request'\)/);
   assert.match(main, /typeof language !== 'string' \|\| !supportedMenuLanguages\.has\(language\)/);
-  const match = main.match(/const supportedMenuLanguages = new Set\\(\\[([\\s\\S]*?)\\]\\);/);
+  const match = main.match(/const supportedMenuLanguages = new Set\(\[([\s\S]*?)\]\);/);
   assert.ok(match, 'Electron native-menu IPC must use a fixed allowlist');
   const allowed = [...match[1].matchAll(/'([^']+)'/g)].map(entry => entry[1]);
   const transloco = fs.readFileSync(
     path.join(__dirname, '../src/app/transloco/transloco-root.module.ts'), 'utf8'
   );
-  const registered = [...transloco.matchAll(/\\{ id: '([^']+)', label:/g)].map(entry => entry[1]);
+  const registered = [...transloco.matchAll(/\{ id: '([^']+)', label:/g)].map(entry => entry[1]);
   assert.deepEqual(allowed, registered, 'native menu IPC must support all registered UI languages');
   assert.match(main, /desktopLabels\(applicationMenuLocale \?\? app\.getLocale\(\)\)/);
   assert.match(main, /Menu\.setApplicationMenu\(Menu\.buildFromTemplate\(getApplicationMenu\(\)\)\)/);
