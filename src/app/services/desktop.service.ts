@@ -38,6 +38,12 @@ export class DesktopService {
     if (!this._ipc) return Promise.resolve(null);
     return this._ipc.getSystemLocale().catch(() => null);
   }
+
+  // The PWA has no native menu; leave its language handling unchanged.
+  setMenuLanguage(language: string): Promise<boolean> {
+    if (!this._ipc) return Promise.resolve(false);
+    return this._ipc.setMenuLanguage(language).catch(() => false);
+  }
   // Null is an unavailable Electron signal, not an offline indication.
   isNetworkOnline(): Promise<boolean | null> {
     if (!this._ipc) return Promise.resolve(null);
