@@ -28,6 +28,10 @@ contextBridge.exposeInMainWorld('naultDesktop', {
   getSystemLocale(): Promise<string> {
     return ipcRenderer.invoke('app-system-locale');
   },
+  // Narrow, validated IPC action for synchronizing Electron's native menu.
+  setMenuLanguage(language: string): Promise<boolean> {
+    return ipcRenderer.invoke('app-menu-language', language);
+  },
   isNetworkOnline(): Promise<boolean> {
     return ipcRenderer.invoke('app-network-online');
   },
