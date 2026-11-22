@@ -46,6 +46,66 @@ for (const language of languages) {
   console.log('Translation validated: ' + language + ', ' + Object.keys(translation).length + ' entries');
 }
 
+// Bluetooth SIG permits translations of its word mark only for Chinese,
+// Japanese and Korean. Keep the ® on prominent Latin-script actions, never
+// attach ® to the unregistered Simplified Chinese translation (蓝牙).
+// An ownership footnote is not a claim that Nault holds a trademark license.
+const bluetoothNames = {
+  'zh-HK': '藍牙', 'zh-CN': '蓝牙', ja: 'ブルートゥース', ko: '블루투스'
+};
+for (const language of ['en', ...languages]) {
+  const strings = read(language);
+  const wallet = strings['ui-wallet-setup'];
+  const ledger = strings['ui-ledger'];
+  const notice = strings['ui-notifications']['bluetooth-unavailable'];
+  const expectedWordMark = bluetoothNames[language] || 'Bluetooth®';
+  assert.ok(
+    wallet['connect-bluetooth'].includes(expectedWordMark) &&
+    ledger['reconnect-via-bluetooth'].includes(expectedWordMark) &&
+    notice.includes(expectedWordMark),
+    language + ': unsupported or missing Bluetooth word mark in a prominent action/notice'
+  );
+  if (language === 'zh-CN') {
+    assert.doesNotMatch(wallet['connect-bluetooth'], /®/,
+      'Do not claim registration for Simplified Chinese 蓝牙');
+  }
+  const footnote = wallet['bluetooth-trademark-attribution'];
+  assert.ok(
+    footnote.includes('Bluetooth®') && footnote.includes('Bluetooth SIG, Inc.'),
+    language + ': missing Bluetooth SIG ownership attribution'
+  );
+}
+const walletSetupMarkup = fs.readFileSync(
+  path.join(__dirname, '..', 'src', 'app', 'components', 'configure-wallet', 'configure-wallet.component.html'), 'utf8'
+);
+assert.ok(
+  walletSetupMarkup.includes("'ui-wallet-setup.bluetooth-trademark-attribution' | transloco") &&
+  walletSetupMarkup.includes("selectedImportOption === 'ledger'"),
+  'The Ledger wallet configuration must display the Bluetooth ownership footnote'
+);
+console.log('Bluetooth SIG word marks and attribution validated in all 14 languages');
+
+// Known Ledger BLE errors are translated for every supported locale, without
+// changing Bluetooth transport behavior or hiding unknown diagnostics.
+for (const language of ['en', ...languages]) {
+  const labels = read(language)['ui-notifications'];
+  for (const key of ['ledger-ble-mtu-timeout', 'ledger-ble-connection-timeout',
+                     'ledger-ble-disconnected', 'ledger-ble-pairing-help']) {
+    assert.ok(labels[key]?.trim(), language + ': missing Ledger BLE diagnostic: ' + key);
+  }
+  assert.ok(labels['ledger-ble-mtu-timeout'].includes('MTU'),
+    language + ': preserve the MTU diagnostic category');
+}
+const notificationSource = fs.readFileSync(
+  path.join(__dirname, '..', 'src', 'app', 'services', 'notification-message.ts'), 'utf8'
+);
+assert.ok(
+  notificationSource.includes('Ledger Bluetooth MTU negotiation timed out; reconnect the device') &&
+  notificationSource.includes("translate('ui-notifications.ledger-ble-mtu-timeout')") &&
+  notificationSource.includes('return message;'),
+  'Keep an actionable localized MTU timeout while preserving unknown diagnostics'
+);
+
 // Preserve the selected fiat currency code beside each converted sidebar balance.
 const sidebarMarkup = fs.readFileSync(
   path.join(__dirname, '..', 'src', 'app', 'app.component.html'), 'utf8'

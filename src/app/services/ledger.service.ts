@@ -868,6 +868,12 @@ export class LedgerService {
       if (readinessIssue) this.bluetoothErrorMessage = ledgerReadinessMessage(readinessIssue);
       else if (authenticationFailed) this.bluetoothErrorMessage = pairingAdvice;
       else if (possiblePairing) this.bluetoothErrorMessage = detail;
+      else if (detail === 'Ledger Bluetooth MTU negotiation timed out; reconnect the device' ||
+               detail === 'Bluetooth connection timed out') {
+        // Give the setup panel an actionable timeout message without changing
+        // the established no-pairing-advice behavior for a generic disconnect.
+        this.bluetoothErrorMessage = `Bluetooth connection failed: ${detail}`;
+      }
       const message = adapterUnavailable
         ? 'Bluetooth unavailable. Check Bluetooth on your computer and Ledger, or choose Reconnect via USB.'
         : this.bluetoothErrorMessage || `Bluetooth connection failed: ${detail}`;
