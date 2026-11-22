@@ -42,6 +42,25 @@ export function localizeNotificationMessage(message: string, translate: Notifica
       return translate('ui-notifications.ledger-locked-reconnect');
   }
 
+  // The BLE transport still reports the original English diagnostic to the
+  // console. Only known, exact error messages are localized for user-facing
+  // toasts and Ledger setup hints; unknown errors retain their original text.
+  const blePrefix = 'Bluetooth connection failed: ';
+  const bleDetail = message.startsWith(blePrefix) ? message.slice(blePrefix.length) : message;
+  switch (bleDetail) {
+    case 'Ledger Bluetooth MTU negotiation timed out; reconnect the device':
+      return translate('ui-notifications.ledger-ble-mtu-timeout');
+    case 'Bluetooth connection timed out':
+      return translate('ui-notifications.ledger-ble-connection-timeout');
+    case 'Ledger Bluetooth disconnected. Click Reconnect.':
+    case 'Ledger Bluetooth connection closed':
+      return translate('ui-notifications.ledger-ble-disconnected');
+    case 'Ledger Nano X Bluetooth authentication failed. Your device may not be paired correctly. Re-pair it in your computer Bluetooth settings (Linux: bluetoothctl), then click Reconnect.':
+    case 'Ledger Nano X Bluetooth pairing may be missing or invalid (authentication may have failed). Re-pair your Ledger in your computer Bluetooth settings (Linux: bluetoothctl), then click Reconnect.':
+    case 'Bluetooth authentication failed while enabling notifications. Remove the Ledger from the computer Bluetooth settings, pair it again, and retry the connection in Nault.':
+      return translate('ui-notifications.ledger-ble-pairing-help');
+  }
+
   // A declined Ledger transaction (APDU 0x6985) is a user action, not
   // a malfunction. The native transport remains connected after a refusal.
   if (message === 'Transaction denied on Ledger device' ||
