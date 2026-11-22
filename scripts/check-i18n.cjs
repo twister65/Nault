@@ -85,6 +85,27 @@ assert.ok(
 );
 console.log('Bluetooth SIG word marks and attribution validated in all 14 languages');
 
+// Known Ledger BLE errors are translated for every supported locale, without
+// changing Bluetooth transport behavior or hiding unknown diagnostics.
+for (const language of ['en', ...languages]) {
+  const labels = read(language)['ui-notifications'];
+  for (const key of ['ledger-ble-mtu-timeout', 'ledger-ble-connection-timeout',
+                     'ledger-ble-disconnected', 'ledger-ble-pairing-help']) {
+    assert.ok(labels[key]?.trim(), language + ': missing Ledger BLE diagnostic: ' + key);
+  }
+  assert.ok(labels['ledger-ble-mtu-timeout'].includes('MTU'),
+    language + ': preserve the MTU diagnostic category');
+}
+const notificationSource = fs.readFileSync(
+  path.join(__dirname, '..', 'src', 'app', 'services', 'notification-message.ts'), 'utf8'
+);
+assert.ok(
+  notificationSource.includes('Ledger Bluetooth MTU negotiation timed out; reconnect the device') &&
+  notificationSource.includes("translate('ui-notifications.ledger-ble-mtu-timeout')") &&
+  notificationSource.includes('return message;'),
+  'Keep an actionable localized MTU timeout while preserving unknown diagnostics'
+);
+
 // Preserve the selected fiat currency code beside each converted sidebar balance.
 const sidebarMarkup = fs.readFileSync(
   path.join(__dirname, '..', 'src', 'app', 'app.component.html'), 'utf8'
