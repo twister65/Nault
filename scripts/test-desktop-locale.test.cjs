@@ -40,6 +40,7 @@ test('Electron menu tracks the saved wallet language at startup and on changes',
   const desktop = fs.readFileSync(path.join(__dirname, '../src/app/services/desktop.service.ts'), 'utf8');
   const startup = fs.readFileSync(path.join(__dirname, '../src/app/app.component.ts'), 'utf8');
   const configure = fs.readFileSync(path.join(__dirname, '../src/app/components/configure-app/configure-app.component.ts'), 'utf8');
+  const bluetooth = fs.readFileSync(path.join(__dirname, '../desktop-app/src/lib/web-bluetooth.ts'), 'utf8');
 
   assert.match(main, /ipcMain\.handle\('app-menu-language', \(event, language: unknown\) => \{/);
   assert.match(main, /if \(!isTrustedLedgerSender\(event\)\) throw new Error\('Untrusted menu language request'\)/);
@@ -53,6 +54,9 @@ test('Electron menu tracks the saved wallet language at startup and on changes',
   assert.match(desktop, /if \(!this\._ipc\) return Promise\.resolve\(false\)/);
   assert.match(startup, /void this\.desktop\.setMenuLanguage\(this\.settings\.settings\.language\)/);
   assert.match(configure, /void this\.desktop\.setMenuLanguage\(this\.selectedLanguage\)/);
+  assert.match(main, /configureWebBluetooth\(currentWindow, isTrustedWalletURL,/);
+  assert.match(main, /\(\) => applicationMenuLocale \?\? app\.getLocale\(\)/);
+  assert.match(bluetooth, /const t = desktopLabels\(getLocale\(\)\)/);
   // The existing language dictionaries are reused without changing their labels.
   assert.equal(desktopLabels('en').edit, 'Edit');
   assert.equal(desktopLabels('fr').edit, 'Édition');
