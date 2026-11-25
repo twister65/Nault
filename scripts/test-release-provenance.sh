@@ -10,7 +10,6 @@ mkdir -p "$tmp/assets" "$tmp/bin"
 for suffix in exe AppImage deb rpm pkg.tar.zst; do
   printf 'fixture\n' > "$tmp/assets/pkg-1.$suffix"
 done
-done
 cat > "$tmp/bin/gh" <<'MOCK'
 #!/usr/bin/env bash
 [[ "$1" == attestation && "$2" == verify ]] || exit 1
