@@ -100,30 +100,30 @@ test('native distro packages declare cross-distribution Electron runtime depende
   assert.match(script, /ldd "\$launcher"/);
 });
 
-test('release notes group platforms and include macOS Apple Silicon plus distro names', () => {
+test('release notes recommend macOS PWA and retain Windows and Linux downloads', () => {
   const p = JSON.parse(fs.readFileSync('package.json','utf8'));
   assert.equal(p.build.nsis.artifactName, 'Nault-Windows-Setup-${version}.${ext}');
-  assert.equal(p.build.mac.artifactName, 'Nault-macOS-${version}-${arch}.${ext}');
-  assert.deepEqual(p.build.mac.target, ['dmg','zip']);
+  assert.ok(!p.scripts.publish.includes('-wml'));
   assert.equal(p.build.appImage.artifactName, 'Nault-Linux-Portable-${version}-${arch}.${ext}');
   assert.equal(p.build.deb.artifactName, 'Nault-Linux-Debian-Ubuntu-Mint-${version}-${arch}.${ext}');
   assert.equal(p.build.rpm.artifactName, 'Nault-Linux-Fedora-openSUSE-${version}-${arch}.${ext}');
   assert.equal(p.build.pacman.artifactName, 'Nault-Linux-Arch-Manjaro-${version}-${arch}.pkg.tar.zst');
   const w = fs.readFileSync('.github/workflows/electron_hash.yml','utf8');
-  assert.ok(w.includes('macos-15-intel, macos-15'));
+  assert.ok(!w.includes('macos-15'));
+  assert.ok(!fs.existsSync('.github/workflows/macos-bluetooth.yml'));
   assert.ok(w.includes('node scripts/assemble-release-assets.cjs'));
   assert.ok(w.includes('needs: [release-preview, linux-install-smoke]'));
   const assembly = fs.readFileSync('scripts/assemble-release-assets.cjs','utf8');
   for (const heading of ['### Windows','### macOS','### Linux']) assert.ok(assembly.includes(heading));
   assert.ok(assembly.includes('Download the version that matches your operating system.'));
   assert.ok(!assembly.includes('Les noms de fichiers ne comportent plus de préfixe numérique.'));
-  for (const arch of ['x64','arm64']) assert.ok(assembly.includes(arch));
+  assert.ok(assembly.includes('installable Nault PWA in Google Chrome'));
   const validator = fs.readFileSync('scripts/verify-release-asset-order.cjs','utf8');
-  for (const f of ['latest.yml','latest-mac.yml','latest-linux.yml']) assert.ok(validator.includes(f));
+  for (const f of ['latest.yml','latest-linux.yml']) assert.ok(validator.includes(f));
 });
 
 
-test('release assembler ignores builder-debug metadata and merges both Mac update feeds', () => {
+test('release assembler ignores builder-debug metadata and publishes Windows and Linux only', () => {
   const path = require('node:path');
   const os = require('node:os');
   const crypto = require('node:crypto');
@@ -136,14 +136,6 @@ test('release assembler ignores builder-debug metadata and merges both Mac updat
   const notes = path.join(root, 'downloads.md');
   const artifacts = {
     'desktop-windows-2022': ['Nault-Windows-Setup-' + version + '.exe'],
-    'desktop-macos-15-intel': [
-      'Nault-macOS-' + version + '-x64.dmg',
-      'Nault-macOS-' + version + '-x64.zip'
-    ],
-    'desktop-macos-15': [
-      'Nault-macOS-' + version + '-arm64.dmg',
-      'Nault-macOS-' + version + '-arm64.zip'
-    ],
     'desktop-linux-deb': [
       'Nault-Linux-Debian-Ubuntu-Mint-' + version + '-amd64.deb'
     ],
@@ -158,9 +150,7 @@ test('release assembler ignores builder-debug metadata and merges both Mac updat
     ]
   };
   const feeds = {
-    'desktop-windows-2022': 'latest.yml',
-    'desktop-macos-15-intel': 'latest-mac.yml',
-    'desktop-macos-15': 'latest-mac.yml'
+    'desktop-windows-2022': 'latest.yml'
   };
   try {
     const linuxFiles = [];
@@ -185,20 +175,22 @@ test('release assembler ignores builder-debug metadata and merges both Mac updat
       'scripts/assemble-release-assets.cjs', input, output, notes, ''
     ], {encoding: 'utf8'});
     assert.equal(run.status, 0, run.stderr + run.stdout);
-    const meta = yaml.load(fs.readFileSync(path.join(output, 'latest-mac.yml'), 'utf8'));
-    assert.equal(meta.files.length, 4);
+    assert.ok(!fs.existsSync(path.join(output, 'latest-mac.yml')));
+    assert.ok(!fs.readdirSync(output).some(name => /\.(dmg|zip)$/.test(name)));
     const linuxMeta = yaml.load(fs.readFileSync(path.join(output, 'latest-linux.yml'), 'utf8'));
     assert.equal(linuxMeta.files.length, 4, 'Linux updater must combine all four packages');
     for (const name of ['desktop-linux-deb', 'desktop-linux-rpm',
       'desktop-linux-pacman', 'desktop-linux-appimage']) {
       assert.ok(fs.existsSync(path.join(input, name)), 'Missing per-format source ' + name);
     }
-    assert.ok(meta.files.some(f => f.url.includes('-arm64.zip')));
-    assert.ok(meta.files.some(f => f.url.includes('-x64.zip')));
     assert.ok(!fs.existsSync(path.join(output, 'builder-debug.yml')));
     assert.ok(fs.readFileSync(notes, 'utf8').includes('### Windows'));
     assert.ok(fs.readFileSync(notes, 'utf8').includes('### macOS'));
     assert.ok(fs.readFileSync(notes, 'utf8').includes('### Linux'));
     assert.ok(fs.existsSync(path.join(output, 'SHA256SUMS')));
+    fs.mkdirSync(path.join(input, 'desktop-macos-15'));
+    const rejected = cp.spawnSync(process.execPath, ['scripts/assemble-release-assets.cjs', input, path.join(root, 'rejected'), notes, ''], {encoding: 'utf8'});
+    assert.notEqual(rejected.status, 0);
+    assert.match(rejected.stderr, /Unexpected retired macOS artifacts/);
   } finally { fs.rmSync(root, {recursive: true, force: true}); }
 });

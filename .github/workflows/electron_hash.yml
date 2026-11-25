@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15-intel, macos-15, windows-2022]
+        os: [ubuntu-24.04, windows-2022]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -49,9 +49,6 @@ jobs:
         run: |
           node -e "const p=require('./package.json'),l=require('./package-lock.json'),v=process.env.RELEASE_TAG.replace(/^v/,''); if(p.version!==v||l.version!==v||l.packages[''].version!==v) throw Error('Release tag/version mismatch')"
       - name: Install locked dependencies
-        env:
-          # node-usb 2.0.3 native bindings use Node 22 C++17/20 APIs on Apple Silicon.
-          CXXFLAGS: ${{ runner.os == 'macOS' && '-std=c++20' || '' }}
         run: npm ci --legacy-peer-deps --no-audit --no-fund
       - name: Verify tar APIs used by native build tooling
         run: node scripts/test-build-dependencies.cjs
@@ -75,13 +72,6 @@ jobs:
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: desktop-app/build/*.exe
-      - name: Attest native macOS packages provenance (SLSA)
-        if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/v')
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
-        with:
-          subject-path: |
-            desktop-app/build/*.dmg
-            desktop-app/build/*.zip
       - name: Attest Linux packages provenance (SLSA)
         if: runner.os == 'Linux' && startsWith(github.ref, 'refs/tags/v')
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
@@ -91,15 +81,13 @@ jobs:
             desktop-app/build/*.deb
             desktop-app/build/*.rpm
             desktop-app/build/*.pkg.tar.zst
-      - name: Upload Windows and macOS packages
+      - name: Upload Windows packages
         if: runner.os != 'Linux'
         uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.os }}
           if-no-files-found: error
           path: |
-            desktop-app/build/*.dmg
-            desktop-app/build/*.zip
             desktop-app/build/*.exe
             desktop-app/build/*.yml
             desktop-app/build/*.blockmap
@@ -285,9 +273,6 @@ jobs:
           # Every Linux updater needs the same manifest to choose its own package type.
           test -s packages/latest-linux.yml
           test "$(find packages -maxdepth 1 -type f -name '*.exe' | wc -l)" -ge 1
-          test "$(find packages -maxdepth 1 -type f -name '*.dmg' | wc -l)" -eq 2
-          test "$(find packages -maxdepth 1 -type f -name '*.zip' | wc -l)" -eq 2
-          test -s packages/latest-mac.yml
           test -s packages/latest.yml
           (cd packages && sha256sum --check SHA256SUMS)
           gh release upload "$RELEASE_TAG" packages/* --clobber

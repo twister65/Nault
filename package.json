@@ -12,7 +12,7 @@
     "test": "ng test",
     "lint": "ng lint",
     "e2e": "playwright test",
-    "publish": "build -wml --x64 -p always",
+    "publish": "electron-builder --win --linux --x64 -p always",
     "release": "npm run desktop:build && electron-builder",
     "wallet:dev": "ng serve --open",
     "wallet:dev-ssl": "ng serve --ssl --open",

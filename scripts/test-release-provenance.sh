@@ -7,10 +7,8 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/assets" "$tmp/bin"
 
-for suffix in exe dmg zip AppImage deb rpm pkg.tar.zst; do
-  count=1
-  if [[ "$suffix" == dmg || "$suffix" == zip ]]; then count=2; fi
-  for ((i=1; i<=count; i++)); do printf 'fixture\n' > "$tmp/assets/pkg-$i.$suffix"; done
+for suffix in exe AppImage deb rpm pkg.tar.zst; do
+  printf 'fixture\n' > "$tmp/assets/pkg-1.$suffix"
 done
 cat > "$tmp/bin/gh" <<'MOCK'
 #!/usr/bin/env bash
@@ -30,7 +28,14 @@ export MOCK_LOG="$tmp/log"
 
 bash -n "$root/verify-release-provenance.sh"
 bash "$root/verify-release-provenance.sh" "$tmp/assets" >/dev/null
-[[ "$(wc -l < "$MOCK_LOG")" -eq 9 ]]
+[[ "$(wc -l < "$MOCK_LOG")" -eq 5 ]]
+
+printf 'fixture\n' > "$tmp/assets/retired.dmg"
+if bash "$root/verify-release-provenance.sh" "$tmp/assets" >/dev/null 2>&1; then
+  echo 'FAIL: retired macOS installer was accepted' >&2
+  exit 1
+fi
+rm "$tmp/assets/retired.dmg"
 
 rm "$tmp/assets/pkg-1.exe"
 if bash "$root/verify-release-provenance.sh" "$tmp/assets" >/dev/null 2>&1; then
@@ -50,4 +55,4 @@ if bash "$root/verify-release-provenance.sh" "$tmp/assets" >/dev/null 2>&1; then
   exit 1
 fi
 
-echo 'PASS: provenance gate, 9 artifact checks, missing/invalid/non-tag rejection'
+echo 'PASS: provenance gate, 5 artifact checks, missing/invalid/non-tag rejection'

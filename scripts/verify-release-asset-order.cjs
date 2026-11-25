@@ -10,7 +10,6 @@ const pkg = require('../package.json');
 const dir = path.resolve(__dirname, '../desktop-app/build');
 const formats = {
   win32: [['.exe', /^Nault-Windows-Setup-/]],
-  darwin: [['.dmg', /^Nault-macOS-/], ['.zip', /^Nault-macOS-/]],
   linux: [
     ['.AppImage', /^Nault-Linux-Portable-/],
     ['.deb', /^Nault-Linux-Debian-Ubuntu-Mint-/],
@@ -18,7 +17,7 @@ const formats = {
     ['.pkg.tar.zst', /^Nault-Linux-Arch-Manjaro-/]
   ]
 };
-const feeds = {win32: 'latest.yml', darwin: 'latest-mac.yml', linux: 'latest-linux.yml'};
+const feeds = {win32: 'latest.yml', linux: 'latest-linux.yml'};
 async function digest(file) {
   const hash = crypto.createHash('sha512');
   for await (const data of fs.createReadStream(file)) hash.update(data);
@@ -38,7 +37,6 @@ async function main() {
     const name = found[0];
     assert.match(name, prefix);
     assert.ok(name.includes(pkg.version));
-    if (process.platform === 'darwin') assert.ok(name.includes(process.arch), 'Wrong Mac architecture ' + name);
     const entries = info.files.filter(entry => entry.url === name);
     assert.equal(entries.length, 1, 'Missing/ambiguous updater entry for ' + name);
     const file = path.join(dir, name);
