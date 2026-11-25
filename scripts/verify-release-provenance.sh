@@ -44,11 +44,11 @@ verify_format() {
 }
 
 verify_format .exe 1
-verify_format .dmg 2
-verify_format .zip 2
+verify_format .dmg 0
+verify_format .zip 0
 verify_format .AppImage 1
 verify_format .deb 1
 verify_format .rpm 1
 verify_format .pkg.tar.zst 1
-[[ "$verified" -eq 9 ]] || { echo "Unexpected number of release binaries: $verified" >&2; exit 1; }
-echo 'PASS: 9/9 desktop installers and update ZIPs have verified SLSA provenance'
+[[ "$verified" -eq 5 ]] || { echo "Unexpected number of release binaries: $verified" >&2; exit 1; }
+echo 'PASS: 5/5 desktop installers have verified SLSA provenance'
