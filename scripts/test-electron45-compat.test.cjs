@@ -10,8 +10,8 @@ const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf
 const manifest = JSON.parse(read('package.json'));
 const lock = JSON.parse(read('package-lock.json'));
 
-test('Electron 45.4.1 is pinned consistently in npm v2 lockfile', () => {
-  const selected = '45.4.1';
+test('Electron 45.5.0 is pinned consistently in npm v2 lockfile', () => {
+  const selected = '45.5.0';
   const resolved = lock.packages['node_modules/electron'];
   assert.equal(manifest.devDependencies.electron, selected);
   assert.equal(lock.packages[''].devDependencies.electron, selected);
