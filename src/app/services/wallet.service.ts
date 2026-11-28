@@ -132,9 +132,68 @@ export class WalletService {
     refresh$: new BehaviorSubject(false),
   };
 
+  // Account management intentionally defers incoming notices until validation.
+  // RPC reconciliation on validation restores the pending balance and menu badge.
+  private accountManagementActive = false;
+
+  setAccountManagementMode(active: boolean): void {
+    this.accountManagementActive = active;
+    if (active) this.notifications.removeNotification('pending-locked');
+  }
+
+  notifyPendingAfterAccountManagement(): void {
+    if (this.accountManagementActive || !this.isConfigured() || !this.hasPendingTransactions()) return;
+    if (this.appSettings.settings.pendingOption === 'manual') {
+      this.notifications.sendWarning('Incoming transaction(s) found - Set to be received manually', {
+        identifier: 'pending-locked', length: 10000
+      });
+    } else {
+      this.showLockedReceiveNotice('New incoming transaction(s) - Unlock the wallet to receive');
+    }
+  }
+
+  // The existing wallet widget owns the password and device-unlock UI.
+  // Offer its modal on an explicit user click; never unlock or receive automatically.
+  showLockedReceiveNotice(message: string): void {
+    if (this.accountManagementActive || !this.isConfigured() ||
+        !this.wallet.locked || this.isLedgerWallet()) return;
+    this.notifications.sendWarning(message, {
+      length: 10000,
+      identifier: 'pending-locked',
+      action: {labelKey: 'ui-notifications.unlock-wallet-action',
+        run: () => this.requestPendingWalletUnlock()}
+    });
+  }
+
+  requestPendingWalletUnlock(): void {
+    // Avoid a stale toast opening a modal after unlock or a wallet switch.
+    if (!this.isConfigured() || !this.wallet.locked || this.isLedgerWallet()) return;
+    this.notifications.removeNotification('pending-locked');
+    this.wallet.unlockModalRequested$.next(true);
+  }
+
   // Reflect account additions, removals and wallet replacement in Web Push enrollment.
   readonly accountsChanged$ = new Subject<void>();
   processingPending = false;
+  // A manual receive may be waiting for wallet unlock. Reserve its account
+  // before showing the unlock dialog so unlockWallet() cannot concurrently
+  // auto-receive from that account. Other accounts may still auto-receive.
+  private readonly manualReceiveAccounts = new Set<string>();
+
+  beginManualReceive(accountId: string): boolean {
+    if (this.manualReceiveAccounts.has(accountId)) return false;
+    this.manualReceiveAccounts.add(accountId);
+    return true;
+  }
+
+  endManualReceive(accountId: string): void {
+    this.manualReceiveAccounts.delete(accountId);
+  }
+
+  // Session-local, non-persistent safety guard. An explicit Ledger refusal must
+  // not be overridden by periodic balance reloads, WS events or reconnection.
+  // Manual receive remains available via Account Details.
+  private readonly rejectedAutoReceiveHashes = new Set<string>();
   successfulBlocks: string[] = [];
   trackedHashes: string[] = [];
   // Coalesce confirmations arriving while a previous balance RPC is still running.
@@ -169,6 +228,11 @@ export class WalletService {
       this.saveWalletExport();
       console.info('[Ledger USB] verified model saved', { model });
     };
+    this.nanoBlock?.ledgerReceiveRejected$?.subscribe(({ account, sourceBlock }) => {
+      if (this.isLedgerWallet() && this.wallet.accounts.some(a => a.id === account)) {
+        this.rejectedAutoReceiveHashes.add(sourceBlock);
+      }
+    });
     this.websocket.newTransactions$.subscribe(async (transaction) => {
       if (!transaction) return; // Not really a new transaction
       console.log('New Transaction', transaction);
@@ -204,8 +268,12 @@ export class WalletService {
 
       if (isConfirmedIncomingTransactionForOwnWalletAccount === true) {
         if (shouldNotify === true) {
-          if (this.wallet.locked && this.appSettings.settings.pendingOption !== 'manual') {
-            this.notifications.sendWarning(`New incoming transaction - Unlock the wallet to receive`, { length: 10000, identifier: 'pending-locked' });
+          // Account Add / Hide is a temporary management view. Keep the
+          // receive state updated but defer the notice until explicit Validate.
+          if (this.accountManagementActive) {
+            // A fresh RPC snapshot below still records the incoming block.
+          } else if (this.wallet.locked && this.appSettings.settings.pendingOption !== 'manual') {
+            this.showLockedReceiveNotice('New incoming transaction - Unlock the wallet to receive');
           } else if (this.appSettings.settings.pendingOption === 'manual') {
             this.notifications.sendWarning(`New incoming transaction - Set to be received manually`, { length: 10000, identifier: 'pending-locked' });
           }
@@ -244,17 +312,17 @@ export class WalletService {
           if (transaction.block.subtype === 'send') {
             // Incoming transaction
             if (this.addressBook.getTransactionTrackingById(addressLink)) {
-              this.notifications.sendInfo(`Tracked address ${accountHrefLink} can now receive ${trackedAmount} XNO`, { length: 10000 });
+              this.notifications.sendInfo(`Tracked address ${accountHrefLink} can now receive ${trackedAmount} Ӿ`, { length: 10000 });
               console.log(`Tracked incoming block to: ${address} - Ӿ${trackedAmount}`);
             }
             // Outgoing transaction
             if (this.addressBook.getTransactionTrackingById(address)) {
-              this.notifications.sendInfo(`Tracked address ${accountHref} sent ${trackedAmount} XNO`, { length: 10000 });
+              this.notifications.sendInfo(`Tracked address ${accountHref} sent ${trackedAmount} Ӿ`, { length: 10000 });
               console.log(`Tracked send block from: ${address} - Ӿ${trackedAmount}`);
             }
           } else if (transaction.block.subtype === 'receive' && this.addressBook.getTransactionTrackingById(address)) {
             // Receive transaction
-            this.notifications.sendInfo(`Tracked address ${accountHref} received incoming ${trackedAmount} XNO`, { length: 10000 });
+            this.notifications.sendInfo(`Tracked address ${accountHref} received incoming ${trackedAmount} Ӿ`, { length: 10000 });
             console.log(`Tracked receive block to: ${address} - Ӿ${trackedAmount}`);
           } else if (transaction.block.subtype === 'change' && this.addressBook.getTransactionTrackingById(address)) {
             // Change transaction
@@ -856,6 +924,8 @@ export class WalletService {
     this.wallet.selectedAccount = null;
     this.wallet.selectedAccount$.next(null);
     this.wallet.pendingBlocks = [];
+    this.rejectedAutoReceiveHashes.clear();
+    this.manualReceiveAccounts.clear();
   }
 
   isConfigured() {
@@ -1113,6 +1183,13 @@ export class WalletService {
     // eslint-disable-next-line
     this.wallet.hasPending = walletPendingAboveThresholdConfirmed.gt(0);
 
+    // A confirmed/received block eventually disappears from a successful RPC
+    // receivable snapshot. Drop obsolete refusals, retaining active ones.
+    const stillPending = new Set(this.wallet.pendingBlocks.map(block => block.hash));
+    for (const hash of this.rejectedAutoReceiveHashes) {
+      if (!stillPending.has(hash)) this.rejectedAutoReceiveHashes.delete(hash);
+    }
+
     this.wallet.balanceInitialized = true;
 
     if (this.wallet.pendingBlocks.length) {
@@ -1269,9 +1346,16 @@ export class WalletService {
       this.wallet.pendingBlocks.sort(this.sortByAmount);
     }
 
-    this.processingPending = true;
+    // A rejected source remains receivable and visible but cannot be presented
+    // on the Ledger again by any automatic trigger. Other pending sources may
+    // still be processed; explicit manual receive bypasses this queue.
+    const nextBlock = this.wallet.pendingBlocks.find(
+      block => !this.rejectedAutoReceiveHashes.has(block.hash) &&
+        !this.manualReceiveAccounts?.has(block.account)
+    );
+    if (!nextBlock) return;
 
-    const nextBlock = this.wallet.pendingBlocks[0];
+    this.processingPending = true;
     if (this.successfulBlocks.includes(nextBlock.hash)) {
       return setTimeout(() => this.processPendingBlocks(), 1500); // Block has already been processed
     }
@@ -1288,7 +1372,7 @@ export class WalletService {
 
       const receiveAmount = this.util.nano.rawToMnano(nextBlock.amount);
       this.notifications.removeNotification('success-receive');
-      this.notifications.sendSuccess(`Successfully received ${receiveAmount.isZero() ? '' : this.noZerosPipe.transform(receiveAmount.toFixed(6)) } XNO!`, { identifier: 'success-receive' });
+      this.notifications.sendSuccess(`Successfully received ${receiveAmount.isZero() ? '' : this.noZerosPipe.transform(receiveAmount.toFixed(6)) } Ӿ!`, { identifier: 'success-receive' });
 
       // remove after processing
       // list also updated with reloadBalances but not if called too fast

@@ -49,3 +49,37 @@ th.hidden-column, td.hidden-column {
 .icon-delete-account {
 	vertical-align: -2px;
 }
+
+/* Small accessible refresh control in the Accounts heading. */
+.accounts-refresh-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin-left: 10px;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  color: inherit;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.accounts-refresh-button:disabled { opacity: .45; cursor: default; }
+.accounts-refresh-button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+/* Match the primary Send Nano button while preserving a touch-friendly hit target.
+ * Keep the horizontal gap after Refresh in the Accounts heading. */
+.accounts-heading { white-space: normal; }
+.accounts-mode-toggle {
+  min-height: 44px;
+  margin-left: 24px;
+  vertical-align: middle;
+  white-space: normal;
+}
+.accounts-mode-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.accounts-mode-toggle:disabled { opacity: .55; cursor: progress; }
+@media (max-width: 640px) {
+  .accounts-mode-toggle { margin: 8px 0 0 20px; }
+}

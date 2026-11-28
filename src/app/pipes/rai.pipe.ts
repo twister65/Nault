@@ -18,15 +18,15 @@ export class RaiPipe implements PipeTransform {
 
     switch (denomination.toLowerCase()) {
       default:
-      case 'xrb': return `${(value / this.mrai).toFixed(6)}${!hideText ? ' XNO' : ''}`;
+      case 'xrb': return `${(value / this.mrai).toFixed(6)}${!hideText ? ' Ӿ' : ''}`;
       case 'mnano':
         const hasRawValue = (value / this.rai) % 1;
         if (hasRawValue) {
           // New more precise toFixed function, but bugs on huge raw numbers
           const newVal = value / this.mrai < 0.000001 ? 0 : value / this.mrai;
-          return `${this.toFixed(newVal, this.precision)}${!hideText ? ' XNO' : ''}`;
+          return `${this.toFixed(newVal, this.precision)}${!hideText ? ' Ӿ' : ''}`;
         } else {
-          return `${(value / this.mrai).toFixed(6)}${!hideText ? ' XNO' : ''}`;
+          return `${(value / this.mrai).toFixed(6)}${!hideText ? ' Ӿ' : ''}`;
         }
       case 'knano': return `${(value / this.krai).toFixed(3)}${!hideText ? ' knano' : ''}`;
       case 'nano': return `${(value / this.rai).toFixed(0)}${!hideText ? ' nano' : ''}`;

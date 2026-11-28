@@ -1,6 +1,7 @@
 import {Component, ElementRef, HostListener, OnInit, OnDestroy, ViewChild, Renderer2, ChangeDetectionStrategy, inject} from '@angular/core';
 import { DeviceUnlockService } from './services/device-unlock.service';
 import { ReceivablePushService } from './services/receivable-push.service';
+import { WalletOverviewRefreshService } from './services/wallet-overview-refresh.service';
 import {WalletService, WalletAccount} from './services/wallet.service';
 import {AddressBookService} from './services/address-book.service';
 import {AppSettingsService} from './services/app-settings.service';
@@ -92,6 +93,7 @@ export class AppComponent implements OnInit, OnDestroy {
   powVaultUnlockRemainingAttempts = 0;
   readonly deviceUnlock = inject(DeviceUnlockService);
   private readonly receivablePush = inject(ReceivablePushService);
+  readonly overviewRefresh = inject(WalletOverviewRefreshService);
   deviceUnlockSupported = false;
 
   // Prompt to unlock any saved API vault after startup, independently of
@@ -411,8 +413,9 @@ export class AppComponent implements OnInit, OnDestroy {
     // New for v19: Patch saved xrb_ prefixes to nano_
     await this.patchXrbToNanoPrefixData();
 
-    // set translation language
+    // Set both Angular's language and Electron's native menu language.
     this.translate.setActiveLang(this.settings.settings.language);
+    void this.desktop.setMenuLanguage(this.settings.settings.language);
 
     // Align WebSocket subscriptions and the visible notice after an RPC switch.
     this.settings.serverFailover$.subscribe(({ previousName, nextName }) => {
@@ -512,7 +515,7 @@ export class AppComponent implements OnInit, OnDestroy {
     // If the wallet is locked and there is a pending balance, show a warning to unlock the wallet
     // (if not receive priority is set to manual)
     if (this.wallet.locked && this.walletService.hasPendingTransactions() && this.settings.settings.pendingOption !== 'manual') {
-      this.notifications.sendWarning(`New incoming transaction(s) - Unlock the wallet to receive`, { length: 10000, identifier: 'pending-locked' });
+      this.walletService.showLockedReceiveNotice('New incoming transaction(s) - Unlock the wallet to receive');
     } else if (this.walletService.hasPendingTransactions() && this.settings.settings.pendingOption === 'manual') {
       this.notifications.sendWarning(`Incoming transaction(s) found - Set to be received manually`, { length: 10000, identifier: 'pending-locked' });
     }
@@ -633,14 +636,19 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  private navTouchStart: { x: number; y: number } | null = null;
+  private navTouchStart: { x: number; y: number; atTop: boolean } | null = null;
 
   onNavTouchStart(event: TouchEvent): void {
     if (!this.navExpanded || event.touches.length !== 1) {
       this.navTouchStart = null;
       return;
     }
-    this.navTouchStart = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+    const nav = event.currentTarget as HTMLElement;
+    this.navTouchStart = {
+      x: event.touches[0].clientX,
+      y: event.touches[0].clientY,
+      atTop: nav.scrollTop <= 3
+    };
   }
 
   onNavTouchEnd(event: TouchEvent): void {
@@ -649,9 +657,14 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!start || !this.navExpanded || event.changedTouches.length !== 1) return;
     const dx = event.changedTouches[0].clientX - start.x;
     const dy = event.changedTouches[0].clientY - start.y;
-    // Only a deliberate leftward horizontal swipe closes the drawer.
-    // Vertical scrolling and taps retain their existing behavior.
-    if (dx < -60 && Math.abs(dx) > Math.abs(dy) * 1.5) this.closeNav();
+    // Preserve left-swipe-to-close. A distinct downward pull at the scroll
+    // top refreshes both balances and the current representative.
+    if (dx < -60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      this.closeNav();
+    } else if (start.atTop && dy > 75 && dy > Math.abs(dx) * 1.5 &&
+               (event.currentTarget as HTMLElement).scrollTop <= 3) {
+      void this.overviewRefresh.refresh();
+    }
   }
 
   onNavTouchCancel(): void {

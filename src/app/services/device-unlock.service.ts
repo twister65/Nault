@@ -30,6 +30,14 @@ type PrfExtensions = AuthenticationExtensionsClientInputs & {
 const PREFIX = 'nault-device-unlock-prf-v1-';
 const MAX_STORAGE_LENGTH = 4096;
 
+// Temporary safeguard for Windows browser/PWA WebAuthn PRF interoperability.
+// Both navigator.platform and the user agent are checked for compatibility
+// with Chromium's reduced UA and other browsers. Electron's file:// origin
+// remains unsupported by the separate secure-origin check below.
+export function isWindowsWebDeviceUnlockDisabled(platform: string, userAgent: string): boolean {
+  return /^(?:Win32|Win64|WinCE|Windows)$/i.test(platform) || /\bWindows NT\b/i.test(userAgent);
+}
+
 function secureCrypto(): Crypto {
   if (!globalThis.crypto?.subtle || !globalThis.crypto.getRandomValues) {
     throw new Error('Secure WebCrypto context required');
@@ -112,6 +120,11 @@ export class DeviceUnlockService {
   }
 
   async isSupported(): Promise<boolean> {
+    // Temporarily disable both enrollment and unlock in Windows browsers/PWAs
+    // until the platform WebAuthn PRF interoperability issue is resolved.
+    // Keep existing credentials and the password fallback untouched.
+    if (isWindowsWebDeviceUnlockDisabled(navigator.platform, navigator.userAgent)) return false;
+
     // file:// and custom schemes do not provide a reliable WebAuthn RP ID.
     if (!window.isSecureContext || !['https:', 'http:'].includes(location.protocol) ||
         (location.protocol === 'http:' &&

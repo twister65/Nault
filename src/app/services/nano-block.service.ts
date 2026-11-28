@@ -7,7 +7,7 @@ import {NotificationService} from './notification.service';
 import {AppSettingsService} from './app-settings.service';
 import {LedgerService, LedgerStatus, getLedgerSigningIssue} from './ledger.service';
 import { WalletAccount } from './wallet.service';
-import {BehaviorSubject} from 'rxjs';
+import {BehaviorSubject, Subject} from 'rxjs';
 import { tools as nanocurrencyWebTools } from 'nanocurrency-web';
 // The bundled Nano nacl shim exposes the existing detached-signature API.
 const nacl = (window as unknown as {
@@ -49,6 +49,16 @@ export class NanoBlockService {
   epochV2SignerAccount = 'nano_3qb6o6i1tkzr6jwr5s7eehfxwg9x6eemitdinbpi7u8bjjwsgqfj4wzser3x';
 
   newOpenBlock$: BehaviorSubject<boolean|false> = new BehaviorSubject(false);
+
+  // A 0x6985 refusal is the user's decision, not a transport failure.
+  // WalletService must keep the source block receivable but stop asking for
+  // this same signature automatically until the user initiates another receive.
+  readonly ledgerReceiveRejected$ = new Subject<{ account: string; sourceBlock: string }>();
+
+  // All receive paths (automatic, manual, and merchant mode) share the same
+  // in-flight publication for a given account/source. A Nano source can only
+  // be received once; publishing two copies races into an "Old block" error.
+  private readonly inFlightReceives = new Map<string, Promise<string | null>>();
 
   constructor(
     private api: ApiService,
@@ -273,7 +283,23 @@ export class NanoBlockService {
     return processResponse.hash;
   }
 
-  async generateReceive(walletAccount: WalletAccount, sourceBlock: string, ledger = false) {
+  async generateReceive(walletAccount: WalletAccount, sourceBlock: string, ledger = false): Promise<string | null> {
+    const receiveKey = `${walletAccount.id}:${sourceBlock}`;
+    const pending = this.inFlightReceives.get(receiveKey);
+    if (pending) return pending;
+
+    const operation = this.generateReceiveOnce(walletAccount, sourceBlock, ledger);
+    this.inFlightReceives.set(receiveKey, operation);
+    try {
+      return await operation;
+    } finally {
+      if (this.inFlightReceives.get(receiveKey) === operation) {
+        this.inFlightReceives.delete(receiveKey);
+      }
+    }
+  }
+
+  private async generateReceiveOnce(walletAccount: WalletAccount, sourceBlock: string, ledger = false): Promise<string | null> {
     const toAcct = await this.api.accountInfo(walletAccount.id);
     const walletAccountPublicKey = this.util.account.getAccountPublicKey(walletAccount.id);
 
@@ -281,8 +307,8 @@ export class NanoBlockService {
 
     const openEquiv = !toAcct || !toAcct.frontier;
 
-    const previousBlock = toAcct.frontier || this.zeroHash;
-    const representative = toAcct.representative || (this.settings.settings.defaultRepresentative || this.getRandomRepresentative());
+    const previousBlock = toAcct?.frontier || this.zeroHash;
+    const representative = toAcct?.representative || (this.settings.settings.defaultRepresentative || this.getRandomRepresentative());
 
     const srcBlockInfo = await this.api.blocksInfo([sourceBlock]);
     const srcAmount = new BigNumber(srcBlockInfo.blocks[sourceBlock].amount);
@@ -328,6 +354,11 @@ export class NanoBlockService {
         blockData.signature = sig.signature.toUpperCase();
       } catch (err) {
         this.notifications.removeNotification('ledger-sign');
+        if (getLedgerSigningIssue(err) === 'rejected') {
+          // Do not automatically re-request an explicitly declined receive
+          // after a balance refresh, WebSocket event or BLE reconnect.
+          this.ledgerReceiveRejected$.next({ account: walletAccount.id, sourceBlock });
+        }
         if (this.ledgerService.isUnavailableError(err)) {
           this.ledgerService.handleUnavailableReceive();
         } else {
@@ -542,7 +573,9 @@ export class NanoBlockService {
         ? 'Ledger is busy. Wait a moment and try signing again.'
         : issue === 'not-ready'
           ? 'Ledger is not ready. Unlock your Ledger, open the Nano app, then click Reconnect.'
-          : 'Ledger signing failed. Check the connection and try again.';
+          : issue === 'timed-out'
+            ? 'Ledger confirmation timed out. Check the device, reconnect and try again.'
+            : 'Ledger signing failed. Check the connection and try again.';
     this.notifications.sendWarning(message);
   }
   sendLedgerNotification() {

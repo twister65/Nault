@@ -4,9 +4,12 @@ const log = require('electron-log');
 
 // Chromium filters requestDevice by the Ledger service UUIDs in TransportWebBLE.
 // A name is only a label: never automatically select or pair based on a name.
-export function configureWebBluetooth(window: BrowserWindow, isTrustedURL: (url: string) => boolean) {
+export function configureWebBluetooth(
+  window: BrowserWindow,
+  isTrustedURL: (url: string) => boolean,
+  getLocale: () => string = () => app.getLocale()
+) {
   const contents = window.webContents;
-  const t = desktopLabels(app.getLocale());
   const trusted = () => !window.isDestroyed() && !contents.isDestroyed() && isTrustedURL(contents.getURL());
   const selected = new Set<string>();
   type Scan = {
@@ -35,6 +38,7 @@ export function configureWebBluetooth(window: BrowserWindow, isTrustedURL: (url:
     if (scan !== request || request.showing) return;
     if (!trusted()) return finish(request);
     request.showing = true;
+    const t = desktopLabels(getLocale());
     // Snapshot: updates must not change the meaning of an existing button.
     const devices = request.devices.slice(0, 12);
     try {
@@ -95,6 +99,7 @@ export function configureWebBluetooth(window: BrowserWindow, isTrustedURL: (url:
       callback({ confirmed: false });
       return;
     }
+    const t = desktopLabels(getLocale());
     const abort = new AbortController();
     let done = false;
     let timer: ReturnType<typeof setTimeout>;

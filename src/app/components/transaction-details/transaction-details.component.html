@@ -63,7 +63,7 @@
                     >
                     <span class="amount-integer">{{ $safeNavigationMigration(transaction?.amount) | rai: 'mnano,true' | amountsplit: 0 }}</span>
                     <span class="amount-fractional">{{ $safeNavigationMigration(transaction?.amount) | rai: 'mnano,true' | amountsplit: 1 }}</span>
-                    <span class="currency-name">XNO</span>
+                    <span class="currency-name">Ӿ</span>
                   </div>
                 }
                 @if (amountRaw.gt(0)) {
@@ -208,7 +208,7 @@
                 <div class="balance-amount-primary uk-text-truncate">
                   <span class="amount-integer">{{ ( isStateBlock ? getBalanceFromDec($safeNavigationMigration(transaction?.contents?.balance)) : getBalanceFromHex($safeNavigationMigration(transaction?.contents?.balance) )) | rai: 'mnano,true' | amountsplit: 0 }}</span>
                   <span class="amount-fractional">{{ ( isStateBlock ? getBalanceFromDec($safeNavigationMigration(transaction?.contents?.balance)) : getBalanceFromHex($safeNavigationMigration(transaction?.contents?.balance) )) | rai: 'mnano,true' | amountsplit: 1 }}</span>
-                  <span class="currency-name">XNO</span>
+                  <span class="currency-name">Ӿ</span>
                 </div>
                 <div class="uk-text-small block-hash-monospace"><span class="text-half-muted" style="margin-right: 4px;">=</span>{{ transaction?.contents?.balance }} raw</div>
               </div>

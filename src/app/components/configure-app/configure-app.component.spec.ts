@@ -29,6 +29,49 @@ describe('ConfigureAppComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('does not close the default representative picker after an address-input blur', fakeAsync(() => {
+    component.defaultRepresentative = null;
+    component.defaultRepSearch = '';
+    component.browseDefaultReps = false;
+    component.showRepresentatives = false;
+    component.representativeList = [
+      {id: 'nano_3hn3r6bnnmcy39gu6fgtisgnqh384gmt5mnh71a5xo4cb1d38ps16p8sg5c3', name: 'Twister32'}
+    ];
+    void component.validateRepresentative(); // blur previously scheduled an auto-close
+    component.toggleDefaultRepBrowser();
+    expect(component.showRepresentatives).toBeTrue();
+    expect(component.representativeResults$.value.length).toBe(1);
+    tick(450);
+    expect(component.browseDefaultReps).toBeTrue();
+    expect(component.showRepresentatives).toBeTrue();
+    component.toggleDefaultRepBrowser();
+    expect(component.showRepresentatives).toBeFalse();
+    component.toggleDefaultRepBrowser();
+    expect(component.showRepresentatives).toBeTrue();
+  }));
+
+  it('updates results without collapsing the default representative browser on async refresh', fakeAsync(() => {
+    const twister = 'nano_3hn3r6bnnmcy39gu6fgtisgnqh384gmt5mnh71a5xo4cb1d38ps16p8sg5c3';
+    component.defaultRepresentative = null;
+    component.defaultRepSearch = '';
+    component.browseDefaultReps = false;
+    component.showRepresentatives = false;
+    component.representativeList = [];
+    (component as any).representativeMonitor = {getSnapshot: () => Promise.resolve({
+      representatives: [{account: twister, name: 'Twister32', online: true}],
+      byAccount: {[twister]: {name: 'Twister32', online: true}}
+    })};
+    (component as any).repService = {getSortedRepresentatives: () => [], getRepresentative: () => undefined};
+    component.toggleDefaultRepBrowser();
+    expect(component.showRepresentatives).toBeTrue();
+    void component.populateRepresentativeList();
+    tick(0);
+    expect(component.browseDefaultReps).toBeTrue();
+    expect(component.showRepresentatives).toBeTrue();
+    expect(component.representativeResults$.value.some(rep => rep.id === twister)).toBeTrue();
+  }));
+
+
   it('refreshes missing node statistics when WebSocket reconnects after offline startup', fakeAsync(() => {
     (component as any).appSettings.settings.serverAPI = 'https://rainstorm.city/api';
     spyOn(component, 'loadFromSettings').and.stub();
@@ -113,11 +156,12 @@ describe('ConfigureAppComponent', () => {
     expect(details.open).toBeFalse();
   });
 
-  it('shows Nano.to key management only for explicit Nano.to PoW, regardless of wallet RPC', async () => {
+  it('shows Nano.to key management for Nano.to PoW and selected-server Nano.to only', async () => {
     spyOn(component, 'ngOnInit').and.stub();
     const settings = (component as any).appSettings.settings;
     const transloco = TestBed.inject(TranslocoService);
     await firstValueFrom(transloco.load(transloco.getActiveLang()));
+    component.selectedServer = '';
     for (const source of ['best', 'nanoTo', 'server', 'custom', 'clientWebGL', 'clientCPU'] as const) {
       component.selectedPoWOption = source;
       settings.powSource = source;
@@ -127,9 +171,28 @@ describe('ConfigureAppComponent', () => {
         fixture.detectChanges();
         await fixture.whenStable();
         fixture.detectChanges();
-        expect(!!fixture.nativeElement.querySelector('#pow-vault-help')).toBe(source === 'nanoTo');
+        const expected = source === 'nanoTo' || (source === 'server' && rpc === 'https://rpc.nano.to/');
+        expect(!!fixture.nativeElement.querySelector('#pow-vault-help')).toBe(expected);
       }
     }
+    // Reject misleading domains, invalid URLs and unrelated PoW modes.
+    component.selectedPoWOption = 'server';
+    settings.serverAPI = 'https://rpc.nano.to.evil.example/';
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
+    settings.serverAPI = 'not-a-url';
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
+
+    // Changing the selected RPC node in the UI immediately updates the vault
+    // visibility, without committing any wallet settings.
+    (component as any).appSettings.serverOptions = [
+      { value: 'nano-to', api: 'https://rpc.nano.to/' },
+      { value: 'other', api: 'https://rainstorm.city/api' },
+    ];
+    settings.serverAPI = 'https://rainstorm.city/api';
+    component.selectedServer = 'nano-to';
+    expect(component.showNanoToPowApiKeys()).toBeTrue();
+    component.selectedServer = 'other';
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
     expect(component.powOptions.some(option => option.value === 'nanoTo')).toBeTrue();
   });
 
@@ -157,7 +220,7 @@ describe('ConfigureAppComponent', () => {
       endpoint: 'https://rpc.nano.to/', status: 'unverified'
     });
     expect(component.getRemotePoWOptionName('best')).toContain('Nano.to');
-    expect(component.showNanoToPowApiKeys()).toBeFalse();
+    expect(component.showNanoToPowApiKeys()).toBeTrue();
 
     hasKey.and.returnValue(false);
     component.pow.syncProviderFromSettings(true);
@@ -165,6 +228,61 @@ describe('ConfigureAppComponent', () => {
     expect(component.showNanoToPowApiKeys()).toBeFalse();
     expect(settings.serverName).toBe('nano-to');
     expect(settings.serverAPI).toBe('https://rpc.nano.to/');
+  });
+
+  it('shows Nano.to key management in best mode when Nano.to is preferred, independent of wallet RPC', async () => {
+    spyOn(component, 'ngOnInit').and.stub();
+    const settings = (component as any).appSettings.settings;
+    const hasKey = spyOn(component.powApiKeyVault, 'hasKey').and.returnValue(true);
+    const transloco = TestBed.inject(TranslocoService);
+    await firstValueFrom(transloco.load(transloco.getActiveLang()));
+
+    settings.powSource = 'best';
+    component.selectedPoWOption = 'best';
+    for (const rpc of ['https://rainstorm.city/api', 'https://rpc.nano.to/']) {
+      settings.serverAPI = rpc;
+      component.pow.syncProviderFromSettings(true);
+      fixture.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+      expect(component.getRemotePoWOptionName('best')).toContain('Nano.to');
+      expect(fixture.nativeElement.querySelector('#pow-vault-help')).toBeTruthy();
+    }
+
+    hasKey.and.returnValue(false);
+    component.pow.syncProviderFromSettings(true);
+    fixture.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(component.getRemotePoWOptionName('best')).not.toContain('Nano.to');
+    expect(fixture.nativeElement.querySelector('#pow-vault-help')).toBeFalsy();
+  });
+
+  it('allows unlocking a stored Nano.to key from best mode, but hides unrelated empty vaults', () => {
+    const settings = (component as any).appSettings.settings;
+    settings.powSource = 'best';
+    component.selectedPoWOption = 'best';
+    spyOn(component.powApiKeyVault, 'hasKey').and.returnValue(false);
+    const summaries = spyOn(component.powApiKeyVault, 'getKeySummaries')
+      .and.returnValue([]);
+
+    component.pow.syncProviderFromSettings(true);
+    expect(component.pow.getPreferredBestPoWProvider()?.name).not.toBe('Nano.to');
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
+
+    // Keys remain encrypted but visible as non-secret metadata in a locked
+    // vault. Keep the UI accessible so users can re-enable Nano.to directly.
+    summaries.and.returnValue([
+      { id: 'saved-key', provider: 'nano-to', label: 'Saved Nano.to key', active: true }
+    ]);
+    expect(component.showNanoToPowApiKeys()).toBeTrue();
+
+    // After a reset/three failed passwords erases the vault, hide the panel.
+    summaries.and.returnValue([]);
+    expect(component.showNanoToPowApiKeys()).toBeFalse();
   });
 
   it('warns about irreversible erasure after three wrong vault passwords', async () => {
@@ -304,8 +422,7 @@ describe('ConfigureAppComponent', () => {
     await render();
     await fixture.whenStable();
     await render();
-    const buttons = fixture.nativeElement.querySelectorAll('.pow-vault-actions button') as NodeListOf<HTMLButtonElement>;
-    const save = Array.from(buttons).find(button => button.classList.contains('uk-button-primary'))!;
+    const save = fixture.nativeElement.querySelector('#pow-api-key-save') as HTMLButtonElement;
     const labelInput = fixture.nativeElement.querySelector('#pow-api-key-label') as HTMLInputElement;
     const keyInput = fixture.nativeElement.querySelector('#pow-api-key') as HTMLInputElement;
     const passphraseInput = fixture.nativeElement.querySelector('#pow-vault-passphrase') as HTMLInputElement;

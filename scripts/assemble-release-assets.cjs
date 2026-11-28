@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 // Assemble a preview on pull requests; never creates a tag or GitHub release.
-// On tag runs, merge macOS x64/arm64 updater feeds and generate download notes.
+// On tag runs, assemble Windows and Linux updater feeds and generate download notes.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -19,19 +19,12 @@ const linuxArtifacts = {
   'desktop-linux-pacman': '.pkg.tar.zst',
   'desktop-linux-appimage': '.AppImage'
 };
-const expected = ['desktop-windows-2022', 'desktop-macos-15-intel',
-  'desktop-macos-15', ...Object.keys(linuxArtifacts)];
-const macHosts = ['desktop-macos-15-intel', 'desktop-macos-15'];
-const feeds = {
-  'desktop-windows-2022': 'latest.yml',
-  'desktop-macos-15-intel': 'latest-mac.yml',
-  'desktop-macos-15': 'latest-mac.yml'
-};
-const allowed = name => name.endsWith('.exe') || name.endsWith('.dmg') ||
-  name.endsWith('.zip') || name.endsWith('.AppImage') || name.endsWith('.deb') ||
-  name.endsWith('.rpm') || name.endsWith('.pkg.tar.zst') ||
-  ['latest.yml', 'latest-linux.yml', 'latest-mac.yml'].includes(name) ||
-  name.endsWith('.blockmap');
+const expected = ['desktop-windows-2022', ...Object.keys(linuxArtifacts)];
+const feeds = {'desktop-windows-2022': 'latest.yml'};
+const allowed = name => name.endsWith('.exe') || name.endsWith('.AppImage') ||
+  name.endsWith('.deb') || name.endsWith('.rpm') || name.endsWith('.pkg.tar.zst') ||
+  ['latest.yml', 'latest-linux.yml'].includes(name) ||
+  (name.endsWith('.blockmap') && !name.startsWith('Nault-macOS-'));
 
 function hash(file, algo) {
   const h = crypto.createHash(algo);
@@ -62,7 +55,6 @@ function validateFeed(dir, feedName) {
   }
   return f;
 }
-function label(arch) { return arch === 'x64' ? 'Intel (x64)' : 'Apple Silicon (arm64)'; }
 function link(name, caption) {
   if (!tag) return '- **' + caption + ':** ' + String.fromCharCode(96) + name + String.fromCharCode(96);
   const url = 'https://github.com/twister65/Nault/releases/download/' +
@@ -72,6 +64,8 @@ function link(name, caption) {
 function main() {
   assert.ok(fs.existsSync(input), 'Missing downloaded platform artifacts');
   fs.mkdirSync(output, {recursive: true});
+  assert.equal(fs.readdirSync(output).length, 0, 'Release output must be empty');
+  assert.ok(!fs.readdirSync(input).some(name => name.startsWith('desktop-macos-')), 'Unexpected retired macOS artifacts');
   for (const host of expected) {
     const dir = path.join(input, host);
     assert.ok(fs.existsSync(dir), 'Missing CI platform ' + host);
@@ -94,27 +88,11 @@ function main() {
   for (const host of expected) {
     const dir = path.join(input, host);
     for (const name of fs.readdirSync(dir).filter(allowed)) {
-      if (name === 'latest-mac.yml') continue; // Merge x64/arm64 feeds below.
       const dst = path.join(output, name);
       assert.ok(!fs.existsSync(dst), 'Collision between platform assets: ' + name);
       fs.copyFileSync(path.join(dir, name), dst);
     }
   }
-  const nativeMac = [];
-  for (const host of macHosts) {
-    const dir = path.join(input, host);
-    const arch = host.endsWith('intel') ? 'x64' : 'arm64';
-    const dmg = onlyFile(dir, '.dmg');
-    const zip = onlyFile(dir, '.zip');
-    assert.ok(dmg.includes('-' + arch + '.dmg'), 'Missing native macOS ' + arch + ' DMG');
-    assert.ok(zip.includes('-' + arch + '.zip'), 'Missing native macOS ' + arch + ' ZIP');
-    const meta = validateFeed(dir, 'latest-mac.yml');
-    assert.equal(meta.files.length, 2, 'Expected both DMG and ZIP per macOS architecture');
-    nativeMac.push({arch, dmg, zip, meta});
-  }
-  const combined = {...nativeMac[0].meta, files: nativeMac.flatMap(x => x.meta.files)};
-  assert.equal(combined.files.length, 4, 'macOS updater must contain 2 DMG + 2 ZIP');
-  fs.writeFileSync(path.join(output, 'latest-mac.yml'), yaml.dump(combined, {lineWidth: -1}));
   const win = onlyFile(output, '.exe');
   const linux = [
     onlyFile(output, '.deb'), onlyFile(output, '.rpm'),
@@ -127,7 +105,6 @@ function main() {
   assert.ok(linux[3].includes('-Portable-'));
   validateFeed(output, 'latest.yml');
   validateFeed(output, 'latest-linux.yml');
-  validateFeed(output, 'latest-mac.yml');
 
   const lines = [
     '## Downloads',
@@ -140,7 +117,7 @@ function main() {
     link(win, 'Windows 64-bit (EXE)'),
     '',
     '### macOS',
-    ...nativeMac.map(m => link(m.dmg, label(m.arch) + ' (DMG)')),
+    'Use the [installable Nault PWA in Google Chrome](https://twister32.changeip.org/). Native macOS desktop packages are no longer published by this fork.',
     '',
     '### Linux',
     link(linux[0], 'Debian / Ubuntu / Linux Mint (DEB)'),
@@ -148,15 +125,14 @@ function main() {
     link(linux[2], 'Arch Linux / Manjaro (Pacman, beta)'),
     link(linux[3], 'Other compatible x86_64 Linux (portable AppImage)'),
     '',
-    'The technical ZIP archives and latest*.yml files are included in Assets for application updates.',
-    'The macOS ZIP update mechanism requires Apple code signing; unsigned CI previews do not validate native automatic installation.',
+    'The latest*.yml files and blockmaps are included in Assets for Windows and Linux application updates.',
     ''
   ];
   fs.writeFileSync(notes, lines.join('\n'));
   const packages = fs.readdirSync(output).filter(allowed).sort();
   const sums = packages.map(name => hash(path.join(output, name), 'sha256') + '  ' + name);
   fs.writeFileSync(path.join(output, 'SHA256SUMS'), sums.join('\n') + '\n');
-  console.log('PASS: grouped release preview, 2 native macOS architectures and 4 Linux formats');
+  console.log('PASS: grouped release preview, Windows and 4 Linux formats');
   console.log(lines.join('\n'));
 }
 main();

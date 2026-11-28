@@ -5,12 +5,41 @@ import { WebsocketService } from './services/websocket.service';
 import { DesktopService } from './services/desktop.service';
 import { AppComponent } from './app.component';
 import { WalletService } from './services/wallet.service';
+import { WalletOverviewRefreshService } from './services/wallet-overview-refresh.service';
 import { NotificationService } from './services/notification.service';
 import { PoWApiKeyVaultService, PoWVaultUnlockError } from './services/pow-api-key-vault.service';
 import { PowService } from './services/pow.service';
 import { ComponentTestModule, isolateConstructorIO } from '../testing/component-test.module';
 
 describe('AppComponent', () => {
+  it('pulls down to refresh the menu while preserving left-swipe to close', () => {
+    const app = TestBed.inject(AppComponent);
+    const refresh = spyOn(TestBed.inject(WalletOverviewRefreshService), 'refresh')
+      .and.returnValue(Promise.resolve());
+    const nav = { scrollTop: 0 } as HTMLElement;
+    const touch = (x: number, y: number) => [{ clientX: x, clientY: y }] as unknown as TouchList;
+    app.navExpanded = true;
+    app.onNavTouchStart({ touches: touch(100, 90), currentTarget: nav } as unknown as TouchEvent);
+    app.onNavTouchEnd({ changedTouches: touch(105, 195), currentTarget: nav } as unknown as TouchEvent);
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    app.onNavTouchStart({ touches: touch(150, 100), currentTarget: nav } as unknown as TouchEvent);
+    app.onNavTouchEnd({ changedTouches: touch(40, 100), currentTarget: nav } as unknown as TouchEvent);
+    expect(app.navExpanded).toBeFalse();
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refresh the menu while scrolled down', () => {
+    const app = TestBed.inject(AppComponent);
+    const refresh = spyOn(TestBed.inject(WalletOverviewRefreshService), 'refresh')
+      .and.returnValue(Promise.resolve());
+    const nav = { scrollTop: 80 } as HTMLElement;
+    app.navExpanded = true;
+    app.onNavTouchStart({ touches: [{ clientX: 50, clientY: 50 }], currentTarget: nav } as any);
+    app.onNavTouchEnd({ changedTouches: [{ clientX: 50, clientY: 200 }], currentTarget: nav } as any);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   beforeEach(waitForAsync(() => {
     isolateConstructorIO();
     TestBed.configureTestingModule({

@@ -5,6 +5,12 @@ export type NotificationTranslator = (key: string, params?: Record<string, strin
 
 export function localizeNotificationMessage(message: string, translate: NotificationTranslator): string {
   switch (message) {
+    case 'New incoming transaction - Unlock the wallet to receive':
+      return translate('ui-notifications.pending-unlock-single');
+    case 'New incoming transaction(s) - Unlock the wallet to receive':
+      return translate('ui-notifications.pending-unlock-multiple');
+    case 'Incoming transaction(s) found - Set to be received manually':
+      return translate('ui-notifications.pending-manual');
     case 'An update was installed in the background and will be applied on next launch.':
       return translate('ui-notifications.pwa-update-ready');
     case 'Unable to connect to the nano node, your balances may be inaccurate!':
@@ -13,7 +19,8 @@ export function localizeNotificationMessage(message: string, translate: Notifica
       return translate('ui-notifications.refresh-balance-failed');
     case 'There was an issue retrieving latest nano price.  Ensure your AdBlocker is disabled on this page then reload to see accurate FIAT values.':
       return translate('ui-notifications.nano-price-unavailable');
-    case 'Incoming XNO is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.':
+    case 'Incoming \u0058NO is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.':
+    case 'Incoming Ӿ is waiting. Unlock your Ledger, open the Nano app, then click Reconnect to receive it.':
       return translate('ui-notifications.ledger-pending-reconnect');
     case 'Bluetooth unavailable. Check Bluetooth on your computer and Ledger, or choose Reconnect via USB.':
       return translate('ui-notifications.bluetooth-unavailable');
@@ -35,6 +42,25 @@ export function localizeNotificationMessage(message: string, translate: Notifica
       return translate('ui-notifications.ledger-locked-reconnect');
   }
 
+  // The BLE transport still reports the original English diagnostic to the
+  // console. Only known, exact error messages are localized for user-facing
+  // toasts and Ledger setup hints; unknown errors retain their original text.
+  const blePrefix = 'Bluetooth connection failed: ';
+  const bleDetail = message.startsWith(blePrefix) ? message.slice(blePrefix.length) : message;
+  switch (bleDetail) {
+    case 'Ledger Bluetooth MTU negotiation timed out; reconnect the device':
+      return translate('ui-notifications.ledger-ble-mtu-timeout');
+    case 'Bluetooth connection timed out':
+      return translate('ui-notifications.ledger-ble-connection-timeout');
+    case 'Ledger Bluetooth disconnected. Click Reconnect.':
+    case 'Ledger Bluetooth connection closed':
+      return translate('ui-notifications.ledger-ble-disconnected');
+    case 'Ledger Nano X Bluetooth authentication failed. Your device may not be paired correctly. Re-pair it in your computer Bluetooth settings (Linux: bluetoothctl), then click Reconnect.':
+    case 'Ledger Nano X Bluetooth pairing may be missing or invalid (authentication may have failed). Re-pair your Ledger in your computer Bluetooth settings (Linux: bluetoothctl), then click Reconnect.':
+    case 'Bluetooth authentication failed while enabling notifications. Remove the Ledger from the computer Bluetooth settings, pair it again, and retry the connection in Nault.':
+      return translate('ui-notifications.ledger-ble-pairing-help');
+  }
+
   // A declined Ledger transaction (APDU 0x6985) is a user action, not
   // a malfunction. The native transport remains connected after a refusal.
   if (message === 'Transaction denied on Ledger device' ||
@@ -50,7 +76,7 @@ export function localizeNotificationMessage(message: string, translate: Notifica
     return translate('ui-notifications.ledger-signing-error', { error: detail });
   }
 
-  const received = /^Successfully received (.*?) XNO!$/.exec(message);
+  const received = /^Successfully received (.*?) (?:Ӿ|\u0058NO)!$/.exec(message);
   if (received) {
     return received[1]
       ? translate('ui-notifications.received-amount', { amount: received[1] })
@@ -59,7 +85,7 @@ export function localizeNotificationMessage(message: string, translate: Notifica
 
   // Keep address-book links intact while localizing tracked-account WebSocket toasts.
   // Account identifiers must be path-safe and labels are plain text within the link.
-  const trackedTransfer = /^Tracked address (<a href="\/account\/[a-zA-Z0-9_]+">[^<>]*<\/a>) (can now receive|sent|received incoming) ((?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:e[+-]?[0-9]+)?) XNO$/.exec(message);
+  const trackedTransfer = /^Tracked address (<a href="\/account\/[a-zA-Z0-9_]+">[^<>]*<\/a>) (can now receive|sent|received incoming) ((?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:e[+-]?[0-9]+)?) (?:Ӿ|\u0058NO)$/.exec(message);
   if (trackedTransfer) {
     const keys: Record<string, string> = {
       'can now receive': 'ui-notifications.tracked-receivable',

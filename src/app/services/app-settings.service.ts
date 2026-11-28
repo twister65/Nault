@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Subject } from 'rxjs';
 import { secureEndpoint } from './endpoint-policy';
+import { DEFAULT_REPRESENTATIVE } from './default-representative';
 import officialNodeRegistry from '../../assets/nodes.json';
 import * as url from 'url';
 import { TranslocoService, getBrowserCultureLang, getBrowserLang } from '@jsverse/transloco';
@@ -51,6 +52,7 @@ export interface AppSettings {
 @Injectable()
 export class AppSettingsService {
   storeKey = `nanovault-appsettings`;
+  private readonly defaultRepresentativeMigrationKey = 'nanovault-default-representative-twister32-v1';
   readonly serverFailover$ = new Subject<{ previousName: string; nextName: string }>();
   // Explicit best-mode completion is not a failure and must not show a failover warning.
   readonly serverBestSelected$ = new Subject<void>();
@@ -61,7 +63,7 @@ export class AppSettingsService {
     // displayPrefix: 'xrb',
     walletStore: 'localStorage',
     displayCurrency: 'USD',
-    defaultRepresentative: null,
+    defaultRepresentative: DEFAULT_REPRESENTATIVE.id,
     lockOnClose: 1,
     lockInactivityMinutes: 30,
     ledgerReconnect: 'usb',
@@ -204,6 +206,15 @@ export class AppSettingsService {
       // so the old random+best legacy migration would now erase a real choice.
     }
     this.settings = Object.assign(this.settings, settings);
+    // One-time migration of the old null default. Later explicit blank/custom
+    // selections remain under user control.
+    if (localStorage.getItem(this.defaultRepresentativeMigrationKey) !== '1') {
+      if (settingsStore && this.settings.defaultRepresentative == null) {
+        this.settings.defaultRepresentative = DEFAULT_REPRESENTATIVE.id;
+        this.saveAppSettings();
+      }
+      localStorage.setItem(this.defaultRepresentativeMigrationKey, '1');
+    }
     this.loadLocalNodes();
     // Preserve pre-existing custom endpoints while making them persistent,
     // individually selectable local entries. No private node is published to GitHub.
@@ -222,8 +233,24 @@ export class AppSettingsService {
     const supportedLocale = (value: string | null | undefined): string | null => {
       if (!value || typeof value !== 'string') return null;
       const normalized = value.trim().toLowerCase().replace(/_/g, '-');
-      const base = normalized.split('-')[0];
-      return [normalized, base].find(lang => supported.includes(lang)) ?? null;
+      // Keep the canonical BCP 47 casing from Transloco's supported locales.
+      // Preserve the legacy generic "zh" choice as Hong Kong Traditional Chinese.
+      // Explicit Simplified Chinese locales must never select that dictionary.
+      const traditionalChinese = normalized === 'zh' || normalized === 'zh-hant' ||
+        normalized.startsWith('zh-hant-') ||
+        ['zh-hk', 'zh-mo', 'zh-tw'].includes(normalized);
+      const simplifiedChinese = normalized === 'zh-hans' ||
+        normalized.startsWith('zh-hans-') ||
+        ['zh-cn', 'zh-sg', 'zh-my'].includes(normalized);
+      const norwegianBokmal = normalized === 'no' || normalized.startsWith('no-');
+      const brazilianPortuguese = normalized === 'pt' || normalized.startsWith('pt-');
+      const candidate = traditionalChinese ? 'zh-hk' :
+        simplifiedChinese ? 'zh-cn' :
+        norwegianBokmal ? 'nb' :
+        brazilianPortuguese ? 'pt-br' : normalized;
+      const base = candidate.split('-')[0];
+      return supported.find(lang => lang.toLowerCase() === candidate) ??
+        supported.find(lang => lang.toLowerCase() === base) ?? null;
     };
 
     // A saved user choice takes precedence over the OS locale. Obsolete or
@@ -361,7 +388,7 @@ export class AppSettingsService {
       // displayPrefix: 'xrb',
       walletStore: 'localStorage',
       displayCurrency: 'USD',
-      defaultRepresentative: null,
+      defaultRepresentative: DEFAULT_REPRESENTATIVE.id,
       lockOnClose: 1,
       lockInactivityMinutes: 30,
       ledgerReconnect: 'usb',

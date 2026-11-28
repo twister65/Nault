@@ -59,7 +59,7 @@ export class SendComponent implements OnInit {
   addressAliasMatch: string | null = '';
 
   amounts = [
-    { name: 'XNO', shortName: 'XNO', value: 'mnano' },
+    { name: 'Ӿ', shortName: 'Ӿ', value: 'mnano' },
     { name: 'knano', shortName: 'knano', value: 'knano' },
     { name: 'nano', shortName: 'nano', value: 'nano' },
   ];
@@ -237,7 +237,7 @@ export class SendComponent implements OnInit {
       if (this.util.account.isValidAccount(url.pathname)) {
         const amountAsRaw = url.searchParams.get('amount');
 
-        const amountAsXNO = (
+        const amountAsNano = (
             amountAsRaw
           ? nanocurrency.convert(
               amountAsRaw, {
@@ -252,7 +252,7 @@ export class SendComponent implements OnInit {
           () => {
             this.updateQueries({
               to: url.pathname,
-              amount: amountAsXNO,
+              amount: amountAsNano,
             });
           },
           10

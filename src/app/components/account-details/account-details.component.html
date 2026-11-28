@@ -22,7 +22,7 @@
         <div class="account-balances">
           <ng-container *ngIf="!loadingAccountDetails else cardBalancesLoading">
             <div class="balance-container primary">
-              <div class="currency-name">XNO</div>
+              <div class="currency-name">Ӿ</div>
               <div class="amount-container">
                 <div class="amount-integer">{{ !account ? 0 : (account.balance || 0 | rai: 'mnano,true') | amountsplit: 0 }}</div>
                 <div class="amount-fractional">{{ !account ? 0 : (account.balance || 0 | rai: 'mnano,true') | amountsplit: 1 }}</div>
@@ -391,7 +391,7 @@
             <span class="uk-text-small">{{ 'general.blockactions.ready-to-receive' | transloco }}</span><br>
             <span class="amount-integer">{{ pending.amount | rai: 'mnano,true' | amountsplit: 0 }}</span>
             <span class="amount-fractional">{{ pending.amount | rai: 'mnano,true' | amountsplit: 1 }}</span>
-            <span class="currency-name">XNO</span>
+            <span class="currency-name">Ӿ</span>
             <div class="compact-actions-date">
               <ng-template [ngTemplateOutlet]="transactionActionsOrDate"></ng-template>
             </div>
@@ -487,7 +487,7 @@
               </ng-container>
               <span class="amount-integer">{{ history.amount | rai: 'mnano,true' | amountsplit: 0 }}</span>
               <span class="amount-fractional">{{ history.amount | rai: 'mnano,true' | amountsplit: 1 }}</span>
-              <span class="currency-name">XNO</span>
+              <span class="currency-name">Ӿ</span>
               <div class="compact-actions-date text-half-muted">
                 <ng-template [ngTemplateOutlet]="transactionActionsOrDate"></ng-template>
               </div>
@@ -612,7 +612,7 @@
                   </div>
                   <div class="uk-width-1-1" style="margin-top: 10px;" *ngIf="settings.settings.displayCurrency">
                     <div class="uk-width-1-1 uk-inline">
-                      <a class="uk-form-icon uk-link-reset uk-link-muted" style="padding-left: 7px;" uk-tooltip title="Last Price: {{ price.price.lastPrice | fiat: settings.settings.displayCurrency }} / XNO">{{ settings.settings.displayCurrency | currencySymbol }}</a>
+                      <a class="uk-form-icon uk-link-reset uk-link-muted" style="padding-left: 7px;" uk-tooltip title="Last Price: {{ price.price.lastPrice | fiat: settings.settings.displayCurrency }} / Ӿ">{{ settings.settings.displayCurrency | currencySymbol }}</a>
                       <input [(ngModel)]="amountFiat" (input)="syncNanoPrice()" style="padding-left: 50px !important;" class="uk-input" id="form-horizontal-text-fiat" type="text" placeholder="Amount of {{ settings.settings.displayCurrency }} to send">
                     </div>
                   </div>

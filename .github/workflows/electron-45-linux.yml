@@ -1,0 +1,73 @@
+name: Electron 45 Linux AppImage validation
+
+on:
+  push:
+    branches: [maintenance/electron-45]
+    paths:
+      - '.github/workflows/electron-45-linux.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'desktop-app/**'
+      - 'src/**'
+      - 'scripts/test-electron45-compat.test.cjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: electron45-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      CXXFLAGS: '-std=c++20'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        id: python
+        with:
+          python-version: '3.11'
+      - name: Install native build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config libudev-dev libusb-1.0-0-dev
+      - name: Install locked dependencies and native bindings
+        env:
+          npm_config_python: ${{ steps.python.outputs.python-path }}
+        run: npm ci --legacy-peer-deps --include=optional --no-audit --no-fund
+      - name: Compile Nault renderer and Electron main/preload
+        run: npm run desktop:build
+      - name: Electron 45 and Ledger regression tests
+        run: |
+          node --test scripts/test-electron45-compat.test.cjs
+          node scripts/test-ledger-bluetooth.js
+      - name: Package Linux x64 AppImage
+        run: npx --no-install electron-builder --linux AppImage --x64 --publish never
+      - name: Smoke test packaged Electron native modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe="$(find desktop-app/build/linux-unpacked -maxdepth 1 -type f -iname nault -print -quit)"
+          test -n "$exe"
+          export ELECTRON_RUN_AS_NODE=1
+          export NAULT_SMOKE_APP="$PWD/desktop-app/build/linux-unpacked/resources/app.asar"
+          "$exe" -e 'const fs=require("fs"),p=require("path"),app=process.env.NAULT_SMOKE_APP;for(const f of ["dist/index.html","desktop-app/dist/desktop-app.js","desktop-app/dist/preload.js"]){if(!fs.existsSync(p.join(app,f)))throw Error("Missing "+f)}const req=require("module").createRequire(p.join(app,"package.json"));req("node-hid");req("usb");req("@ledgerhq/hw-transport-node-hid");console.log("Packaged native modules OK; Electron",process.versions.electron);'
+          find desktop-app/build -maxdepth 1 -type f -name '*.AppImage' -size +1M | grep -q .
+          sha256sum desktop-app/build/*.AppImage | tee desktop-app/build/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nault-Electron45-Linux-x64
+          path: |
+            desktop-app/build/*.AppImage
+            desktop-app/build/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14

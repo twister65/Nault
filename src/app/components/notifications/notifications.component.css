@@ -21,3 +21,19 @@
 .notification-container .uk-alert {
 	pointer-events: all;
 }
+
+/* Ensure toast actions can be tapped comfortably on phones. */
+.wallet-notification button {
+	min-height: 44px;
+	max-width: 100%;
+	margin-top: 6px;
+	white-space: normal;
+	line-height: 1.3;
+}
+
+@media (max-width: 640px) {
+	.notification-container {
+		width: calc(100% - 24px);
+		left: 12px;
+	}
+}

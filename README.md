@@ -5,7 +5,7 @@
 
 This fork aims to improve Nault's stability, security, and portability across operating systems and Nano/RsNano nodes. It also maintains and tests hardware wallet compatibility with Ledger Nano S Plus and Nano X devices.
 
-It's a fully client-side signing wallet for sending and receiving [nano](https://github.com/nanocurrency/nano-node/) either directly in your browser at [twister32.changeip.org](https://twister32.changeip.org/) or with the [desktop app](https://github.com/twister65/Nault/releases/latest).
+It's a fully client-side signing wallet for sending and receiving [nano](https://github.com/nanocurrency/nano-node/) either directly in your browser at [twister32.changeip.org](https://twister32.changeip.org/) or with the Windows/Linux [desktop app](https://github.com/twister65/Nault/releases/latest).
 
 Seamless integration with any nano compatible RPC backend/websocket and the aim to be more frequently maintained are some of the main features. Those together will greatly increase the stability, performance and uptime.
 
@@ -33,7 +33,7 @@ revocable API keys and review Nano.to's own service terms before enabling them.
 ## How To Use
 Nault comes in different flavors to suit your needs.
 #### Desktop App
-Available for Windows/Mac/Linux – just head over to the [latest release](https://github.com/twister65/Nault/releases/latest) and download the version for your OS. Release notes group downloads by **Windows, macOS (Intel / Apple Silicon), and Linux distribution**. GitHub's native Assets list cannot be manually grouped. Updater feeds (`latest*.yml`) retain their filenames.
+Available for Windows/Linux – just head over to the [latest release](https://github.com/twister65/Nault/releases/latest) and download the version for your OS. Release notes group downloads by **Windows and Linux distribution**. GitHub's native Assets list cannot be manually grouped. Updater feeds (`latest*.yml`) retain their filenames.
 
 If you want to verify the binary checksum there are plenty of apps to do this. One way is using a powershell or bash terminal:
 
@@ -52,10 +52,16 @@ Then compare the output hash with the one listed in the corresponding checksums 
 
 Use the downloaded file's exact name if your shell does not expand the sample pattern. Native packages are updated by installing the next release package unless a package repository is configured; GitHub downloads alone do not set up an APT/DNF/Pacman repository. For verification and functional test guidance, see [Linux packaging](docs/linux-packaging.md).
 
+#### macOS (Intel and Apple Silicon): use the PWA
+
+This fork no longer publishes native macOS desktop packages (DMG or updater ZIP), due to Apple signing/notarization requirements, unreliable macOS CI runner availability and a native Ledger USB crash observed on macOS Sequoia. Existing releases remain available for historical reference, but will not receive new native macOS updates. Use the [Nault PWA](https://twister32.changeip.org/) in **Google Chrome** and install it from Chrome's install option for a standalone window. No Gatekeeper bypass is needed.
+
+On an Intel Mac running macOS Sequoia 15.8.3, the PWA was tested with Ledger Nano S Plus over USB (WebHID), Ledger Nano X over Bluetooth (including pairing and reconnection), Nano transactions and remote proof of work. Apple Silicon has not yet been hardware-tested for this fork. Safari does not provide the required WebHID/Web Bluetooth support for these Ledger connections.
+
 #### Web App
 You can also use this Nault fork from any device on the web at [twister32.changeip.org](https://twister32.changeip.org/). Encrypted v2 wallet backup QR links created on this site point back to its own `/import-wallet` page. For recovery, also retain a securely stored offline seed or encrypted JSON backup; a QR link alone is not a durable backup.
 
-Both the desktop (recommended) and web version supports the Ledger Nano hardware wallet. For help using it, please refer to [this guide](https://docs.nault.cc/2020/08/04/ledger-guide.html).
+Both the Windows/Linux desktop app and compatible web browsers support Ledger Nano hardware wallets. For macOS, the Chrome PWA is recommended. For help using it, please refer to [this guide](https://docs.nault.cc/2020/08/04/ledger-guide.html).
 
 The original upstream web image remains available in the [upstream Docker Hub repository](https://hub.docker.com/r/nault/nault) using: `docker pull nault/nault:latest`. This upstream image is **not** the same as this fork's latest `master` and may not support v2 wallet backups.
 
@@ -83,6 +89,9 @@ Special thanks to the following!
 - [Angular](https://angular.dev/) - Deliver web apps with confidence 🚀
 - [rsnano-node](https://github.com/rsnano-node/rsnano-node) - RsNano is a Rust port of nano-node
 - [nano-work-server](https://github.com/nanocurrency/nano-work-server) - A dedicated work server for the Nano cryptocurrency
+- [Nano.to](https://rpc.nano.to/) - Nano RPC infrastructure and proof-of-work services
+- [Nanonode.de](https://nanonode.de/) - Nano node monitoring and network data API
+- [NanoTicker](https://www.nanoticker.org/) - Nano network monitoring, representative statistics, and decentralization metrics
 - [ChatGPT](https://chatgpt.com/) - ChatGPT helped me improve the stability and security of Nault.
   
 Thanks a lot!

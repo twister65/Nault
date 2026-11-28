@@ -2,6 +2,7 @@ import { ComponentTestModule, isolateConstructorIO } from '../../testing/compone
 import { TestBed, inject } from '@angular/core/testing';
 
 import { AppSettingsService } from './app-settings.service';
+import { DEFAULT_REPRESENTATIVE } from './default-representative';
 
 describe('AppSettingsService', () => {
   beforeEach(() => {
@@ -15,6 +16,38 @@ describe('AppSettingsService', () => {
   it('should be created', inject([AppSettingsService], (service: AppSettingsService) => {
     expect(service).toBeTruthy();
   }));
+
+  it('uses Twister32 for fresh settings, resets and a one-time legacy migration', inject(
+    [AppSettingsService], (service: AppSettingsService) => {
+      const saved = localStorage.getItem(service.storeKey);
+      const markerKey = 'nanovault-default-representative-twister32-v1';
+      const marker = localStorage.getItem(markerKey);
+      const nodes = localStorage.getItem('nanovault-rpc-local-nodes');
+      try {
+        service.clearAppSettings();
+        expect(service.settings.defaultRepresentative).toBe(DEFAULT_REPRESENTATIVE.id);
+        localStorage.removeItem(markerKey);
+        localStorage.setItem(service.storeKey, JSON.stringify({ ...service.settings, defaultRepresentative: null }));
+        service.loadAppSettings('fr-FR');
+        expect(service.settings.defaultRepresentative).toBe(DEFAULT_REPRESENTATIVE.id);
+        service.setAppSetting('defaultRepresentative', null);
+        service.loadAppSettings('fr-FR');
+        expect(service.settings.defaultRepresentative).toBeNull();
+        service.setAppSetting('defaultRepresentative', 'nano_custom');
+        service.loadAppSettings('fr-FR');
+        expect(service.settings.defaultRepresentative).toBe('nano_custom');
+        service.clearAppSettings();
+        expect(service.settings.defaultRepresentative).toBe(DEFAULT_REPRESENTATIVE.id);
+      } finally {
+        if (saved === null) localStorage.removeItem(service.storeKey);
+        else localStorage.setItem(service.storeKey, saved);
+        if (marker === null) localStorage.removeItem(markerKey);
+        else localStorage.setItem(markerKey, marker);
+        if (nodes === null) localStorage.removeItem('nanovault-rpc-local-nodes');
+        else localStorage.setItem('nanovault-rpc-local-nodes', nodes);
+      }
+    }
+  ));
 
   it('defaults to best PoW on a fresh launch and after reset without changing saved choices', inject(
     [AppSettingsService], (service: AppSettingsService) => {
@@ -83,15 +116,67 @@ describe('AppSettingsService', () => {
     }
   }));
 
+  it('selects the Hong Kong Chinese dictionary for Traditional Chinese system locales', inject([AppSettingsService], (service: AppSettingsService) => {
+    const saved = localStorage.getItem(service.storeKey);
+    try {
+      localStorage.removeItem(service.storeKey);
+      for (const locale of ['zh-HK', 'zh_HK', 'zh-Hant-HK', 'zh-Hant', 'zh-TW', 'zh-MO', 'zh']) {
+        service.settings.language = '';
+        service.loadAppSettings(locale);
+        expect(service.settings.language).toBe('zh-HK');
+      }
+
+    } finally {
+      if (saved === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, saved);
+    }
+  }));
+
+  it('resolves the new locales and OS regional variants', inject([AppSettingsService], (service: AppSettingsService) => {
+    const saved = localStorage.getItem(service.storeKey);
+    try {
+      localStorage.removeItem(service.storeKey);
+      const expectedLocales = [
+        ['nb-NO', 'nb'], ['no-NO', 'nb'],
+        ['da-DK', 'da'], ['nl-NL', 'nl'], ['fi-FI', 'fi'],
+        ['pt-BR', 'pt-BR'], ['pt-PT', 'pt-BR'], ['pt', 'pt-BR'],
+        ['it-IT', 'it'], ['ja-JP', 'ja'], ['ko-KR', 'ko'],
+        ['zh-CN', 'zh-CN'], ['zh_Hans_CN', 'zh-CN'],
+        ['zh-Hans', 'zh-CN'], ['zh-SG', 'zh-CN']
+      ];
+      for (const [locale, expected] of expectedLocales) {
+        service.settings.language = '';
+        service.loadAppSettings(locale);
+        expect(service.settings.language).toBe(expected);
+      }
+    } finally {
+      if (saved === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, saved);
+    }
+  }));
+
+  it('preserves a saved lowercase Hong Kong locale and normalizes the registered ID', inject([AppSettingsService], (service: AppSettingsService) => {
+    const saved = localStorage.getItem(service.storeKey);
+    try {
+      localStorage.setItem(service.storeKey, JSON.stringify({ ...service.settings, language: 'zh-hk' }));
+      service.loadAppSettings('en-US');
+      expect(service.settings.language).toBe('zh-HK');
+      expect(JSON.parse(localStorage.getItem(service.storeKey) || '{}').language).toBe('zh-HK');
+    } finally {
+      if (saved === null) localStorage.removeItem(service.storeKey);
+      else localStorage.setItem(service.storeKey, saved);
+    }
+  }));
+
   it('defaults to English for an unsupported OS locale instead of choosing the browser language', inject([AppSettingsService], (service: AppSettingsService) => {
     const saved = localStorage.getItem(service.storeKey);
     try {
       localStorage.removeItem(service.storeKey);
       service.settings.language = '';
-      service.loadAppSettings('it-IT');
+      service.loadAppSettings('ru-RU');
       expect(service.settings.language).toBe('en');
       service.settings.language = '';
-      service.loadAppSettings('ja-JP');
+      service.loadAppSettings('ar-SA');
       expect(service.settings.language).toBe('en');
     } finally {
       if (saved === null) localStorage.removeItem(service.storeKey);
@@ -111,11 +196,11 @@ describe('AppSettingsService', () => {
     }
   }));
 
-  it('normalizes an obsolete saved language to English without losing other settings', inject([AppSettingsService], (service: AppSettingsService) => {
+  it('normalizes an unsupported saved language to English without losing other settings', inject([AppSettingsService], (service: AppSettingsService) => {
     const saved = localStorage.getItem(service.storeKey);
     try {
       localStorage.setItem(service.storeKey, JSON.stringify({
-        ...service.settings, language: 'it-IT', displayCurrency: 'EUR'
+        ...service.settings, language: 'ru-RU', displayCurrency: 'EUR'
       }));
       service.loadAppSettings('de-DE');
       expect(service.settings.language).toBe('en');

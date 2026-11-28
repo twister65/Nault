@@ -16,6 +16,27 @@ import * as QRCode from 'qrcode';
 import BigNumber from 'bignumber.js';
 import { TranslocoService } from '@jsverse/transloco';
 
+// Nano's badge generator uses asset filename codes that sometimes differ
+// from the BCP 47 locale IDs used by Transloco (notably ko → kr).
+// Try documented/observed codes first, then alternate legacy spellings if a
+// particular image is missing. Keep every variant on the official Nano host.
+const NANO_MERCHANT_BADGE_CODES: Record<string, readonly string[]> = {
+  en: ['en'],
+  fr: ['fr'],
+  es: ['es'],
+  de: ['de'],
+  'zh-HK': ['zh-hk'],
+  nb: ['no', 'nb'],
+  da: ['dk', 'da'],
+  nl: ['nl'],
+  fi: ['fi'],
+  'pt-BR': ['pt-br', 'br'],
+  it: ['it'],
+  ja: ['jp', 'ja'],
+  ko: ['kr', 'ko'],
+  'zh-CN': ['zh-cn', 'cn'],
+};
+
 interface ReceivePendingItem {
   hash: string;
   amount: string | BigNumber;
@@ -86,6 +107,27 @@ export class ReceiveComponent implements OnInit, OnDestroy {
   merchantModeSeenBlockHashes: Record<string, boolean> = {};
   merchantModePrompts: MerchantPrompt[] = [];
   merchantModeTransactionHashes: string[] = [];
+  merchantModeAcceptedBadgeLoadFailed = false;
+  merchantModeBadgeCandidateIndex = 0;
+
+  // Preserve the existing blue "Accepted here" badge style in merchant mode.
+  // A missing remote SVG falls through to another official filename, then to
+  // the local Nano symbol and the translated accessible text.
+  get merchantModeAcceptedBadgeUrl(): string {
+    const badgeCodes = NANO_MERCHANT_BADGE_CODES[this.settings.settings.language] ?? ['en'];
+    const badgeCode = badgeCodes[Math.min(this.merchantModeBadgeCandidateIndex, badgeCodes.length - 1)];
+    return `https://assets.nano.org/img/badges/blue-${badgeCode}-var1.svg`;
+  }
+
+  merchantModeHandleBadgeLoadError(): void {
+    const badgeCodes = NANO_MERCHANT_BADGE_CODES[this.settings.settings.language] ?? ['en'];
+    if (this.merchantModeBadgeCandidateIndex + 1 < badgeCodes.length) {
+      this.merchantModeBadgeCandidateIndex++;
+    } else {
+      this.merchantModeAcceptedBadgeLoadFailed = true;
+    }
+  }
+
 
   routerSub: Subscription | null = null;
 
@@ -366,51 +408,69 @@ export class ReceiveComponent implements OnInit, OnDestroy {
   }
 
   async receiveReceivableBlock(receivableBlock: ReceivePendingItem) {
-    const sourceBlock = receivableBlock.hash;
+    if (receivableBlock.loading || receivableBlock.received) return;
 
+    const sourceBlock = receivableBlock.hash;
     const walletAccount = this.walletService.wallet.accounts.find(a => a.id === receivableBlock.destination);
     if (!walletAccount) {
       throw new Error(`Unable to find receiving account in wallet`);
     }
 
-    if (this.walletService.isLocked()) {
-      const wasUnlocked = await this.walletService.requestWalletUnlock();
-
-      if (wasUnlocked === false) {
-        return;
-      }
-    }
+    // Reserve before awaiting the unlock dialog. Unlocking a hot wallet also
+    // starts automatic reception; it must not race this explicit user action.
+    if (!this.walletService.beginManualReceive(walletAccount.id)) return;
     receivableBlock.loading = true;
-
-    let createdReceiveBlockHash = null;
-    let hasShownErrorNotification = false;
+    let received = false;
 
     try {
-      createdReceiveBlockHash =
-        await this.nanoBlock.generateReceive(walletAccount, sourceBlock, this.walletService.isLedgerWallet());
-    } catch (err) {
-      this.notificationService.sendError(this.translocoService.translate('ui-notifications.receive-failed-detail', { error: err instanceof Error ? err.message : String(err) }));
-      hasShownErrorNotification = true;
-    }
+      if (this.walletService.isLocked()) {
+        const wasUnlocked = await this.walletService.requestWalletUnlock();
+        if (!wasUnlocked) return;
+      }
 
-    if (createdReceiveBlockHash != null) {
-      receivableBlock.received = true;
-      this.mobileTransactionMenuModal.hide();
-      this.notificationService.removeNotification('success-receive');
-      this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.receive-success'), { identifier: 'success-receive' });
-      // pending has been processed, can be removed from the list
-      // list also updated with reloadBalances but not if called too fast
-      this.walletService.removePendingBlock(receivableBlock.hash);
-    } else {
-      if (hasShownErrorNotification === false) {
-        if (!this.walletService.isLedgerWallet()) {
-          this.notificationService.sendError(this.translocoService.translate('ui-notifications.receive-failed'), {length: 10000});
-        }
+      // An automatic receive may have completed before this click (or during
+      // the unlock transition). Do not publish an already received source.
+      if (this.walletService.successfulBlocks.includes(sourceBlock)) {
+        receivableBlock.received = true;
+        this.walletService.removePendingBlock(sourceBlock);
+        received = true;
+        return;
+      }
+
+      let createdReceiveBlockHash: string | null = null;
+      let hasShownErrorNotification = false;
+
+      try {
+        createdReceiveBlockHash =
+          await this.nanoBlock.generateReceive(walletAccount, sourceBlock, this.walletService.isLedgerWallet());
+      } catch (err) {
+        this.notificationService.sendError(this.translocoService.translate('ui-notifications.receive-failed-detail', { error: err instanceof Error ? err.message : String(err) }));
+        hasShownErrorNotification = true;
+      }
+
+      if (createdReceiveBlockHash != null) {
+        received = true;
+        receivableBlock.received = true;
+        this.mobileTransactionMenuModal.hide();
+        this.notificationService.removeNotification('success-receive');
+        this.notificationService.sendSuccess(this.translocoService.translate('ui-notifications.receive-success'), { identifier: 'success-receive' });
+        // Remove the confirmed source; do not let an automatic refresh pick it again.
+        this.walletService.removePendingBlock(sourceBlock);
+      } else if (!hasShownErrorNotification && !this.walletService.isLedgerWallet()) {
+        this.notificationService.sendError(this.translocoService.translate('ui-notifications.receive-failed'), { length: 10000 });
+      }
+    } finally {
+      receivableBlock.loading = false;
+      this.walletService.endManualReceive(walletAccount.id);
+      this.updatePendingBlocks();
+      // Resume normal auto-receive for other sources on the same account.
+      // Never retry this source automatically on manual failure/cancellation.
+      if (received) {
+        void this.walletService.processPendingBlocks().catch(error => {
+          console.warn('Unable to resume automatic receive after manual receive.', error);
+        });
       }
     }
-
-    receivableBlock.loading = false;
-    this.updatePendingBlocks(); // update the list
   }
 
   copied() {
@@ -463,6 +523,8 @@ export class ReceiveComponent implements OnInit, OnDestroy {
   }
 
   merchantModeResetState() {
+    this.merchantModeAcceptedBadgeLoadFailed = false;
+    this.merchantModeBadgeCandidateIndex = 0;
     this.unsetSelectedAccount();
     this.resetAmount();
 

@@ -308,6 +308,7 @@ export class LedgerService {
 
   // Called only through trusted, narrow main-frame IPC. Setting the flag
   // synchronously prevents new native polls while an in-flight probe finishes.
+  // Reused for both signing transactions and confirming a displayed address.
   async beginSigning(): Promise<boolean> {
     if (this.signingReserved) throw new Error('Ledger signing already in progress');
     this.signingReserved = true;
@@ -316,6 +317,9 @@ export class LedgerService {
       if (this.ledger.status !== LedgerStatus.READY || !this.ledger.nano) {
         throw new Error('Ledger is not ready for signing');
       }
+      // Hold HID reads for a human decision: cacheBlock/signBlock or getAddress
+      // with showOnScreen=true. Ordinary background reads remain time bounded.
+      (this.ledger.transport as LedgerHidWorkerTransport | null)?.setSigningMode?.(true);
       return true;
     } catch (error) {
       this.signingReserved = false;
@@ -324,7 +328,11 @@ export class LedgerService {
   }
 
   endSigning(): boolean {
-    this.signingReserved = false;
+    try {
+      (this.ledger.transport as LedgerHidWorkerTransport | null)?.setSigningMode?.(false);
+    } finally {
+      this.signingReserved = false;
+    }
     return true;
   }
 

@@ -7,7 +7,7 @@
 }
 
 .representative-health-column-header, .representative-health-column {
-	min-width: 120px;
+	min-width: 155px;
 }
 
 .voting-weight-column-header {
@@ -203,3 +203,129 @@
 	align-items: center;
 	justify-content: flex-end;
 }
+
+/* Search results stay in normal document flow (unlike the old absolute
+   dropdown). This avoids covering fields/other apps' autocomplete suggestions,
+   and keeps the picker usable on mobile and when the keyboard is open. */
+.rep-picker-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 9px;
+}
+.rep-online-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.rep-picker-results {
+  position: relative;
+  margin-top: 9px;
+  max-height: 330px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(139, 145, 174, 0.3);
+  border-radius: 7px;
+  background: transparent;
+}
+.rep-picker-heading {
+  padding: 10px 12px 6px;
+  color: #9ba2b9;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+.rep-picker-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid rgba(139, 145, 174, 0.18);
+  padding: 6px 10px;
+}
+.rep-picker-select {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 4px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rep-picker-select:hover,
+.rep-picker-select:focus-visible {
+  outline: 1px solid #4a93db;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.rep-picker-name { font-weight: 600; overflow-wrap: anywhere; }
+.rep-picker-address {
+  max-width: 100%;
+  font-size: 0.71rem;
+  color: #959eb8;
+  overflow-wrap: anywhere;
+}
+.rep-picker-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: center;
+  color: #959eb8;
+  font-size: 0.71rem;
+}
+.rep-picker-details { flex-shrink: 0; font-size: 0.75rem; }
+.rep-trusted-tag, .rep-observation-online { color: #32d296; }
+.rep-observation-offline { color: #faa05a; }
+.rep-observation { margin-top: 5px; font-size: 0.75rem; line-height: 1.25; }
+.rep-observation-source { color: #9499b4; }
+.rep-external-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 0.74rem;
+  margin-top: 7px;
+  color: #9499b4;
+}
+@media (max-width: 600px) {
+  .rep-picker-result { align-items: flex-start; flex-direction: column; }
+  .rep-picker-details { align-self: flex-end; }
+  .rep-picker-results { max-height: 260px; }
+}
+
+/* Compact vote observation details alongside the existing health badge.
+   UIkit tooltips open by hover, keyboard focus and touch on the info button. */
+.rep-status-line { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; }
+.rep-vote-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 25px;
+  min-height: 28px;
+  padding: 2px;
+  border: 0;
+  color: #a8b3d3;
+  cursor: help;
+  background: transparent;
+}
+.rep-vote-info:hover, .rep-vote-info:focus-visible { color: #4a93db; }
+.rep-vote-info:focus-visible { outline: 2px solid #4a93db; outline-offset: 2px; border-radius: 4px; }
+.rep-picker-more {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-top: 1px solid rgba(139, 145, 174, 0.3);
+  padding: 11px 12px;
+  background: transparent;
+  color: #4a93db;
+  cursor: pointer;
+  text-align: center;
+}
+.rep-picker-more:hover, .rep-picker-more:focus-visible { text-decoration: underline; }

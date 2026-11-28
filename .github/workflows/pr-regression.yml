@@ -45,6 +45,9 @@ jobs:
       - name: Install dependencies from lockfile
         run: npm ci --legacy-peer-deps --no-audit --no-fund
 
+      - name: Validate merchant translations and Nano currency symbol
+        run: npm run test:i18n
+
       - name: Verify patched electron-updater dependency chain
         run: npm run test:electron-updater-security
 
@@ -98,6 +101,9 @@ jobs:
 
       - name: Typecheck and compile Electron main/preload
         run: npm run desktop:compile
+
+      - name: Electron 45 compatibility and sandbox contract checks
+        run: node --test scripts/test-electron45-compat.test.cjs
 
       - name: UIkit DOMPurify browser XSS regression
         run: node scripts/test-uikit-security.cjs
