@@ -156,6 +156,16 @@ describe('ReceivablePushService', () => {
     expect(changed.accounts).toEqual([]);
   });
 
+  it('does not show the first-launch guide on unsupported platforms or without a backend', async () => {
+    const android = spyOn(service, 'isAndroidInstalledPwa').and.returnValue(false);
+    expect(await service.checkStartupGuide()).toBeFalse();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    android.and.returnValue(true);
+    fetchSpy.and.resolveTo(configResponse({}, 503));
+    expect(await service.checkStartupGuide()).toBeFalse();
+    expect(requestSubscription).not.toHaveBeenCalled();
+  });
+
   it('does not enroll automatically when guiding an Android PWA user', async () => {
     spyOn(service, 'isAndroidInstalledPwa').and.returnValue(true);
     expect(await service.checkStartupGuide()).toBeTrue();

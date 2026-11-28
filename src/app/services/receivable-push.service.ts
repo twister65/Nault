@@ -55,7 +55,6 @@ export class ReceivablePushService {
   busy = false;
   private vapidPublicKey: string | null = null;
   private syncTimer: ReturnType<typeof setTimeout> | null = null;
-  private syncInFlight = false;
 
   constructor(
     private swPush: SwPush,
@@ -364,19 +363,24 @@ export class ReceivablePushService {
   }
 
   async sync(): Promise<void> {
-    if (!this.hasSubscription || this.busy || this.syncInFlight) return;
-    this.syncInFlight = true;
+    if (!this.hasSubscription) return;
+    if (this.busy) {
+      // Do not drop a wallet change during an enrollment or a sync.
+      this.scheduleSync();
+      return;
+    }
+    const binding = this.readBinding();
+    if (!binding) return;
+    const preferences = this.preferences();
+    // Wallet removal must stop account monitoring but preserve release alerts.
+    if ((preferences.notifyReceivable || preferences.notifyOutgoing) &&
+        (!this.wallet.isConfigured() || !this.accounts().length)) {
+      if (!(await this.disableWalletAlerts())) this.status = 'error';
+      return;
+    }
+    // Serialize the network mutation against explicit opt-outs and deletion.
+    this.busy = true;
     try {
-      const binding = this.readBinding();
-      if (!binding) return;
-      const preferences = this.preferences();
-      // Wallet removal must stop account monitoring, but must not silently
-      // revoke a separate release-alert subscription on the same device.
-      if ((preferences.notifyReceivable || preferences.notifyOutgoing) &&
-          (!this.wallet.isConfigured() || !this.accounts().length)) {
-        if (!(await this.disableWalletAlerts())) this.status = 'error';
-        return;
-      }
       const subscription = await firstValueFrom(this.swPush.subscription.pipe(take(1)));
       if (this.permissionInactive || !subscription || subscription.endpoint !== binding.endpoint) {
         // A rotated or revoked browser endpoint needs explicit re-enrollment.
@@ -403,7 +407,7 @@ export class ReceivablePushService {
     } catch {
       this.status = 'error';
     } finally {
-      this.syncInFlight = false;
+      this.busy = false;
     }
   }
 }
