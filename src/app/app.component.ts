@@ -1,5 +1,6 @@
 import {Component, ElementRef, HostListener, OnInit, OnDestroy, ViewChild, Renderer2, ChangeDetectionStrategy, inject} from '@angular/core';
 import { DeviceUnlockService } from './services/device-unlock.service';
+import { ReceivablePushService } from './services/receivable-push.service';
 import { WalletOverviewRefreshService } from './services/wallet-overview-refresh.service';
 import {WalletService, WalletAccount} from './services/wallet.service';
 import {AddressBookService} from './services/address-book.service';
@@ -63,6 +64,7 @@ export class AppComponent implements OnInit, OnDestroy {
       this.websocket.connected$.subscribe(() => {
         void this.confirmInternetRestoredBySelectedWebsocket();
       });
+      this.walletService.accountsChanged$.subscribe(() => this.receivablePush.scheduleSync());
     }
 
   @ViewChild('selectButton') selectButton!: ElementRef<HTMLElement>;
@@ -90,6 +92,18 @@ export class AppComponent implements OnInit, OnDestroy {
   powVaultUnlockErrorKey = 'configure-app.pow-api-vault.failed';
   powVaultUnlockRemainingAttempts = 0;
   readonly deviceUnlock = inject(DeviceUnlockService);
+  private readonly receivablePush = inject(ReceivablePushService);
+  showAndroidPushGuide = false;
+
+  dismissAndroidPushGuide(): void {
+    this.receivablePush.dismissStartupGuide();
+    this.showAndroidPushGuide = false;
+  }
+
+  openAndroidPushSettings(): void {
+    this.dismissAndroidPushGuide();
+    void this.router.navigate(['configure-app'], { fragment: 'android-push-notifications' });
+  }
   readonly overviewRefresh = inject(WalletOverviewRefreshService);
   deviceUnlockSupported = false;
 
@@ -432,6 +446,9 @@ export class AppComponent implements OnInit, OnDestroy {
       // Release guarded routes only after the persisted wallet has been read.
       this.walletService.walletLoaded$.next(true);
     }
+    // Sync only an existing, explicit Web Push enrollment after wallet restore.
+    void this.receivablePush.sync();
+    void this.receivablePush.checkStartupGuide().then(show => this.showAndroidPushGuide = show);
     // A saved API-key vault is locked after each full restart by design.
     // Offer a dismissible unlock prompt AFTER wallet restoration, including
     // an empty wallet when a saved vault exists; the phrase is never persisted.

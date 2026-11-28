@@ -302,6 +302,14 @@
         [style.height]="( innerHeightWithoutMobileBar + 'px' )"
         (click)="closeNav()"
       >
+        @if (showAndroidPushGuide) {
+          <section class="uk-alert uk-alert-primary uk-margin-small" aria-labelledby="android-push-guide-title">
+            <h3 id="android-push-guide-title">{{ 'configure-app.receivable-push.guide-title' | transloco }}</h3>
+            <p>{{ 'configure-app.receivable-push.guide-description' | transloco }}</p>
+            <button type="button" class="uk-button uk-button-primary uk-margin-small-right" (click)="openAndroidPushSettings()">{{ 'configure-app.receivable-push.guide-settings' | transloco }}</button>
+            <button type="button" class="uk-button uk-button-default" (click)="dismissAndroidPushGuide()">{{ 'configure-app.receivable-push.guide-later' | transloco }}</button>
+          </section>
+        }
         <router-outlet></router-outlet>
       </div>
     </div>
