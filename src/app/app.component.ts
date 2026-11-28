@@ -93,6 +93,17 @@ export class AppComponent implements OnInit, OnDestroy {
   powVaultUnlockRemainingAttempts = 0;
   readonly deviceUnlock = inject(DeviceUnlockService);
   private readonly receivablePush = inject(ReceivablePushService);
+  showAndroidPushGuide = false;
+
+  dismissAndroidPushGuide(): void {
+    this.receivablePush.dismissStartupGuide();
+    this.showAndroidPushGuide = false;
+  }
+
+  openAndroidPushSettings(): void {
+    this.dismissAndroidPushGuide();
+    void this.router.navigate(['configure-app'], { fragment: 'android-push-notifications' });
+  }
   readonly overviewRefresh = inject(WalletOverviewRefreshService);
   deviceUnlockSupported = false;
 
@@ -437,6 +448,7 @@ export class AppComponent implements OnInit, OnDestroy {
     }
     // Sync only an existing, explicit Web Push enrollment after wallet restore.
     void this.receivablePush.sync();
+    void this.receivablePush.checkStartupGuide().then(show => this.showAndroidPushGuide = show);
     // A saved API-key vault is locked after each full restart by design.
     // Offer a dismissible unlock prompt AFTER wallet restoration, including
     // an empty wallet when a saved vault exists; the phrase is never persisted.

@@ -47,6 +47,7 @@ describe('ReceivablePushService', () => {
       { settings: { minimumReceive: '0.000001' } } as any,
       { nano: { mnanoToRaw: () => ({ toString: () => '1000000000000000000000000' }) } } as any
     );
+    spyOnProperty(service, 'permissionDenied', 'get').and.returnValue(false);
     fetchSpy = spyOn(window, 'fetch').and.callFake(async () =>
       configResponse({ enabled: true, vapidPublicKey: 'A'.repeat(87) }));
   });
@@ -77,6 +78,7 @@ describe('ReceivablePushService', () => {
     expect(registered.accounts.length).toBe(1);
     expect(registered.notifyReceivable).toBeTrue();
     expect(registered.notifyUpdates).toBeFalse();
+    expect(registered.notifyOutgoing).toBeFalse();
     expect(registered.minimumReceiveRaw).toBe('1000000000000000000000000');
     expect(JSON.stringify(registered)).not.toContain('seed');
     expect(service.hasSubscription).toBeTrue();
@@ -129,6 +131,37 @@ describe('ReceivablePushService', () => {
     expect(service.hasSubscription).toBeFalse();
     expect(unsubscribe).toHaveBeenCalledTimes(1);
     expect((fetchSpy.calls.mostRecent().args[1] as RequestInit).method).toBe('DELETE');
+  });
+
+  it('registers outgoing alerts independently and removes both wallet alerts atomically', async () => {
+    fetchSpy.and.callFake(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/config')) return configResponse({ enabled: true, vapidPublicKey: 'A'.repeat(87) });
+      if (init?.method === 'POST') return configResponse({ id: 'one-sub', managementToken: 'token' }, 201);
+      return configResponse({});
+    });
+    await service.checkAvailability();
+    expect(await service.enableOutgoing()).toBeTrue();
+    const registration = JSON.parse((fetchSpy.calls.mostRecent().args[1] as RequestInit).body as string);
+    expect(registration.notifyOutgoing).toBeTrue();
+    expect(registration.notifyReceivable).toBeFalse();
+    expect(registration.accounts.length).toBe(1);
+    expect(await service.enableReceivable()).toBeTrue();
+    expect(await service.enableUpdates()).toBeTrue();
+    expect(requestSubscription).toHaveBeenCalledTimes(1);
+    expect(await service.disableWalletAlerts()).toBeTrue();
+    const changed = JSON.parse((fetchSpy.calls.mostRecent().args[1] as RequestInit).body as string);
+    expect(changed.notifyOutgoing).toBeFalse();
+    expect(changed.notifyReceivable).toBeFalse();
+    expect(changed.notifyUpdates).toBeTrue();
+    expect(changed.accounts).toEqual([]);
+  });
+
+  it('does not enroll automatically when guiding an Android PWA user', async () => {
+    spyOn(service, 'isAndroidInstalledPwa').and.returnValue(true);
+    expect(await service.checkStartupGuide()).toBeTrue();
+    expect(requestSubscription).not.toHaveBeenCalled();
+    service.dismissStartupGuide();
+    expect(await service.checkStartupGuide()).toBeFalse();
   });
 
   it('preserves the update preference when wallet data is removed', async () => {

@@ -11,6 +11,7 @@ import { WalletService } from './wallet.service';
 // Push subscriptions contain private endpoint capabilities: never log them.
 const API = '/api/push';
 const STORAGE_KEY = 'nault-receivable-push-v1';
+const GUIDE_KEY = 'nault-android-push-guide-v1';
 const REQUEST_TIMEOUT_MS = 10000;
 
 interface PushBinding {
@@ -30,12 +31,13 @@ interface RegistrationResult {
   managementToken: string;
 }
 
-// Both preferences share one browser PushSubscription and one backend record.
+// All preferences share one browser PushSubscription and one backend record.
 // Update alerts can be enabled without a wallet.
-export type PushNotificationKind = 'notifyReceivable' | 'notifyUpdates';
+export type PushNotificationKind = 'notifyReceivable' | 'notifyOutgoing' | 'notifyUpdates';
 
 interface PushPreferences {
   notifyReceivable: boolean;
+  notifyOutgoing: boolean;
   notifyUpdates: boolean;
 }
 
@@ -97,27 +99,60 @@ export class ReceivablePushService {
     return this.preferences().notifyReceivable;
   }
 
+  get outgoingEnabled(): boolean {
+    return this.preferences().notifyOutgoing;
+  }
+
+  get permissionInactive(): boolean {
+    return this.supported && Notification.permission !== 'granted';
+  }
+
+  get permissionDenied(): boolean {
+    return this.supported && Notification.permission === 'denied';
+  }
+
+  isAndroidInstalledPwa(): boolean {
+    return this.supported && /Android/i.test(navigator.userAgent) &&
+      (window.matchMedia('(display-mode: standalone)').matches ||
+       window.matchMedia('(display-mode: fullscreen)').matches);
+  }
+
+  async checkStartupGuide(): Promise<boolean> {
+    if (!this.isAndroidInstalledPwa()) return false;
+    try { if (localStorage.getItem(GUIDE_KEY)) return false; } catch { /* storage unavailable */ }
+    await this.checkAvailability();
+    // No permission prompt or registration occurs at startup. Retry on a
+    // later launch when the backend is unavailable or not yet deployed.
+    return !!this.vapidPublicKey && (this.permissionInactive || !this.hasSubscription);
+  }
+
+  dismissStartupGuide(): void {
+    try { localStorage.setItem(GUIDE_KEY, '1'); } catch { /* storage unavailable */ }
+  }
+
   get updatesEnabled(): boolean {
     return this.preferences().notifyUpdates;
   }
 
   private preferences(): PushPreferences {
     const binding = this.readBinding();
-    if (!binding) return { notifyReceivable: false, notifyUpdates: false };
+    if (!binding) return { notifyReceivable: false, notifyOutgoing: false, notifyUpdates: false };
     try {
       const snapshot = JSON.parse(binding.snapshot) as Partial<PushSnapshot>;
       // Backward-compatible with opt-in registrations from the first draft.
       // They only enrolled receivable notifications, never release alerts.
       if (typeof snapshot.notifyReceivable !== 'boolean' &&
-          typeof snapshot.notifyUpdates !== 'boolean') {
-        return { notifyReceivable: true, notifyUpdates: false };
+          typeof snapshot.notifyUpdates !== 'boolean' &&
+          typeof snapshot.notifyOutgoing !== 'boolean') {
+        return { notifyReceivable: true, notifyOutgoing: false, notifyUpdates: false };
       }
       return {
         notifyReceivable: snapshot.notifyReceivable === true,
+        notifyOutgoing: snapshot.notifyOutgoing === true,
         notifyUpdates: snapshot.notifyUpdates === true,
       };
     } catch {
-      return { notifyReceivable: true, notifyUpdates: false };
+      return { notifyReceivable: true, notifyOutgoing: false, notifyUpdates: false };
     }
   }
 
@@ -131,9 +166,10 @@ export class ReceivablePushService {
     const minimum = this.settings.settings.minimumReceive || '0';
     return {
       notifyReceivable: preferences.notifyReceivable,
+      notifyOutgoing: preferences.notifyOutgoing,
       notifyUpdates: preferences.notifyUpdates,
       // A release-only subscription must not disclose or retain wallet accounts.
-      accounts: preferences.notifyReceivable && this.wallet.isConfigured() ? this.accounts() : [],
+      accounts: (preferences.notifyReceivable || preferences.notifyOutgoing) && this.wallet.isConfigured() ? this.accounts() : [],
       minimumReceiveRaw: this.util.nano.mnanoToRaw(minimum).toString(10),
     };
   }
@@ -171,7 +207,7 @@ export class ReceivablePushService {
         return;
       }
       this.vapidPublicKey = config.vapidPublicKey;
-      this.status = this.hasSubscription ? 'enabled' : 'ready';
+      this.status = this.hasSubscription ? (this.permissionInactive ? 'error' : 'enabled') : 'ready';
     } catch {
       // A missing backend is expected on all existing deployments. No toast,
       // console error, or retry loop on a fresh PWA installation.
@@ -193,6 +229,21 @@ export class ReceivablePushService {
     return this.setPreference('notifyUpdates', true);
   }
 
+  async enableOutgoing(): Promise<boolean> {
+    return this.setPreference('notifyOutgoing', true);
+  }
+
+  async disableOutgoing(): Promise<boolean> {
+    return this.setPreference('notifyOutgoing', false);
+  }
+
+  async disableWalletAlerts(): Promise<boolean> {
+    if (this.busy) return false;
+    const original = this.preferences();
+    if (!original.notifyReceivable && !original.notifyOutgoing) return true;
+    return this.applyPreferences({ ...original, notifyReceivable: false, notifyOutgoing: false });
+  }
+
   async disableReceivable(): Promise<boolean> {
     return this.setPreference('notifyReceivable', false);
   }
@@ -205,16 +256,19 @@ export class ReceivablePushService {
     if (this.busy) return false;
     const original = this.preferences();
     if (original[kind] === enabled) return true;
-    if (enabled && (!this.supported || !this.vapidPublicKey)) return false;
-    if (enabled && kind === 'notifyReceivable' &&
+    if (enabled && (!this.supported || !this.vapidPublicKey || this.permissionDenied)) return false;
+    if (enabled && kind !== 'notifyUpdates' &&
         (!this.wallet.isConfigured() || !this.accounts().length)) return false;
 
-    const preferences = { ...original, [kind]: enabled };
-    if (!preferences.notifyReceivable && !preferences.notifyUpdates) {
+    return this.applyPreferences({ ...original, [kind]: enabled });
+  }
+
+  private async applyPreferences(preferences: PushPreferences): Promise<boolean> {
+    if (!preferences.notifyReceivable && !preferences.notifyOutgoing && !preferences.notifyUpdates) {
       return this.disable();
     }
     const snapshot = this.snapshot(preferences);
-    if (preferences.notifyReceivable && !snapshot.accounts.length) return false;
+    if ((preferences.notifyReceivable || preferences.notifyOutgoing) && !snapshot.accounts.length) return false;
 
     const binding = this.readBinding();
     this.busy = true;
@@ -318,13 +372,13 @@ export class ReceivablePushService {
       const preferences = this.preferences();
       // Wallet removal must stop account monitoring, but must not silently
       // revoke a separate release-alert subscription on the same device.
-      if (preferences.notifyReceivable &&
+      if ((preferences.notifyReceivable || preferences.notifyOutgoing) &&
           (!this.wallet.isConfigured() || !this.accounts().length)) {
-        if (!(await this.disableReceivable())) this.status = 'error';
+        if (!(await this.disableWalletAlerts())) this.status = 'error';
         return;
       }
       const subscription = await firstValueFrom(this.swPush.subscription.pipe(take(1)));
-      if (!subscription || subscription.endpoint !== binding.endpoint) {
+      if (this.permissionInactive || !subscription || subscription.endpoint !== binding.endpoint) {
         // A rotated or revoked browser endpoint needs explicit re-enrollment.
         // Keep the server management capability available for revocation.
         this.status = 'error';

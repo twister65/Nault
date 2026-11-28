@@ -863,7 +863,7 @@ describe('ConfigureAppComponent advanced-data deletion removes the PoW vault', (
       // The deletion flow must revoke Web Push before clearing wallet data.
       // Stub the isolated notification backend for these existing deletion tests.
       receivablePush: {
-        disableReceivable: jasmine.createSpy('disableReceivable').and.resolveTo(true),
+        disableWalletAlerts: jasmine.createSpy('disableWalletAlerts').and.resolveTo(true),
         disable: jasmine.createSpy('disable').and.resolveTo(true)
       },
       workPool,
@@ -917,7 +917,7 @@ describe('ConfigureAppComponent advanced-data deletion removes the PoW vault', (
   });
 
   it('preserves wallet data when revoking receivable notifications fails', async () => {
-    ((component as any).receivablePush.disableReceivable as jasmine.Spy).and.resolveTo(false);
+    ((component as any).receivablePush.disableWalletAlerts as jasmine.Spy).and.resolveTo(false);
     await component.clearWalletData();
     expect(vault.clearVault).not.toHaveBeenCalled();
     expect(wallet.resetWallet).not.toHaveBeenCalled();
